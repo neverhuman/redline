@@ -1,3 +1,8 @@
+<!-- GitHub authority -->
+This is an included component of [neverhuman/RedlineDB](https://github.com/neverhuman/RedlineDB).
+Use the canonical checkout, root GitHub workflows, and `scripts/ci-family.sh`.
+Keep this component's Cargo workspace independent. Root `AGENTS.md` governs source and releases.
+
 @/home/ubuntu/.codex/RTK.md
 
 # redline-testing Agent Router
@@ -5,7 +10,7 @@
 Mission: keep the external RedlineDB conformance runner deterministic,
 release-packaged, and compatible with RedlineDB's pinned artifact consumer.
 
-Access contract: local agent workspaces use `~/.jeryu/access.toml`, `jeryu access doctor`, and `jeryu access repair --repo . --yes`; do not install/use `glab`, scrape credential stores, or keep HTTP local GitLab origins.
+Access contract: use `gh pr ... --repo neverhuman/RedlineDB` and GitHub authentication.
 
 Start here:
 - `docs/architecture.md` — layers, data-access boundary, output contract

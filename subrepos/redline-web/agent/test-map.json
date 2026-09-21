@@ -13,10 +13,6 @@
       "command": "bash ops/ci/score.sh",
       "purpose": "verify governed Jankurai policy and version metadata"
     },
-    ".jeryu/": {
-      "command": "bash ops/ci/release-readiness.sh",
-      "purpose": "verify local-forge release policy remains fail closed"
-    },
     ".npmrc": {
       "command": "bash ops/ci/web.sh",
       "purpose": "verify the frontend dependency and registry policy"

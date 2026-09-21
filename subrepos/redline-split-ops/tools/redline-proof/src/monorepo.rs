@@ -17,9 +17,11 @@ const COMPONENTS: &[(&str, &str)] = &[
 ];
 
 pub fn root() -> Option<PathBuf> {
-    let start = env::var_os("REDLINE_REPO_ROOT")
-        .map(PathBuf::from)
-        .or_else(|| env::current_dir().ok())?;
+    if let Some(explicit) = env::var_os("REDLINE_REPO_ROOT") {
+        let root = PathBuf::from(explicit);
+        return root.join("subrepos.toml").is_file().then_some(root);
+    }
+    let start = env::current_dir().ok()?;
     start
         .ancestors()
         .find(|p| p.join("subrepos.toml").is_file())
@@ -97,6 +99,7 @@ fn cargo_paths(root: &Path, dir: &Path) -> Result<()> {
 
 fn validate(root: &Path, history: bool) -> Result<serde_json::Value> {
     let manifest: toml::Value = fs::read_to_string(root.join("subrepos.toml"))?.parse()?;
+    crate::authority::validate(root, &manifest)?;
     let rows = manifest
         .get("component")
         .and_then(toml::Value::as_array)
@@ -185,7 +188,7 @@ fn validate(root: &Path, history: bool) -> Result<serde_json::Value> {
         }
     }
     Ok(
-        json!({"schema":"redline.monorepo-validation/v1","components":COMPONENTS,"history_verified":history}),
+        json!({"schema":"redline.monorepo-validation/v1","repository":crate::authority::REPOSITORY,"components":COMPONENTS,"history_verified":history}),
     )
 }
 

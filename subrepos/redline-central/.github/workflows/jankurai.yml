@@ -12,7 +12,7 @@ concurrency:
   group: redline-central-${{ github.ref }}
   cancel-in-progress: true
 
-# Compatibility declaration only. The release gate is the local Jeryu
+# Compatibility declaration only. The release gate is the root GitHub
 # `redline-central/required` check posted by the exact-SHA host runner.
 jobs:
   required:

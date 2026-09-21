@@ -1,21 +1,13 @@
-# Redline split control-plane standard
+# Release-tooling standard
 
-This independent control plane uses pinned Jankurai 1.6.11 and the protected
-check `redline-split-ops/required`. `just required`, `just security`, and
-`just score` are merge evidence. `just family-ci` and `just cutover-verify` are
-additional cutover gates and may correctly remain red while reviewed child
-heads, immutable tags, or fresh consumer evidence are unavailable.
+Use the governed Jankurai binary and root GitHub `RedlineDB/required` check.
+Root `subrepos.toml` describes the six included component workspaces. Source,
+review and release authority is `neverhuman/RedlineDB`.
 
-## Ownership boundaries
+Rust implementation lives below `tools/redline-proof/`; process tests live in
+`tests/`. Shell files launch that controller or root CI lanes. Validation rejects
+wrong-owner remotes, obsolete forge activation files and executable old routes.
 
-Rust implementation and tests live below `tools/redline-proof/`; shell files
-only launch the Rust binary or fixed external scanners. The canonical manifest
-and authoritative lock remain at repository root. The compatibility lock is at
-the physical family-container root `../redline.lock.toml`; it may be absent only
-for the explicitly ineligible candidate state documented in `docs/testing.md`.
-
-## Proof lanes and repair receipts
-
-Every family or cutover failure identifies the repository or evidence field to
-repair. Re-run the exact command from `docs/testing.md`; never edit eligibility,
-checksums, commits, or tag metadata by hand.
+Run the component checks documented in `docs/testing.md`, then root acceptance.
+Historical receipts under `release-evidence/` retain their original identities;
+they are not current acceptance evidence and never authorize deployment.

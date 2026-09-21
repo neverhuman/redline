@@ -1,20 +1,13 @@
-# redline-split-ops
+# Release tooling
 
-This repository is the Redline nested-family control plane. It is independent
-of every child repository and is not a Cargo workspace or a Redline product
-member.
+This component belongs to [neverhuman/RedlineDB](https://github.com/neverhuman/RedlineDB).
+Root `AGENTS.md` and GitHub workflows govern all development and publication.
+Keep the independent Cargo workspace and edit only in the canonical checkout.
 
-The default family root is resolved from this checkout's parent or from
-`REDLINE_SPLIT_ROOT`; no command relies on `/home/ubuntu` or another fixed
-checkout path. The canonical nested manifest is `repos.manifest.toml`, and the
-family lock is `../redline.lock.toml`.
+`./redlinectl doctor`, `./redlinectl validate`, and `./redlinectl family-ci`
+use root `subrepos.toml`. `validate --history` additionally verifies imported
+source identities and custody refs. Commands require the complete checkout or
+source archive; there is no split-repository or alternate-forge fallback.
 
-Use `./redlinectl doctor`, `./redlinectl validate`, and
-`./redlinectl family-ci` as the control-plane proof lanes.
-
-Operational boundaries are documented in `docs/architecture.md`; exact test,
-security, receipt, and repair commands are in `docs/testing.md`; cutover and
-rollback rules are in `docs/release.md`. Generated evidence ownership is in
-`docs/generated-zones.md`, and audit acceptance is in
-`docs/audit-rubric.md`. New control-plane implementation and tests are Rust.
-Python belongs only in genuine cross-language parity harnesses.
+New controller implementation and tests are Rust. Historical receipts under
+`release-evidence/` retain their original bytes and are not release authority.

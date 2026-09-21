@@ -1,3 +1,8 @@
+<!-- GitHub authority -->
+This is an included component of [neverhuman/RedlineDB](https://github.com/neverhuman/RedlineDB).
+Use the canonical checkout, root GitHub workflows, and `scripts/ci-family.sh`.
+Keep this component's Cargo workspace independent. Root `AGENTS.md` governs source and releases.
+
 # RedlineDB Agent Router
 
 ## Workspace Boundary
@@ -6,7 +11,7 @@
 - Never switch to sibling clones, archives, backups, resolved symlink targets, or duplicate roots.
 - Never create repo copies or side folders outside the active repo; preserve work with git branches.
 - Before edits, report `pwd`, `git rev-parse --show-toplevel`, and `git status --short --branch`.
-- Use Jeryu APIs/CLI for local GitLab/MR work; no `glab`, credential scraping, or raw local GitLab API calls.
+- Use GitHub pull requests in `neverhuman/RedlineDB`; root workflows are authoritative.
 
 ## Git Worktree Policy — MANDATORY
 
@@ -23,7 +28,7 @@ Rules:
 
 Mission: keep invariants local, edit the smallest lawful surface, and preserve raw evidence.
 
-Access contract: local agent workspaces use `~/.jeryu/access.toml`, `jeryu access doctor`, and `jeryu access repair --repo . --yes`; do not install/use `glab`, scrape credential stores, or keep HTTP local GitLab origins.
+Access contract: use `gh pr ... --repo neverhuman/RedlineDB` and GitHub authentication.
 
 Start here:
 - `.jankurai/owner-map.json`

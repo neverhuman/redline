@@ -2,8 +2,10 @@
 
 `neverhuman/RedlineDB` is the release authority for the engine and every included
 component. The executable workflows live in the root `.github/workflows/`.
-Historical split-repository release instructions and Jain/Jeryu receipts remain
-under `subrepos/` for reference. They do not grant deployment authority.
+Historical split-repository receipts remain under `subrepos/` as immutable
+evidence. They are not configuration or publication prerequisites. The former
+forge control plane and its activation policies are retired; all components
+use GitHub `neverhuman/RedlineDB` and root `subrepos.toml`.
 
 ## Required acceptance
 

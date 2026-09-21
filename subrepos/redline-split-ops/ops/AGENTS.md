@@ -1,7 +1,7 @@
 # Operations surface
 
-Owns CI orchestration, pinned external-tool installation, and the optional
-local pre-push hook. Product code, child repository history, production
-promotion, and eligibility decisions are forbidden here. Run
-`bash ops/ci/quality-gates.sh`; family cutover remains a separate explicit
-`just family-ci && just cutover-verify` decision.
+Owns CI helpers and pinned tool installation for the included component.
+Root GitHub workflows in `neverhuman/RedlineDB` own acceptance and publication.
+Run `bash ops/ci/required.sh` for the component and root `scripts/ci-family.sh all`
+for full acceptance. Product behavior and consumer database changes belong to
+their respective owners. Historical lock promotion is retired.

@@ -25,17 +25,9 @@
       "command": "rtk bash scripts/ci-local.sh required",
       "purpose": "verify ignored evidence boundaries through the canonical host-required lane"
     },
-    ".gitlab-ci.yml": {
-      "command": "rtk bash scripts/ci-local.sh required",
-      "purpose": "verify CI compatibility through the canonical host-required lane"
-    },
     ".jankurai/": {
       "command": "rtk bash scripts/ci-local.sh required",
       "purpose": "verify proof policy through the canonical host-required lane"
-    },
-    ".jeryu/": {
-      "command": "rtk bash scripts/ci-local.sh required",
-      "purpose": "verify Jeryu policy through the canonical host-required lane"
     },
     "AGENTS.md": {
       "command": "rtk bash scripts/ci-local.sh required",
@@ -221,7 +213,10 @@
       "command": "bash ops/ci/security-family.sh",
       "purpose": "source-distribution and dependency security"
     },
-    ".gitleaksignore": {"command": "bash ops/ci/security-family.sh", "purpose": "reviewed historical false positives"},
+    ".gitleaksignore": {
+      "command": "bash ops/ci/security-family.sh",
+      "purpose": "reviewed historical false positives"
+    },
     ".gitleaks.toml": {
       "command": "bash ops/ci/security-family.sh",
       "purpose": "source-distribution and dependency security"

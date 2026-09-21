@@ -70,7 +70,7 @@ enum Command {
         #[arg(long)]
         workers: usize,
     },
-    /// Probe SignRail receipts and emit Jeryu canary telemetry as JSON.
+    /// Read historical receipt files and emit their compatible telemetry JSON.
     Telemetry {
         #[arg(long)]
         repo: String,

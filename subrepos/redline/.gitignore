@@ -46,8 +46,6 @@ agent/*
 :memory:/
 FUCKIT.md
 
-# Local jeryu daemon artifacts (not part of repo)
-.jeryu/
 
 # claude-code agent runtime: scheduled-tasks state + isolated worktrees
 .claude/

@@ -1,3 +1,7 @@
+> Source, reviews, CI and releases: [neverhuman/RedlineDB](https://github.com/neverhuman/RedlineDB).
+> This component lives at `subrepos/redline-testing` in the canonical checkout.
+> Follow the [root release process](../../docs/release.md); historical component release examples below are archival.
+
 # redline-testing
 
 Primary CI runs on GitHub via [.github/workflows/ci.yml](.github/workflows/ci.yml).

@@ -5,17 +5,9 @@
       "command": "rtk scripts/ci-local.sh doctor && rtk env REDLINE_STRICT_TOOLS=1 bash ops/ci/security.sh",
       "purpose": "verify GitHub workflows delegate to blocking local lanes and pass workflow security lint"
     },
-    ".gitlab-ci.yml": {
-      "command": "rtk cargo test --locked --test ci_fail_closed",
-      "purpose": "verify the retired GitLab pipeline remains absent after the GitHub cutover"
-    },
     ".jankurai/": {
       "command": "rtk cargo test --locked --test ci_fail_closed",
       "purpose": "verify mirrored control-plane proof routing remains consistent"
-    },
-    ".jeryu/": {
-      "command": "rtk scripts/ci-local.sh doctor",
-      "purpose": "verify local-Jeryu policy changes retain the canonical CI entrypoints"
     },
     ".gitignore": {
       "command": "rtk scripts/ci-local.sh doctor",
@@ -51,11 +43,11 @@
     },
     "corpus/beyond_sqlite/": {
       "command": "rtk cargo test --locked --features pg-embedded -p redline-testing beyond_sqlite::oracle::tests::postgres_self_compare_all_published_cases -- --ignored --exact",
-      "purpose": "verify every beyond-SQLite case passes psql↔psql self-compare before shipping"
+      "purpose": "verify every beyond-SQLite case passes psql\u2194psql self-compare before shipping"
     },
     "corpus/sqlite_parity/cases/": {
       "command": "rtk cargo run --locked -p xtask -- ship-gate",
-      "purpose": "verify every SQLite-parity case passes sqlite3↔sqlite3 self-compare before shipping"
+      "purpose": "verify every SQLite-parity case passes sqlite3\u2194sqlite3 self-compare before shipping"
     },
     "corpus/sqlite_parity/generated_manifest.json": {
       "command": "rtk cargo test --locked",

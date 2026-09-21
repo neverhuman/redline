@@ -4,7 +4,6 @@
     ".github/": "ops",
     ".gitignore": "ops",
     ".jankurai/": "ops",
-    ".jeryu/": "ops",
     ".npmrc": "web",
     "AGENTS.md": "maintainers",
     "CHANGELOG.md": "maintainers",

@@ -41,7 +41,7 @@ JAIN_GOVERNED_JANKURAI_BIN="$(jain_first_present_path \
   "${JANKURAI_BIN:-}" \
   /opt/jain-ci/authority/release-bin/jankurai \
   /usr/local/libexec/jain/jankurai \
-  /home/ubuntu/.jeryu/bin/jankurai || true)"
+  "$repo_root/../../target/ci/tools/jankurai" || true)"
 readonly JAIN_GOVERNED_JANKURAI_BIN
 readonly JAIN_GOVERNED_JANKURAI_VERSION="jankurai 1.6.11"
 readonly JAIN_GOVERNED_JANKURAI_SHA256="9e6b8857a26f6004d4c74e510e13b06d880f2e2ae0c89502698889ed690c5d6c"

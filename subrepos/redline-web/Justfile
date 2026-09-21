@@ -18,7 +18,7 @@ check:
 # Alias for `check`.
 verify: check
 
-# Full PR-CI gate locally (identical to the jeryu / GitHub Actions check).
+# Full PR-CI gate locally (identical to the root GitHub Actions check).
 ci:
     bash ops/ci/pr-ci.sh
 

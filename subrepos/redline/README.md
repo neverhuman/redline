@@ -1,23 +1,28 @@
+> Source, reviews, CI and releases: [neverhuman/RedlineDB](https://github.com/neverhuman/RedlineDB).
+> This component lives at `subrepos/redline` in the canonical checkout.
+> Follow the [root release process](../../docs/release.md); historical component release examples below are archival.
+
 # RedlineDB
 
-`redline` is the public hub for the Redline family. The embedded engine lives
-only in [`redline-core`](../redline-core); the conformance harness lives in
-[`redline-testing`](../redline-testing); and the observability console lives in
-[`redline-web`](../redline-web).
+`redline` is the historical public hub for the Redline family. The family is
+now a single GitHub repository: the engine lives in
+[`crates/`](../../crates) at the root of the canonical checkout, the
+conformance harness in [`redline-testing`](../redline-testing), and the
+observability console in [`redline-web`](../redline-web).
 
-This repository intentionally contains no Cargo workspace and no engine
-source. The family is independently managed by
-[`redline-split-ops`](../redline-split-ops) and pinned by
-[`redline.lock.toml`](../redline.lock.toml). Use the control-plane commands
-from the family root to clone, update, validate, or run all child checks.
+This directory intentionally contains no Cargo workspace and no engine source.
+Release tooling lives in [`redline-split-ops`](../redline-split-ops). The
+separate family manifest and lock file were retired with the multi-repo
+layout; [neverhuman/RedlineDB](https://github.com/neverhuman/RedlineDB) is now
+the sole source and release authority.
 
 ## Public entry points
 
-- Engine API and CLI: [`redline-core`](../redline-core)
+- Engine API and CLI: [`crates/`](../../crates)
 - SQLite-parity, RQL, memory, and beyond-SQLite evidence:
   [`redline-testing`](../redline-testing)
 - SQL console and metrics dashboard: [`redline-web`](../redline-web)
-- Family manifest: [`repos.manifest.toml`](../repos.manifest.toml)
+- Release tooling: [`redline-split-ops`](../redline-split-ops)
 
 Run `scripts/guard-no-duplicate-engine.sh` from this repository before
 publishing a hub change. It fails if engine crates or a Cargo workspace are

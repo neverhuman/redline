@@ -20,4 +20,4 @@ Every failed lane must retain an agent-friendly receipt with:
 
 Never replace a failure with a pass marker. Never move an immutable tag, edit a
 family lock manually, force-push `main`, or run a production promotion from the
-hub. Use Jeryu review and the Redline control plane for lifecycle operations.
+hub. Use GitHub review in `neverhuman/RedlineDB` and the root release workflow.

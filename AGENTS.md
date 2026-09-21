@@ -14,7 +14,7 @@ locks and databases are outside this source/release migration.
 - Exact-SHA isolation may use an automatically removed standalone `git clone --no-local` sandbox;
   it must never register a worktree or become a second persistent source of truth.
 - Before edits, report `pwd`, `git rev-parse --show-toplevel`, and `git status --short --branch`.
-- Use Jeryu APIs/CLI for local GitLab/MR work; no `glab`, credential scraping, or raw local GitLab API calls.
+- Use GitHub pull requests in `neverhuman/RedlineDB`; root workflows are authoritative.
 
 ## Zero Git Worktrees — MANDATORY
 
@@ -28,7 +28,7 @@ locks and databases are outside this source/release migration.
 
 Mission: keep invariants local, edit the smallest lawful surface, and preserve raw evidence.
 
-Access contract: local agent workspaces use `~/.jeryu/access.toml`, `jeryu access doctor`, and `jeryu access repair --repo . --yes`; do not install/use `glab`, scrape credential stores, or keep HTTP local GitLab origins.
+Access contract: use `gh pr ... --repo neverhuman/RedlineDB` and GitHub authentication.
 
 Start here:
 - `.jankurai/owner-map.json`

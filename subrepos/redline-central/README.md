@@ -1,3 +1,7 @@
+> Source, reviews, CI and releases: [neverhuman/RedlineDB](https://github.com/neverhuman/RedlineDB).
+> This component lives at `subrepos/redline-central` in the canonical checkout.
+> Follow the [root release process](../../docs/release.md); historical component release examples below are archival.
+
 # redline-central
 
 [![Jankurai](https://img.shields.io/badge/Jankurai-governed-blue)](agent/repo-score.md)

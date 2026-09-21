@@ -51,7 +51,7 @@ pub(crate) fn run(args: &[String]) -> Result<()> {
         .or_else(|| {
             env::var_os("HOME")
                 .filter(|value| !value.is_empty())
-                .map(|home| PathBuf::from(home).join(".local/share/jeryu/signrail"))
+                .map(|home| PathBuf::from(home).join(".local/share/redlinedb/release-receipts"))
         })
         .ok_or_else(|| anyhow!("telemetry: SIGNRAIL_STORE_ROOT or HOME is required"))?;
     let started = Instant::now();

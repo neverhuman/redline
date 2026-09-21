@@ -1,3 +1,7 @@
+> Source, reviews, CI and releases: [neverhuman/RedlineDB](https://github.com/neverhuman/RedlineDB).
+> This component lives at `subrepos/redline-web` in the canonical checkout.
+> Follow the [root release process](../../docs/release.md); historical component release examples below are archival.
+
 <h1 align="center">redline-web</h1>
 
 <p align="center">
@@ -81,7 +85,7 @@ just dev-web      # Vite dev server on :5173, proxies /api -> :7788 (terminal B)
 ## CI
 
 `redline-web` is **independently** CI'd: `bash ops/ci/pr-ci.sh` is the
-authoritative jeryu gate (fast + frontend + backend + security + web e2e +
+component validation gate (fast + frontend + backend + security + web e2e +
 cost-budget + release-readiness + jankurai evidence). GitHub Actions
 ([`.github/workflows/ci.yml`](.github/workflows/ci.yml)) mirrors it lane-for-lane
 (ci-local parity), with every action pinned to a 40-hex commit SHA. A red build

@@ -58,14 +58,16 @@ printf '#!/usr/bin/env bash\nprintf "hostile PATH jankurai\\n"\n' \
 chmod 0755 "$tmp_dir/hostile-bin/jankurai"
 
 expect_rejected hostile-source-selection \
-    /usr/bin/env PATH="$tmp_dir/hostile-bin:/usr/bin:/bin" \
+    /usr/bin/env REDLINE_JANKURAI_BIN="$tmp_dir/hostile-bin/jankurai" \
+    PATH="$tmp_dir/hostile-bin:/usr/bin:/bin" \
     /usr/bin/bash -c \
     'set -euo pipefail; . "$1"; ci_require_governed_jankurai' \
     _ "$repo_root/ops/ci/lib.sh"
 
 mkdir -p "$tmp_dir/empty-bin"
 expect_rejected missing-source-selection \
-    /usr/bin/env PATH="$tmp_dir/empty-bin:/usr/bin:/bin" \
+    /usr/bin/env REDLINE_JANKURAI_BIN="$tmp_dir/empty-bin/jankurai" \
+    PATH="$tmp_dir/empty-bin:/usr/bin:/bin" \
     /usr/bin/bash -c \
     'set -euo pipefail; . "$1"; ci_require_governed_jankurai' \
     _ "$repo_root/ops/ci/lib.sh"
@@ -76,7 +78,7 @@ ci_require_governed_jankurai >/dev/null
 [ "$(type -t jankurai)" = "function" ]
 [ "$(jankurai --version)" = "jankurai $CI_JANKURAI_VERSION" ]
 
-if grep -Fq '/home/ubuntu/.jeryu/bin/jankurai' "$repo_root/ops/ci/lib.sh"; then
+if grep -Fq '/home/ubuntu/' "$repo_root/ops/ci/lib.sh"; then
     printf 'governed Jankurai selection still depends on the user home\n' >&2
     exit 1
 fi

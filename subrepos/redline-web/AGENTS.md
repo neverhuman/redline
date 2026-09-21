@@ -1,3 +1,8 @@
+<!-- GitHub authority -->
+This is an included component of [neverhuman/RedlineDB](https://github.com/neverhuman/RedlineDB).
+Use the canonical checkout, root GitHub workflows, and `scripts/ci-family.sh`.
+Keep this component's Cargo workspace independent. Root `AGENTS.md` governs source and releases.
+
 # redline-web — agent guide
 
 Rust (Axum) backend in `apps/api/` + Vite/TS/React frontend in `apps/web/`. It is
@@ -25,8 +30,7 @@ operations, release).
 - **Offline advisory authority.** Release security consumes only the fresh
   root-staged Cargo registry and authenticated Grype v6 database. npm is
   lock/install integrity only; `npm audit --offline` is not advisory evidence.
-- **MR-only.** Land via a jeryu PR (`gh pr create` → `jeryu.propose_patch`);
-  `main` advances on forge merge and mirrors to `github.com/neverhuman/redline-web`.
+- **PR-only.** Land through a reviewed GitHub PR in `neverhuman/RedlineDB`.
 
 ## Layout
 

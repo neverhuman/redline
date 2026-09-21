@@ -19,12 +19,9 @@
     "docs/": "docs",
     "docs/**": "docs",
     "deny.toml": "ops",
-    "redline.lock.toml": "release",
-    "redline.lock.toml.sha256": "release",
     "redlinectl": "ops",
     "release-evidence/": "release",
     "release-evidence/**": "release",
-    "repos.manifest.toml": "release",
     "rust-toolchain.toml": "tools",
     "scripts/": "ops",
     "scripts/**": "ops",
@@ -33,7 +30,8 @@
     "ops/": "ops",
     "ops/**": "ops",
     "tools/": "tools",
-    "tools/**": "tools"
+    "tools/**": "tools",
+    "tests/": "control-plane"
   },
   "workspace": "redline-split-ops"
 }

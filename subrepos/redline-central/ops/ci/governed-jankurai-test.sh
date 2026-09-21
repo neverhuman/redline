@@ -65,7 +65,7 @@ require_governed_jankurai
 [[ "$(type -t jankurai)" == function ]]
 [[ "$(jankurai --version)" == "jankurai $JANKURAI_VERSION" ]]
 
-if grep -Fq '/home/ubuntu/.jeryu/bin/jankurai' \
+if grep -Fq '/home/ubuntu/' \
   "$ROOT/ops/ci/lib.sh" "$ROOT/ops/ci/jankurai.sh" "$ROOT/scripts/ci-doctor.sh"
 then
   printf 'governed Jankurai selection still depends on the user home\n' >&2

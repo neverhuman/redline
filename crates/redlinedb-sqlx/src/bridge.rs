@@ -5,9 +5,9 @@
 //! URL schemes are registered.
 //!
 //! Canonical owning/server URL:
-//! `redline:///absolute/path/to/target/jeryu/autonomy.redlineDB?mode=rwc`.
+//! `redline:///absolute/path/to/application.redlineDB?mode=rwc`.
 //! Canonical dashboard/TUI/inspection URL:
-//! `redline:///absolute/path/to/target/jeryu/autonomy.redlineDB?mode=ro`.
+//! `redline:///absolute/path/to/application.redlineDB?mode=ro`.
 //! HLT-022-AUTHZ-ISOLATION-GAP negative proof for the attach boundary:
 //! `crates/redlinedb-sqlx/tests/attach_mode.rs::mode_ro_attaches_to_live_database_and_blocks_writes`
 //! proves the non-owner attach path can read live rows, rejects writes,

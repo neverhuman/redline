@@ -1,23 +1,13 @@
-# Release process
+# redline-split-ops releases
 
-Run `bash ops/ci/quality-gates.sh`, then generate a fresh checksummed family CI
-receipt with `just family-ci`. After every declared immutable tag is present on
-the exact reviewed local-Jeryu main commit and both consumers have produced
-fresh checksummed evidence, run `just proof-refresh ...` and
-`just cutover-verify`. Production promotion is a separately authorized action.
+Source, pull requests, CI and releases are owned by
+[neverhuman/RedlineDB](https://github.com/neverhuman/RedlineDB).
+This component is built from `subrepos/redline-split-ops` in that checkout.
+Its Cargo workspace stays independent; its release identity and artifacts come
+from the reviewed parent commit and root release workflows.
 
-The former Jain.4 one-revision successor flow is retained as historical,
-verification-only tooling:
-
-```bash
-./redlinectl proof-refresh --reconcile-successor \
-  --receipt release-evidence/8.0.0/redline-proof-successor-jain4-reconciled.json
-./redlinectl successor-receipt-verify \
-  release-evidence/8.0.0/redline-proof-successor-jain4-reconciled.json
-```
-
-Those receipts remain deliberately cutover-ineligible and are not Jain.6
-readiness requirements. With the current mirror absent,
-`review-lock-verify` reports `authoritative-only-historical`; fresh family CI,
-both consumer proofs, normal proof refresh, and cutover verification remain
-mandatory. Only normal proof refresh may create the current mirror pair.
+Follow the [root release process](../../docs/release.md).
+Run `bash scripts/ci-family.sh all` from the root for acceptance. Packages and
+attestations are published only by the root GitHub release workflow. Existing
+releases are immutable, and installed consumer databases require explicit,
+recoverable migrations. Historical receipts are evidence of past executions.

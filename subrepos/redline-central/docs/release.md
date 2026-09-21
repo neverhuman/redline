@@ -1,54 +1,13 @@
-# Redline Central release
+# redline-central releases
 
-Redline Central keeps the Redline family's native `4.1.0-jain.N` identity.
-Jain 8.0.1 consumes an immutable Redline tag by exact commit and tree checksum;
-it does not rewrite this repository's package version to 8.0.1.
+Source, pull requests, CI and releases are owned by
+[neverhuman/RedlineDB](https://github.com/neverhuman/RedlineDB).
+This component is built from `subrepos/redline-central` in that checkout.
+Its Cargo workspace stays independent; its release identity and artifacts come
+from the reviewed parent commit and root release workflows.
 
-The onboarding candidate is `redline-central-v4.1.0-jain.4`. The tag may be cut
-only after the production-readiness pull request passes `redline-central/required`,
-receives an independent approval, and protected `main` advances by fast-forward.
-Existing tags are immutable and corrections use the next unused `.jain.N` suffix.
-
-## Version source
-
-`VERSION` and `[workspace.package].version` in `Cargo.toml` must agree. The
-contract lane verifies both workspace crates report `4.1.0` through locked
-Cargo metadata. `CHANGELOG.md` carries the matching `.jain.N` candidate note.
-
-## Release checklist
-
-1. Run `bash scripts/ci-local.sh required` at the exact review head.
-2. Read back governed score, security, contract, artifact, and coverage proof.
-3. Obtain an independent approval and protected fast-forward merge.
-4. Cut the next unused immutable `redline-central-v4.1.0-jain.N` tag.
-5. Bind the exact tag commit and release-tree SHA-256 in the Redline authority.
-
-## Integrity and provenance
-
-The artifact lane records the locked dependency digest, source commit, source
-tree, and package SHA-256. The security lane produces a dependency audit,
-secret scan, and SPDX SBOM. Accepted release evidence must be regenerated from
-the merged commit; review-branch output is readiness evidence only.
-
-## Rollback
-
-Rollback selects the previous accepted immutable `.jain.N` tag and its bound
-tree checksum. It never moves or deletes a tag. Database data rollback is a
-separate operator action and requires a verified backup; code rollback must not
-silently downgrade or rewrite the persisted Redline format.
-
-Local release proof:
-
-```sh
-rtk bash scripts/ci-local.sh required
-```
-
-The artifact lane builds the default Redline adapter and packages the Redline client smoke binary,
-the backend-neutral corpus runner, and the machine-readable backend contract as a reproducible,
-explicitly non-deployable support archive. Docker and Compose inputs are omitted because their
-build requires a separately governed Redline Core source; see `docs/support-archive.md`. Separate
-closure gates prove that neither oracle enters the production graph. The explicit family-release
-lane runs the identical governed corpus against genuine Redline and Postgres; this is not an
-arbitrary SQL-parity claim. SHA-256 evidence is recorded under
-`target/artifact-support/`. Generated evidence is not source authority; the
-accepted tag commit and tree checksum are bound by the Redline control plane.
+Follow the [root release process](../../../docs/release.md).
+Run `bash scripts/ci-family.sh all` from the root for acceptance. Packages and
+attestations are published only by the root GitHub release workflow. Existing
+releases are immutable, and installed consumer databases require explicit,
+recoverable migrations. Historical receipts are evidence of past executions.

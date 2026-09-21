@@ -37,7 +37,7 @@ CI_REDLINE_TESTING_EXPECTED_TARBALL_SHA256="${CI_REDLINE_TESTING_EXPECTED_TARBAL
 CI_REDLINE_TESTING_EXPECTED_BINARY_SHA256="${CI_REDLINE_TESTING_EXPECTED_BINARY_SHA256:-}"
 readonly CI_REDLINE_TESTING_ATTESTATION_REPO="${CI_REDLINE_TESTING_ATTESTATION_REPO:-neverhuman/redline-testing}"
 readonly CI_JANKURAI_VERSION="${CI_JANKURAI_VERSION:-1.6.10}"
-readonly CI_JANKURAI_GIT="${CI_JANKURAI_GIT:-http://127.0.0.1:8787/git/jeryu/jankurai.git}"
+readonly CI_JANKURAI_GIT="${CI_JANKURAI_GIT:-https://github.com/neverhuman/jankurai.git}"
 readonly CI_JANKURAI_TAG="${CI_JANKURAI_TAG:-v${CI_JANKURAI_VERSION}}"
 readonly CI_JANKURAI_REV="${CI_JANKURAI_REV:-3c804453e6c7a6e0e4028d95cc3bccea467277ef}"
 
@@ -781,7 +781,7 @@ ci_verify_jankurai_source() {
     fi
 }
 
-# Build and install the exact reviewed Jeryu commit. Cargo retains its verified
+# Build and install the exact reviewed GitHub commit. Cargo retains its verified
 # source checkout under CARGO_HOME, which is also where the binary's embedded
 # runtime schema path points.
 ci_install_jankurai() {

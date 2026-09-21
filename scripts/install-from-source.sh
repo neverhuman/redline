@@ -9,7 +9,7 @@ case "${1:-}" in
 esac
 [[ $# == 0 ]] || { printf 'Usage: %s [--all]\n' "$0" >&2; exit 64; }
 prefix=${PREFIX:-$HOME/.local}
-dest=${JERYU_INSTALL_DIR:-${REDLINEDB_INSTALL_DIR:-$prefix/bin}}
+dest=${REDLINEDB_INSTALL_DIR:-$prefix/bin}
 target_dir=${CARGO_TARGET_DIR:-$root/target}
 bins=(redlinedb redlinedb-cli redlinedb-server)
 if "$all"; then bins+=(redline-testing redline-web redline-proof redlinedb-client-smoke db-shim-parity); fi
