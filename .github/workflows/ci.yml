@@ -73,9 +73,10 @@ jobs:
           - kernel
           - sql-unit
           - sql-contracts
+          - sql-integration
           - bench
     runs-on: [self-hosted, Linux, X64]
-    timeout-minutes: 30
+    timeout-minutes: 45
     permissions:
       contents: read
       attestations: read

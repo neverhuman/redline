@@ -65,6 +65,14 @@ run_test_stage() {
             cargo test -p redlinedb-sql --test phase11_veox_queue --quiet --locked
             cargo test -p redlinedb-sql --test phase11_xdoug_compat --quiet --locked
             ;;
+        sql-integration)
+            # crates/sql/tests holds 87 files / ~1140 tests. Before this stage
+            # existed CI ran only `--lib` plus the five named sql-contracts
+            # targets, so ~82 files never executed in CI at all. nextest runs
+            # the binaries in parallel; a sequential `cargo test` over the same
+            # set takes well past the job timeout.
+            cargo nextest run -p redlinedb-sql --tests --locked
+            ;;
         bench)
             cargo test -p redlinedb-bench --quiet --locked
             ;;
@@ -80,7 +88,7 @@ case "$stage" in
     preflight)
         run_preflight
         ;;
-    core|kernel|sql-unit|sql-contracts|bench)
+    core|kernel|sql-unit|sql-contracts|sql-integration|bench)
         run_test_stage "$stage"
         ;;
     tests)
@@ -88,6 +96,7 @@ case "$stage" in
         run_test_stage kernel
         run_test_stage sql-unit
         run_test_stage sql-contracts
+        run_test_stage sql-integration
         run_test_stage bench
         ;;
     all)
@@ -96,6 +105,7 @@ case "$stage" in
         run_test_stage kernel
         run_test_stage sql-unit
         run_test_stage sql-contracts
+        run_test_stage sql-integration
         run_test_stage bench
         ;;
     *)
