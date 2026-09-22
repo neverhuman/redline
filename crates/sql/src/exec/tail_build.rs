@@ -241,6 +241,9 @@ pub(crate) fn compute_stored_generated_columns(
         let Some(gen_def) = &column.generated else {
             continue;
         };
+        if crate::pg_schema::is_nextval_default(gen_def.expr_sql.as_ref()) {
+            continue;
+        }
         if !matches!(gen_def.kind, GeneratedColumnKind::Stored) {
             // VIRTUAL columns leave the heap slot as NULL; reads
             // compute on demand.

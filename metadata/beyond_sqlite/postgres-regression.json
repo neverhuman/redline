@@ -1,7 +1,7 @@
 {
   "schema_version": "redline-postgres-regression-v1",
   "previous_source_commit": "4e742765a75fe94dff26ef02c33b323c1b718345",
-  "reason": "LANGUAGE SQL functions substitute arguments into their SELECT body. 61 failures remain.",
+  "reason": "Postgres schemas keep distinct tables, and DEFAULT nextval inserts sequence values. 58 failures remain.",
   "corpus_sha256": "01a25cfc48176a535919354a6bddf48f87692857857c24777dcf9b4841bd0a9d",
   "reference_settings": "160015|C|C|UTC",
   "image_digest": "sha256:efdf07c2f9d4df592783dcc8ea5f6db02efbf5f6452b527225ff5e58364570e9",
@@ -25,9 +25,6 @@
     "BEYOND-CASE-20216",
     "BEYOND-CASE-20217",
     "BEYOND-CASE-20219",
-    "BEYOND-CASE-20249",
-    "BEYOND-CASE-20254",
-    "BEYOND-CASE-20255",
     "BEYOND-CASE-20301",
     "BEYOND-CASE-20302",
     "BEYOND-CASE-20303",

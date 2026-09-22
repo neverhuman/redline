@@ -261,6 +261,8 @@ pub struct SequenceState {
     pub start: i64,
     pub increment: i64,
     pub last_value: Option<i64>,
+    /// `ALTER SEQUENCE ... OWNED BY` target, folded `table.column` text.
+    pub owned_by: Option<String>,
 }
 
 impl SequenceState {
@@ -269,6 +271,7 @@ impl SequenceState {
             start,
             increment,
             last_value: None,
+            owned_by: None,
         }
     }
 }

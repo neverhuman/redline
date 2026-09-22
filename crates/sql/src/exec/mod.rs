@@ -790,6 +790,20 @@ pub fn execute_prepared(
                 affected_rows: 0,
             })
         }
+        PreparedKind::AlterSequenceOwned { name, owned_by } => {
+            let key = crate::pg_schema::sequence_key(name);
+            with_session_reentrant(conn, |session| {
+                let entry = session.pg_sequences.get_mut(&key).ok_or_else(|| {
+                    Error::UnsupportedSql(format!("relation \"{key}\" does not exist"))
+                })?;
+                entry.owned_by = Some(owned_by.to_string());
+                Ok(())
+            })?;
+            Ok(ExecutionResult {
+                runtime: RuntimeState::Done,
+                affected_rows: 0,
+            })
+        }
         // Track J: SET TRANSACTION ISOLATION LEVEL — recall-only stash.
         PreparedKind::SetTransactionIsolation { level } => {
             with_session_reentrant(conn, |session| {
@@ -1146,7 +1160,8 @@ fn template_writes(kind: &PreparedKind) -> bool {
         | PreparedKind::CreateSchema { .. }
         | PreparedKind::DropSchema { .. }
         | PreparedKind::CreateSequence { .. }
-        | PreparedKind::DropSequence { .. } => true,
+        | PreparedKind::DropSequence { .. }
+        | PreparedKind::AlterSequenceOwned { .. } => true,
         PreparedKind::Merge(_) => true,
     }
 }

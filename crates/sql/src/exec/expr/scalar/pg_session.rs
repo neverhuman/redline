@@ -39,6 +39,16 @@ pub(crate) fn try_eval(name: &str, values: &[SqlValue]) -> Option<Result<SqlValu
             }
         }
         "repeat" => repeat(values),
+        "current_user" | "session_user" | "current_role" => zero(values, || {
+            Ok(SqlValue::Text(Arc::from(crate::pg_schema::SESSION_ROLE)))
+        }),
+        "pg_get_userbyid" => one(values, |value| match value {
+            SqlValue::Integer(10) => Ok(SqlValue::Text(Arc::from(crate::pg_schema::SESSION_ROLE))),
+            SqlValue::Text(text) if text.as_ref() == "10" => {
+                Ok(SqlValue::Text(Arc::from(crate::pg_schema::SESSION_ROLE)))
+            }
+            _ => Ok(SqlValue::Null),
+        }),
         _ => return None,
     };
     Some(result)

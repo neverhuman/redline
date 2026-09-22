@@ -10,6 +10,7 @@ mod listen;
 mod matview;
 mod parser;
 mod pg_fn;
+mod pg_schema;
 mod planner;
 mod regexp;
 mod rql;

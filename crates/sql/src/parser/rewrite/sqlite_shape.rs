@@ -75,14 +75,28 @@ pub(crate) fn rewrite_select_into_in_statement(stmt: &str) -> String {
     // keyword (FROM/WHERE/...).
     let rest = &trimmed[after_into..];
     let upper_rest = &upper[after_into..];
-    let mut name_end = 0usize;
-    for (idx, ch) in rest.char_indices() {
-        if ch.is_ascii_alphanumeric() || ch == '_' || ch == '.' {
-            name_end = idx + ch.len_utf8();
-        } else {
-            break;
+    let name_end = if rest.starts_with('"') {
+        let mut end = 1usize;
+        let bytes = rest.as_bytes();
+        while end < bytes.len() {
+            if bytes[end] == b'"' {
+                end += 1;
+                break;
+            }
+            end += 1;
         }
-    }
+        end
+    } else {
+        let mut end = 0usize;
+        for (idx, ch) in rest.char_indices() {
+            if ch.is_ascii_alphanumeric() || ch == '_' || ch == '.' {
+                end = idx + ch.len_utf8();
+            } else {
+                break;
+            }
+        }
+        end
+    };
     if name_end == 0 {
         return stmt.to_owned();
     }

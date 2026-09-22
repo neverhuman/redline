@@ -115,6 +115,9 @@ fn parse_prepared_template_impl(conn: &Connection, sql: &str) -> Result<Prepared
     if let Some(prepared) = pg_fn_stmt::try_prepare(conn, sql)? {
         return Ok(prepared);
     }
+    if let Some(prepared) = crate::pg_schema::try_prepare(conn, sql)? {
+        return Ok(prepared);
+    }
     if starts_with_create_virtual_table(stmt) {
         return Err(Error::UnsupportedSql(
             "CREATE VIRTUAL TABLE is not supported without module migration support".to_owned(),
@@ -123,12 +126,21 @@ fn parse_prepared_template_impl(conn: &Connection, sql: &str) -> Result<Prepared
     let schema = conn.schema_snapshot();
     let schema_epoch = conn.schema_epoch();
 
-    // Track J: strip Postgres-registered schema prefixes (`sch.t` → `t`)
-    // before further parsing. SQLite has no schema layer; the kernel rejects
-    // any qualifier other than `main`, so once the session has registered
-    // the namespace via CREATE SCHEMA we treat qualified references as
-    // ordinary table names in the main schema.
-    if let Some(rewritten) = strip_registered_pg_schema_prefixes(conn, sql) {
+    // SQLite keeps one namespace, so a registered schema prefix is removed.
+    // The postgres dialect keeps `schema.table` as its own name. Sequence
+    // DDL still stores the bare sequence name.
+    if crate::value::postgres_result_dialect() && !crate::pg_schema::is_sequence_ddl(sql) {
+        if let Some(rewritten) = crate::pg_schema::rewrite_tables(conn, sql) {
+            if rewritten != sql {
+                return parse_prepared_template_impl(conn, &rewritten);
+            }
+        }
+        if let Some(rewritten) = crate::pg_schema::rewrite_session_keywords(sql) {
+            if rewritten != sql {
+                return parse_prepared_template_impl(conn, &rewritten);
+            }
+        }
+    } else if let Some(rewritten) = strip_registered_pg_schema_prefixes(conn, sql) {
         if rewritten != sql {
             return parse_prepared_template_impl(conn, &rewritten);
         }

@@ -50,6 +50,40 @@ pub(crate) fn is_param_char(byte: u8) -> bool {
     byte.is_ascii_alphanumeric() || byte == b'_'
 }
 
+fn nextval_sequence_name(expr: &Expr) -> Option<String> {
+    let Expr::Function(func) = expr else {
+        return None;
+    };
+    if !func.name.to_string().eq_ignore_ascii_case("nextval") {
+        return None;
+    }
+    let sqlparser::ast::FunctionArguments::List(list) = &func.args else {
+        return None;
+    };
+    let [arg] = list.args.as_slice() else {
+        return None;
+    };
+    let sqlparser::ast::FunctionArg::Unnamed(sqlparser::ast::FunctionArgExpr::Expr(Expr::Value(
+        value,
+    ))) = arg
+    else {
+        return None;
+    };
+    let sqlparser::ast::Value::SingleQuotedString(text) = &value.value else {
+        return None;
+    };
+    let folded = text.to_ascii_lowercase();
+    let name = folded
+        .rsplit_once('.')
+        .map(|(_, bare)| bare)
+        .unwrap_or(folded.as_str());
+    if name.is_empty() {
+        None
+    } else {
+        Some(name.to_owned())
+    }
+}
+
 pub(crate) fn convert_column_def(
     column: ColumnDef,
     ordinal: usize,
@@ -100,6 +134,13 @@ pub(crate) fn convert_column_def(
                 conflict: ConflictAction::Abort,
             }),
             ColumnOption::Default(expr) => {
+                if let Some(sequence) = nextval_sequence_name(&expr) {
+                    generated = Some(GeneratedColumnSpec {
+                        kind: GeneratedColumnKind::Stored,
+                        expr_sql: format!("nextval:{sequence}").into_boxed_str(),
+                    });
+                    continue;
+                }
                 let expr_ast = default_expr_to_kernel_ast(&expr, column_lookup)?;
                 if let ExprAst::Const(value) = &expr_ast {
                     default_value = Some(value.clone());

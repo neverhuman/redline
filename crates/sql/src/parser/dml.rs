@@ -1,5 +1,11 @@
 use super::*;
 
+fn is_generated_write_target(col: &redlinedb_kernel::catalog::ColumnDef) -> bool {
+    col.generated
+        .as_ref()
+        .is_some_and(|spec| !crate::pg_schema::is_nextval_default(spec.expr_sql.as_ref()))
+}
+
 pub(crate) fn bind_insert(
     conn: &Connection,
     schema: Arc<SchemaSnapshot>,
@@ -45,7 +51,7 @@ pub(crate) fn bind_insert(
         // generated column with "cannot INSERT into generated column X".
         for ord in &ordinals {
             if let Some(col) = table.columns.get(*ord)
-                && col.generated.is_some()
+                && is_generated_write_target(col)
             {
                 return Err(Error::UnsupportedSql(format!(
                     "cannot INSERT into generated column \"{}\"",
@@ -246,7 +252,7 @@ pub(crate) fn bind_update(
         // Phase-11 SQL-D A6: SQLite rejects assigning a value directly
         // to a generated column with "cannot UPDATE generated column X".
         if let Some(col) = table.columns.get(ordinal)
-            && col.generated.is_some()
+            && is_generated_write_target(col)
         {
             return Err(Error::UnsupportedSql(format!(
                 "cannot UPDATE generated column \"{}\"",
@@ -571,7 +577,7 @@ fn bind_upsert_arm(
                         // still an UPDATE — assigning a generated column
                         // is forbidden in SQLite.
                         if let Some(col) = table.columns.get(ordinal)
-                            && col.generated.is_some()
+                            && is_generated_write_target(col)
                         {
                             return Err(Error::UnsupportedSql(format!(
                                 "cannot UPDATE generated column \"{}\"",
@@ -823,7 +829,7 @@ fn bind_merge_assignments(
             }
         };
         if let Some(col) = table.columns.get(ordinal)
-            && col.generated.is_some()
+            && is_generated_write_target(col)
         {
             return Err(Error::UnsupportedSql(format!(
                 "cannot UPDATE generated column \"{}\"",

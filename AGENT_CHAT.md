@@ -4,6 +4,10 @@
 
 Claim: canonical checkout `/home/ubuntu/redlineDB`, rebased onto `origin/main` `162b582b5`. `RUSTC_WRAPPER` must point at the repo-root script so nested workspaces can run local `just pr-ci`. No engine behavior change.
 
+## 2026-09-22T19:05Z parity/pg-sql-fn
+
+Claim: canonical checkout `/home/ubuntu/redlineDB`, still on `parity/pg-sql-fn`. Postgres-dialect schema qualifiers must stay distinct (`auth_ns.users_collide` versus `public.users_collide`). `CREATE SCHEMA ... AUTHORIZATION CURRENT_USER` must satisfy `pg_get_userbyid(nspowner) = current_user`. `DEFAULT nextval` plus `ALTER SEQUENCE ... OWNED BY` must insert sequence values. SQLite dialect keeps stripping schema prefixes. No bulletfarm hub.
+
 ## 2026-09-22T18:36Z parity/pg-sql-fn
 
 Claim: canonical checkout `/home/ubuntu/redlineDB`, still on `parity/pg-sql-fn`. `just pr-ci` reached the official suite, then failed reading `target/redline-testing/postgres-qualification.json` because `REDLINE_TESTING_POSTGRES_URL` was unset and the gate never wrote that file. `ops/ci/parity.sh` now reuses a local listener on `127.0.0.1:55432` when its identity is `160015|C|C|UTC`. No engine behavior change.

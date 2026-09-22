@@ -154,6 +154,11 @@ pub enum PreparedKind {
         name: Arc<str>,
         if_exists: bool,
     },
+    /// `ALTER SEQUENCE name OWNED BY table.column`.
+    AlterSequenceOwned {
+        name: Arc<str>,
+        owned_by: Arc<str>,
+    },
     /// Track J — `SET TRANSACTION ISOLATION LEVEL <level>`. Recall-only
     /// store on the session.
     SetTransactionIsolation {

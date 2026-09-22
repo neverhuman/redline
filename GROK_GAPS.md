@@ -56,7 +56,11 @@ beyond gate is then 197 passed, 68 failed, 0 skipped, and `20220` through
 `20239` left the allowlist. `LANGUAGE SQL` functions run their `SELECT` body
 with call arguments substituted. The beyond gate is then 201 passed, 64 failed,
 0 skipped, and `20300`, `20313`, `20317`, and `20318` left the allowlist.
-`LANGUAGE plpgsql` stays unsupported.
+`LANGUAGE plpgsql` stays unsupported. Postgres-dialect schema qualifiers stay
+distinct, `pg_get_userbyid(nspowner) = current_user` holds for a schema created
+`AUTHORIZATION CURRENT_USER`, and `DEFAULT nextval` plus `ALTER SEQUENCE
+... OWNED BY` inserts sequence values. The beyond gate is then 204 passed,
+61 failed, 0 skipped, and `20249`, `20254`, and `20255` left the allowlist.
 
 ## Governing decisions — 2026-09-18
 
