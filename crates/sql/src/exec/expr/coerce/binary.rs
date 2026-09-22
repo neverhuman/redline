@@ -35,12 +35,18 @@ pub(crate) fn eval_binary(
         BinaryOperator::Plus => {
             match try_pg_decimal_arith(&left_value, &right_value, PgDecimalOp::Add) {
                 Some(v) => v,
-                None => arithmetic(
-                    left_value,
-                    right_value,
-                    |a, b| Some(a.wrapping_add(b)),
-                    |a, b| Some(a + b),
-                )?,
+                None => {
+                    if let Some(v) = try_float4_add(&left_value, &right_value) {
+                        v
+                    } else {
+                        arithmetic(
+                            left_value,
+                            right_value,
+                            |a, b| Some(a.wrapping_add(b)),
+                            |a, b| Some(a + b),
+                        )?
+                    }
+                }
             }
         }
         BinaryOperator::Minus => match try_json_delete(&left_value, &right_value) {
@@ -359,6 +365,30 @@ pub(crate) fn pg_regex_result(
 
 /// `'2025-01-02'::timestamp - '2025-01-01'::timestamp` is the text `1 day`.
 /// Only date-shaped text is recognized so numeric text subtraction is unchanged.
+/// Postgres `real` is float4. Two non-integer values that are already
+/// float4-rounded add in binary32, so `0.1::real + 0.2::real` equals
+/// `0.3::real`. Integer-valued operands stay on the f64 path.
+fn try_float4_add(left: &SqlValue, right: &SqlValue) -> Option<SqlValue> {
+    if !crate::value::postgres_result_dialect() {
+        return None;
+    }
+    let (SqlValue::Real(left), SqlValue::Real(right)) = (left, right) else {
+        return None;
+    };
+    if !is_float4_canonical(*left) || !is_float4_canonical(*right) {
+        return None;
+    }
+    if left.fract() == 0.0 && right.fract() == 0.0 {
+        return None;
+    }
+    let sum = (*left as f32) + (*right as f32);
+    Some(SqlValue::Real(f64::from(sum)))
+}
+
+fn is_float4_canonical(value: f64) -> bool {
+    value.is_finite() && value == f64::from(value as f32)
+}
+
 fn try_timestamp_diff(left: &SqlValue, right: &SqlValue) -> Option<SqlValue> {
     let (SqlValue::Text(left), SqlValue::Text(right)) = (left, right) else {
         return None;

@@ -60,6 +60,14 @@ pub(crate) fn cast_value(
         });
     }
 
+    // Postgres `real` / `float4` is binary32. `0.1::real + 0.2::real = 0.3::real`
+    // is true only when the addition itself is float4. SQLite `real` stays f64.
+    if crate::value::postgres_result_dialect()
+        && (type_name.eq_ignore_ascii_case("real") || type_name.eq_ignore_ascii_case("float4"))
+    {
+        return Ok(SqlValue::Real(cast_to_real(&value) as f32 as f64));
+    }
+
     if type_name_contains_ci(&type_name, "real")
         || type_name_contains_ci(&type_name, "floa")
         || type_name_contains_ci(&type_name, "doub")

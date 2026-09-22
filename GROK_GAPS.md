@@ -30,7 +30,9 @@ result dialect, `CREATE INDEX ... NULLS FIRST/LAST` is accepted; the SQLite
 shell still rejects it. The beyond gate is then 147 passed, 118 failed, 0 skipped,
 and `20357` left the allowlist. Window `avg` of integers renders Postgres numeric
 scale in that dialect (`15.0000000000000000`). The beyond gate is then
-148 passed, 117 failed, 0 skipped, and `20117` left the allowlist.
+148 passed, 117 failed, 0 skipped, and `20117` left the allowlist. Postgres
+`real` addition is float4, so `0.1::real + 0.2::real = 0.3::real`. The beyond
+gate is then 149 passed, 116 failed, 0 skipped, and `20005` left the allowlist.
 
 ## Governing decisions — 2026-09-18
 

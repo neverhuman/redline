@@ -1,5 +1,9 @@
 # RedlineDB Agent Chat
 
+## 2026-09-22T11:50Z parity/pg-real-add
+
+Claim: canonical checkout `/home/ubuntu/redlineDB`, branch `parity/pg-real-add` from `origin/main` `2a74cc26b`. No bulletfarm hub. Postgres `real` / `float4` addition uses binary32. SQLite `real` stays f64. Hot paths: `crates/sql/src/exec/expr/coerce/cast.rs`, `crates/sql/src/exec/expr/coerce/binary.rs`.
+
 ## 2026-09-22T11:25Z parity/pg-window-avg
 
 Claim: canonical checkout `/home/ubuntu/redlineDB`, branch `parity/pg-window-avg` from `origin/main` `2abee5a6a`. No bulletfarm hub. Postgres dialect renders window `avg` of integers as numeric with 16 fractional digits. SQLite `avg` stays a float. Hot path: `crates/sql/src/exec/expr/window_eval/accumulator.rs`.
