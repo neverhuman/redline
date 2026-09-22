@@ -215,6 +215,7 @@ fn apply_query_tail(
     };
     validate_order_by_positions(&order_by, &template.output_columns)?;
     resolve_order_by_positions(&mut order_by, &template.output_columns);
+    validate_distinct_on_matches_order_by(&plan.distinct_on, &order_by)?;
 
     let (limit, offset) = match limit_clause {
         Some(LimitClause::LimitOffset {
@@ -385,6 +386,7 @@ pub(crate) fn bind_simple_select_query(
     };
     validate_order_by_positions(&order_by, &output_columns)?;
     resolve_order_by_positions(&mut order_by, &output_columns);
+    validate_distinct_on_matches_order_by(&distinct_on, &order_by)?;
 
     let (limit, offset) = match limit_clause {
         Some(LimitClause::LimitOffset {
@@ -1330,6 +1332,35 @@ fn resolve_order_by_positions(items: &mut [OrderByExpr], output_columns: &[Strin
 /// Validate that every bare positional integer in `items` references
 /// a real output column. Returns `Err` with a SQLite-compatible
 /// "Nth ORDER BY term out of range" message for the first offender.
+/// Postgres requires the `DISTINCT ON` expressions to be the leftmost
+/// `ORDER BY` terms. "The first row of each group" is only well defined once
+/// the group's rows are ordered, so an `ORDER BY` that sorts by something
+/// else first would silently decide which row survives; Postgres rejects the
+/// query rather than pick an arbitrary winner. With no `ORDER BY` at all the
+/// winner is explicitly unspecified and the query is allowed, so an empty
+/// `order_by` is not an error here.
+///
+/// Ordering among the leading terms does not matter, and extra trailing terms
+/// are fine -- they break ties inside a group.
+fn validate_distinct_on_matches_order_by(
+    distinct_on: &[Expr],
+    order_by: &[OrderByExpr],
+) -> Result<()> {
+    if distinct_on.is_empty() || order_by.is_empty() {
+        return Ok(());
+    }
+    let leading = order_by.len().min(distinct_on.len());
+    let covers_leading = order_by[..leading]
+        .iter()
+        .all(|item| distinct_on.contains(&item.expr));
+    if !covers_leading || order_by.len() < distinct_on.len() {
+        return Err(Error::Bind(
+            "SELECT DISTINCT ON expressions must match initial ORDER BY expressions".to_owned(),
+        ));
+    }
+    Ok(())
+}
+
 pub(crate) fn validate_order_by_positions(
     items: &[OrderByExpr],
     output_columns: &[String],

@@ -378,7 +378,11 @@ fn build_select_runtime(
     {
         match &plan.source {
             SelectSource::Table(table) => {
-                if plan.order_by.is_empty() {
+                // A DISTINCT ON query must reach the materializing
+                // path even with no ORDER BY: Postgres still keeps one
+                // row per ON key (an arbitrary one), so the streaming
+                // scan below would return every row instead.
+                if plan.order_by.is_empty() && plan.distinct_on.is_empty() {
                     // Lane C access-path resolution. Order of
                     // preference matches the planner:
                     //   1. rowid PK fast path (already covered by
@@ -546,7 +550,7 @@ fn build_select_runtime(
                 } else {
                     sqlite_schema_rows(conn)
                 };
-                if !plan.order_by.is_empty() {
+                if !plan.order_by.is_empty() || !plan.distinct_on.is_empty() {
                     let sqlite_rows = rows
                         .into_iter()
                         .map(SqlRow::SqliteSchema)
