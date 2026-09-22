@@ -403,7 +403,24 @@ fn run_one_case_against_target(
         };
     }
 
-    if ref_norm == tgt_norm && reference.exit_code == 0 {
+    // Both engines rejected the script, and printed the same thing doing it.
+    // Whether that is agreement depends entirely on *why* the target
+    // rejected, which only the corpus can say -- see
+    // `BeyondCase::expected_target_stderr_contains`.
+    let shared_rejection = if ref_norm == tgt_norm && reference.exit_code != 0 {
+        Some(classify_shared_rejection(
+            case,
+            &target.stderr,
+            target_bin,
+            timeout,
+        ))
+    } else {
+        None
+    };
+
+    if ref_norm == tgt_norm
+        && (reference.exit_code == 0 || matches!(shared_rejection, Some(SharedRejection::Agrees)))
+    {
         TargetOutcome {
             status: "passed".to_owned(),
             diagnostic: None,
@@ -416,7 +433,9 @@ fn run_one_case_against_target(
             target_elapsed_ns,
         }
     } else {
-        let diagnostic = if ref_norm == tgt_norm {
+        let diagnostic = if let Some(rejection) = shared_rejection {
+            rejection.diagnostic(reference.exit_code, target.exit_code, &target_stderr_head)
+        } else if ref_norm == tgt_norm {
             format!(
                 "matching nonzero exit is not a semantic pass: reference={} target={} target_stderr={}",
                 reference.exit_code, target.exit_code, target_stderr_head
@@ -532,6 +551,85 @@ fn first_nonempty_line(s: &str) -> String {
         .find(|line| !line.trim().is_empty())
         .unwrap_or("")
         .to_owned()
+}
+
+/// Why a case that both engines rejected did or did not count as agreement.
+enum SharedRejection {
+    /// The corpus declared the message, the target produced it, and the
+    /// target got as far as the statement under test.
+    Agrees,
+    /// The corpus says nothing about what the target must say, so a shared
+    /// non-zero exit proves only that both engines were unhappy.
+    Undeclared,
+    /// The corpus declared a message the target did not produce -- it
+    /// rejected the script for some other reason.
+    WrongReason { expected: String, actual: String },
+    /// The target never reached the statement under test: its setup failed.
+    /// Cases 20021 and 20023 land here, on `DROP TYPE` and `DROP DOMAIN`.
+    SetupFailed { stderr: String },
+}
+
+impl SharedRejection {
+    fn diagnostic(&self, reference_exit: i32, target_exit: i32, stderr_head: &str) -> String {
+        match self {
+            Self::Agrees => unreachable!("an agreeing rejection is a pass"),
+            Self::Undeclared => format!(
+                "matching nonzero exit is not a semantic pass: reference={reference_exit} \
+                 target={target_exit} target_stderr={stderr_head}. Set \
+                 expected_target_stderr_contains on this case if the target is \
+                 expected to reject it, and for this reason",
+            ),
+            Self::WrongReason { expected, actual } => format!(
+                "target rejected for a different reason: expected stderr to contain \
+                 {expected:?}, got {actual:?}",
+            ),
+            Self::SetupFailed { stderr } => {
+                format!("target failed during setup, before the statement under test: {stderr:?}",)
+            }
+        }
+    }
+}
+
+/// A shared non-zero exit counts as agreement only when the corpus declares
+/// the message the target must produce, the target produces it, and the
+/// target executed the case's setup successfully -- so the rejection came
+/// from the statement under test rather than from something before it.
+fn classify_shared_rejection(
+    case: &BeyondCase,
+    target_stderr: &str,
+    target_bin: &Path,
+    timeout: Duration,
+) -> SharedRejection {
+    let Some(expected) = case.expected_target_stderr_contains.as_deref() else {
+        return SharedRejection::Undeclared;
+    };
+    if !target_stderr.contains(expected) {
+        return SharedRejection::WrongReason {
+            expected: expected.to_owned(),
+            actual: truncate(&first_nonempty_line(target_stderr), 256),
+        };
+    }
+    // Re-run the setup alone against a fresh in-memory database. We do not
+    // care what it produces, only whether the target can execute it at all:
+    // if it cannot, the combined run died before the statement the case is
+    // about, and the matching exit code means nothing.
+    if let Some(setup) = &case.setup_stdin {
+        let stdin = format!("{SQLITE_FORMATTING_PREAMBLE}{setup}");
+        match invoke_target(target_bin, &stdin, timeout) {
+            Ok(out) if out.exit_code == 0 => {}
+            Ok(out) => {
+                return SharedRejection::SetupFailed {
+                    stderr: truncate(&first_nonempty_line(&out.stderr), 256),
+                };
+            }
+            Err(err) => {
+                return SharedRejection::SetupFailed {
+                    stderr: format!("setup invocation error: {err}"),
+                };
+            }
+        }
+    }
+    SharedRejection::Agrees
 }
 
 fn assembled_stdin(case: &BeyondCase) -> String {

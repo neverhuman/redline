@@ -3,7 +3,18 @@ use anyhow::{Context, Result, ensure};
 use serde_json::Value;
 use std::collections::BTreeSet;
 
-pub(super) fn outcomes(raw: &str, required: &BTreeSet<String>) -> Result<BTreeSet<String>> {
+/// `declared_rejections` are the cases whose corpus entry states the message
+/// the target must produce when both engines reject the script. Only those may
+/// pass with a non-zero exit; for every other case a negative result that
+/// "matches" proves nothing, because two engines can be unhappy for unrelated
+/// reasons. The gate re-derives this from the corpus rather than trusting the
+/// runner, so a runner that started passing negatives on its own would still
+/// be caught here.
+pub(super) fn outcomes(
+    raw: &str,
+    required: &BTreeSet<String>,
+    declared_rejections: &BTreeSet<String>,
+) -> Result<BTreeSet<String>> {
     let mut oracle = BTreeSet::new();
     let mut target = BTreeSet::new();
     let mut failed = BTreeSet::new();
@@ -52,7 +63,8 @@ pub(super) fn outcomes(raw: &str, required: &BTreeSet<String>) -> Result<BTreeSe
                 failed.insert(id);
             } else {
                 ensure!(
-                    row["reference_exit_code"] == 0 && row["target_exit_code"] == 0,
+                    (row["reference_exit_code"] == 0 && row["target_exit_code"] == 0)
+                        || declared_rejections.contains(&id),
                     "case {id} needs semantic error assertions before a negative result can pass"
                 );
             }
@@ -81,8 +93,9 @@ mod tests {
     #[test]
     fn missing_duplicate_skipped_unknown_and_empty_runs_fail() {
         let required = BTreeSet::from(["c".to_owned()]);
+        let none = BTreeSet::new();
         let good = rows("passed");
-        assert!(outcomes(&good, &required).unwrap().is_empty());
+        assert!(outcomes(&good, &required, &none).unwrap().is_empty());
         for bad in [
             String::new(),
             good.lines().next().unwrap().into(),
@@ -90,9 +103,33 @@ mod tests {
             rows("skipped"),
             good.replace("\"c\"", "\"unknown\""),
         ] {
-            assert!(outcomes(&bad, &required).is_err(), "{bad}");
+            assert!(outcomes(&bad, &required, &none).is_err(), "{bad}");
         }
-        assert!(outcomes("", &BTreeSet::new()).is_err());
-        assert_eq!(outcomes(&rows("failed"), &required).unwrap(), required);
+        assert!(outcomes("", &BTreeSet::new(), &none).is_err());
+        assert_eq!(
+            outcomes(&rows("failed"), &required, &none).unwrap(),
+            required
+        );
+    }
+
+    #[test]
+    fn a_negative_result_passes_only_where_the_corpus_declared_the_message() {
+        let required = BTreeSet::from(["c".to_owned()]);
+        let rejecting = rows("passed")
+            .replace("\"target_exit_code\":0", "\"target_exit_code\":3")
+            .replace("\"reference_exit_code\":0", "\"reference_exit_code\":3");
+        // Undeclared: a matching non-zero exit is not evidence of anything.
+        let err = outcomes(&rejecting, &required, &BTreeSet::new())
+            .unwrap_err()
+            .to_string();
+        assert!(err.contains("needs semantic error assertions"), "{err}");
+        // Declared: the corpus stated what the target must say, so the runner
+        // is allowed to have checked it.
+        let declared = BTreeSet::from(["c".to_owned()]);
+        assert!(
+            outcomes(&rejecting, &required, &declared)
+                .unwrap()
+                .is_empty()
+        );
     }
 }

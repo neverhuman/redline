@@ -66,6 +66,23 @@ pub struct BeyondCase {
     /// fixtures declare psql's ON_ERROR_STOP exit code (3).
     #[serde(default)]
     pub expected_reference_exit: i32,
+    /// What the target's stderr must contain for a case that BOTH engines
+    /// reject to count as agreement.
+    ///
+    /// Absent -- the default, and the safe direction -- means a shared
+    /// non-zero exit is never a pass. That default exists because the two
+    /// engines can reject the same script for unrelated reasons: case 20021
+    /// asks Postgres to refuse a bad enum value, and RedlineDB refuses the
+    /// `DROP TYPE` in its *setup*, never reaching the statement under test.
+    /// Counting that as agreement would be a false pass of exactly the kind
+    /// this suite exists to catch.
+    ///
+    /// Declaring a value moves the burden to the corpus author, who has to
+    /// write down the semantic message the engine is expected to produce. A
+    /// capability gap ("unsupported sql: ...") cannot be spelled that way
+    /// without the diff saying so out loud.
+    #[serde(default)]
+    pub expected_target_stderr_contains: Option<String>,
     #[serde(default)]
     pub compare_mode: CompareMode,
     #[serde(default)]

@@ -93,7 +93,12 @@ pub fn check(raw_path: &Path, baseline_path: Option<&Path>, readme: Option<&Path
         .into_iter()
         .map(|case| format!("BEYOND-CASE-{:05}", case.id))
         .collect();
-    let failures = outcomes(&raw, &required)?;
+    let declared_rejections: BTreeSet<_> = super::oracle::load_cases()?
+        .into_iter()
+        .filter(|case| case.expected_target_stderr_contains.is_some())
+        .map(|case| format!("BEYOND-CASE-{:05}", case.id))
+        .collect();
+    let failures = outcomes(&raw, &required, &declared_rejections)?;
     let reference = &provenance["reference"];
     ensure!(
         reference["settings"] == "160015|C|C|UTC",
@@ -277,7 +282,8 @@ mod tests {
         assert!(
             outcomes(
                 &rows("passed").replace("exit_code\":0", "exit_code\":3"),
-                &BTreeSet::from(["c".to_owned()])
+                &BTreeSet::from(["c".to_owned()]),
+                &BTreeSet::new()
             )
             .is_err()
         );
