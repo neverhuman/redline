@@ -357,6 +357,12 @@ pub(crate) fn build_plan(
         PreparedKind::SetSearchPath { .. } => {
             simple_node(PhysicalKind::Constant, "SET search_path".to_owned())
         }
+        PreparedKind::CreateCollation { .. } => {
+            simple_node(PhysicalKind::Constant, "CREATE COLLATION".to_owned())
+        }
+        PreparedKind::DropCollation { .. } => {
+            simple_node(PhysicalKind::Constant, "DROP COLLATION".to_owned())
+        }
         PreparedKind::ShowVariable { .. } => simple_node(PhysicalKind::Constant, "SHOW".to_owned()),
         PreparedKind::AlterIndex { .. } => {
             simple_node(PhysicalKind::Constant, "ALTER INDEX".to_owned())

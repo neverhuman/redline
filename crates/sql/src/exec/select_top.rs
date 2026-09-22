@@ -1083,12 +1083,7 @@ fn normalize_order_key(order: &OrderByExpr, value: SqlValue) -> Result<SqlValue>
         return Ok(value);
     };
     Ok(match (&collation, value) {
-        (crate::collation::Collation::NoCase, SqlValue::Text(text)) => {
-            SqlValue::Text(Arc::from(text.to_ascii_lowercase()))
-        }
-        (crate::collation::Collation::RTrim, SqlValue::Text(text)) => {
-            SqlValue::Text(Arc::from(text.trim_end_matches(' ')))
-        }
+        (_, SqlValue::Text(text)) => SqlValue::Text(Arc::from(collation.sort_text(&text))),
         (_, value) => value,
     })
 }

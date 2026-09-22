@@ -57,6 +57,7 @@ pub(crate) mod templates;
 pub use split::{first_statement_complete, is_blank_sql, split_first_statement, split_statements};
 pub(crate) use templates::{bind_statement, template};
 
+mod collation_stmt;
 mod rewrite;
 #[allow(unused_imports)]
 pub(crate) use rewrite::{
@@ -103,6 +104,9 @@ pub fn parse_prepared_template(conn: &Connection, sql: &str) -> Result<PreparedT
 fn parse_prepared_template_impl(conn: &Connection, sql: &str) -> Result<PreparedTemplate> {
     let trimmed = sql.trim();
     let stmt = trimmed.trim_end_matches(';').trim();
+    if let Some(prepared) = collation_stmt::try_prepare(conn, sql)? {
+        return Ok(prepared);
+    }
     if starts_with_create_virtual_table(stmt) {
         return Err(Error::UnsupportedSql(
             "CREATE VIRTUAL TABLE is not supported without module migration support".to_owned(),

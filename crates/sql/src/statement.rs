@@ -163,6 +163,16 @@ pub enum PreparedKind {
     SetSearchPath {
         shown: Arc<str>,
     },
+    /// `CREATE COLLATION name (provider = icu, locale = ..., deterministic = false)`.
+    CreateCollation {
+        name: Arc<str>,
+        /// 1 = accent insensitive, 2 = case insensitive.
+        level: u8,
+    },
+    DropCollation {
+        name: Arc<str>,
+        if_exists: bool,
+    },
     /// Track J — `SHOW <name>` for session-state introspection. Today
     /// returns the recalled `transaction_isolation`; other names return
     /// empty string.

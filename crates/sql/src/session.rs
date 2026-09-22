@@ -202,6 +202,9 @@ pub struct SessionState {
     /// `SET search_path` text as `SHOW search_path` prints it. Default
     /// matches Postgres: `"$user", public`.
     pub search_path: String,
+    /// `CREATE COLLATION` registrations. Value is the ICU strength:
+    /// 1 accent-and-case insensitive, 2 case insensitive.
+    pub pg_collations: std::collections::BTreeMap<String, u8>,
 }
 
 /// Track J — runtime state for a PostgreSQL-style sequence.
@@ -293,6 +296,7 @@ impl Default for SessionState {
             pg_sequences: std::collections::BTreeMap::new(),
             transaction_isolation: crate::statement::TransactionIsolationLevel::ReadCommitted,
             search_path: "\"$user\", public".to_owned(),
+            pg_collations: std::collections::BTreeMap::new(),
         }
     }
 }
@@ -354,6 +358,7 @@ impl SessionState {
         self.sqlite_sequences_dirty.clear();
         self.transaction_isolation = crate::statement::TransactionIsolationLevel::ReadCommitted;
         self.search_path = "\"$user\", public".to_owned();
+        self.pg_collations.clear();
     }
 
     /// Reset journal + savepoint stack at a transaction boundary.

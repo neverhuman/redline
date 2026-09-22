@@ -372,7 +372,12 @@ pub(crate) fn compare_binary_with(
         Some(o) => o,
         None => compare_values(&left, &right),
     };
-    Ok(SqlValue::Integer(if accept(ord) { 1 } else { 0 }))
+    let yes = accept(ord);
+    if crate::value::postgres_result_dialect() {
+        Ok(SqlValue::Text(Arc::from(if yes { "t" } else { "f" })))
+    } else {
+        Ok(SqlValue::Integer(if yes { 1 } else { 0 }))
+    }
 }
 
 pub(crate) fn collation_from_expr(expr: &Expr) -> Option<crate::collation::Collation> {

@@ -95,6 +95,44 @@ pub(crate) fn selection_passes(
 /// operators in this crate return the textual tokens `"t"`/`"f"` to
 /// match psql's unaligned output; treat those (and the spelled-out
 /// `"true"`/`"false"`) as boolean values inside WHERE / CASE.
+fn is_text_cast(data_type: &sqlparser::ast::DataType) -> bool {
+    let name = data_type.to_string().to_ascii_lowercase();
+    name == "text" || name == "varchar" || name.starts_with("char")
+}
+
+fn is_boolean_expr(expr: &Expr) -> bool {
+    match expr {
+        Expr::BinaryOp { op, .. } => matches!(
+            op,
+            BinaryOperator::Eq
+                | BinaryOperator::NotEq
+                | BinaryOperator::Lt
+                | BinaryOperator::LtEq
+                | BinaryOperator::Gt
+                | BinaryOperator::GtEq
+                | BinaryOperator::And
+                | BinaryOperator::Or
+        ),
+        Expr::Nested(inner) | Expr::UnaryOp { expr: inner, .. } => is_boolean_expr(inner),
+        _ => false,
+    }
+}
+
+fn pg_bool_text(value: SqlValue) -> SqlValue {
+    match value {
+        SqlValue::Null => SqlValue::Null,
+        SqlValue::Integer(0) => SqlValue::Text(Arc::from("false")),
+        SqlValue::Integer(_) => SqlValue::Text(Arc::from("true")),
+        SqlValue::Text(text)
+            if text.eq_ignore_ascii_case("f") || text.eq_ignore_ascii_case("false") =>
+        {
+            SqlValue::Text(Arc::from("false"))
+        }
+        SqlValue::Text(_) => SqlValue::Text(Arc::from("true")),
+        other => other,
+    }
+}
+
 pub(crate) fn pg_bool_or_truthy(value: &SqlValue) -> bool {
     if let SqlValue::Text(s) = value {
         let trimmed = s.as_ref().trim();
@@ -272,7 +310,17 @@ pub(crate) fn eval_scalar(
             expr,
             data_type,
             ..
-        } => cast_value(eval_scalar(expr, row, bindings)?, data_type, kind.clone())?,
+        } => {
+            let value = eval_scalar(expr, row, bindings)?;
+            if crate::value::postgres_result_dialect()
+                && is_boolean_expr(expr)
+                && is_text_cast(data_type)
+            {
+                pg_bool_text(value)
+            } else {
+                cast_value(value, data_type, kind.clone())?
+            }
+        }
         Expr::Ceil { expr, .. } => match eval_scalar(expr, row, bindings)? {
             SqlValue::Null => SqlValue::Null,
             value => SqlValue::Real(numeric_value(&value)?.ceil()),

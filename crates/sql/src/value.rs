@@ -29,7 +29,24 @@ pub fn compare_values(left: &SqlValue, right: &SqlValue) -> Ordering {
     }
 }
 
+/// The beyond-SQLite runner sets this so boolean results render as `t`/`f`
+/// and `::text` of a boolean renders as `true`/`false`. SQLite runs leave it unset.
+pub fn postgres_result_dialect() -> bool {
+    std::env::var("REDLINEDB_RESULT_DIALECT").ok().as_deref() == Some("postgres")
+}
+
 pub fn is_truthy(value: &SqlValue) -> bool {
+    if postgres_result_dialect()
+        && let OwnedValue::Text(text) = value
+    {
+        let trimmed = text.as_ref().trim();
+        if trimmed.eq_ignore_ascii_case("t") || trimmed.eq_ignore_ascii_case("true") {
+            return true;
+        }
+        if trimmed.eq_ignore_ascii_case("f") || trimmed.eq_ignore_ascii_case("false") {
+            return false;
+        }
+    }
     match value {
         OwnedValue::Null => false,
         OwnedValue::Integer(v) => *v != 0,

@@ -798,6 +798,32 @@ pub fn execute_prepared(
                 affected_rows: 0,
             })
         }
+        PreparedKind::CreateCollation { name, level } => {
+            let folded = name.to_ascii_lowercase();
+            with_session_reentrant(conn, |session| {
+                session.pg_collations.insert(folded, *level);
+                Ok(())
+            })?;
+            Ok(ExecutionResult {
+                runtime: RuntimeState::Done,
+                affected_rows: 0,
+            })
+        }
+        PreparedKind::DropCollation { name, if_exists } => {
+            let folded = name.to_ascii_lowercase();
+            with_session_reentrant(conn, |session| {
+                if session.pg_collations.remove(&folded).is_none() && !if_exists {
+                    return Err(Error::UnsupportedSql(format!(
+                        "collation \"{name}\" does not exist"
+                    )));
+                }
+                Ok(())
+            })?;
+            Ok(ExecutionResult {
+                runtime: RuntimeState::Done,
+                affected_rows: 0,
+            })
+        }
         PreparedKind::SetSearchPath { shown } => {
             with_session_reentrant(conn, |session| {
                 session.search_path = shown.to_string();
@@ -990,6 +1016,8 @@ fn template_writes(kind: &PreparedKind) -> bool {
         | PreparedKind::Attach(_)
         | PreparedKind::SetTransactionIsolation { .. }
         | PreparedKind::SetSearchPath { .. }
+        | PreparedKind::CreateCollation { .. }
+        | PreparedKind::DropCollation { .. }
         | PreparedKind::ShowVariable { .. } => false,
         PreparedKind::CreateTable(_)
         | PreparedKind::CreateTempTable(_)
