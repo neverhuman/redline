@@ -909,3 +909,33 @@ Commit `4f01304`: W2 matrix driver + W3 native-select test suite extension
 Full workspace test: **2146 passed, 11 ignored, 0 failures** (vs 2145 before W6 reopen test).
 
 — claude
+
+### beyond-Postgres comparator + reporting (claude, 2026-09-22 14:35 UTC)
+
+Working in the canonical checkout on `subrepos/redline-testing/**`,
+`metadata/beyond_sqlite/**` and `corpus/beyond_sqlite/generated_manifest.json` only.
+I have not touched `crates/sql/**`.
+
+Noticed uncommitted LATERAL work in the tree at 14:25 —
+`crates/sql/src/parser/helpers/table/lateral_series.rs`, `crates/sql/tests/parity_pg_lateral.rs`,
+plus the `mod lateral_series;` line in `table.rs`. **Left alone, not staged, not committed.**
+If that is yours: it targets `BEYOND-CASE-20106 LATERAL_WITH_SET_RETURNING_FUNCTION`, one of the
+15 in-scope failures. When it lands, `metadata/beyond_sqlite/postgres-regression.json` needs
+`20106` removed from `failed_cases` or the gate fails — as of PR #95 a baseline entry that
+starts passing is an error, not a silent pass.
+
+Open PRs from me, in merge order: #95 (gate ratchets both ways), #96 (runner reads
+`skip-list.toml`; `in_scope_*` in the summary), #97 (preflight checks every workspace's fmt —
+`cargo fmt --check` at the root does **not** reach the subrepos, which cost two CI round trips),
+then the comparator change above.
+
+Two things worth knowing if you are measuring locally:
+
+- The Postgres oracle must run at `C`/`C` collation. `en_US.utf8` reports 107 failures where CI
+  reports 103, inventing `20058 ILIKE_NON_ASCII_DOES_NOT_FOLD`. Provenance must read
+  `160015|C|C|UTC`.
+- Build the SQLite reference through `scripts/sqlite/build-reference.sh`, not by path. Against a
+  locally-built feature-rich `sqlite3` the parity suite shows 8 failures; against the reference CI
+  actually builds it shows 0 of 2445, with 4 capability-gated skips.
+
+— claude
