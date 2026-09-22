@@ -212,6 +212,17 @@ pub struct SessionState {
     pub pg_listening: std::collections::BTreeSet<String>,
     /// `pg_listening` as of `BEGIN`. Restored on rollback.
     pub pg_listening_tx_snapshot: Option<std::collections::BTreeSet<String>>,
+    /// Materialized views keyed by folded name. The rows live in a real table.
+    pub pg_matviews: std::collections::BTreeMap<String, MatViewDef>,
+    /// `pg_matviews` as of `BEGIN`. Restored on rollback.
+    pub pg_matviews_tx_snapshot: Option<std::collections::BTreeMap<String, MatViewDef>>,
+}
+
+/// Query and populated flag for one `CREATE MATERIALIZED VIEW`.
+#[derive(Clone, Debug)]
+pub struct MatViewDef {
+    pub query_sql: String,
+    pub populated: bool,
 }
 
 /// Postgres `GENERATED { ALWAYS | BY DEFAULT } AS IDENTITY` for one column.
@@ -318,6 +329,8 @@ impl Default for SessionState {
             pg_identities: std::collections::BTreeMap::new(),
             pg_listening: std::collections::BTreeSet::new(),
             pg_listening_tx_snapshot: None,
+            pg_matviews: std::collections::BTreeMap::new(),
+            pg_matviews_tx_snapshot: None,
         }
     }
 }
@@ -383,6 +396,8 @@ impl SessionState {
         self.pg_identities.clear();
         self.pg_listening.clear();
         self.pg_listening_tx_snapshot = None;
+        self.pg_matviews.clear();
+        self.pg_matviews_tx_snapshot = None;
     }
 
     /// Reset journal + savepoint stack at a transaction boundary.

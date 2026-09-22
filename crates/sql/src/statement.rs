@@ -190,6 +190,29 @@ pub enum PreparedKind {
     Unlisten {
         channel: Arc<str>,
     },
+    /// `CREATE MATERIALIZED VIEW name AS query`. Rows live in a table.
+    CreateMatView {
+        name: Arc<str>,
+        query: Arc<str>,
+        populated: bool,
+    },
+    /// `REFRESH MATERIALIZED VIEW [CONCURRENTLY] name [WITH NO DATA]`.
+    RefreshMatView {
+        name: Arc<str>,
+        concurrently: bool,
+        no_data: bool,
+    },
+    /// `DROP MATERIALIZED VIEW [IF EXISTS] name [CASCADE]`.
+    DropMatView {
+        name: Arc<str>,
+        if_exists: bool,
+        cascade: bool,
+    },
+    /// `ALTER MATERIALIZED VIEW name RENAME TO new_name`.
+    RenameMatView {
+        from: Arc<str>,
+        to: Arc<str>,
+    },
     /// Track J — `ALTER INDEX <name> RENAME TO <new_name>`.
     AlterIndex {
         old_name: Arc<str>,

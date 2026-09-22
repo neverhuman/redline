@@ -4,6 +4,10 @@
 
 Claim: canonical checkout `/home/ubuntu/redlineDB`, rebased onto `origin/main` `162b582b5`. `RUSTC_WRAPPER` must point at the repo-root script so nested workspaces can run local `just pr-ci`. No engine behavior change.
 
+## 2026-09-22T15:30Z parity/pg-lateral
+
+Claim: canonical checkout `/home/ubuntu/redlineDB`, branch `parity/pg-lateral` at `49e2523c8`. No bulletfarm hub. `CREATE MATERIALIZED VIEW` stores the query in a table and `REFRESH` refills it. `pg_matviews`, `pg_indexes`, and `pg_class.relispopulated` read that state. Hot paths: `crates/sql/src/parser.rs`, `crates/sql/src/exec/mod.rs`, `crates/sql/src/parser/rewrite/pg_ddl.rs`.
+
 ## 2026-09-22T15:25Z parity/pg-lateral
 
 Claim: canonical checkout `/home/ubuntu/redlineDB`, branch `parity/pg-lateral` at `714c75282`. No bulletfarm hub. Empty Postgres catalog reads (`pg_locks`, `pg_replication_slots`, `pg_stat_replication`, `pg_publication`, `pg_subscription`, `pg_publication_tables`, `pg_stat_wal_receiver`) return no rows. Hot path: `crates/sql/src/parser.rs`.

@@ -7,6 +7,7 @@ mod exec;
 mod identity;
 mod json;
 mod listen;
+mod matview;
 mod parser;
 mod planner;
 mod regexp;

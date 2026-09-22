@@ -58,15 +58,16 @@ pub use split::{first_statement_complete, is_blank_sql, split_first_statement, s
 pub(crate) use templates::{bind_statement, template};
 
 mod collation_stmt;
+mod matview_stmt;
 mod rewrite;
 #[allow(unused_imports)]
 pub(crate) use rewrite::{
     OnConflictSegment, collect_on_conflict_segments, contains_ignore_ascii_case,
-    dml_order_limit_rewrite_enabled, find_ignore_ascii_case, rewrite_empty_pg_catalog,
-    rewrite_pg_catalog_query, rewrite_sqlite_compat_syntax, set_dml_order_limit_rewrite_enabled,
-    sql_gap_is_trivia, starts_with_create_virtual_table, strip_ignore_ascii_case_prefix,
-    strip_on_conflict_extras, strip_pg_cast_suffixes, strip_registered_pg_schema_prefixes,
-    try_parse_dml_order_limit_rewrite_pragma,
+    dml_order_limit_rewrite_enabled, find_ignore_ascii_case, replace_table_ident,
+    rewrite_empty_pg_catalog, rewrite_pg_catalog_query, rewrite_sqlite_compat_syntax,
+    set_dml_order_limit_rewrite_enabled, sql_gap_is_trivia, starts_with_create_virtual_table,
+    strip_ignore_ascii_case_prefix, strip_on_conflict_extras, strip_pg_cast_suffixes,
+    strip_registered_pg_schema_prefixes, try_parse_dml_order_limit_rewrite_pragma,
 };
 
 pub(crate) fn is_pragma_sql(sql: &str) -> bool {
@@ -107,6 +108,9 @@ fn parse_prepared_template_impl(conn: &Connection, sql: &str) -> Result<Prepared
     if let Some(prepared) = collation_stmt::try_prepare(conn, sql)? {
         return Ok(prepared);
     }
+    if let Some(prepared) = matview_stmt::try_prepare(conn, sql)? {
+        return Ok(prepared);
+    }
     if starts_with_create_virtual_table(stmt) {
         return Err(Error::UnsupportedSql(
             "CREATE VIRTUAL TABLE is not supported without module migration support".to_owned(),
@@ -132,6 +136,9 @@ fn parse_prepared_template_impl(conn: &Connection, sql: &str) -> Result<Prepared
         return parse_prepared_template_impl(conn, &rewritten);
     }
     if let Some(rewritten) = rewrite_empty_pg_catalog(sql) {
+        return parse_prepared_template_impl(conn, &rewritten);
+    }
+    if let Some(rewritten) = crate::matview::rewrite_catalog(conn, sql) {
         return parse_prepared_template_impl(conn, &rewritten);
     }
     if let Some(rewritten) = crate::listen::rewrite_pg_listening_channels(conn, sql) {

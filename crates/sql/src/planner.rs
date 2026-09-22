@@ -367,6 +367,20 @@ pub(crate) fn build_plan(
         PreparedKind::Notify => simple_node(PhysicalKind::Constant, "NOTIFY".to_owned()),
         PreparedKind::Listen { .. } => simple_node(PhysicalKind::Constant, "LISTEN".to_owned()),
         PreparedKind::Unlisten { .. } => simple_node(PhysicalKind::Constant, "UNLISTEN".to_owned()),
+        PreparedKind::CreateMatView { .. } => simple_node(
+            PhysicalKind::Constant,
+            "CREATE MATERIALIZED VIEW".to_owned(),
+        ),
+        PreparedKind::RefreshMatView { .. } => simple_node(
+            PhysicalKind::Constant,
+            "REFRESH MATERIALIZED VIEW".to_owned(),
+        ),
+        PreparedKind::DropMatView { .. } => {
+            simple_node(PhysicalKind::Constant, "DROP MATERIALIZED VIEW".to_owned())
+        }
+        PreparedKind::RenameMatView { .. } => {
+            simple_node(PhysicalKind::Constant, "ALTER MATERIALIZED VIEW".to_owned())
+        }
         PreparedKind::AlterIndex { .. } => {
             simple_node(PhysicalKind::Constant, "ALTER INDEX".to_owned())
         }

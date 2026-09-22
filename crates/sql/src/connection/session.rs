@@ -373,6 +373,9 @@ impl Connection {
             if session.pg_listening_tx_snapshot.is_none() {
                 crate::listen::snapshot_tx(&mut session);
             }
+            if session.pg_matviews_tx_snapshot.is_none() {
+                crate::matview::snapshot_tx(&mut session);
+            }
             true
         } else {
             false
@@ -457,6 +460,7 @@ impl Connection {
                 session.sqlite_sequences = snapshot.clone();
             }
             crate::listen::restore_tx_keep(&mut session);
+            crate::matview::restore_tx_keep(&mut session);
             session.sqlite_sequences_dirty.clear();
             (
                 journal_prefix,
@@ -519,6 +523,7 @@ impl Connection {
         session.sqlite_sequences = committed_sqlite_sequences;
         session.sqlite_sequences_tx_snapshot = Some(session.sqlite_sequences.clone());
         crate::listen::snapshot_tx(&mut session);
+        crate::matview::snapshot_tx(&mut session);
         session.sqlite_sequences_dirty.clear();
         session.tx = Some(tx);
         session.failed = false;
@@ -580,6 +585,7 @@ impl Connection {
                     session.sqlite_sequences = snapshot;
                 }
                 crate::listen::restore_tx(&mut session);
+                crate::matview::restore_tx(&mut session);
                 return Err(err);
             }
             session.tx = Some(tx);
@@ -595,6 +601,7 @@ impl Connection {
                 session.clear_savepoints();
                 session.sqlite_sequences_tx_snapshot = None;
                 crate::listen::release_tx(&mut session);
+                crate::matview::release_tx(&mut session);
                 self.db.publish_sqlite_sequence_entries(
                     &session.sqlite_sequences,
                     &session.sqlite_sequences_dirty,
@@ -613,6 +620,7 @@ impl Connection {
                 session.clear_savepoints();
                 session.sqlite_sequences_tx_snapshot = None;
                 crate::listen::release_tx(&mut session);
+                crate::matview::release_tx(&mut session);
                 session.sqlite_sequences_dirty.clear();
                 Err(Error::CommitMaybeCommitted)
             }
@@ -624,6 +632,7 @@ impl Connection {
                     session.sqlite_sequences = snapshot;
                 }
                 crate::listen::restore_tx(&mut session);
+                crate::matview::restore_tx(&mut session);
                 session.sqlite_sequences_dirty.clear();
                 Err(Error::TransactionState("transaction rolled back"))
             }
@@ -635,6 +644,7 @@ impl Connection {
                     session.sqlite_sequences = snapshot;
                 }
                 crate::listen::restore_tx(&mut session);
+                crate::matview::restore_tx(&mut session);
                 session.sqlite_sequences_dirty.clear();
                 Err(err.into())
             }
@@ -657,6 +667,7 @@ impl Connection {
             session.sqlite_sequences = snapshot;
         }
         crate::listen::restore_tx(&mut session);
+        crate::matview::restore_tx(&mut session);
         session.sqlite_sequences_dirty.clear();
         // SQLite parity: `PRAGMA defer_foreign_keys` is auto-cleared
         // at the next transaction boundary.
@@ -1166,6 +1177,7 @@ impl Connection {
         let normalized = sql.trim();
         if crate::parser::is_pragma_sql(normalized)
             || crate::listen::sql_reads_listening_channels(normalized)
+            || crate::matview::sql_reads_matview_catalog(normalized)
         {
             let mut template = parse_prepared_template(self.as_ref(), sql)?;
             template.stats_epoch = self.stats_epoch().0;

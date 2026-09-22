@@ -499,6 +499,7 @@ pub fn execute_prepared(
                     .sqlite_sequences
                     .remove(&spec.name.name.folded().to_owned());
                 crate::identity::forget_table(session, spec.name.name.folded());
+                crate::matview::forget(session, spec.name.name.folded());
                 session
                     .sqlite_sequences_dirty
                     .insert(spec.name.name.folded().to_owned());
@@ -862,6 +863,46 @@ pub fn execute_prepared(
                 affected_rows: 0,
             })
         }
+        PreparedKind::CreateMatView {
+            name,
+            query,
+            populated,
+        } => {
+            crate::matview::create(conn, name, query, *populated)?;
+            Ok(ExecutionResult {
+                runtime: RuntimeState::Done,
+                affected_rows: 0,
+            })
+        }
+        PreparedKind::RefreshMatView {
+            name,
+            concurrently,
+            no_data,
+        } => {
+            crate::matview::refresh(conn, name, *concurrently, *no_data)?;
+            Ok(ExecutionResult {
+                runtime: RuntimeState::Done,
+                affected_rows: 0,
+            })
+        }
+        PreparedKind::DropMatView {
+            name,
+            if_exists,
+            cascade,
+        } => {
+            crate::matview::drop(conn, name, *if_exists, *cascade)?;
+            Ok(ExecutionResult {
+                runtime: RuntimeState::Done,
+                affected_rows: 0,
+            })
+        }
+        PreparedKind::RenameMatView { from, to } => {
+            crate::matview::rename(conn, from, to)?;
+            Ok(ExecutionResult {
+                runtime: RuntimeState::Done,
+                affected_rows: 0,
+            })
+        }
         PreparedKind::ShowVariable { name } => {
             let value = if name.eq_ignore_ascii_case("transaction_isolation") {
                 let iso =
@@ -1048,6 +1089,10 @@ fn template_writes(kind: &PreparedKind) -> bool {
         | PreparedKind::Notify
         | PreparedKind::Listen { .. }
         | PreparedKind::Unlisten { .. } => false,
+        PreparedKind::CreateMatView { .. }
+        | PreparedKind::RefreshMatView { .. }
+        | PreparedKind::DropMatView { .. }
+        | PreparedKind::RenameMatView { .. } => true,
         PreparedKind::CreateTable(_)
         | PreparedKind::CreateTempTable(_)
         | PreparedKind::CreateTableAsSelect(_)

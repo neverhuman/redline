@@ -50,6 +50,10 @@ need plpgsql. Empty single-node catalogs (`pg_locks`, `pg_replication_slots`,
 `pg_publication_tables`, `pg_stat_wal_receiver`) return no rows. The beyond
 gate is then 177 passed, 88 failed, 0 skipped, and `20409`, `20419`, `20420`,
 `20421`, `20424`, `20426`, `20427`, and `20428` left the allowlist.
+`CREATE MATERIALIZED VIEW` stores the query in a table. `REFRESH` refills it,
+including `WITH NO DATA` and `CONCURRENTLY` when a unique index exists. The
+beyond gate is then 197 passed, 68 failed, 0 skipped, and `20220` through
+`20239` left the allowlist.
 
 ## Governing decisions — 2026-09-18
 

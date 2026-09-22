@@ -121,10 +121,11 @@ pub(crate) fn rewrite_pg_catalog_query(conn: &Connection, sql: &str) -> Option<S
         Ok((
             session.pg_schemas.iter().cloned().collect::<Vec<_>>(),
             session.pg_sequences.keys().cloned().collect::<Vec<_>>(),
+            crate::matview::populated_flags(session),
         ))
     })
     .ok()?;
-    let (mut namespaces, sequences) = session_state;
+    let (mut namespaces, sequences, matviews) = session_state;
     namespaces.sort();
     namespaces.dedup();
     let snapshot = conn.schema_snapshot();
@@ -203,32 +204,36 @@ pub(crate) fn rewrite_pg_catalog_query(conn: &Connection, sql: &str) -> Option<S
         out = replace_table_ident(&out, "pg_constraint", &subq);
     }
     if lower.contains("pg_class") {
-        let mut rows: Vec<(String, &str)> = Vec::new();
+        let mut rows: Vec<(String, &str, bool)> = Vec::new();
         for table in snapshot.tables.iter() {
-            rows.push((table.name.as_ref().to_owned(), "r"));
+            let populated = matviews.get(table.folded.as_ref()).copied().unwrap_or(true);
+            rows.push((table.name.as_ref().to_owned(), "r", populated));
             for idx in &table.indexes {
-                rows.push((idx.name.as_ref().to_owned(), "i"));
+                rows.push((idx.name.as_ref().to_owned(), "i", true));
             }
         }
         for view in snapshot.views.iter() {
-            rows.push((view.name.as_ref().to_owned(), "v"));
+            rows.push((view.name.as_ref().to_owned(), "v", true));
         }
         for seq in &sequences {
-            rows.push((seq.clone(), "S"));
+            rows.push((seq.clone(), "S", true));
         }
         let mut subq = String::from("(SELECT ");
         if rows.is_empty() {
-            subq.push_str("NULL AS relname, NULL AS relkind WHERE 0");
+            subq.push_str("NULL AS relname, NULL AS relkind, NULL AS relispopulated WHERE 0");
         } else {
-            subq.push_str("column1 AS relname, column2 AS relkind FROM (VALUES ");
+            subq.push_str(
+                "column1 AS relname, column2 AS relkind, column3 AS relispopulated FROM (VALUES ",
+            );
             let mut first = true;
-            for (name, kind) in &rows {
+            for (name, kind, populated) in &rows {
                 if !first {
                     subq.push_str(", ");
                 }
                 first = false;
                 let escaped = name.replace('\'', "''");
-                subq.push_str(&format!("('{escaped}', '{kind}')"));
+                let flag = if *populated { "t" } else { "f" };
+                subq.push_str(&format!("('{escaped}', '{kind}', '{flag}')"));
             }
             subq.push(')');
         }
