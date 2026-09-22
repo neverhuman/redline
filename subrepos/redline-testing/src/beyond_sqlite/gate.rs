@@ -33,6 +33,9 @@ struct Qualification {
     skipped: usize,
     unverified: usize,
     failed_cases: BTreeSet<String>,
+    /// Cases the regression baseline lists as failing that now pass. Always
+    /// empty on a green run; non-empty means the baseline needs pruning.
+    newly_passing: BTreeSet<String>,
     source_commit: Value,
     source_dirty: bool,
     corpus_sha256: String,
@@ -116,6 +119,13 @@ pub fn check(raw_path: &Path, baseline_path: Option<&Path>, readme: Option<&Path
         .as_deref()
         .map(serde_json::from_slice)
         .transpose()?;
+    // The ratchet has two directions. `failures.is_subset(...)` below catches a
+    // failure set that grows. Nothing caught a case the baseline lists as
+    // failing that has since started passing -- so a closed gap stays recorded
+    // as broken, and the file overstates how much is left. That is exactly how
+    // metadata/beyond_sqlite/skip-list.toml came to mark 29 cases "deferred"
+    // while every one of them passed.
+    let mut newly_passing: BTreeSet<String> = BTreeSet::new();
     let regression = if let Some(policy) = &baseline {
         ensure!(
             policy.schema_version == "redline-postgres-regression-v1",
@@ -138,6 +148,11 @@ pub fn check(raw_path: &Path, baseline_path: Option<&Path>, readme: Option<&Path
                 || reference["server_binary_sha256"] == policy.server_binary_sha256,
             "unknown reference digest"
         );
+        newly_passing = policy
+            .failed_cases
+            .difference(&failures)
+            .cloned()
+            .collect();
         failures.is_subset(&policy.failed_cases)
     } else {
         failures.is_empty()
@@ -157,6 +172,7 @@ pub fn check(raw_path: &Path, baseline_path: Option<&Path>, readme: Option<&Path
         skipped: 0,
         unverified: 0,
         failed_cases: failures,
+        newly_passing: newly_passing.clone(),
         source_commit: provenance["source_commit"].clone(),
         source_dirty: provenance["source_dirty"].as_bool().unwrap_or(true),
         corpus_sha256: corpus_hash,
@@ -190,6 +206,13 @@ pub fn check(raw_path: &Path, baseline_path: Option<&Path>, readme: Option<&Path
         "PostgreSQL gate failed: {} of {} cases failed; see postgres-qualification.json",
         report.failed,
         report.required
+    );
+    ensure!(
+        newly_passing.is_empty(),
+        "regression baseline is stale: {} case(s) it records as failing now pass. \
+         Remove them from the baseline so it stops overstating what is broken: {}",
+        newly_passing.len(),
+        newly_passing.iter().cloned().collect::<Vec<_>>().join(", ")
     );
     if let Some(path) = readme {
         let text = fs::read_to_string(path)?;
@@ -247,6 +270,49 @@ mod tests {
         )
         .unwrap();
         dir
+    }
+
+    /// Writes a regression baseline naming `failed_cases` as the expected
+    /// failures, against a bundle in which every case passes.
+    fn baseline(dir: &Path, failed_cases: &[&str]) -> std::path::PathBuf {
+        let path = dir.join("regression.json");
+        let policy = serde_json::json!({
+            "schema_version": "redline-postgres-regression-v1",
+            "corpus_sha256": hash(super::super::oracle::MANIFEST.as_bytes()),
+            "failed_cases": failed_cases,
+            "reference_settings": "160015|C|C|UTC",
+            "image_digest": "sha256:efdf07c2f9d4df592783dcc8ea5f6db02efbf5f6452b527225ff5e58364570e9",
+            "server_binary_sha256": "d".repeat(64),
+        });
+        fs::write(&path, policy.to_string()).unwrap();
+        path
+    }
+
+    #[test]
+    fn a_baseline_failure_that_now_passes_fails_the_gate() {
+        let dir = bundle();
+        let raw = dir.path().join("beyond_sqlite.raw.jsonl");
+        // Every case in the bundle passes, so a baseline that claims one fails
+        // is stale. The subset ratchet alone is happy with this -- an empty set
+        // is a subset of anything -- which is the hole being closed.
+        let stale = baseline(dir.path(), &["BEYOND-CASE-20021"]);
+        let err = check(&raw, Some(&stale), None).unwrap_err().to_string();
+        assert!(err.contains("regression baseline is stale"), "{err}");
+        assert!(err.contains("BEYOND-CASE-20021"), "{err}");
+
+        // ... and the artifact records which ones, not just that some exist.
+        let report: Value =
+            serde_json::from_slice(&fs::read(dir.path().join("postgres-qualification.json")).unwrap())
+                .unwrap();
+        assert_eq!(report["newly_passing"], serde_json::json!(["BEYOND-CASE-20021"]));
+
+        // An exact baseline still passes, and records nothing newly passing.
+        let exact = baseline(dir.path(), &[]);
+        check(&raw, Some(&exact), None).unwrap();
+        let report: Value =
+            serde_json::from_slice(&fs::read(dir.path().join("postgres-qualification.json")).unwrap())
+                .unwrap();
+        assert_eq!(report["newly_passing"], serde_json::json!([]));
     }
 
     #[test]
