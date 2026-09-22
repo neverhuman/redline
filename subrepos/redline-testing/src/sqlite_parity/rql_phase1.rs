@@ -4,10 +4,11 @@ use std::time::Instant;
 use anyhow::{Context, Result, bail};
 use serde_json::{Value as JsonValue, json};
 use sqlparser::ast::{
-    AssignmentTarget, BinaryOperator, ColumnOption, DataType, Distinct, DuplicateTreatment, Expr,
-    FunctionArg, FunctionArgExpr, FunctionArguments, Ident, JoinConstraint, JoinOperator,
-    LimitClause, ObjectName, ObjectNamePart, ObjectType, OrderByKind, Query, SelectItem, SetExpr,
-    Statement, TableAlias, TableFactor, TableWithJoins, UnaryOperator, Value,
+    AssignmentTarget, BinaryOperator, CeilFloorKind, ColumnOption, DataType, DateTimeField,
+    Distinct, DuplicateTreatment, Expr, FunctionArg, FunctionArgExpr, FunctionArguments, Ident,
+    JoinConstraint, JoinOperator, LimitClause, ObjectName, ObjectNamePart, ObjectType, OrderByKind,
+    Query, SelectItem, SetExpr, Statement, TableAlias, TableFactor, TableWithJoins, UnaryOperator,
+    Value,
 };
 use sqlparser::dialect::SQLiteDialect;
 use sqlparser::parser::Parser;
@@ -1086,6 +1087,63 @@ fn expr(value: Expr) -> Result<JsonValue> {
             "expr": expr(*inner)?
         }),
         Expr::Function(function) => function_expr(function)?,
+        // SQLite spells these as ordinary scalar functions, but sqlparser
+        // lifts each into a dedicated AST node, so `Expr::Function` never
+        // sees them and `expr` fell through to the catch-all. That is why 54
+        // cases were reported as "outside RQL phase-1" when the only thing
+        // missing was the match arm: they lower to the same
+        // `{"type":"function"}` shape the rest of the suite already uses, so
+        // no IR change is involved.
+        Expr::Substring {
+            expr: inner,
+            substring_from,
+            substring_for,
+            special: _,
+            shorthand,
+        } => {
+            // `shorthand` distinguishes `substr(...)` from `substring(...)`.
+            // SQLite treats the two as the same function, but carrying the
+            // spelling through keeps the lowered JSON faithful to the input.
+            let name = if shorthand { "substr" } else { "substring" };
+            let mut args = vec![expr(*inner)?];
+            match (substring_from, substring_for) {
+                (Some(from), None) => args.push(expr(*from)?),
+                (Some(from), Some(length)) => {
+                    args.push(expr(*from)?);
+                    args.push(expr(*length)?);
+                }
+                // `SUBSTRING(x FOR n)` and a bare `SUBSTRING(x)` have no
+                // SQLite spelling. Refuse rather than invent a start offset.
+                (None, _) => bail!("{name} without a start position is outside RQL phase-1"),
+            }
+            json!({ "type": "function", "name": name, "args": args, "distinct": false })
+        }
+        Expr::Ceil { expr: inner, field } => ceil_floor_expr("ceil", *inner, field)?,
+        Expr::Floor { expr: inner, field } => ceil_floor_expr("floor", *inner, field)?,
+        Expr::Trim {
+            expr: inner,
+            trim_where,
+            trim_what,
+            trim_characters,
+        } => {
+            // `TRIM(LEADING 'x' FROM y)` is ltrim with the arguments the other
+            // way round, and `TRIM(BOTH ...)` likewise. Mapping them here
+            // would be a rewrite, not a lowering, so they stay out of scope.
+            if trim_where.is_some() || trim_what.is_some() {
+                bail!("TRIM with BOTH/LEADING/TRAILING or FROM is outside RQL phase-1");
+            }
+            let mut args = vec![expr(*inner)?];
+            // Unreachable under SQLiteDialect, which rejects `trim(x, y)` at
+            // parse time. Handled anyway so a dialect change cannot silently
+            // drop the character set.
+            if let Some(characters) = trim_characters {
+                let [only] = <[Expr; 1]>::try_from(characters).map_err(|_| {
+                    anyhow::anyhow!("TRIM with several character sets is outside RQL phase-1")
+                })?;
+                args.push(expr(only)?);
+            }
+            json!({ "type": "function", "name": "trim", "args": args, "distinct": false })
+        }
         Expr::Cast {
             expr: inner,
             data_type,
@@ -1147,6 +1205,24 @@ fn expr(value: Expr) -> Result<JsonValue> {
         }),
         other => bail!("expression `{other}` is outside RQL phase-1"),
     })
+}
+
+/// `ceil(x)` / `floor(x)`. Anything carrying a `TO <field>` or a scale is a
+/// different function from SQLite's one-argument form, so it is refused
+/// rather than lowered with the extra operand dropped on the floor.
+fn ceil_floor_expr(name: &str, inner: Expr, field: CeilFloorKind) -> Result<JsonValue> {
+    if !matches!(
+        field,
+        CeilFloorKind::DateTimeField(DateTimeField::NoDateTime)
+    ) {
+        bail!("{name} with a TO field or scale is outside RQL phase-1");
+    }
+    Ok(json!({
+        "type": "function",
+        "name": name,
+        "args": [expr(inner)?],
+        "distinct": false
+    }))
 }
 
 fn function_expr(function: sqlparser::ast::Function) -> Result<JsonValue> {
