@@ -52,6 +52,15 @@ pub(crate) fn bind_insert(
                     col.name
                 )));
             }
+            if let Some(col) = table.columns.get(*ord)
+                && crate::identity::is_always(conn, table.folded.as_ref(), col.folded.as_ref())
+                && !sql.to_ascii_lowercase().contains("overriding system value")
+            {
+                return Err(Error::UnsupportedSql(format!(
+                    "cannot insert a non-DEFAULT value into column \"{}\"",
+                    col.name
+                )));
+            }
         }
         ordinals
     };

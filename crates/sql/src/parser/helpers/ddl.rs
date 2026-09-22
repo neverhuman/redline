@@ -4,13 +4,47 @@ use redlinedb_kernel::catalog::{
     TableConstraintSpec,
 };
 use sqlparser::ast::{
-    ColumnDef, ColumnOption, DataType, DeferrableInitial, Expr, ForeignKeyConstraint,
-    GeneratedExpressionMode, IndexColumn, ObjectNamePart, ReferentialAction,
+    ColumnDef, ColumnOption, DataType, DeferrableInitial, Expr, ForeignKeyConstraint, GeneratedAs,
+    GeneratedExpressionMode, IndexColumn, ObjectNamePart, ReferentialAction, SequenceOptions,
 };
 
 use crate::error::{Error, Result};
 
 use super::expr::{default_expr_to_kernel_ast, expr_to_kernel_ast};
+
+pub(crate) fn sequence_bounds(options: Option<&[SequenceOptions]>) -> (i64, i64) {
+    let mut start = 1i64;
+    let mut increment = 1i64;
+    let Some(options) = options else {
+        return (start, increment);
+    };
+    for option in options {
+        match option {
+            SequenceOptions::StartWith(expr, _) => {
+                if let Some(value) = expr_i64(expr) {
+                    start = value;
+                }
+            }
+            SequenceOptions::IncrementBy(expr, _) => {
+                if let Some(value) = expr_i64(expr) {
+                    increment = value;
+                }
+            }
+            _ => {}
+        }
+    }
+    (start, increment)
+}
+
+fn expr_i64(expr: &Expr) -> Option<i64> {
+    let Expr::Value(value) = expr else {
+        return None;
+    };
+    let sqlparser::ast::Value::Number(text, _) = &value.value else {
+        return None;
+    };
+    text.parse().ok()
+}
 
 pub(crate) fn is_param_char(byte: u8) -> bool {
     byte.is_ascii_alphanumeric() || byte == b'_'
@@ -21,6 +55,7 @@ pub(crate) fn convert_column_def(
     ordinal: usize,
     column_lookup: &std::collections::HashMap<String, usize>,
     table_constraints: &mut Vec<TableConstraintSpec>,
+    identities: &mut Vec<crate::identity::IdentitySpec>,
 ) -> Result<ColumnSpec> {
     let mut constraints = Vec::new();
     let mut collation = None;
@@ -107,6 +142,8 @@ pub(crate) fn convert_column_def(
             ColumnOption::Generated {
                 generation_expr,
                 generation_expr_mode,
+                generated_as,
+                sequence_options,
                 ..
             } => {
                 // Phase-11 SQL-D A6: capture the GENERATED ALWAYS AS
@@ -118,12 +155,23 @@ pub(crate) fn convert_column_def(
                 let expr_text = match &generation_expr {
                     Some(e) => e.to_string(),
                     None => {
-                        // Track J — `GENERATED { ALWAYS | BY DEFAULT } AS
-                        // IDENTITY` (Postgres). No expression: treat the
-                        // column as an INTEGER PRIMARY KEY auto-increment
-                        // (SQLite's nearest equivalent). The kernel will
-                        // pick up an auto-assigned rowid on INSERT, matching
-                        // the Postgres surface result for ordered output.
+                        // `GENERATED { ALWAYS | BY DEFAULT } AS IDENTITY`.
+                        // The sequence lives on the session and does not
+                        // alias the rowid, so an explicit id does not move
+                        // the next generated value.
+                        if matches!(generated_as, GeneratedAs::Always | GeneratedAs::ByDefault) {
+                            let (start, increment) = sequence_bounds(sequence_options.as_deref());
+                            constraints.push(ColumnConstraintSpec::NotNull {
+                                conflict: ConflictAction::Abort,
+                            });
+                            identities.push(crate::identity::IdentitySpec {
+                                column: column_name.original().to_owned(),
+                                always: matches!(generated_as, GeneratedAs::Always),
+                                start,
+                                increment,
+                            });
+                            continue;
+                        }
                         constraints.push(ColumnConstraintSpec::PrimaryKey {
                             sort_dir: SortDir::Asc,
                             conflict: ConflictAction::Abort,

@@ -211,6 +211,8 @@ pub enum AlterTableOperationSpec {
     AddColumnIdentity {
         column_name: DbName,
         always: bool,
+        start: i64,
+        increment: i64,
     },
     /// Track J — `ALTER COLUMN <c> DROP IDENTITY [IF EXISTS]`. Clears
     /// the marker; future INSERTs must specify a value.

@@ -89,6 +89,7 @@ pub(crate) fn bind_create_table(
         column_lookup.insert(column.name.value.to_ascii_lowercase(), ordinal);
     }
     let mut constraints = Vec::new();
+    let mut identities = Vec::new();
 
     for (ordinal, column) in create_table.columns.into_iter().enumerate() {
         columns.push(convert_column_def(
@@ -96,12 +97,14 @@ pub(crate) fn bind_create_table(
             ordinal,
             &column_lookup,
             &mut constraints,
+            &mut identities,
         )?);
     }
 
     for constraint in create_table.constraints {
         constraints.push(convert_table_constraint(constraint, &column_lookup)?);
     }
+    crate::identity::remember(conn, name.folded(), &identities)?;
 
     Ok(PreparedTemplate {
         sql: Arc::from(sql),
@@ -721,12 +724,20 @@ pub(crate) fn bind_alter_table(
                 ));
             }
             let mut alter_constraints = Vec::new();
+            let mut identities = Vec::new();
             let column = convert_column_def(
                 column_def,
                 0,
                 &std::collections::HashMap::new(),
                 &mut alter_constraints,
+                &mut identities,
             )?;
+            if !identities.is_empty() {
+                return Err(Error::UnsupportedSql(
+                    "ALTER TABLE ADD COLUMN does not accept IDENTITY; use ALTER COLUMN ... ADD GENERATED AS IDENTITY"
+                        .to_owned(),
+                ));
+            }
             if column.constraints.iter().any(|constraint| {
                 !matches!(
                     constraint,
@@ -826,12 +837,15 @@ pub(crate) fn bind_alter_table(
             },
             sqlparser::ast::AlterColumnOperation::AddGenerated {
                 generated_as,
-                sequence_options: _,
+                sequence_options,
             } => {
                 let always = matches!(generated_as, Some(sqlparser::ast::GeneratedAs::Always));
+                let (start, increment) = sequence_bounds(sequence_options.as_deref());
                 redlinedb_kernel::catalog::AlterTableOperationSpec::AddColumnIdentity {
                     column_name: DbName::new(column_name.value),
                     always,
+                    start,
+                    increment,
                 }
             }
         },

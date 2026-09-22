@@ -2,6 +2,7 @@
 //! shapes `sqlparser` and the executor already understand.
 
 mod dml_limit;
+mod identity_opts;
 mod pg_ddl;
 mod pg_types;
 mod scan;
@@ -9,6 +10,7 @@ mod sqlite_shape;
 mod virtual_table;
 
 pub(crate) use dml_limit::*;
+pub(crate) use identity_opts::*;
 pub(crate) use pg_ddl::*;
 pub(crate) use pg_types::*;
 pub(crate) use scan::*;
@@ -40,6 +42,7 @@ pub(crate) fn rewrite_sqlite_compat_syntax(sql: &str) -> String {
     }
     out = rewrite_strict_without_rowid_combo(&out);
     out = rewrite_create_sequence_options_order(&out);
+    out = rewrite_identity_sequence_options(&out);
     out = rewrite_alter_column_drop_identity(&out);
     out = rewrite_overriding_system_value(&out);
     if has_pg_array_literal(&out) {

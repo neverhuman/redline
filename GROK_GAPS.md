@@ -21,7 +21,11 @@ official reference shell: that shell rejects `soundex` and ordered DML
 `LIMIT` (even with `-DSQLITE_ENABLE_UPDATE_DELETE_LIMIT` on the command
 line) and exits 0 for `.session`. `10405` and `12023` stay open.
 `SHOW wal_level`, `SHOW session_replication_role`, and `search_path` /
-`current_schema()` are corrected in the follow-up.
+`current_schema()` are corrected in the follow-up. Identity columns keep a
+session sequence instead of `max(rowid)+1`. The beyond gate after that change
+is 145 passed, 120 failed, 0 skipped; `20137`, `20139`, and `20209` left the
+allowlist. Explicit `GENERATED ALWAYS` inserts still fail both shells, so
+`20136` and `20247` stay listed until stderr is asserted.
 
 ## Governing decisions — 2026-09-18
 

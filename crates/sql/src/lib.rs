@@ -4,6 +4,7 @@ mod connection;
 mod datetime;
 mod error;
 mod exec;
+mod identity;
 mod json;
 mod parser;
 mod planner;

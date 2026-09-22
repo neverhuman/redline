@@ -867,6 +867,8 @@ pub fn apply_alter_table(
         AlterTableOperationSpec::AddColumnIdentity {
             column_name,
             always: _,
+            start: _,
+            increment: _,
         } => {
             let folded = column_name.folded();
             let _column_id = table

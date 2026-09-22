@@ -498,6 +498,7 @@ pub fn execute_prepared(
                 session
                     .sqlite_sequences
                     .remove(&spec.name.name.folded().to_owned());
+                crate::identity::forget_table(session, spec.name.name.folded());
                 session
                     .sqlite_sequences_dirty
                     .insert(spec.name.name.folded().to_owned());
@@ -573,6 +574,7 @@ pub fn execute_prepared(
             });
             redlinedb_kernel::catalog::set_legacy_alter_table(prev_legacy);
             alter_result?;
+            crate::identity::after_alter(conn, template.sql.as_ref(), spec)?;
             Ok(ExecutionResult {
                 runtime: RuntimeState::Done,
                 affected_rows: 1,

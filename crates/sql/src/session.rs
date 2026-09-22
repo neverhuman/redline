@@ -205,6 +205,20 @@ pub struct SessionState {
     /// `CREATE COLLATION` registrations. Value is the ICU strength:
     /// 1 accent-and-case insensitive, 2 case insensitive.
     pub pg_collations: std::collections::BTreeMap<String, u8>,
+    /// Identity columns keyed by `folded_table \u{1} folded_column`.
+    /// The counter is independent of explicit inserts and of rowid.
+    pub pg_identities: std::collections::BTreeMap<String, IdentityColumn>,
+}
+
+/// Postgres `GENERATED { ALWAYS | BY DEFAULT } AS IDENTITY` for one column.
+/// Session-scoped: the corpus and the shell share one connection. A reopen
+/// starts the counter again at `start`.
+#[derive(Clone, Debug)]
+pub struct IdentityColumn {
+    pub always: bool,
+    pub start: i64,
+    pub increment: i64,
+    pub last_value: Option<i64>,
 }
 
 /// Track J — runtime state for a PostgreSQL-style sequence.
@@ -297,6 +311,7 @@ impl Default for SessionState {
             transaction_isolation: crate::statement::TransactionIsolationLevel::ReadCommitted,
             search_path: "\"$user\", public".to_owned(),
             pg_collations: std::collections::BTreeMap::new(),
+            pg_identities: std::collections::BTreeMap::new(),
         }
     }
 }
@@ -359,6 +374,7 @@ impl SessionState {
         self.transaction_isolation = crate::statement::TransactionIsolationLevel::ReadCommitted;
         self.search_path = "\"$user\", public".to_owned();
         self.pg_collations.clear();
+        self.pg_identities.clear();
     }
 
     /// Reset journal + savepoint stack at a transaction boundary.

@@ -29,6 +29,7 @@ pub(super) fn execute_insert(
         let mut returning_rows = Vec::new();
         if plan.default_values {
             let mut values = build_default_row(&plan.table)?;
+            crate::identity::fill_omitted(session, &plan.table, &[], &mut values);
             if fire_before_insert_triggers(conn, tx, &plan.table, &values)? {
                 return Ok(build_dml_execution_result(
                     0,
@@ -98,6 +99,7 @@ pub(super) fn execute_insert(
                     ));
                 }
                 let mut values = build_row_from_values(&plan.table, row, &plan.columns)?;
+                crate::identity::fill_omitted(session, &plan.table, &plan.columns, &mut values);
                 if fire_before_insert_triggers(conn, tx, &plan.table, &values)? {
                     continue;
                 }
@@ -152,6 +154,7 @@ pub(super) fn execute_insert(
                 ));
             }
             let mut values = build_row(&plan.table, row, &plan.columns, bindings)?;
+            crate::identity::fill_omitted(session, &plan.table, &plan.columns, &mut values);
             if fire_before_insert_triggers(conn, tx, &plan.table, &values)? {
                 continue;
             }
