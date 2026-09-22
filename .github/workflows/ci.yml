@@ -391,10 +391,15 @@ jobs:
         with: {name: security-evidence, path: target/jankurai/security}
       - name: Audit engine against the accepted baseline
         run: jankurai audit . --full --mode ratchet --baseline .jankurai/baselines/github-monorepo.repo-score.json --json target/audit-family/engine/repo-score.json --md target/audit-family/engine/repo-score.md --no-score-history --policy agent/audit-policy.toml
-      - run: bash ops/ci/audit-family.sh components
+      - name: Run the jankurai tool lane (proofbind, proofmark, rust witness, copy-code)
+        run: bash ops/ci/jankurai-audit.sh
+      - run: bash ops/ci/audit-family.sh
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
         if: always()
         with: {name: audit-family, path: target/audit-family, if-no-files-found: error}
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        if: always()
+        with: {name: jankurai-tool-evidence, path: target/jankurai, if-no-files-found: error}
 
   security:
     runs-on: [self-hosted, Linux, X64]

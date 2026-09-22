@@ -23,5 +23,5 @@ for component in "${components[@]}"; do
     baseline=(--mode standard)
   fi
   (cd "$root/$component"; jankurai audit . --full "${baseline[@]}" --policy "$root/$component/agent/audit-policy.toml" --json "$report" --md "$root/target/audit-family/$name/repo-score.md" --no-score-history)
-  jq -e '.score >= 85 and .decision.hard_findings == 0 and (.caps_applied | length) == 0' "$report" >/dev/null
+  jq -e '.score > 85 and .decision.hard_findings == 0 and (.caps_applied | length) == 0' "$report" >/dev/null
 done

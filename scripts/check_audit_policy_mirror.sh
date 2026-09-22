@@ -32,3 +32,8 @@ require_mirror \
     "generated-zones manifest" \
     "$repo_root/agent/generated-zones.toml" \
     "$repo_root/.jankurai/generated-zones.toml"
+
+require_mirror \
+    "tool-adoption manifest" \
+    "$repo_root/agent/tool-adoption.toml" \
+    "$repo_root/.jankurai/tool-adoption.toml"
