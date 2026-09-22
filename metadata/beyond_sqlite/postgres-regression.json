@@ -1,7 +1,7 @@
 {
   "schema_version": "redline-postgres-regression-v1",
   "previous_source_commit": "4e742765a75fe94dff26ef02c33b323c1b718345",
-  "reason": "A shared rejection counts as agreement only where the corpus declares the message the target must print and the target survived the case setup. 20136, 20203 and 20247 now pass; 100 failures remain.",
+  "reason": "LATERAL generate_series expands per outer row. 99 failures remain.",
   "corpus_sha256": "01a25cfc48176a535919354a6bddf48f87692857857c24777dcf9b4841bd0a9d",
   "reference_settings": "160015|C|C|UTC",
   "image_digest": "sha256:efdf07c2f9d4df592783dcc8ea5f6db02efbf5f6452b527225ff5e58364570e9",
@@ -18,7 +18,6 @@
     "BEYOND-CASE-20039",
     "BEYOND-CASE-20040",
     "BEYOND-CASE-20103",
-    "BEYOND-CASE-20106",
     "BEYOND-CASE-20111",
     "BEYOND-CASE-20213",
     "BEYOND-CASE-20214",

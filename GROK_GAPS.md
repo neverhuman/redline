@@ -38,6 +38,8 @@ advisory lock, WAL LSN, `pg_notify`, `repeat`) then leave ten more cases.
 The beyond gate is 159 passed, 106 failed, 0 skipped. `NOTIFY` with no
 listener is a successful no-op. The beyond gate is then 162 passed, 103 failed,
 0 skipped, and `20431`, `20432`, and `20443` left the allowlist.
+`CROSS JOIN LATERAL generate_series` expands once per outer row. The beyond
+gate is then 163 passed, 102 failed, 0 skipped, and `20106` left the allowlist.
 
 ## Governing decisions — 2026-09-18
 

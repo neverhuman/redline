@@ -30,6 +30,10 @@ pub(crate) fn bind_select_from(
         }
     }
 
+    if let Some(source) = super::lateral_series::try_bind(conn, schema, &from, params)? {
+        return Ok((source, None));
+    }
+
     // CTE-aware single-source fast path. When a single FROM entry without
     // joins names an active CTE, route it through `SelectSource::Cte` so
     // the executor reads the pre-materialized rows instead of looking the

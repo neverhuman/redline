@@ -1,5 +1,7 @@
 #[path = "table/bind.rs"]
 mod bind;
+#[path = "table/lateral_series.rs"]
+mod lateral_series;
 #[path = "table/projection.rs"]
 mod projection;
 #[path = "table/select.rs"]
