@@ -9,6 +9,7 @@ mod json;
 mod listen;
 mod matview;
 mod parser;
+mod pg_fn;
 mod planner;
 mod regexp;
 mod rql;

@@ -59,6 +59,7 @@ pub(crate) use templates::{bind_statement, template};
 
 mod collation_stmt;
 mod matview_stmt;
+mod pg_fn_stmt;
 mod rewrite;
 #[allow(unused_imports)]
 pub(crate) use rewrite::{
@@ -111,6 +112,9 @@ fn parse_prepared_template_impl(conn: &Connection, sql: &str) -> Result<Prepared
     if let Some(prepared) = matview_stmt::try_prepare(conn, sql)? {
         return Ok(prepared);
     }
+    if let Some(prepared) = pg_fn_stmt::try_prepare(conn, sql)? {
+        return Ok(prepared);
+    }
     if starts_with_create_virtual_table(stmt) {
         return Err(Error::UnsupportedSql(
             "CREATE VIRTUAL TABLE is not supported without module migration support".to_owned(),
@@ -139,6 +143,9 @@ fn parse_prepared_template_impl(conn: &Connection, sql: &str) -> Result<Prepared
         return parse_prepared_template_impl(conn, &rewritten);
     }
     if let Some(rewritten) = crate::matview::rewrite_catalog(conn, sql) {
+        return parse_prepared_template_impl(conn, &rewritten);
+    }
+    if let Some(rewritten) = crate::pg_fn::rewrite_pg_proc(conn, sql) {
         return parse_prepared_template_impl(conn, &rewritten);
     }
     if let Some(rewritten) = crate::listen::rewrite_pg_listening_channels(conn, sql) {

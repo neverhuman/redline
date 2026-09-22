@@ -903,6 +903,35 @@ pub fn execute_prepared(
                 affected_rows: 0,
             })
         }
+        PreparedKind::CreateSqlFn {
+            name,
+            arg_names,
+            defaults,
+            body,
+            security_definer,
+        } => {
+            crate::pg_fn::create(
+                conn,
+                name,
+                crate::session::SqlFnDef {
+                    arg_names: arg_names.clone(),
+                    defaults: defaults.clone(),
+                    body: body.to_string(),
+                    security_definer: *security_definer,
+                },
+            )?;
+            Ok(ExecutionResult {
+                runtime: RuntimeState::Done,
+                affected_rows: 0,
+            })
+        }
+        PreparedKind::DropSqlFn { name, if_exists } => {
+            crate::pg_fn::drop(conn, name, *if_exists)?;
+            Ok(ExecutionResult {
+                runtime: RuntimeState::Done,
+                affected_rows: 0,
+            })
+        }
         PreparedKind::ShowVariable { name } => {
             let value = if name.eq_ignore_ascii_case("transaction_isolation") {
                 let iso =
@@ -1092,7 +1121,9 @@ fn template_writes(kind: &PreparedKind) -> bool {
         PreparedKind::CreateMatView { .. }
         | PreparedKind::RefreshMatView { .. }
         | PreparedKind::DropMatView { .. }
-        | PreparedKind::RenameMatView { .. } => true,
+        | PreparedKind::RenameMatView { .. }
+        | PreparedKind::CreateSqlFn { .. }
+        | PreparedKind::DropSqlFn { .. } => true,
         PreparedKind::CreateTable(_)
         | PreparedKind::CreateTempTable(_)
         | PreparedKind::CreateTableAsSelect(_)

@@ -4,6 +4,10 @@
 
 Claim: canonical checkout `/home/ubuntu/redlineDB`, rebased onto `origin/main` `162b582b5`. `RUSTC_WRAPPER` must point at the repo-root script so nested workspaces can run local `just pr-ci`. No engine behavior change.
 
+## 2026-09-22T16:20Z parity/pg-sql-fn
+
+Claim: canonical checkout `/home/ubuntu/redlineDB`, branch `parity/pg-sql-fn` from `2962f0898`. No bulletfarm hub. `LANGUAGE SQL` functions store a single SELECT body and substitute call arguments. `pg_proc.prosecdef` records `SECURITY DEFINER`. plpgsql stays unsupported. Hot paths: `crates/sql/src/parser.rs`, `crates/sql/src/exec/expr/json_dispatch.rs`.
+
 ## 2026-09-22T15:30Z parity/pg-lateral
 
 Claim: canonical checkout `/home/ubuntu/redlineDB`, branch `parity/pg-lateral` at `49e2523c8`. No bulletfarm hub. `CREATE MATERIALIZED VIEW` stores the query in a table and `REFRESH` refills it. `pg_matviews`, `pg_indexes`, and `pg_class.relispopulated` read that state. Hot paths: `crates/sql/src/parser.rs`, `crates/sql/src/exec/mod.rs`, `crates/sql/src/parser/rewrite/pg_ddl.rs`.

@@ -213,6 +213,19 @@ pub enum PreparedKind {
         from: Arc<str>,
         to: Arc<str>,
     },
+    /// `CREATE FUNCTION ... LANGUAGE SQL`.
+    CreateSqlFn {
+        name: Arc<str>,
+        arg_names: Vec<String>,
+        defaults: Vec<Option<String>>,
+        body: Arc<str>,
+        security_definer: bool,
+    },
+    /// `DROP FUNCTION [IF EXISTS] name`.
+    DropSqlFn {
+        name: Arc<str>,
+        if_exists: bool,
+    },
     /// Track J — `ALTER INDEX <name> RENAME TO <new_name>`.
     AlterIndex {
         old_name: Arc<str>,

@@ -92,6 +92,13 @@ fn split_first_statement_state(sql: &str) -> StatementSplit<'_> {
                     i += 2;
                 }
             }
+            b'$' => {
+                if let Some(end) = dollar_quote_end(bytes, i) {
+                    i = end;
+                } else {
+                    i += 1;
+                }
+            }
             b';' if block_depth == 0 => {
                 let head_end = i + 1;
                 return StatementSplit {
@@ -163,6 +170,37 @@ fn is_word_boundary_keyword(bytes: &[u8], i: usize, kw: &[u8]) -> bool {
 
 pub(crate) fn is_ident_byte(b: u8) -> bool {
     b.is_ascii_alphanumeric() || b == b'_'
+}
+
+/// End index just past a dollar-quoted string that starts at `start`.
+/// `$1` style parameters are not quotes and return `None`.
+fn dollar_quote_end(bytes: &[u8], start: usize) -> Option<usize> {
+    if start + 1 >= bytes.len() {
+        return None;
+    }
+    let tag_end = if bytes[start + 1] == b'$' {
+        start + 2
+    } else if bytes[start + 1].is_ascii_alphabetic() || bytes[start + 1] == b'_' {
+        let mut j = start + 2;
+        while j < bytes.len() && is_ident_byte(bytes[j]) {
+            j += 1;
+        }
+        if j >= bytes.len() || bytes[j] != b'$' {
+            return None;
+        }
+        j + 1
+    } else {
+        return None;
+    };
+    let tag = &bytes[start..tag_end];
+    let mut i = tag_end;
+    while i + tag.len() <= bytes.len() {
+        if &bytes[i..i + tag.len()] == tag {
+            return Some(i + tag.len());
+        }
+        i += 1;
+    }
+    None
 }
 
 /// True if `sql` (after trimming whitespace and stripping comments) is empty.

@@ -53,7 +53,10 @@ gate is then 177 passed, 88 failed, 0 skipped, and `20409`, `20419`, `20420`,
 `CREATE MATERIALIZED VIEW` stores the query in a table. `REFRESH` refills it,
 including `WITH NO DATA` and `CONCURRENTLY` when a unique index exists. The
 beyond gate is then 197 passed, 68 failed, 0 skipped, and `20220` through
-`20239` left the allowlist.
+`20239` left the allowlist. `LANGUAGE SQL` functions run their `SELECT` body
+with call arguments substituted. The beyond gate is then 201 passed, 64 failed,
+0 skipped, and `20300`, `20313`, `20317`, and `20318` left the allowlist.
+`LANGUAGE plpgsql` stays unsupported.
 
 ## Governing decisions — 2026-09-18
 

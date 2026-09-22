@@ -216,6 +216,10 @@ pub struct SessionState {
     pub pg_matviews: std::collections::BTreeMap<String, MatViewDef>,
     /// `pg_matviews` as of `BEGIN`. Restored on rollback.
     pub pg_matviews_tx_snapshot: Option<std::collections::BTreeMap<String, MatViewDef>>,
+    /// `LANGUAGE SQL` functions keyed by folded name.
+    pub pg_sql_fns: std::collections::BTreeMap<String, SqlFnDef>,
+    /// `pg_sql_fns` as of `BEGIN`. Restored on rollback.
+    pub pg_sql_fns_tx_snapshot: Option<std::collections::BTreeMap<String, SqlFnDef>>,
 }
 
 /// Query and populated flag for one `CREATE MATERIALIZED VIEW`.
@@ -223,6 +227,16 @@ pub struct SessionState {
 pub struct MatViewDef {
     pub query_sql: String,
     pub populated: bool,
+}
+
+/// One `CREATE FUNCTION ... LANGUAGE SQL` body.
+#[derive(Clone, Debug)]
+pub struct SqlFnDef {
+    pub arg_names: Vec<String>,
+    /// Parallel to `arg_names`. `Some` is a SQL literal such as `'world'`.
+    pub defaults: Vec<Option<String>>,
+    pub body: String,
+    pub security_definer: bool,
 }
 
 /// Postgres `GENERATED { ALWAYS | BY DEFAULT } AS IDENTITY` for one column.
@@ -331,6 +345,8 @@ impl Default for SessionState {
             pg_listening_tx_snapshot: None,
             pg_matviews: std::collections::BTreeMap::new(),
             pg_matviews_tx_snapshot: None,
+            pg_sql_fns: std::collections::BTreeMap::new(),
+            pg_sql_fns_tx_snapshot: None,
         }
     }
 }
@@ -398,6 +414,8 @@ impl SessionState {
         self.pg_listening_tx_snapshot = None;
         self.pg_matviews.clear();
         self.pg_matviews_tx_snapshot = None;
+        self.pg_sql_fns.clear();
+        self.pg_sql_fns_tx_snapshot = None;
     }
 
     /// Reset journal + savepoint stack at a transaction boundary.

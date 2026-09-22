@@ -598,6 +598,11 @@ pub(crate) fn eval_scalar_function_values(
         // then Arc::clone for each invocation.
         "current_schema" => Ok(current_schema_value()),
         _ => {
+            if let Some(conn) = crate::exec::current_connection()
+                && let Some(result) = crate::pg_fn::try_call(conn, name, &values)
+            {
+                return result;
+            }
             let db = crate::udf::current_db();
             match crate::udf::call_registered_scalar(db, &name, &values) {
                 Some(Ok(v)) => Ok(v),

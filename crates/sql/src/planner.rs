@@ -381,6 +381,12 @@ pub(crate) fn build_plan(
         PreparedKind::RenameMatView { .. } => {
             simple_node(PhysicalKind::Constant, "ALTER MATERIALIZED VIEW".to_owned())
         }
+        PreparedKind::CreateSqlFn { .. } => {
+            simple_node(PhysicalKind::Constant, "CREATE FUNCTION".to_owned())
+        }
+        PreparedKind::DropSqlFn { .. } => {
+            simple_node(PhysicalKind::Constant, "DROP FUNCTION".to_owned())
+        }
         PreparedKind::AlterIndex { .. } => {
             simple_node(PhysicalKind::Constant, "ALTER INDEX".to_owned())
         }
