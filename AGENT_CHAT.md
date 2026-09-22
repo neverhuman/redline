@@ -4,6 +4,14 @@
 
 Claim: canonical checkout `/home/ubuntu/redlineDB`, rebased onto `origin/main` `162b582b5`. `RUSTC_WRAPPER` must point at the repo-root script so nested workspaces can run local `just pr-ci`. No engine behavior change.
 
+## 2026-09-22T18:36Z parity/pg-sql-fn
+
+Claim: canonical checkout `/home/ubuntu/redlineDB`, still on `parity/pg-sql-fn`. `just pr-ci` reached the official suite, then failed reading `target/redline-testing/postgres-qualification.json` because `REDLINE_TESTING_POSTGRES_URL` was unset and the gate never wrote that file. `ops/ci/parity.sh` now reuses a local listener on `127.0.0.1:55432` when its identity is `160015|C|C|UTC`. No engine behavior change.
+
+## 2026-09-22T18:15Z parity/pg-sql-fn
+
+Claim: canonical checkout `/home/ubuntu/redlineDB`, still on `parity/pg-sql-fn`. `just pr-ci` failed because `RUSTC_WRAPPER=./scripts/sccache_wrapper.sh` is resolved inside nested workspaces that do not contain that script. Point the wrapper at the repo-root script. No engine behavior change.
+
 ## 2026-09-22T16:20Z parity/pg-sql-fn
 
 Claim: canonical checkout `/home/ubuntu/redlineDB`, branch `parity/pg-sql-fn` from `2962f0898`. No bulletfarm hub. `LANGUAGE SQL` functions store a single SELECT body and substitute call arguments. `pg_proc.prosecdef` records `SECURITY DEFINER`. plpgsql stays unsupported. Hot paths: `crates/sql/src/parser.rs`, `crates/sql/src/exec/expr/json_dispatch.rs`.
