@@ -53,7 +53,11 @@ pub(crate) fn run_suite(args: RunArgs) -> Result<()> {
                     summary.total, summary.passed, summary.failed, summary.skipped
                 );
             }
-            Ok(())
+            beyond_sqlite::gate::check(
+                &args.output,
+                args.postgres_regression_baseline.as_deref(),
+                args.postgres_readme.as_deref(),
+            )
         }
     }
 }
@@ -132,6 +136,11 @@ fn run_all_suites(
             ),
         ],
     )?;
+    let postgres_gate = beyond_sqlite::gate::check(
+        &beyond_output,
+        args.postgres_regression_baseline.as_deref(),
+        args.postgres_readme.as_deref(),
+    );
     evidence::write_official_evidence(OfficialEvidenceConfig {
         output_dir: output_dir.to_path_buf(),
         all_output: args.output.clone(),
@@ -175,7 +184,7 @@ fn run_all_suites(
             ),
             OfficialSuiteEvidence::new(
                 "beyond_sqlite",
-                beyond_output,
+                beyond_output.clone(),
                 evidence::suite_artifact_path(output_dir, "beyond_sqlite", "summary.json"),
                 evidence::suite_artifact_path(output_dir, "beyond_sqlite", "ranked.csv"),
                 evidence::suite_artifact_path(output_dir, "beyond_sqlite", "manifest.json"),
@@ -183,7 +192,8 @@ fn run_all_suites(
                 &beyond_summary,
             ),
         ],
-    })
+    })?;
+    postgres_gate
 }
 
 fn run_sqlite_like_suite(

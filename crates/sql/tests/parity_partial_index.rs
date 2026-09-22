@@ -151,3 +151,71 @@ fn partial_index_planner_only_uses_matching_predicate() {
     // correct results.
     lab.assert_query_matches("SELECT id FROM t WHERE b = 'x' AND a = 10 ORDER BY id");
 }
+
+#[test]
+fn unique_partial_backfill_ignores_excluded_duplicates_and_null_predicates() {
+    let lab = Lab::new();
+    lab.execute("CREATE TABLE t(a INT, active BOOLEAN)");
+    lab.execute("INSERT INTO t VALUES (1,true),(2,true),(1,false),(1,false),(1,NULL)");
+    lab.execute("CREATE UNIQUE INDEX ix ON t(a) WHERE active");
+    lab.assert_query_matches("SELECT a FROM t INDEXED BY ix WHERE active ORDER BY a");
+    lab.execute("INSERT INTO t VALUES (1,false)");
+    assert!(
+        lab.redline
+            .execute("INSERT INTO t VALUES (1,true)")
+            .is_err()
+    );
+    lab.assert_query_matches("SELECT a,active FROM t ORDER BY a,active");
+}
+
+#[test]
+fn duplicate_backfill_is_a_constraint_error_and_leaves_connection_usable() {
+    let lab = Lab::new();
+    lab.execute("CREATE TABLE t(a INT, active BOOLEAN)");
+    lab.execute("INSERT INTO t VALUES (1,true),(1,true)");
+    for sql in [
+        "CREATE UNIQUE INDEX ix ON t(a)",
+        "CREATE UNIQUE INDEX ix ON t(a) WHERE active",
+    ] {
+        let err = lab.redline.execute(sql).unwrap_err().to_string();
+        assert!(err.contains("UNIQUE constraint failed"), "{err}");
+        assert!(lab.sqlite.execute_batch(sql).is_err());
+        lab.assert_query_matches("SELECT name FROM sqlite_schema WHERE type='index'");
+        lab.assert_query_matches("SELECT count(*) FROM t");
+    }
+    lab.execute("DELETE FROM t");
+    lab.execute("INSERT INTO t VALUES(2,true)");
+    lab.execute("CREATE UNIQUE INDEX ix ON t(a) WHERE active");
+    lab.assert_query_matches("SELECT a FROM t INDEXED BY ix WHERE active");
+}
+
+#[test]
+fn partial_backfill_survives_reopen_and_transaction_rollback() {
+    let dir = tempdir().unwrap();
+    let path = dir.path().join("reopen.db");
+    {
+        let db = Database::create(&path, DbOptions::default()).unwrap();
+        let c = db.connect();
+        c.execute("CREATE TABLE t(a INT, active BOOLEAN)").unwrap();
+        c.execute("INSERT INTO t VALUES(1,true),(1,false),(2,true)")
+            .unwrap();
+        c.execute("BEGIN").unwrap();
+        c.execute("CREATE UNIQUE INDEX rolled_back ON t(a) WHERE active")
+            .unwrap();
+        c.execute("ROLLBACK").unwrap();
+        c.execute("CREATE UNIQUE INDEX ix ON t(a) WHERE active")
+            .unwrap();
+    }
+    let db = Database::open(&path, DbOptions::default()).unwrap();
+    let c = db.connect();
+    c.execute("INSERT INTO t VALUES(1,false)").unwrap();
+    assert!(c.execute("INSERT INTO t VALUES(1,true)").is_err());
+    let mut stmt = c
+        .prepare("SELECT a FROM t INDEXED BY ix WHERE active ORDER BY a")
+        .unwrap();
+    assert_eq!(stmt.step().unwrap(), Step::Row);
+    assert_eq!(stmt.column_value(0).unwrap(), &SqlValue::Integer(1));
+    assert_eq!(stmt.step().unwrap(), Step::Row);
+    assert_eq!(stmt.column_value(0).unwrap(), &SqlValue::Integer(2));
+    assert_eq!(stmt.step().unwrap(), Step::Done);
+}

@@ -110,6 +110,10 @@ struct BeyondProvenance {
     target_binary_sha256: String,
     target_version: String,
     postgres_reference_status: String,
+    reference: Option<super::engine::ReferenceIdentity>,
+    corpus_sha256: String,
+    source_commit: Option<String>,
+    source_dirty: bool,
     command_line: Vec<String>,
     started_unix_ms: u128,
     ended_unix_ms: u128,
@@ -129,11 +133,7 @@ pub fn run(config: RunConfig) -> Result<RunSummary> {
         fs::create_dir_all(parent).with_context(|| format!("create {}", parent.display()))?;
     }
 
-    let target = binary_identity(&config.target_bin).unwrap_or_else(|_| BinaryIdentity {
-        path: config.target_bin.to_string_lossy().into_owned(),
-        sha256: "<unknown>".to_owned(),
-        version: "<unknown>".to_owned(),
-    });
+    let target = binary_identity(&config.target_bin)?;
     let postgres_status = postgres_reference_status();
     let mut raw = String::new();
     let mut passed = 0usize;
@@ -196,21 +196,7 @@ pub fn run(config: RunConfig) -> Result<RunSummary> {
     let (oracle_summary, oracle_outcomes) =
         super::oracle::run_cases_with(super::oracle::RunCasesOptions {
             target_bin: Some(config.target_bin.clone()),
-        })
-        .unwrap_or((
-            super::oracle::OracleSummary {
-                total: 0,
-                passed: 0,
-                skipped_unavailable: 0,
-                skipped_feature_missing: 0,
-                failed: 0,
-                target_total: 0,
-                target_passed: 0,
-                target_failed: 0,
-                target_skipped: 0,
-            },
-            Vec::new(),
-        ));
+        })?;
     let mut oracle_raw = String::new();
     for outcome in &oracle_outcomes {
         let record = serde_json::json!({
@@ -297,15 +283,17 @@ pub fn run(config: RunConfig) -> Result<RunSummary> {
             target_skipped: oracle_summary.target_skipped,
         },
         &features,
+        oracle_summary.reference,
     )?;
 
     Ok(RunSummary {
-        total: features.len() + oracle_summary.total,
-        passed: passed + oracle_summary.passed,
-        failed: oracle_summary.failed,
-        skipped: skipped
-            + oracle_summary.skipped_unavailable
-            + oracle_summary.skipped_feature_missing,
+        total: oracle_summary.total,
+        passed: oracle_summary.target_passed,
+        failed: oracle_summary.target_failed + oracle_summary.failed,
+        skipped: oracle_summary
+            .total
+            .saturating_sub(oracle_summary.target_total + oracle_summary.failed)
+            + oracle_summary.target_skipped,
         elapsed: Duration::from_nanos(started.elapsed().as_nanos().min(u64::MAX as u128) as u64),
         slowest: Vec::new(),
     })
@@ -318,6 +306,7 @@ fn write_artifacts(
     raw: &str,
     summary: BeyondSummary,
     features: &[Feature],
+    reference: Option<super::engine::ReferenceIdentity>,
 ) -> Result<()> {
     let output_dir = config
         .output
@@ -355,6 +344,13 @@ fn write_artifacts(
         target_binary_sha256: target.sha256.clone(),
         target_version: target.version.clone(),
         postgres_reference_status: postgres_status.to_owned(),
+        reference,
+        corpus_sha256: sha256_hex(super::oracle::MANIFEST),
+        source_commit: std::env::var("REDLINEDB_BENCH_GIT_SHA").ok(),
+        source_dirty: !std::process::Command::new("git")
+            .args(["diff", "--quiet", "HEAD"])
+            .status()
+            .is_ok_and(|status| status.success()),
         command_line: config.command_line.clone(),
         started_unix_ms: config.started_unix_ms,
         ended_unix_ms: config.ended_unix_ms,

@@ -380,6 +380,13 @@ pub fn write_official_evidence(config: OfficialEvidenceConfig) -> Result<()> {
         &config.all_manifest,
     )?;
 
+    for name in ["postgres-qualification.json", "postgres-progress.md"] {
+        insert_hash(
+            &mut output_file_hashes,
+            &config.output_dir,
+            &config.output_dir.join(name),
+        )?;
+    }
     let mut suites = BTreeMap::new();
     let mut failed = 0usize;
     for suite in config.suites {

@@ -65,7 +65,7 @@ pub(crate) fn lookup(name: &str) -> Option<&'static dyn TvFunc> {
         .map(|f| *f)
 }
 
-static EXTRA_TVFS: &[&dyn TvFunc] = &[&GenerateSeries];
+static EXTRA_TVFS: &[&dyn TvFunc] = &[&GenerateSeries, &Unnest];
 
 struct GenerateSeries;
 
@@ -76,7 +76,7 @@ impl TvFunc for GenerateSeries {
 
     fn eval(
         &self,
-        _conn: &Connection,
+        conn: &Connection,
         _schema: &SchemaSnapshot,
         args: &[TvArg],
     ) -> Result<TvResult> {
@@ -84,6 +84,12 @@ impl TvFunc for GenerateSeries {
             return Err(Error::UnsupportedSql(
                 "generate_series expects 2 or 3 arguments".to_owned(),
             ));
+        }
+        if args.iter().any(|arg| matches!(arg, TvArg::Null)) {
+            return Ok(TvResult {
+                columns: vec!["value".into()],
+                rows: Vec::new(),
+            });
         }
         let start = tv_int(&args[0])?;
         let stop = tv_int(&args[1])?;
@@ -97,21 +103,101 @@ impl TvFunc for GenerateSeries {
                 "generate_series step must not be zero".to_owned(),
             ));
         }
-        let mut rows = Vec::new();
-        let mut value = start;
-        if step > 0 {
-            while value <= stop {
-                rows.push(vec![SqlValue::Integer(value)]);
-                value = value.saturating_add(step);
-            }
+        let count = if (step > 0 && start > stop) || (step < 0 && start < stop) {
+            0
         } else {
-            while value >= stop {
-                rows.push(vec![SqlValue::Integer(value)]);
-                value = value.saturating_add(step);
+            ((i128::from(stop) - i128::from(start)) / i128::from(step) + 1) as u128
+        };
+        // These rows are materialized at prepare time. Reject a series that
+        // cannot fit the connection's work-memory budget before allocating.
+        let row_bytes = std::mem::size_of::<Vec<SqlValue>>() + std::mem::size_of::<SqlValue>();
+        if count > (conn.query_memory().work_mem_bytes / row_bytes) as u128 {
+            return Err(Error::Config(
+                "generate_series exceeds query work memory".into(),
+            ));
+        }
+        let mut rows = Vec::with_capacity(count as usize);
+        let mut value = start;
+        for index in 0..count {
+            rows.push(vec![SqlValue::Integer(value)]);
+            if index + 1 < count {
+                value = value.checked_add(step).ok_or(Error::DatatypeMismatch)?;
             }
         }
         Ok(TvResult {
             columns: vec!["value".to_owned()],
+            rows,
+        })
+    }
+}
+
+struct Unnest;
+
+impl TvFunc for Unnest {
+    fn name(&self) -> &'static str {
+        "unnest"
+    }
+
+    fn eval(
+        &self,
+        conn: &Connection,
+        _schema: &SchemaSnapshot,
+        args: &[TvArg],
+    ) -> Result<TvResult> {
+        if args.is_empty() {
+            return Err(Error::UnsupportedSql(
+                "unnest requires at least one array".into(),
+            ));
+        }
+        let arrays: Vec<Vec<SqlValue>> = args
+            .iter()
+            .map(|arg| {
+                match arg {
+                    TvArg::Null => Ok(Vec::new()),
+                    TvArg::Text(text) => {
+                        let value: serde_json::Value =
+                            serde_json::from_str(text).map_err(|_| Error::DatatypeMismatch)?;
+                        let serde_json::Value::Array(values) = value else {
+                            return Err(Error::DatatypeMismatch);
+                        };
+                        // The existing ARRAY literal representation is JSON. Flatten
+                        // dimensions in storage order, preserving NULL elements.
+                        fn flatten(value: serde_json::Value, out: &mut Vec<SqlValue>) {
+                            match value {
+                                serde_json::Value::Array(values) => {
+                                    for value in values {
+                                        flatten(value, out);
+                                    }
+                                }
+                                value => out.push(crate::json::scalar::json_to_sql(&value)),
+                            }
+                        }
+                        let mut out = Vec::new();
+                        for value in values {
+                            flatten(value, &mut out);
+                        }
+                        Ok(out)
+                    }
+                    _ => Err(Error::DatatypeMismatch),
+                }
+            })
+            .collect::<Result<_>>()?;
+        let count = arrays.iter().map(Vec::len).max().unwrap_or(0);
+        let row_bytes =
+            std::mem::size_of::<Vec<SqlValue>>() + args.len() * std::mem::size_of::<SqlValue>();
+        if count > conn.query_memory().work_mem_bytes / row_bytes {
+            return Err(Error::Config("unnest exceeds query work memory".into()));
+        }
+        let rows = (0..count)
+            .map(|i| {
+                arrays
+                    .iter()
+                    .map(|array| array.get(i).cloned().unwrap_or(SqlValue::Null))
+                    .collect()
+            })
+            .collect();
+        Ok(TvResult {
+            columns: vec!["unnest".into(); args.len()],
             rows,
         })
     }
@@ -193,8 +279,49 @@ fn lower_expr(expr: &sqlparser::ast::Expr) -> Result<TvArg> {
         // body parse the JSON / int / text as needed.
         Expr::Cast { expr, .. } => lower_expr(expr),
         Expr::Nested(inner) => lower_expr(inner),
+        Expr::Function(func) if func.name.to_string().eq_ignore_ascii_case("json_array") => {
+            constant_arg(expr)
+        }
+        Expr::UnaryOp {
+            op: sqlparser::ast::UnaryOperator::Minus,
+            expr,
+        } if matches!(expr.as_ref(), Expr::Value(_)) => {
+            let Expr::Value(value) = expr.as_ref() else {
+                unreachable!()
+            };
+            if let Value::Number(n, _) = &value.value {
+                format!("-{n}")
+                    .parse::<i64>()
+                    .map(TvArg::Integer)
+                    .map_err(|_| Error::DatatypeMismatch)
+            } else {
+                constant_arg(expr)
+            }
+        }
+        Expr::UnaryOp { .. } => constant_arg(expr),
+        Expr::Array(array) => {
+            let values = array
+                .elem
+                .iter()
+                .map(|expr| super::expr::eval_scalar(expr, &super::expr::RowContext::Empty, &[]))
+                .collect::<Result<Vec<_>>>()?;
+            let SqlValue::Text(text) = crate::json::scalar::json_array(&values)? else {
+                return Err(Error::DatatypeMismatch);
+            };
+            Ok(TvArg::Text(text))
+        }
         other => Err(Error::UnsupportedSql(format!(
             "unsupported table-valued function argument: {other:?}"
         ))),
+    }
+}
+
+fn constant_arg(expr: &sqlparser::ast::Expr) -> Result<TvArg> {
+    let value = super::expr::eval_scalar(expr, &super::expr::RowContext::Empty, &[])?;
+    match value {
+        SqlValue::Integer(v) => Ok(TvArg::Integer(v)),
+        SqlValue::Text(v) => Ok(TvArg::Text(v)),
+        SqlValue::Null => Ok(TvArg::Null),
+        _ => Err(Error::DatatypeMismatch),
     }
 }

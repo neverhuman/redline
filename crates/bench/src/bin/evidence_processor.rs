@@ -262,7 +262,7 @@ fn validated_suite(
         provenance_path.clone(),
     ]);
 
-    if failed != 0 {
+    if failed != 0 && name != "beyond_sqlite" {
         bail!("suite {name} failed {failed} test(s)");
     }
     match name {
@@ -284,6 +284,10 @@ fn validated_suite(
                 );
             }
         }
+        "beyond_sqlite" if total == 0 || skipped != 0 || passed + failed != total => {
+            bail!("PostgreSQL target run is missing or incomplete");
+        }
+        "beyond_sqlite" => {}
         _ if passed + skipped != total => bail!(
             "suite {name} has inconsistent totals: passed={passed} skipped={skipped} total={total}"
         ),
@@ -370,7 +374,7 @@ fn run(root: PathBuf) -> Result<PathBuf> {
         .and_then(Value::as_str)
         .map(|value| value.trim().to_ascii_lowercase())
         .ok_or_else(|| anyhow!("status is missing or not a string"))?;
-    if !["passed", "pass", "success", "succeeded", "ok"].contains(&status.as_str()) {
+    if !["passed", "failed"].contains(&status.as_str()) {
         bail!("official evidence status is not successful: {status:?}");
     }
 
@@ -401,6 +405,10 @@ fn run(root: PathBuf) -> Result<PathBuf> {
         .iter()
         .map(|path| (*path).to_owned())
         .collect::<BTreeSet<_>>();
+    required_paths.extend([
+        "postgres-qualification.json".to_owned(),
+        "postgres-progress.md".to_owned(),
+    ]);
     let mut validated = BTreeMap::new();
     for name in REQUIRED_SUITE_NAMES {
         validated.insert(
@@ -421,6 +429,28 @@ fn run(root: PathBuf) -> Result<PathBuf> {
         if actual != expected {
             bail!("sha256 mismatch for {relative}: expected {expected}, got {actual}");
         }
+    }
+    let pg: Value = serde_json::from_slice(&fs::read(root.join("postgres-qualification.json"))?)?;
+    let pg_summary = &validated["beyond_sqlite"];
+    let pg_policy = repo_root.join("metadata/beyond_sqlite/postgres-regression.json");
+    if pg["schema_version"] != "redline-postgres-qualification-v1"
+        || pg["regression"] != "passed"
+        || pg["required"] != pg_summary["total"]
+        || pg["passed"] != pg_summary["passed"]
+        || pg["failed"] != pg_summary["failed"]
+        || pg["skipped"] != 0
+        || pg["unverified"] != 0
+        || pg["raw_sha256"] != sha256_file(&root.join("beyond_sqlite.raw.jsonl"))?
+        || pg["provenance_sha256"] != sha256_file(&root.join("beyond-sqlite-provenance.json"))?
+        || pg["policy_sha256"] != sha256_file(&pg_policy)?
+    {
+        bail!("PostgreSQL regression proof is missing, inconsistent, or failed");
+    }
+    let has_failures = validated
+        .values()
+        .any(|suite| suite["failed"].as_u64().unwrap_or(1) > 0);
+    if (status == "failed") != has_failures {
+        bail!("official qualification status disagrees with suite failures");
     }
     for suite in validated.values_mut() {
         add_suite_hashes(&repo_root, &root, &output_hashes, suite)?;
@@ -458,7 +488,8 @@ fn run(root: PathBuf) -> Result<PathBuf> {
         "runner_observed_binary_sha256".to_owned(),
         Value::String(observed_sha),
     );
-    processed.insert("status".to_owned(), Value::String("passed".to_owned()));
+    processed.insert("status".to_owned(), Value::String(status));
+    processed.insert("postgres_regression".to_owned(), pg);
     processed.insert(
         "suite_summaries".to_owned(),
         Value::Object(
@@ -540,5 +571,23 @@ mod tests {
         assert!(validated_suite("memory", &suite(2_445, 2_441, 4), &mut paths).is_ok());
         assert!(validated_suite("rql_phase1", &suite(1_385, 1_129, 256), &mut paths).is_ok());
         assert!(validated_suite("sqlite_parity", &suite(1_127, 1_123, 4), &mut paths).is_err());
+    }
+    #[test]
+    fn postgres_requires_executions_and_preserves_failure_counts() {
+        let mut suite = serde_json::json!({
+            "total": 265, "passed": 127, "failed": 138, "skipped": 0,
+            "raw_path": "raw.jsonl", "summary_path": "summary.json",
+            "ranked_path": "ranked.csv", "manifest_path": "manifest.json",
+            "provenance_path": "provenance.json"
+        });
+        let mut paths = BTreeSet::new();
+        let result = validated_suite("beyond_sqlite", &suite, &mut paths).unwrap();
+        assert_eq!(result["failed"], 138);
+        suite["skipped"] = 138.into();
+        assert!(validated_suite("beyond_sqlite", &suite, &mut paths).is_err());
+        for field in ["total", "passed", "failed", "skipped"] {
+            suite[field] = 0.into();
+        }
+        assert!(validated_suite("beyond_sqlite", &suite, &mut paths).is_err());
     }
 }

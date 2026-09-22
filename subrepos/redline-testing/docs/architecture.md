@@ -7,8 +7,8 @@ CLI cases through both and diffing normalized output.
 ## Layers
 
 ```
-src/cli.rs            clap entry layer — parses args, routes to suites, renders
-src/report.rs         report rendering + official-evidence bundle (over JSONL)
+src/cli/              clap entry layer — parses args, routes to suites, renders
+src/report/           report rendering + official-evidence bundle (over JSONL)
 src/evidence.rs       evidence bundle hashing + serialization
 src/sqlite_parity/    SQLite-parity suite
   ├── engine.rs       subprocess SQL driver (the data-access / adapter seam)
@@ -20,8 +20,10 @@ src/sqlite_parity/    SQLite-parity suite
   └── normalize.rs    output normalization
 src/beyond_sqlite/    PostgreSQL-class oracle suite
   ├── engine.rs       subprocess psql driver (adapter seam)
-  ├── oracle.rs       psql ↔ psql self-compare oracle
-  └── taxonomy.rs     feature rank/owner taxonomy
+  ├── oracle.rs       psql self-comparison and target execution
+  ├── gate.rs         artifact identities, reference pin and regression policy
+  │   └── gate/cases.rs  complete, unique, executed case coverage
+  └── taxonomy.rs     legacy feature metadata and execution artifacts
 xtask/                dev-only corpus, badge, and receipt tooling (not shipped)
 ```
 
@@ -36,8 +38,8 @@ seam; the reference CLI name is centralized as
 ## Output contract
 
 The runner emits JSONL raw records (`schemas/raw-record.schema.json`) and a
-release manifest (`schemas/release-manifest.schema.json`). RedlineDB CI consumes
-the pinned tarball; JSONL field compatibility is a hard contract. Generated
+release manifest (`schemas/release-manifest.schema.json`). Root RedlineDB CI builds this included runner at the tested source commit;
+historical reports can explicitly select a pinned release tarball. JSONL field compatibility is a hard contract. Generated
 zones are declared in [`.jankurai/generated-zones.toml`](../.jankurai/generated-zones.toml)
 and must not be hand-edited.
 

@@ -533,6 +533,7 @@ dependencies = [
  "serde_json",
  "sha2",
  "sqlparser",
+ "tempfile",
 ]
 
 [[package]]

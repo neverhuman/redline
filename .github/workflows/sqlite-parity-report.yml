@@ -2,10 +2,8 @@ name: redline-testing-report
 
 on:
   workflow_dispatch:
-  workflow_run:
-    workflows: ["ci"]
-    types: [completed]
-    branches: [main]
+  schedule:
+    - cron: '30 6 * * *'
 
 concurrency:
   group: redline-testing-report
@@ -13,13 +11,25 @@ concurrency:
 
 jobs:
   publish-pr:
-    if: github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success'
     runs-on: [self-hosted, Linux, X64]
     timeout-minutes: 240
     permissions:
       contents: write
       pull-requests: write
+      actions: write
       attestations: read
+    services:
+      postgres:
+        image: postgres:16.15-bookworm@sha256:efdf07c2f9d4df592783dcc8ea5f6db02efbf5f6452b527225ff5e58364570e9
+        env:
+          POSTGRES_DB: redlinedb_beyond
+          POSTGRES_USER: redlinedb
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_INITDB_ARGS: --locale=C --encoding=UTF8
+        ports: [5432]
+        options: >-
+          --health-cmd "pg_isready -U redlinedb -d redlinedb_beyond"
+          --health-interval 5s --health-timeout 5s --health-retries 12
     steps:
       - name: Unlock leftover workspace files
         run: |
@@ -43,10 +53,12 @@ jobs:
       - uses: swatinem/rust-cache@42dc69e1aa15d09112580998cf2ef0119e2e91ae
       - name: Install system packages
         run: |
-          bash ops/ci/apt-install.sh build-essential mold openssl sqlite3 zlib1g-dev
+          bash ops/ci/apt-install.sh build-essential mold openssl sqlite3 zlib1g-dev postgresql-client
       - run: bash ops/ci/install-github-tools.sh
-      - name: Publish generated SQLite parity report PR
+      - name: Publish generated SQLite and PostgreSQL parity report PR
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           REDLINEDB_BENCH_GIT_SHA: ${{ github.sha }}
+          REDLINE_TESTING_POSTGRES_IMAGE: sha256:efdf07c2f9d4df592783dcc8ea5f6db02efbf5f6452b527225ff5e58364570e9
+          REDLINE_TESTING_POSTGRES_URL: postgres://redlinedb:postgres@127.0.0.1:${{ job.services.postgres.ports['5432'] }}/redlinedb_beyond
         run: bash ops/ci/sqlite-parity-report.sh publish-pr

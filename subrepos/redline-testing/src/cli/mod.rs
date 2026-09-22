@@ -10,6 +10,11 @@ use args::CommandKind;
 pub fn run(cli: Cli) -> Result<()> {
     match cli.command {
         CommandKind::Run(args) => run::run_suite(args),
+        CommandKind::CheckPostgres(args) => crate::beyond_sqlite::gate::check(
+            &args.input,
+            args.baseline.as_deref(),
+            args.readme.as_deref(),
+        ),
         CommandKind::Report(args) => cmds::report(args),
         CommandKind::List(args) => cmds::list(args),
         CommandKind::JankuraiCompare(args) => cmds::jankurai_compare(args),

@@ -471,16 +471,16 @@ pub fn execute_prepared(
         }
         PreparedKind::CreateIndex(spec) => {
             with_write_tx(conn, |_session, tx| {
-                let spec_has_expression_key =
-                    spec.columns.iter().any(|column| column.expr_sql.is_some());
-                let existed_before = if spec_has_expression_key {
+                let requires_sql_backfill = spec.predicate_sql.is_some()
+                    || spec.columns.iter().any(|column| column.expr_sql.is_some());
+                let existed_before = if requires_sql_backfill {
                     create_index_existed_before(conn, tx, spec)?
                 } else {
                     false
                 };
                 let index = conn.engine().create_index(tx, spec.clone())?;
-                if spec_has_expression_key && !existed_before {
-                    backfill_expression_index(conn, tx, &index)?;
+                if requires_sql_backfill && !existed_before {
+                    backfill_sql_index(conn, tx, &index)?;
                 }
                 Ok(())
             })?;
@@ -1135,7 +1135,7 @@ fn create_index_existed_before(
         .is_some())
 }
 
-fn backfill_expression_index(conn: &Connection, tx: &mut Txn, index: &Arc<IndexDef>) -> Result<()> {
+fn backfill_sql_index(conn: &Connection, tx: &mut Txn, index: &Arc<IndexDef>) -> Result<()> {
     let Some(handle) = index_dml::open_index_handle_for_tx(conn.engine(), tx, index) else {
         return Ok(());
     };

@@ -221,6 +221,7 @@ run_redline_testing_official() {
     --target-bin "${CARGO_TARGET_DIR:-target}/release/redlinedb" \
     --sqlite-bin "$sqlite_parity_reference_bin" \
     --suite all \
+    --postgres-regression-baseline metadata/beyond_sqlite/postgres-regression.json \
     --workers auto \
     --tmp-root "$(redline_testing_tmp_root)" \
     --repetitions "$sqlite_parity_repetitions" \

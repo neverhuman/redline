@@ -14,6 +14,7 @@ pub struct Cli {
 #[derive(Debug, Subcommand)]
 pub(crate) enum CommandKind {
     Run(RunArgs),
+    CheckPostgres(CheckPostgresArgs),
     Report(ReportArgs),
     List(ListArgs),
     JankuraiCompare(JankuraiCompareArgs),
@@ -43,6 +44,12 @@ pub(crate) struct RunArgs {
     pub(crate) progress: ProgressMode,
     #[arg(long)]
     pub(crate) memory_samples: bool,
+    /// Explicit regression policy; failures remain failed in qualification output.
+    #[arg(long)]
+    pub(crate) postgres_regression_baseline: Option<PathBuf>,
+    /// Update the marked README block from validated PostgreSQL results.
+    #[arg(long)]
+    pub(crate) postgres_readme: Option<PathBuf>,
 }
 
 #[derive(Debug, Args)]
@@ -176,4 +183,14 @@ impl Suite {
             Self::BeyondSqlite => "beyond_sqlite",
         }
     }
+}
+
+#[derive(Debug, Args)]
+pub(crate) struct CheckPostgresArgs {
+    #[arg(long)]
+    pub(crate) input: PathBuf,
+    #[arg(long)]
+    pub(crate) baseline: Option<PathBuf>,
+    #[arg(long)]
+    pub(crate) readme: Option<PathBuf>,
 }

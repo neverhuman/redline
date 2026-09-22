@@ -14,4 +14,8 @@ target/release/redline-testing report \
   --updated-date "$(date -u +%F)" \
   --expected-repetitions "${REDLINEDB_SQLITE_PARITY_REPETITIONS:-3}" \
   --expected-warmup "${REDLINEDB_SQLITE_PARITY_WARMUP:-1}"
-printf 'Verified full-corpus report generation passed.\n'
+target/release/redline-testing check-postgres \
+  --input target/redline-testing/beyond_sqlite.raw.jsonl \
+  --baseline metadata/beyond_sqlite/postgres-regression.json \
+  --readme "$work/README.md"
+printf 'Verified SQLite and PostgreSQL corpus report generation passed.\n'

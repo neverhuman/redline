@@ -1,6 +1,7 @@
 name: ci
 
 on:
+  workflow_dispatch:
   workflow_call:
     inputs:
       tag:
@@ -121,6 +122,26 @@ jobs:
     permissions:
       contents: read
       attestations: read
+    # Beyond-SQLite cases compare RedlineDB against a live PostgreSQL oracle.
+    # Without one the runner skips them ("postgres unavailable"), and a skip
+    # does not fail the suite - so the lane reported success while measuring
+    # nothing. The host port is assigned by the runner so concurrent parity
+    # jobs on a shared self-hosted host cannot collide.
+    services:
+      postgres:
+        image: postgres:16.15-bookworm@sha256:efdf07c2f9d4df592783dcc8ea5f6db02efbf5f6452b527225ff5e58364570e9
+        env:
+          POSTGRES_DB: redlinedb_beyond
+          POSTGRES_USER: redlinedb
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_INITDB_ARGS: --locale=C --encoding=UTF8
+        ports:
+          - 5432
+        options: >-
+          --health-cmd "pg_isready -U redlinedb -d redlinedb_beyond"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 12
     steps:
       - name: Unlock leftover workspace files
         run: |
@@ -143,11 +164,13 @@ jobs:
       - uses: swatinem/rust-cache@42dc69e1aa15d09112580998cf2ef0119e2e91ae
       - name: Install system packages
         run: |
-          bash ops/ci/apt-install.sh build-essential pkg-config openssl sqlite3 zlib1g-dev
+          bash ops/ci/apt-install.sh build-essential pkg-config openssl sqlite3 zlib1g-dev postgresql-client
       - name: Run parity shard
         env:
           REDLINEDB_BENCH_GIT_SHA: ${{ github.sha }}
           GH_TOKEN: ${{ github.token }}
+          REDLINE_TESTING_POSTGRES_IMAGE: sha256:efdf07c2f9d4df592783dcc8ea5f6db02efbf5f6452b527225ff5e58364570e9
+          REDLINE_TESTING_POSTGRES_URL: postgres://redlinedb:postgres@127.0.0.1:${{ job.services.postgres.ports['5432'] }}/redlinedb_beyond
         run: CI_PARITY_STAGE=${{ matrix.stage }} bash ops/ci/parity.sh
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
         if: always()
@@ -386,6 +409,14 @@ jobs:
           exit 0
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
         with: {fetch-depth: 0}
+      - uses: dtolnay/rust-toolchain@3c5f7ea28cd621ae0bf5283f0e981fb97b8a7af9
+        with: {toolchain: 1.95.0}
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with: {node-version: '22'}
+      - name: Install security tools for this runner
+        run: |
+          cargo install cargo-audit --locked --version 0.22.1
+          cargo install cargo-deny --locked --version 0.19.8
       - run: bash ops/ci/install-github-tools.sh
       - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
         with: {name: security-evidence, path: target/jankurai/security}
@@ -455,3 +486,23 @@ jobs:
           RESULTS: ${{ toJSON(needs) }}
         run: |
           echo "$RESULTS" | jq -e 'to_entries | length > 0 and all(.value.result == "success")'
+
+  merge-report:
+    if: github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/automation/sqlite-parity-report'
+    needs: required
+    runs-on: [self-hosted, Linux, X64]
+    timeout-minutes: 5
+    permissions:
+      contents: write
+      pull-requests: write
+    steps:
+      - name: Merge the report only after all normal checks pass
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          REPORT_HEAD: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+          number=$(gh pr list --head automation/sqlite-parity-report --base main --state open --json number --jq '.[0].number // empty')
+          test -n "$number"
+          gh pr merge "$number" --squash --delete-branch --match-head-commit "$REPORT_HEAD"

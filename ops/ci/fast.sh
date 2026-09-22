@@ -60,6 +60,7 @@ run_test_stage() {
             cargo test -p redlinedb-sql --lib --quiet --locked
             ;;
         sql-contracts)
+            cargo test -p redlinedb-sql --test postgres_table_functions --test parity_partial_index --quiet --locked
             cargo test -p redlinedb-sql --test phase11_temp_roots --quiet --locked
             cargo test -p redlinedb-sql --test phase11_veox_queue --quiet --locked
             cargo test -p redlinedb-sql --test phase11_xdoug_compat --quiet --locked

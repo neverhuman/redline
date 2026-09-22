@@ -241,6 +241,16 @@ impl Engine {
             EncodedIndexKey, IndexKeySource, OwnedValue, RecordRef, RecordScratch, encode_index_key,
         };
 
+        // SQL owns expression and predicate evaluation. Its caller backfills
+        // these indexes after the transaction-local handle is installed.
+        if index.predicate_sql.is_some()
+            || index
+                .keys
+                .iter()
+                .any(|key| matches!(key.source, IndexKeySource::Expression { .. }))
+        {
+            return Ok(());
+        }
         // Snapshot the row directory for this relation BEFORE we begin so the
         // backfill does not race with concurrent inserts in the same tx.
         let entries = self.heap.relation_entries(table.relation_id)?;
@@ -320,7 +330,9 @@ impl Engine {
                     .point_lookup_visible(&self.txs, tx.snapshot(), Some(tx.id()), &bytes)?
                     .is_empty()
                 {
-                    return Err(Error::WriteConflict);
+                    return Err(Error::ConstraintViolation(
+                        "UNIQUE constraint failed during index creation",
+                    ));
                 }
             }
             let row_ref = IndexRowRef::with_row_id(

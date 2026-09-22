@@ -23,6 +23,19 @@ RedlineDB is an embedded SQL engine written in Rust. It keeps the SQLite-facing
 API familiar while replacing the storage core with MVCC, a concurrent B-tree,
 group-commit WAL, and crash recovery designed for multi-writer workloads.
 
+## Compatibility qualification
+
+The SQLite 3.53.1 and PostgreSQL 16.15 compatibility programs are incomplete.
+CI executes both reference lanes and uploads their raw results and provenance.
+A passing regression gate means recorded failures have not increased; it does
+not establish full SQL, ABI, database-file, or PostgreSQL wire compatibility.
+
+<!-- POSTGRES_PARITY_START -->
+PostgreSQL **16.15** SQL-shell corpus: **127 / 265 passed**, **138 failed**, **0 skipped**. Corpus qualification: **failed**. Regression gate: **passed**.
+
+All corpus cases run in CI; known failures remain failures. PostgreSQL wire/client and full application compatibility remain unverified. Source: `090dbc9b17e2ee1e20a669d0cffa61d5802634db` (dirty workspace); corpus SHA-256: `90a0d6242f6153dd4d2099c0f58d0c9b96cc3a6dd02cbc85c935d8204d8aedd0`.
+<!-- POSTGRES_PARITY_END -->
+
 ## What's new in v4.0.9 → v4.1.0 (W7 startup optimization)
 
 **W7** eliminates unnecessary syscalls from the in-memory database startup path.

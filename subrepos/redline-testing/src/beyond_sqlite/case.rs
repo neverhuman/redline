@@ -62,6 +62,10 @@ pub struct BeyondCase {
     #[serde(default)]
     pub setup_stdin: Option<String>,
     pub stdin: String,
+    /// Explicit reference outcome: successful SQL by default; reviewed negative
+    /// fixtures declare psql's ON_ERROR_STOP exit code (3).
+    #[serde(default)]
+    pub expected_reference_exit: i32,
     #[serde(default)]
     pub compare_mode: CompareMode,
     #[serde(default)]

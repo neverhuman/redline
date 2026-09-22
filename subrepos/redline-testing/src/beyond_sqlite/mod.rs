@@ -22,6 +22,7 @@
 
 pub mod case;
 pub mod engine;
+pub mod gate;
 pub mod normalize;
 pub mod oracle;
 pub mod taxonomy;

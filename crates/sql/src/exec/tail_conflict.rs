@@ -49,6 +49,11 @@ fn collect_unique_conflicts(
         if !index.unique && !index.primary {
             continue;
         }
+        if let Some(predicate) = index.predicate_sql.as_deref()
+            && !index_predicate::eval_index_predicate(table, predicate, values)?
+        {
+            continue;
+        }
         let constraint_name = match table
             .constraints
             .iter()
@@ -121,6 +126,11 @@ fn collect_unique_conflicts(
         session.unique_guards.push(guard);
         for row in &rows {
             if skip_rowid == Some(row.rowid) {
+                continue;
+            }
+            if let Some(predicate) = index.predicate_sql.as_deref()
+                && !index_predicate::eval_index_predicate(table, predicate, &row.values)?
+            {
                 continue;
             }
             let other =

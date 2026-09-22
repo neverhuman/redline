@@ -32,3 +32,4 @@ sqlparser = "0.61"
 # other in-crate helpers). See the in-module `prop_tests` under
 # src/sqlite_parity/.
 proptest = "1"
+tempfile = "3"

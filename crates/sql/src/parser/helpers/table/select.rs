@@ -23,6 +23,13 @@ pub(crate) fn bind_select_from(
         return Ok((SelectSource::Empty, None));
     }
 
+    for entry in &mut from {
+        normalize_unnest(&mut entry.relation)?;
+        for join in &mut entry.joins {
+            normalize_unnest(&mut join.relation)?;
+        }
+    }
+
     // CTE-aware single-source fast path. When a single FROM entry without
     // joins names an active CTE, route it through `SelectSource::Cte` so
     // the executor reads the pre-materialized rows instead of looking the
@@ -66,9 +73,11 @@ pub(crate) fn bind_select_from(
             name,
             alias,
             args: Some(args),
+            with_ordinality,
             ..
         } = &from[0].relation
-        && let Some(source) = try_table_valued_source(conn, schema, name, alias.as_ref(), args)?
+        && let Some(source) =
+            try_table_valued_source(conn, schema, name, alias.as_ref(), args, *with_ordinality)?
     {
         return Ok((source, None));
     }
@@ -761,7 +770,11 @@ fn try_rewrite_tvf_factor(
     scope: &mut HashMap<String, crate::exec::cte::CteDef>,
 ) -> Result<()> {
     let TableFactor::Table {
-        name, alias, args, ..
+        name,
+        alias,
+        args,
+        with_ordinality,
+        ..
     } = factor
     else {
         return Ok(());
@@ -780,7 +793,9 @@ fn try_rewrite_tvf_factor(
         return Ok(());
     };
     let lowered = crate::exec::table_valued::lower_args(call_args)?;
-    let result = func.eval(conn, schema, &lowered)?;
+    let mut result = func.eval(conn, schema, &lowered)?;
+    shape_tvf_result(func.name(), alias.as_ref(), *with_ordinality, &mut result)?;
+    *with_ordinality = false;
     let sentinel = format!("__rldb_tvf_{}_", *counter);
     *counter += 1;
     // Build the CteDef under the sentinel key so the binder finds it via
@@ -899,6 +914,7 @@ fn try_table_valued_source(
     name: &ObjectName,
     alias: Option<&sqlparser::ast::TableAlias>,
     args: &sqlparser::ast::TableFunctionArgs,
+    with_ordinality: bool,
 ) -> Result<Option<SelectSource>> {
     let func_name = match name.0.as_slice() {
         [part] => object_name_part_to_string(part)?,
@@ -908,7 +924,8 @@ fn try_table_valued_source(
         return Ok(None);
     };
     let lowered = crate::exec::table_valued::lower_args(args)?;
-    let result = func.eval(conn, schema, &lowered)?;
+    let mut result = func.eval(conn, schema, &lowered)?;
+    shape_tvf_result(func.name(), alias, with_ordinality, &mut result)?;
     let alias_arc: Option<Arc<str>> = alias.map(|a| Arc::from(a.name.value.as_str()));
     Ok(Some(SelectSource::Cte {
         name: Arc::from(func.name()),
@@ -916,4 +933,74 @@ fn try_table_valued_source(
         columns: Arc::from(result.columns),
         rows: Arc::from(result.rows),
     }))
+}
+
+/// PostgreSQL scalar table functions use the table alias as the default
+/// column name. Explicit column aliases override the corresponding prefix.
+fn shape_tvf_result(
+    function: &str,
+    alias: Option<&TableAlias>,
+    with_ordinality: bool,
+    result: &mut crate::exec::table_valued::TvResult,
+) -> Result<()> {
+    if result.columns.len() == 1
+        && matches!(function, "generate_series" | "unnest")
+        && let Some(alias) = alias
+    {
+        result.columns[0] = alias.name.value.clone();
+    }
+    if with_ordinality {
+        result.columns.push("ordinality".into());
+        for (index, row) in result.rows.iter_mut().enumerate() {
+            row.push(SqlValue::Integer((index + 1) as i64));
+        }
+    }
+    if let Some(alias) = alias {
+        if alias.columns.len() > result.columns.len() {
+            return Err(Error::Bind(
+                "too many column aliases for table function".into(),
+            ));
+        }
+        for (column, name) in result.columns.iter_mut().zip(&alias.columns) {
+            *column = name.name.value.clone();
+        }
+    }
+    Ok(())
+}
+
+fn normalize_unnest(factor: &mut TableFactor) -> Result<()> {
+    use sqlparser::ast::{FunctionArg, FunctionArgExpr, TableFunctionArgs};
+    if let TableFactor::UNNEST {
+        alias,
+        array_exprs,
+        with_offset,
+        with_ordinality,
+        ..
+    } = factor
+    {
+        if *with_offset {
+            return Err(Error::UnsupportedSql(
+                "UNNEST WITH OFFSET is not supported".into(),
+            ));
+        }
+        *factor = TableFactor::Table {
+            name: ObjectName::from(vec![Ident::new("unnest")]),
+            alias: alias.take(),
+            args: Some(TableFunctionArgs {
+                args: std::mem::take(array_exprs)
+                    .into_iter()
+                    .map(|expr| FunctionArg::Unnamed(FunctionArgExpr::Expr(expr)))
+                    .collect(),
+                settings: None,
+            }),
+            with_ordinality: *with_ordinality,
+            with_hints: Vec::new(),
+            version: None,
+            partitions: Vec::new(),
+            json_path: None,
+            sample: None,
+            index_hints: Vec::new(),
+        };
+    }
+    Ok(())
 }

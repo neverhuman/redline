@@ -6,15 +6,15 @@
 //! that reference and target shells agree.
 //!
 //! When Postgres is unavailable the cases are emitted as `skipped` records
-//! with a clear diagnostic — the SQLite-parity invariant (suite passes with
-//! only `sqlite3` installed) is preserved.
+//! with a diagnostic. The required qualification gate rejects missing target
+//! comparisons. The separate SQLite-only suite does not require PostgreSQL.
 //!
 //! Two compare lanes are emitted per case:
 //!   1. **Reference self-compare** (`profile: beyond_sqlite_oracle`) — runs
 //!      psql against the case twice and asserts identical output. This is the
 //!      ship gate: a case can only sit in the published corpus if psql agrees
 //!      with itself. Failures here mean the case is non-deterministic and
-//!      should be removed from the shard.
+//!      must be repaired before qualification can pass.
 //!   2. **Target compare** (`profile: beyond_sqlite_target`, opt-in via
 //!      `RunCasesOptions::target_bin`) — when a target binary is supplied,
 //!      drives it with the same stdin (plus a SQLite-style formatting
@@ -34,7 +34,8 @@ use super::case::{BeyondCase, CompareMode};
 use super::engine::{PostgresReference, ResolveOutcome, invoke_psql, resolve};
 use super::normalize::apply_chain;
 
-const MANIFEST: &str = include_str!("../../corpus/beyond_sqlite/generated_manifest.json");
+pub(crate) const MANIFEST: &str =
+    include_str!("../../corpus/beyond_sqlite/generated_manifest.json");
 
 /// SQLite-shell formatting preamble. Mirrors the `.mode list / .nullvalue NULL
 /// / .separator |` setup baked into per-case sqlite_parity stdin so target
@@ -58,6 +59,7 @@ pub struct RunCasesOptions {
 
 #[derive(Debug, Clone)]
 pub struct OracleSummary {
+    pub reference: Option<super::engine::ReferenceIdentity>,
     pub total: usize,
     pub passed: usize,
     pub skipped_unavailable: usize,
@@ -71,7 +73,25 @@ pub struct OracleSummary {
 }
 
 pub fn load_cases() -> Result<Vec<BeyondCase>> {
-    serde_json::from_str(MANIFEST).context("parse corpus/beyond_sqlite/generated_manifest.json")
+    parse_cases(MANIFEST)
+}
+
+fn parse_cases(manifest: &str) -> Result<Vec<BeyondCase>> {
+    let cases: Vec<BeyondCase> = serde_json::from_str(manifest)
+        .context("parse corpus/beyond_sqlite/generated_manifest.json")?;
+    let mut ids = std::collections::BTreeSet::new();
+    anyhow::ensure!(!cases.is_empty(), "Postgres corpus is empty");
+    for case in &cases {
+        anyhow::ensure!(ids.insert(case.id), "duplicate Postgres case {}", case.id);
+        anyhow::ensure!(
+            case.script.is_none()
+                && case.files.is_empty()
+                && case.requires_engine_features.is_empty(),
+            "disabled required comparison in case {}",
+            case.id
+        );
+    }
+    Ok(cases)
 }
 
 /// Backwards-compat wrapper: run the psql self-compare ship-gate only,
@@ -85,6 +105,7 @@ pub fn run_cases_with(options: RunCasesOptions) -> Result<(OracleSummary, Vec<Ca
     let cases = load_cases()?;
     let reference = resolve();
     let mut summary = OracleSummary {
+        reference: None,
         total: cases.len(),
         passed: 0,
         skipped_unavailable: 0,
@@ -117,6 +138,7 @@ pub fn run_cases_with(options: RunCasesOptions) -> Result<(OracleSummary, Vec<Ca
         }
     };
 
+    summary.reference = Some(super::engine::identity(&pg)?);
     for case in &cases {
         let mut outcome = run_one_case(case, &pg);
         // Only attempt target compare when self-compare passed AND a target
@@ -228,7 +250,10 @@ fn run_one_case(case: &BeyondCase, pg: &PostgresReference) -> CaseOutcome {
     };
     let ref_norm = normalize_for_compare(&first.stdout, case);
     let tgt_norm = normalize_for_compare(&second.stdout, case);
-    if first.exit_code == second.exit_code && ref_norm == tgt_norm && first.stderr == second.stderr
+    if first.exit_code == case.expected_reference_exit
+        && second.exit_code == case.expected_reference_exit
+        && ref_norm == tgt_norm
+        && first.stderr == second.stderr
     {
         CaseOutcome {
             case_id: case.id,
@@ -316,7 +341,9 @@ fn run_one_case_against_target(
     let tgt_norm = normalize_for_compare(&target.stdout, case);
     let target_stderr_head = first_nonempty_line(&target.stderr);
 
-    if reference.exit_code != target.exit_code {
+    if reference.exit_code != case.expected_reference_exit
+        || reference.exit_code != target.exit_code
+    {
         return TargetOutcome {
             status: "failed".to_owned(),
             diagnostic: Some(format!(
@@ -544,5 +571,19 @@ mod tests {
             summary.passed, summary.total,
             "not every published case passed psql self-compare: {blockers:#?}"
         );
+    }
+}
+
+#[cfg(test)]
+mod completeness_tests {
+    use super::*;
+    #[test]
+    fn disabled_and_duplicate_comparisons_are_rejected() {
+        let cases: Vec<serde_json::Value> = serde_json::from_str(MANIFEST).unwrap();
+        assert!(parse_cases(&serde_json::json!([cases[0], cases[0]]).to_string()).is_err());
+        let mut disabled = cases[0].clone();
+        disabled["requires_engine_features"] = serde_json::json!(["unimplemented"]);
+        assert!(parse_cases(&serde_json::json!([disabled]).to_string()).is_err());
+        assert!(parse_cases("[]").is_err());
     }
 }

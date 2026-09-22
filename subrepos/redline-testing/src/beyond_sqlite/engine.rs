@@ -241,6 +241,9 @@ pub fn invoke_psql(
             .stdin
             .take()
             .ok_or_else(|| anyhow!("no stdin pipe for psql child"))?;
+        // Keep caller PGOPTIONS (timeouts, authentication, etc.) intact.
+        // Suppress state-dependent DROP IF EXISTS notices and pin time rendering.
+        child_stdin.write_all(b"SET client_min_messages = warning; SET timezone = 'UTC';\n")?;
         for (key, value) in extra_set_commands {
             let line = format!("SET {key} = {value};\n");
             child_stdin
@@ -283,4 +286,37 @@ pub fn invoke_psql(
 
 fn normalize_newlines(s: &str) -> String {
     s.replace("\r\n", "\n").replace('\r', "\n")
+}
+
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+pub struct ReferenceIdentity {
+    pub version: String,
+    pub settings: String,
+    pub psql_sha256: String,
+    pub image_digest: Option<String>,
+    pub server_binary_sha256: Option<String>,
+}
+
+pub fn identity(reference: &PostgresReference) -> Result<ReferenceIdentity> {
+    use sha2::{Digest, Sha256};
+    let out = invoke_psql(
+        &reference.bin,
+        &reference.connection,
+        "SELECT current_setting('server_version_num'), datcollate, datctype, current_setting('TimeZone') FROM pg_database WHERE datname = current_database();",
+        &[],
+        Duration::from_secs(3),
+    )?;
+    anyhow::ensure!(out.exit_code == 0, "Postgres identity probe failed");
+    let hash_file = |path: &std::path::Path| -> Result<String> {
+        Ok(format!("{:x}", Sha256::digest(std::fs::read(path)?)))
+    };
+    Ok(ReferenceIdentity {
+        version: reference.version.clone(),
+        settings: out.stdout.trim().to_owned(),
+        psql_sha256: hash_file(&reference.bin)?,
+        image_digest: env::var("REDLINE_TESTING_POSTGRES_IMAGE").ok(),
+        server_binary_sha256: env::var_os("REDLINE_TESTING_POSTGRES_SERVER_BIN")
+            .map(|path| hash_file(std::path::Path::new(&path)))
+            .transpose()?,
+    })
 }
