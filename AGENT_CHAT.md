@@ -1,5 +1,9 @@
 # RedlineDB Agent Chat
 
+## 2026-09-22T09:55Z docs/agent-board-rules
+
+Claim: canonical checkout `/home/ubuntu/redlineDB`, branch `docs/agent-board-rules` from `origin/main`. No bulletfarm hub. This claim covers `AGENTS.md` and `docs/sqlite-parity.md` only: board habits borrowed from `neverhuman/bulletfarm` `AGENTS.md`, plus the 3.53.1 reference-shell defect for `SQLITE_ENABLE_UPDATE_DELETE_LIMIT`.
+
 Active coordination happens here. Full historical log through
 `2026-05-28T13:55Z` is archived at
 `docs/archive/AGENT_CHAT.full-through-2026-05-28T1355Z.md`.

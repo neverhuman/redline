@@ -8,20 +8,28 @@ task-ordered, not a numbered PR sequence. Consumer deployment locks and database
 
 ## Coordinate through the board, not through prose
 
-1. `bf claim <paths> -m "what and why"` before editing; a directory ends with `/`. Exit 2 means someone
+1. When `bf` reaches a hub, read `bf board` and `bf board --to me` before a claim, an edit, or a handoff.
+2. `bf claim <paths> -m "what and why"` before editing; a directory ends with `/`. Exit 2 means someone
    else holds it — that overlap is the only real lock, so resolve it rather than working around it.
-2. `bf heartbeat <id>` at least every 30 minutes while you hold a claim.
-3. `bf release <id> --proof '<command>'` after verification; the command runs and its exit code is recorded.
-4. `bf note` for anything you would otherwise have written in chat.
-5. `bf` needs a local hub (`bulletfarm serve --local`). If none is reachable, append a timestamped,
-   signed claim to `AGENT_CHAT.md` before your first write, and record the release there when done.
-6. Announce the canonical checkout branch before its first write. One integrator controls branch changes;
-   others may read, review and prepare acceptance cases concurrently.
+3. `bf heartbeat <id>` at least every 30 minutes while you hold a claim.
+4. `bf release <id> --proof '<command>'` after verification; the command runs and its exit code is recorded.
+5. `bf note -m "…" --to <agent>`, `--re <id>`, or `--pr <url>` for anything you would otherwise have written
+   in chat. An unaddressed note is a status line, not a handoff.
+6. `bf` needs a local hub (`bulletfarm serve --local`). If none is reachable, append a timestamped
+   claim to `AGENT_CHAT.md` before your first write, and record the release there when done. This
+   checkout's `AGENT_CHAT.md` is a committed log, so that fallback is real. When the hub is up, the
+   board is `bf`, and a hand edit of `AGENT_CHAT.md` is not a claim.
+7. Announce the canonical checkout branch before its first write. One integrator controls branch changes.
+   Do not `git checkout` another branch in this checkout while it is dirty or a claim is open. Other
+   agents may read, review, and prepare acceptance cases. They do not move `HEAD`.
+8. Do not kill another agent's session from a script.
 
 ## Every change is a small PR
 
 - **Contract**: the body carries the claim id and `Acceptance: <test or command that exists in the diff>`.
-  Counts, scores and parity numbers are generated, never typed.
+  The acceptance command fails on the parent commit and passes on the head. Counts, scores and parity
+  numbers are generated, never typed. A Postgres case id leaves
+  `metadata/beyond_sqlite/postgres-regression.json` only in the commit whose raw result shows it passed.
 - **Correct, do not reject**: a PR that misses its acceptance gets `REVIEW: changes <sha>` and is fixed on
   the same branch. Closing is only for a verified exact duplicate, with the salvaged content credited in
   the survivor. Aim for one independent read before merge; self-merge is permitted once
@@ -36,6 +44,19 @@ task-ordered, not a numbered PR sequence. Consumer deployment locks and database
   mirror. It does not run `scripts/guard-official-evidence.sh`, and local parity has no Postgres oracle
   unless `REDLINE_TESTING_POSTGRES_URL` is set. `ops/git-hooks/pre-push` is the enforced gate.
 - **Zero stale PRs**, not zero open PRs: anything older than one working day is fixed or merged.
+- **New behavior in a new file.** `crates/sql/src/exec/mod.rs`, `crates/sql/src/parser.rs`,
+  `crates/sql/src/planner.rs`, `crates/sql/src/statement.rs`, and `crates/redlinedb/src/lib.rs` take a
+  match arm or a call. The body of a statement, function, or dialect goes in a new module under the
+  2,000-line cap, so two lanes are not both editing the same hot file.
+- **The built reference is the oracle.** SQLite proof uses the binary from `scripts/sqlite/build-reference.sh`.
+  A `sqlite3` on `PATH`, or an older tree under `target/sqlite-reference/` whose compile flags differ, is a
+  diagnostic. Postgres proof uses the pinned 16.15 image and settings `160015|C|C|UTC`. A local run that
+  disagrees with that oracle does not close a case. The 3.53.1 autoconf parser has no
+  `UPDATE`/`DELETE` `ORDER BY` `LIMIT` grammar, so `-DSQLITE_ENABLE_UPDATE_DELETE_LIMIT` on the `cc`
+  line does not make cases 00219 and 00220 succeed; see `docs/sqlite-parity.md`.
+- **Write down a reference defect.** When a compile flag or a documented command does not change the
+  reference shell, record that next to the flag. Do not hide it in a comment that the next agent will
+  "fix" by flipping a default.
 
 ## Workspace boundary
 

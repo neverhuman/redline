@@ -6,6 +6,22 @@ harness. RedlineDB-side parity tests are local regression checks only; they do
 not produce SQLite parity coverage, benchmark, report, sentinel, or proof
 evidence artifacts.
 
+## Official reference shell
+
+`scripts/sqlite/build-reference.sh` builds the shell the official lane compares
+against. A `sqlite3` already on `PATH`, or a previously built tree under
+`target/sqlite-reference/` whose compile flags differ from that script, is a
+diagnostic.
+
+The 3.53.1 autoconf amalgamation ships a parser generated without
+`SQLITE_UDL_CAPABLE_PARSER`. `UPDATE`/`DELETE` `… ORDER BY … LIMIT` is therefore
+a parse error (`near "ORDER": syntax error`, exit 1) even when the `cc` line
+passes `-DSQLITE_ENABLE_UPDATE_DELETE_LIMIT`. That flag is present in
+`scripts/sqlite/build-reference.sh` and in the compiler log, and cases 00219 and
+00220 still expect rejection. The same script does not pass `-DSQLITE_SOUNDEX`,
+so `soundex()` is a missing function. `-DSQLITE_ENABLE_SESSION` is on, and
+`.session` with no arguments exits 0 and prints the session help.
+
 The official corpus and gate live in `subrepos/redline-testing` in this checkout.
 That runner is the sole official producer of parity evidence; engine-local
 regression tests do not produce public parity reports. CI builds the runner and
