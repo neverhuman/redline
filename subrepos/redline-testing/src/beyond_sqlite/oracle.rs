@@ -70,6 +70,19 @@ pub struct OracleSummary {
     pub target_passed: usize,
     pub target_failed: usize,
     pub target_skipped: usize,
+    /// The same target lane split by `metadata/beyond_sqlite/skip-list.toml`.
+    /// In-scope is the number the project drives; deferred is the number it
+    /// has decided not to. Reporting only their sum is what let "97% covered"
+    /// and "103 failing" appear in the same artifact.
+    pub in_scope_total: usize,
+    pub in_scope_passed: usize,
+    pub in_scope_failed: usize,
+    pub deferred_total: usize,
+    pub deferred_passed: usize,
+    pub deferred_failed: usize,
+    /// Deferred cases that pass. A deferral that has come true is a bug in the
+    /// skip-list, not a result, so it is named rather than counted.
+    pub deferred_passing_cases: Vec<String>,
 }
 
 pub fn load_cases() -> Result<Vec<BeyondCase>> {
@@ -103,6 +116,7 @@ pub fn run_cases() -> Result<(OracleSummary, Vec<CaseOutcome>)> {
 
 pub fn run_cases_with(options: RunCasesOptions) -> Result<(OracleSummary, Vec<CaseOutcome>)> {
     let cases = load_cases()?;
+    let deferred_ids = super::skip_list::deferred_case_ids()?;
     let reference = resolve();
     let mut summary = OracleSummary {
         reference: None,
@@ -115,6 +129,13 @@ pub fn run_cases_with(options: RunCasesOptions) -> Result<(OracleSummary, Vec<Ca
         target_passed: 0,
         target_failed: 0,
         target_skipped: 0,
+        in_scope_total: 0,
+        in_scope_passed: 0,
+        in_scope_failed: 0,
+        deferred_total: 0,
+        deferred_passed: 0,
+        deferred_failed: 0,
+        deferred_passing_cases: Vec::new(),
     };
     let mut outcomes = Vec::with_capacity(cases.len());
     let pg = match reference {
@@ -169,9 +190,31 @@ pub fn run_cases_with(options: RunCasesOptions) -> Result<(OracleSummary, Vec<Ca
         }
         if let Some(target) = outcome.target.as_ref() {
             summary.target_total += 1;
+            let case_id = format!("BEYOND-CASE-{:05}", outcome.case_id);
+            let deferred = deferred_ids.contains(&case_id);
+            if deferred {
+                summary.deferred_total += 1;
+            } else {
+                summary.in_scope_total += 1;
+            }
             match target.status.as_str() {
-                "passed" => summary.target_passed += 1,
-                "failed" => summary.target_failed += 1,
+                "passed" => {
+                    summary.target_passed += 1;
+                    if deferred {
+                        summary.deferred_passed += 1;
+                        summary.deferred_passing_cases.push(case_id);
+                    } else {
+                        summary.in_scope_passed += 1;
+                    }
+                }
+                "failed" => {
+                    summary.target_failed += 1;
+                    if deferred {
+                        summary.deferred_failed += 1;
+                    } else {
+                        summary.in_scope_failed += 1;
+                    }
+                }
                 _ => summary.target_skipped += 1,
             }
         }

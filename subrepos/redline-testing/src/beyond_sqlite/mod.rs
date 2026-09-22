@@ -25,6 +25,7 @@ pub mod engine;
 pub mod gate;
 pub mod normalize;
 pub mod oracle;
+pub mod skip_list;
 pub mod taxonomy;
 
 pub use taxonomy::{Feature, FeatureStatus, RunConfig, all_features, run};

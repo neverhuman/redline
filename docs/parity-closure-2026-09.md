@@ -11,7 +11,7 @@ measurements" at the end. Where a claim is not measured, it says so.
 | `sqlite_parity` (disk profile) | **2441 pass · 0 fail · 4 capability-gated skip** | 2445 |
 | `memory` (same corpus, memory profile) | **2441 pass · 0 fail · 4 capability-gated skip** | 2445 |
 | `rql_phase1` | **1129 pass · 0 fail · 256 skip** | 1385 |
-| `beyond_sqlite`, in scope | **133 pass · 15 fail** | 148 |
+| `beyond_sqlite`, in scope | **162 pass · 15 fail** | 177 |
 | `beyond_sqlite`, whole corpus | 162 pass · 103 fail | 265 |
 | jankurai, six repos | 86–90, **0 caps, 0 hard findings**, 32 medium | min 85 |
 
@@ -175,29 +175,26 @@ them failing and visible rather than annotating them into a pass.
 `20111` is the only one that is a **correctness** bug rather than a missing feature:
 RedlineDB accepts a query Postgres rejects. Fix it first regardless of case count.
 
-### 2d. The skip-list is not a filter, and 29 entries are stale
+### 2d. The skip-list was not a filter, and 29 entries were stale — fixed
 
-`metadata/beyond_sqlite/skip-list.toml` has 117 entries with per-case rationale. **No code
-reads it** — `grep -rn skip-list` across `*.rs`, `*.sh`, `*.yml`, `*.just` returns nothing
-outside documentation. "148 in scope" is a subtraction performed by hand in every report
-that quotes it, which is why the figure drifts between documents.
+`metadata/beyond_sqlite/skip-list.toml` has 117 entries with per-case rationale, and **no
+code read it**: "148 in scope" was a subtraction performed by hand in every report that
+quoted it, which is why the figure drifted between documents. **29 of the 117 passed** while
+marked `target_release = "deferred"` — "no plan to revisit" — i.e. closed work reported as
+abandoned.
 
-Worse, **29 of the 117 now pass**:
+`beyond_sqlite::skip_list` now parses the policy the runner ships, and the summary carries
+`in_scope_*` and `deferred_*` beside the raw counts, with `deferred_passing_cases` naming
+any entry whose deferral has come true. The 29 were marked `target_release = "closed"`,
+which keeps every rationale on record while taking them out of the deferred set.
 
-```
-20028 20041 20043 20044 20045 20046 20047 20048 20049 20243 20256 20257
-20341 20342 20406 20407 20408 20410 20411 20415 20416 20417 20422 20431
-20432 20435 20436 20443 20444
-```
+**The denominator changed as a result.** A closed case is one we pass, so it belongs in
+scope; excluding it would flatter the figure. In-scope is now **162 / 177 (91.5%)** — the
+same 15 failures, over an honest denominator. Reports quoting "133 / 148" predate this.
 
-Each is marked `target_release = "deferred"` — "no plan to revisit" — and each is green.
-That is closed work being reported as abandoned.
-
-Two changes, both S:
-1. Make the runner **read** `skip-list.toml` and emit `in_scope_passed` / `in_scope_failed`
-   / `deferred` beside the raw counts, so no one subtracts by hand again.
-2. Add a check that **fails** when a deferred case passes. A skip-list entry that has come
-   true is a bug in the skip-list; it should be as loud as a regression.
+`check-postgres` gained the ratchet's missing direction at the same time: a
+`postgres-regression.json` entry that starts passing now fails the gate by name, so the
+other stale-tracking surface cannot rot the same way.
 
 ---
 
@@ -321,8 +318,8 @@ Ordered so that nothing is measured against a surface that later moves.
 | 1 | ~~Guard the unstamped prefix; fix the never-hitting build cache~~ | 1a | done | protects all 2445 |
 | 2 | ~~Record the `compile_options`-vs-grammar trap~~ — already at `docs/sqlite-parity.md:16-23` | 1b | done | — |
 | 3 | Summary/provenance headline: `target_*` first, `in_scope_*`, `source_commit`, real duration | 4a,4b | S | — |
-| 4 | Runner reads `skip-list.toml`; fail when a deferred case passes; retire the 29 stale | 2d | S | 29 reclassified |
-| 5 | `DISTINCT ON` requires `ORDER BY` | 2c | S | 1 (correctness) |
+| 4 | ~~Runner reads `skip-list.toml`; fail when a baseline entry passes; retire the 29 stale~~ | 2d | done | 29 reclassified |
+| 5 | ~~`DISTINCT ON` requires `ORDER BY`~~ (plus the no-`ORDER BY` no-op) | 2c | done | 1 correctness + 1 unlisted |
 | 6 | `expected_target_stderr_contains` + setup-phase guard | 2a | M | 4 → **137/148** |
 | 7 | `DROP TYPE` / `DROP DOMAIN IF EXISTS` as honest no-ops | 2b | S | 2 → **139/148** |
 | 8 | RQL: `SUBSTR`/`CEIL`/`FLOOR`/`TRIM` match arms | 3a | S–M | 54 skips |

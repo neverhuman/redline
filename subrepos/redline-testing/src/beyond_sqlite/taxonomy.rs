@@ -74,14 +74,11 @@ struct BeyondRecord {
 #[derive(Debug, Serialize)]
 struct BeyondSummary {
     suite: String,
-    total_features: usize,
-    passed_features: usize,
-    failed_features: usize,
-    skipped_features: usize,
-    coverage_pct: f64,
-    elapsed_ns: u128,
-    /// Target-compare lane counts (psql↔target_bin compare for cases that
-    /// passed the psql self-compare). Zero when the lane didn't run.
+    /// RedlineDB's result, first, because it is the one being reported on.
+    /// The `*_features` fields below describe the psql↔psql oracle
+    /// self-compare, which is a precondition for the run rather than a
+    /// compatibility figure -- reading `coverage_pct` as RedlineDB's coverage
+    /// gives 97% where the engine is at 61%.
     #[serde(default)]
     target_total: usize,
     #[serde(default)]
@@ -90,6 +87,32 @@ struct BeyondSummary {
     target_failed: usize,
     #[serde(default)]
     target_skipped: usize,
+    /// The target lane split by `metadata/beyond_sqlite/skip-list.toml`.
+    #[serde(default)]
+    in_scope_total: usize,
+    #[serde(default)]
+    in_scope_passed: usize,
+    #[serde(default)]
+    in_scope_failed: usize,
+    #[serde(default)]
+    in_scope_pct: f64,
+    #[serde(default)]
+    deferred_total: usize,
+    #[serde(default)]
+    deferred_passed: usize,
+    #[serde(default)]
+    deferred_failed: usize,
+    /// Deferred cases that pass: entries the skip-list still calls deferred
+    /// although the gap is closed. Empty is the healthy state.
+    #[serde(default)]
+    deferred_passing_cases: Vec<String>,
+    /// Oracle self-compare (psql against psql). Not RedlineDB's result.
+    total_features: usize,
+    passed_features: usize,
+    failed_features: usize,
+    skipped_features: usize,
+    coverage_pct: f64,
+    elapsed_ns: u128,
 }
 
 #[derive(Debug, Serialize)]
@@ -266,6 +289,21 @@ pub fn run(config: RunConfig) -> Result<RunSummary> {
         &combined,
         BeyondSummary {
             suite: "beyond_sqlite".to_owned(),
+            target_total: oracle_summary.target_total,
+            target_passed: oracle_summary.target_passed,
+            target_failed: oracle_summary.target_failed,
+            target_skipped: oracle_summary.target_skipped,
+            in_scope_total: oracle_summary.in_scope_total,
+            in_scope_passed: oracle_summary.in_scope_passed,
+            in_scope_failed: oracle_summary.in_scope_failed,
+            in_scope_pct: pct(
+                oracle_summary.in_scope_passed,
+                oracle_summary.in_scope_total,
+            ),
+            deferred_total: oracle_summary.deferred_total,
+            deferred_passed: oracle_summary.deferred_passed,
+            deferred_failed: oracle_summary.deferred_failed,
+            deferred_passing_cases: oracle_summary.deferred_passing_cases.clone(),
             total_features: features.len() + oracle_summary.total,
             passed_features: passed + oracle_summary.passed,
             failed_features: oracle_summary.failed,
@@ -277,10 +315,6 @@ pub fn run(config: RunConfig) -> Result<RunSummary> {
                 features.len() + oracle_summary.total,
             ),
             elapsed_ns: started.elapsed().as_nanos(),
-            target_total: oracle_summary.target_total,
-            target_passed: oracle_summary.target_passed,
-            target_failed: oracle_summary.target_failed,
-            target_skipped: oracle_summary.target_skipped,
         },
         &features,
         oracle_summary.reference,
