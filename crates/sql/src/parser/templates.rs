@@ -343,10 +343,23 @@ fn bind_set_statement(
             ObjectNamePart::Identifier(ident) => Some(ident.value.as_str()),
             _ => None,
         });
+        if var_name == Some("search_path") {
+            let shown = search_path_show_text(match &set {
+                sqlparser::ast::Set::SingleAssignment { values, .. } => values,
+                _ => &[],
+            });
+            return Ok(template(
+                sql,
+                schema_epoch,
+                false,
+                PreparedKind::SetSearchPath {
+                    shown: Arc::from(shown),
+                },
+            ));
+        }
         if matches!(
             var_name,
-            Some("search_path")
-                | Some("client_encoding")
+            Some("client_encoding")
                 | Some("standard_conforming_strings")
                 | Some("timezone")
                 | Some("statement_timeout")
@@ -407,6 +420,40 @@ fn bind_set_statement(
     Err(Error::UnsupportedSql(format!(
         "SET statement not supported yet: {set:?}"
     )))
+}
+
+/// `SHOW search_path` text for a `SET search_path` value list.
+fn search_path_show_text(values: &[sqlparser::ast::Expr]) -> String {
+    if values.is_empty() {
+        return "\"\"".to_owned();
+    }
+    let parts: Vec<String> = values.iter().map(search_path_part).collect();
+    if parts.len() == 1 && parts[0].is_empty() {
+        return "\"\"".to_owned();
+    }
+    parts.join(", ")
+}
+
+fn search_path_part(expr: &sqlparser::ast::Expr) -> String {
+    use sqlparser::ast::{Expr, Value};
+    match expr {
+        Expr::Identifier(ident) => ident.value.clone(),
+        Expr::CompoundIdentifier(parts) => parts
+            .iter()
+            .map(|part| part.value.as_str())
+            .collect::<Vec<_>>()
+            .join("."),
+        Expr::Value(sqlparser::ast::ValueWithSpan { value, .. }) => match value {
+            Value::SingleQuotedString(text) | Value::DoubleQuotedString(text)
+                if text.is_empty() =>
+            {
+                "\"\"".to_owned()
+            }
+            Value::SingleQuotedString(text) | Value::DoubleQuotedString(text) => text.clone(),
+            other => other.to_string(),
+        },
+        other => other.to_string(),
+    }
 }
 
 /// Track J — `SHOW <name>`. Currently routes `transaction_isolation` to

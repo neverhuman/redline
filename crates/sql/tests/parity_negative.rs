@@ -63,30 +63,32 @@ fn delete_using_is_unsupported() {
 
 #[test]
 fn delete_limit_is_supported() {
-    // Default on, matching SQLITE_ENABLE_UPDATE_DELETE_LIMIT. OFF rejects.
+    // Default off so cases 00219/00220 match the reference shell, which
+    // rejects the syntax. The pragma opts in.
     let (_d, c) = open();
     c.execute("CREATE TABLE t(id INTEGER)").expect("create");
     c.execute("INSERT INTO t VALUES (1),(2),(3)")
         .expect("insert");
-    c.execute("DELETE FROM t LIMIT 1").expect("default rewrite");
-    c.execute("PRAGMA redline_dml_order_limit_rewrite = OFF")
-        .expect("pragma off");
-    // Fresh text so the prepared-statement cache does not reuse the rewrite.
-    let res = c.execute("DELETE FROM t LIMIT 2");
+    let res = c.execute("DELETE FROM t LIMIT 1");
     assert_errors(res);
+    c.execute("PRAGMA redline_dml_order_limit_rewrite = ON")
+        .expect("pragma on");
+    c.execute("DELETE FROM t LIMIT 1").expect("rewrite path");
 }
 
 #[test]
 fn delete_order_by_is_supported() {
-    // ORDER BY without LIMIT stays rejected. ORDER BY LIMIT runs by default.
+    // ORDER BY without LIMIT stays rejected. ORDER BY LIMIT needs the pragma.
     let (_d, c) = open();
     c.execute("CREATE TABLE t(id INTEGER)").expect("create");
     c.execute("INSERT INTO t VALUES (1),(2),(3)")
         .expect("insert");
     let res = c.execute("DELETE FROM t ORDER BY id");
     assert_errors(res);
+    c.execute("PRAGMA redline_dml_order_limit_rewrite = ON")
+        .expect("pragma on");
     c.execute("DELETE FROM t ORDER BY id LIMIT 1")
-        .expect("default rewrite");
+        .expect("rewrite path");
 }
 
 #[test]

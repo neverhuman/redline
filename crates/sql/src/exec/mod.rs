@@ -798,6 +798,16 @@ pub fn execute_prepared(
                 affected_rows: 0,
             })
         }
+        PreparedKind::SetSearchPath { shown } => {
+            with_session_reentrant(conn, |session| {
+                session.search_path = shown.to_string();
+                Ok(())
+            })?;
+            Ok(ExecutionResult {
+                runtime: RuntimeState::Done,
+                affected_rows: 0,
+            })
+        }
         // Track J: SHOW <name>. Returns a single-row result with the recalled
         // session value for `transaction_isolation`; other names yield "".
         PreparedKind::ShowVariable { name } => {
@@ -805,6 +815,13 @@ pub fn execute_prepared(
                 let iso =
                     with_session_reentrant(conn, |session| Ok(session.transaction_isolation))?;
                 SqlValue::Text(Arc::from(iso.as_pg_str()))
+            } else if name.eq_ignore_ascii_case("search_path") {
+                let path = with_session_reentrant(conn, |session| Ok(session.search_path.clone()))?;
+                SqlValue::Text(Arc::from(path))
+            } else if name.eq_ignore_ascii_case("wal_level") {
+                SqlValue::Text(Arc::from("replica"))
+            } else if name.eq_ignore_ascii_case("session_replication_role") {
+                SqlValue::Text(Arc::from("origin"))
             } else {
                 SqlValue::Text(Arc::from(""))
             };
@@ -972,6 +989,7 @@ fn template_writes(kind: &PreparedKind) -> bool {
         | PreparedKind::Select(_)
         | PreparedKind::Attach(_)
         | PreparedKind::SetTransactionIsolation { .. }
+        | PreparedKind::SetSearchPath { .. }
         | PreparedKind::ShowVariable { .. } => false,
         PreparedKind::CreateTable(_)
         | PreparedKind::CreateTempTable(_)

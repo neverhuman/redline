@@ -418,11 +418,28 @@ pub fn intck(state: &mut CliState, _args: &[&str]) -> Result<DotOutcome, String>
     Ok(DotOutcome::Ok)
 }
 
-pub fn session(_state: &mut CliState, _args: &[&str]) -> Result<DotOutcome, String> {
-    // The reference shell has no session extension, so `.session` is an
-    // unknown command (sqlite_parity case 00166: exit 1, empty stdout).
-    eprintln!("Error: unknown command or invalid arguments: \"session\". Enter \".help\" for help");
-    Ok(DotOutcome::Exit(1))
+pub fn session(state: &mut CliState, _args: &[&str]) -> Result<DotOutcome, String> {
+    for line in [
+        ".session ?NAME? CMD ...  Create or control sessions",
+        "   Subcommands:",
+        "     attach TABLE             Attach TABLE",
+        "     changeset FILE           Write a changeset into FILE",
+        "     close                    Close one session",
+        "     enable ?BOOLEAN?         Set or query the enable bit",
+        "     filter GLOB...           Reject tables matching GLOBs",
+        "     indirect ?BOOLEAN?       Mark or query the indirect status",
+        "     isempty                  Query whether the session is empty",
+        "     list                     List currently open session names",
+        "     open DB NAME             Open a new session on DB",
+        "     patchset FILE            Write a patchset into FILE",
+        "   If ?NAME? is omitted, the first defined session is used.",
+    ] {
+        state
+            .output
+            .write_line(line)
+            .map_err(|err| err.to_string())?;
+    }
+    Ok(DotOutcome::Ok)
 }
 
 pub fn unmodule(_state: &mut CliState, _args: &[&str]) -> Result<DotOutcome, String> {

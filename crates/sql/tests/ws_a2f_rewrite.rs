@@ -1,9 +1,9 @@
 //! Pre-parse rewrite of `DELETE/UPDATE ... [WHERE ...] [ORDER BY ...] LIMIT n
 //! [OFFSET m]` into `WHERE rowid IN (SELECT rowid FROM t ...)`.
 //!
-//! The rewrite is on by default because the official SQLite 3.53.1 reference
-//! is built with `SQLITE_ENABLE_UPDATE_DELETE_LIMIT` (cases 00219 and 00220).
-//! `PRAGMA redline_dml_order_limit_rewrite = OFF` rejects the syntax again.
+//! Default off. The official SQLite 3.53.1 reference rejects this syntax
+//! (cases 00219 and 00220). `PRAGMA redline_dml_order_limit_rewrite = ON`
+//! enables the rewrite.
 
 use redlinedb_sql::{Connection, Database, DbOptions, SqlValue};
 use std::sync::Arc;
@@ -33,21 +33,21 @@ fn scalar_i64(c: &Arc<Connection>, sql: &str) -> i64 {
 }
 
 #[test]
-fn delete_order_limit_succeeds_by_default() {
+fn delete_order_limit_errors_without_pragma() {
     let (_d, c) = open();
     seed_t(&c);
-    c.execute("DELETE FROM t ORDER BY id LIMIT 1")
-        .expect("default rewrite");
-    assert_eq!(scalar_i64(&c, "SELECT COUNT(*) FROM t"), 4);
-    assert_eq!(scalar_i64(&c, "SELECT COUNT(*) FROM t WHERE id = 1"), 0);
+    let res = c.execute("DELETE FROM t ORDER BY id LIMIT 1");
+    res.expect_err("expected rejection without PRAGMA opt-in");
+    assert_eq!(scalar_i64(&c, "SELECT COUNT(*) FROM t"), 5);
 }
 
 #[test]
-fn delete_limit_succeeds_by_default() {
+fn delete_limit_errors_without_pragma() {
     let (_d, c) = open();
     seed_t(&c);
-    c.execute("DELETE FROM t LIMIT 1").expect("default rewrite");
-    assert_eq!(scalar_i64(&c, "SELECT COUNT(*) FROM t"), 4);
+    let res = c.execute("DELETE FROM t LIMIT 1");
+    res.expect_err("expected rejection without PRAGMA opt-in");
+    assert_eq!(scalar_i64(&c, "SELECT COUNT(*) FROM t"), 5);
 }
 
 #[test]
@@ -108,16 +108,12 @@ fn delete_limit_offset_with_pragma() {
 }
 
 #[test]
-fn update_order_limit_succeeds_by_default() {
+fn update_order_limit_errors_without_pragma() {
     let (_d, c) = open();
     seed_t(&c);
-    c.execute("UPDATE t SET v = 999 ORDER BY id DESC LIMIT 1")
-        .expect("default rewrite");
-    assert_eq!(
-        scalar_i64(&c, "SELECT COUNT(*) FROM t WHERE id = 5 AND v = 999"),
-        1
-    );
-    assert_eq!(scalar_i64(&c, "SELECT COUNT(*) FROM t WHERE v = 999"), 1);
+    let res = c.execute("UPDATE t SET v = 999 ORDER BY id LIMIT 1");
+    res.expect_err("expected rejection without PRAGMA opt-in");
+    assert_eq!(scalar_i64(&c, "SELECT COUNT(*) FROM t WHERE v = 999"), 0);
 }
 
 #[test]

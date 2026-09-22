@@ -59,61 +59,6 @@ pub(crate) fn simple_function_name_lower<'b>(
     std::str::from_utf8(s).ok()
 }
 
-fn soundex_digit(byte: u8) -> u8 {
-    match byte.to_ascii_uppercase() {
-        b'B' | b'F' | b'P' | b'V' => 1,
-        b'C' | b'G' | b'J' | b'K' | b'Q' | b'S' | b'X' | b'Z' => 2,
-        b'D' | b'T' => 3,
-        b'L' => 4,
-        b'M' | b'N' => 5,
-        b'R' => 6,
-        _ => 0,
-    }
-}
-
-/// SQLite `soundex`: first ASCII letter, then consonant codes, vowels reset
-/// the previous code, result padded to four characters. No letter yields `?000`.
-fn sqlite_soundex(values: &[SqlValue]) -> Result<SqlValue> {
-    if values.len() != 1 {
-        return Err(Error::UnsupportedSql(
-            "soundex requires 1 argument".to_owned(),
-        ));
-    }
-    if matches!(values[0], SqlValue::Null) {
-        return Ok(SqlValue::Null);
-    }
-    let text = value_as_str(&values[0]);
-    let bytes = text.as_bytes();
-    let mut index = 0;
-    while index < bytes.len() && !bytes[index].is_ascii_alphabetic() {
-        index += 1;
-    }
-    if index >= bytes.len() {
-        return Ok(SqlValue::Text(Arc::from("?000")));
-    }
-    let mut out = [b'0'; 4];
-    out[0] = bytes[index].to_ascii_uppercase();
-    let mut prev = soundex_digit(bytes[index]);
-    let mut written = 1;
-    index += 1;
-    while index < bytes.len() && written < 4 {
-        let code = soundex_digit(bytes[index]);
-        if code > 0 {
-            if code != prev {
-                prev = code;
-                out[written] = b'0' + code;
-                written += 1;
-            }
-        } else {
-            prev = 0;
-        }
-        index += 1;
-    }
-    Ok(SqlValue::Text(Arc::from(
-        std::str::from_utf8(&out).unwrap_or("?000"),
-    )))
-}
-
 pub(super) fn eval_function(
     func: &sqlparser::ast::Function,
     row: &RowContext<'_>,
@@ -265,7 +210,11 @@ pub(crate) fn eval_scalar_function_values(
             }
             Ok(SqlValue::Text(Arc::from(out)))
         }
-        "soundex" => sqlite_soundex(&values),
+        // The official reference build does not pass -DSQLITE_SOUNDEX, so
+        // soundex() is a missing function there. Keep that rejection.
+        "soundex" => Err(Error::UnsupportedSql(
+            "no such function: soundex".to_owned(),
+        )),
         // SQLite unhex(X[, ignore]) — decode a hex string into a blob. If any
         // non-hex / non-ignore character appears, return NULL. Whitespace is
         // not implicit; only chars in `ignore` are skipped.
@@ -644,7 +593,7 @@ pub(crate) fn eval_scalar_function_values(
         // A37: cache the "public" Arc<str>. SQLite/Postgres-compat returns
         // this constant string for every call; one OnceLock initialization
         // then Arc::clone for each invocation.
-        "current_schema" => Ok(SqlValue::Text(Arc::clone(current_schema_arc()))),
+        "current_schema" => Ok(current_schema_value()),
         _ => {
             let db = crate::udf::current_db();
             match crate::udf::call_registered_scalar(db, &name, &values) {
@@ -696,13 +645,24 @@ fn empty_text_arc() -> &'static Arc<str> {
     EMPTY.get_or_init(|| Arc::from(""))
 }
 
-/// A37: cached `Arc<str>` for `current_schema()`. SQLite/Postgres-compat
-/// always returns "public" for this function. One-time alloc, then
-/// `Arc::clone` per call.
-fn current_schema_arc() -> &'static Arc<str> {
-    use std::sync::OnceLock;
-    static SCHEMA: OnceLock<Arc<str>> = OnceLock::new();
-    SCHEMA.get_or_init(|| Arc::from("public"))
+/// First existing entry of the session `search_path`. `"$user"` is skipped.
+/// An empty path (`SHOW` text `""`) yields NULL.
+fn current_schema_value() -> SqlValue {
+    let path = crate::exec::current_connection().and_then(|conn| {
+        crate::exec::with_session_reentrant(conn, |session| Ok(session.search_path.clone())).ok()
+    });
+    let path = path.unwrap_or_else(|| "\"$user\", public".to_owned());
+    if path == "\"\"" {
+        return SqlValue::Null;
+    }
+    for part in path.split(',') {
+        let name = part.trim().trim_matches('"');
+        if name.is_empty() || name == "$user" {
+            continue;
+        }
+        return SqlValue::Text(Arc::from(name));
+    }
+    SqlValue::Null
 }
 
 /// session state, advances it by `increment`, and returns the new value.

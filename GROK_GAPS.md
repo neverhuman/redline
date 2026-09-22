@@ -15,10 +15,13 @@ commit. Postgres 16.15 settings `160015|C|C|UTC`. SQLite reference
 string RedlineDB and SQLite return. Cases `20047`–`20049` are not in the
 failure allowlist. Do not change `upper`/`lower`.
 
-The repair commit after this note clears six of the eight SQLite failures
-(`soundex`, default-on `UPDATE`/`DELETE … LIMIT`, `.session` exit 1) and two
-Postgres failures (`20029`, `20058`). `10405` and `12023` stay failed.
-`postgres-regression.json` keeps 136 ids.
+The first repair commit cleared Postgres `20029` and `20058`. A follow-up
+keeps `soundex`, `UPDATE`/`DELETE … LIMIT`, and `.session` aligned with the
+official reference shell: that shell rejects `soundex` and ordered DML
+`LIMIT` (even with `-DSQLITE_ENABLE_UPDATE_DELETE_LIMIT` on the command
+line) and exits 0 for `.session`. `10405` and `12023` stay open.
+`SHOW wal_level`, `SHOW session_replication_role`, and `search_path` /
+`current_schema()` are corrected in the follow-up.
 
 ## Governing decisions — 2026-09-18
 

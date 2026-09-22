@@ -199,6 +199,9 @@ pub struct SessionState {
     /// Track J — `SET TRANSACTION ISOLATION LEVEL` recall value. Default
     /// is `ReadCommitted` (Postgres' default).
     pub transaction_isolation: crate::statement::TransactionIsolationLevel,
+    /// `SET search_path` text as `SHOW search_path` prints it. Default
+    /// matches Postgres: `"$user", public`.
+    pub search_path: String,
 }
 
 /// Track J — runtime state for a PostgreSQL-style sequence.
@@ -289,6 +292,7 @@ impl Default for SessionState {
             },
             pg_sequences: std::collections::BTreeMap::new(),
             transaction_isolation: crate::statement::TransactionIsolationLevel::ReadCommitted,
+            search_path: "\"$user\", public".to_owned(),
         }
     }
 }
@@ -349,6 +353,7 @@ impl SessionState {
         self.sqlite_sequences_tx_snapshot = None;
         self.sqlite_sequences_dirty.clear();
         self.transaction_isolation = crate::statement::TransactionIsolationLevel::ReadCommitted;
+        self.search_path = "\"$user\", public".to_owned();
     }
 
     /// Reset journal + savepoint stack at a transaction boundary.

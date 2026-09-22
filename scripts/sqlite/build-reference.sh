@@ -24,10 +24,14 @@ archive_digest() {
   openssl dgst -sha3-256 "$1" | awk '{print $2}'
 }
 
+reference_stamp_text() {
+  printf '%s\n%s\n' "$archive_sha3" "${sqlite_cflags[*]}"
+}
+
 existing_shell_is_current() {
   [ -x "$bin" ] || return 1
   [ -f "$stamp" ] || return 1
-  [ "$(cat "$stamp")" = "$archive_sha3" ] || return 1
+  [ "$(cat "$stamp")" = "$(reference_stamp_text)" ] || return 1
   "$bin" -batch :memory: 'SELECT sqlite_version();' | grep -qx "$version"
 }
 
@@ -127,6 +131,6 @@ jobs="${REDLINEDB_SQLITE_REFERENCE_JOBS:-$(getconf _NPROCESSORS_ONLN 2>/dev/null
 
 install -m 0755 "$build_dir/sqlite3" "$bin"
 "$bin" -batch :memory: 'PRAGMA compile_options;' > "$prefix/compile-options.txt"
-printf '%s\n' "$archive_sha3" > "$stamp"
+reference_stamp_text > "$stamp"
 smoke_reference_shell
 printf '%s\n' "$bin"

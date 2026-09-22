@@ -8,11 +8,11 @@ use redlinedb_kernel::catalog::SchemaEpoch;
 use std::cell::Cell;
 
 thread_local! {
-    /// Default on. The SQLite 3.53.1 reference used by the official runner
-    /// is built with `SQLITE_ENABLE_UPDATE_DELETE_LIMIT`, so cases 00219
-    /// and 00220 execute the ordered limit. `PRAGMA
-    /// redline_dml_order_limit_rewrite = OFF` restores the rejection.
-    static DML_ORDER_LIMIT_REWRITE_ENABLED: Cell<bool> = const { Cell::new(true) };
+    /// Default off. SQLite 3.53.1 still rejects `UPDATE`/`DELETE` `ORDER BY`
+    /// `LIMIT` when `SQLITE_ENABLE_UPDATE_DELETE_LIMIT` is passed on the
+    /// compiler command line (official reference cases 00219 and 00220 exit
+    /// 1). `PRAGMA redline_dml_order_limit_rewrite = ON` enables the rewrite.
+    static DML_ORDER_LIMIT_REWRITE_ENABLED: Cell<bool> = const { Cell::new(false) };
 }
 
 pub(crate) fn dml_order_limit_rewrite_enabled() -> bool {

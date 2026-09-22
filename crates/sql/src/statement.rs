@@ -159,6 +159,10 @@ pub enum PreparedKind {
     SetTransactionIsolation {
         level: TransactionIsolationLevel,
     },
+    /// `SET search_path TO ...`. `shown` is the text `SHOW search_path` returns.
+    SetSearchPath {
+        shown: Arc<str>,
+    },
     /// Track J — `SHOW <name>` for session-state introspection. Today
     /// returns the recalled `transaction_isolation`; other names return
     /// empty string.

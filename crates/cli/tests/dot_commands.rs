@@ -1126,17 +1126,6 @@ fn dot_parameter_list_and_clear_round_trip() {
 }
 
 #[test]
-fn dot_session_is_an_unknown_command() {
-    let (out, err, code) = run_script(None, ".session\n");
-    assert_eq!(code, 1, "stdout={out} stderr={err}");
-    assert!(out.is_empty(), "stdout={out}");
-    assert!(
-        err.contains("unknown command or invalid arguments: \"session\""),
-        "stderr={err}"
-    );
-}
-
-#[test]
 fn sql_error_exit_defaults_to_one_and_can_be_three() {
     let (out, err, code) = run_script(None, "SELECT * FROM missing_table;\n");
     assert_eq!(code, 1, "stdout={out} stderr={err}");

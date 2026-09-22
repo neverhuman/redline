@@ -354,6 +354,9 @@ pub(crate) fn build_plan(
         PreparedKind::SetTransactionIsolation { .. } => {
             simple_node(PhysicalKind::Constant, "SET TRANSACTION".to_owned())
         }
+        PreparedKind::SetSearchPath { .. } => {
+            simple_node(PhysicalKind::Constant, "SET search_path".to_owned())
+        }
         PreparedKind::ShowVariable { .. } => simple_node(PhysicalKind::Constant, "SHOW".to_owned()),
         PreparedKind::AlterIndex { .. } => {
             simple_node(PhysicalKind::Constant, "ALTER INDEX".to_owned())

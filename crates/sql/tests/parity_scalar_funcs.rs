@@ -678,23 +678,9 @@ fn like_function_form_two_and_three_arg() {
 }
 
 #[test]
-fn soundex_matches_sqlite_codes() {
+fn soundex_returns_error_when_compiled_out() {
+    // scripts/sqlite/build-reference.sh does not pass -DSQLITE_SOUNDEX.
     let (_d, c) = open();
-    assert_eq!(
-        q1(&c, "SELECT soundex('Robert')"),
-        SqlValue::Text(Arc::from("R163"))
-    );
-    assert_eq!(
-        q1(&c, "SELECT soundex('Rupert')"),
-        SqlValue::Text(Arc::from("R163"))
-    );
-    assert_eq!(
-        q1(&c, "SELECT soundex('X')"),
-        SqlValue::Text(Arc::from("X000"))
-    );
-    assert_eq!(
-        q1(&c, "SELECT soundex('')"),
-        SqlValue::Text(Arc::from("?000"))
-    );
-    assert_eq!(q1(&c, "SELECT soundex(NULL)"), SqlValue::Null);
+    let mut stmt = c.prepare("SELECT soundex('Robert')").expect("prepare");
+    assert!(stmt.step().is_err(), "soundex unexpectedly succeeded");
 }
