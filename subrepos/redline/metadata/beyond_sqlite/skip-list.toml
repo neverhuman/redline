@@ -901,3 +901,37 @@ name           = "BTREE_GIST_SCALAR"
 category       = "BEYOND_VECTOR_ADVANCED_INDEXES"
 rationale      = "btree_gist extension requires both the GiST AM and the extension-loader surface."
 target_release = "deferred"
+
+# =============================================================================
+# BEYOND_COLLATIONS_ILIKE — Unicode case mapping (3)
+# RedlineDB implements upper()/lower() with SQLite's semantics, which are
+# ASCII-only. PostgreSQL applies full Unicode case mapping. The two are
+# mutually exclusive, and RedlineDB is SQLite-shaped by design, so these
+# cases cannot be closed without breaking SQLite parity. Verified on
+# 2026-09-22 against sqlite 3.53.1 and PostgreSQL 16.15:
+#   SELECT upper('straße'), lower('ÉCOLE');
+#     sqlite3   -> STRAßE|École
+#     redlinedb -> STRAßE|École      (matches SQLite exactly)
+#     postgres  -> STRAẞE|école
+# =============================================================================
+
+[[skip]]
+case_id        = "20047"
+name           = "LOWER_MULTIBYTE_UNICODE"
+category       = "BEYOND_COLLATIONS_ILIKE"
+rationale      = "lower() follows SQLite's ASCII-only case mapping, so 'ÉCOLE' lowers to 'École' and not 'école'. PostgreSQL applies full Unicode case mapping. Closing this would require diverging from SQLite on a core scalar function, which contradicts the product's SQLite-shaped contract; sqlite3 3.53.1 returns the same value RedlineDB does."
+target_release = "deferred"
+
+[[skip]]
+case_id        = "20048"
+name           = "UPPER_GREEK_SIGMA"
+category       = "BEYOND_COLLATIONS_ILIKE"
+rationale      = "upper() follows SQLite's ASCII-only case mapping, so Greek lowercase is returned unchanged rather than uppercased to 'ΑΒΓ|ΣΣ'. Same designed divergence as 20047: matching PostgreSQL here would break SQLite parity on upper()."
+target_release = "deferred"
+
+[[skip]]
+case_id        = "20049"
+name           = "UPPER_GERMAN_ESZETT"
+category       = "BEYOND_COLLATIONS_ILIKE"
+rationale      = "upper('straße') returns 'STRAßE' under SQLite's ASCII-only mapping; PostgreSQL returns 'STRAẞE' using the Unicode capital sharp S. Same designed divergence as 20047 and 20048."
+target_release = "deferred"
