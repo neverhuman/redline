@@ -1,7 +1,7 @@
 {
   "schema_version": "redline-postgres-regression-v1",
   "previous_source_commit": "2b55087b3026fb90fe3bd6174460e43bd5e9dbdc",
-  "reason": "money renders as locale C and identity sequences passed. 119 failures remain.",
+  "reason": "postgres index NULLS FIRST is accepted. 118 failures remain.",
   "corpus_sha256": "90a0d6242f6153dd4d2099c0f58d0c9b96cc3a6dd02cbc85c935d8204d8aedd0",
   "reference_settings": "160015|C|C|UTC",
   "image_digest": "sha256:efdf07c2f9d4df592783dcc8ea5f6db02efbf5f6452b527225ff5e58364570e9",
@@ -86,7 +86,6 @@
     "BEYOND-CASE-20353",
     "BEYOND-CASE-20354",
     "BEYOND-CASE-20355",
-    "BEYOND-CASE-20357",
     "BEYOND-CASE-20358",
     "BEYOND-CASE-20359",
     "BEYOND-CASE-20404",

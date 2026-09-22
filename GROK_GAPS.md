@@ -25,7 +25,10 @@ line) and exits 0 for `.session`. `10405` and `12023` stay open.
 session sequence instead of `max(rowid)+1`. The beyond gate after identity and locale-C `money` text
 is 146 passed, 119 failed, 0 skipped; `20137`, `20139`, `20209`, and `20028`
 left the allowlist. Explicit `GENERATED ALWAYS` inserts still fail both shells, so
-`20136` and `20247` stay listed until stderr is asserted.
+`20136` and `20247` stay listed until stderr is asserted. In the Postgres
+result dialect, `CREATE INDEX ... NULLS FIRST/LAST` is accepted; the SQLite
+shell still rejects it. The beyond gate is then 147 passed, 118 failed, 0 skipped,
+and `20357` left the allowlist.
 
 ## Governing decisions — 2026-09-18
 

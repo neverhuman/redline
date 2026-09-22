@@ -572,6 +572,11 @@ pub(crate) fn bind_create_index(
 }
 
 fn reject_index_null_order(column: &sqlparser::ast::IndexColumn) -> Result<()> {
+    // Postgres accepts NULLS FIRST/LAST on an index key. The official SQLite
+    // shell rejects that syntax, so the default remains a hard error.
+    if crate::value::postgres_result_dialect() {
+        return Ok(());
+    }
     match column.column.options.nulls_first {
         Some(true) => Err(Error::UnsupportedSql(
             "unsupported use of NULLS FIRST".to_owned(),

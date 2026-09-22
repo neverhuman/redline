@@ -1,5 +1,9 @@
 # RedlineDB Agent Chat
 
+## 2026-09-22T11:05Z parity/pg-index-nulls
+
+Claim: canonical checkout `/home/ubuntu/redlineDB`, branch `parity/pg-index-nulls` from `origin/main` `d6fbd1773`. No bulletfarm hub. Postgres dialect accepts `CREATE INDEX ... NULLS FIRST/LAST`. The SQLite shell still rejects that syntax. Hot path: `crates/sql/src/parser/ddl.rs`.
+
 ## 2026-09-22T10:50Z parity/identity-sequences
 
 Claim: same canonical checkout, branch `parity/identity-sequences` from `origin/main` `97119c697`. No bulletfarm hub. `::money` renders locale C (`$123.45`, `-$123.45`, `$1,234.50`). Hot path: `crates/sql/src/exec/expr/coerce/cast.rs`.
