@@ -8,15 +8,11 @@ use redlinedb_kernel::catalog::SchemaEpoch;
 use std::cell::Cell;
 
 thread_local! {
-    /// WS-A2f-rewrite: opt-in flag toggled by
-    /// `PRAGMA redline_dml_order_limit_rewrite = ON`. When set, the pre-parse
-    /// rewriter lowers `DELETE/UPDATE ... [WHERE ...] [ORDER BY ...] LIMIT n
-    /// [OFFSET m]` into the equivalent `... WHERE rowid IN (SELECT rowid
-    /// FROM t ... ORDER BY ... LIMIT n OFFSET m)` subquery form so the
-    /// rejected SQLite-compat syntax becomes executable without changing
-    /// the executor or breaking parity case 00220 (which expects the
-    /// reference-style rejection at the default OFF setting).
-    static DML_ORDER_LIMIT_REWRITE_ENABLED: Cell<bool> = const { Cell::new(false) };
+    /// Default on. The SQLite 3.53.1 reference used by the official runner
+    /// is built with `SQLITE_ENABLE_UPDATE_DELETE_LIMIT`, so cases 00219
+    /// and 00220 execute the ordered limit. `PRAGMA
+    /// redline_dml_order_limit_rewrite = OFF` restores the rejection.
+    static DML_ORDER_LIMIT_REWRITE_ENABLED: Cell<bool> = const { Cell::new(true) };
 }
 
 pub(crate) fn dml_order_limit_rewrite_enabled() -> bool {

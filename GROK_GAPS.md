@@ -1,5 +1,25 @@
 # RedlineDB compatibility implementation ledger
 
+## Slice 0 measurement — 2026-09-22
+
+Branch `parity/close-all-gaps` at `origin/main` `3fd3e171a`, before the repair
+commit. Postgres 16.15 settings `160015|C|C|UTC`. SQLite reference
+`target/sqlite-reference/3.53.1/bin/sqlite3`.
+
+| Suite | Result |
+|---|---|
+| `sqlite_parity` | 2439 passed, 8 failed, 4 skipped, of 2445. Failures: `00166`, `00219`, `00220`, `10405`, `11437`, `11438`, `11439`, `12023`. |
+| `beyond_sqlite` target | 127 passed, 138 failed, 0 skipped, of 265. Oracle self-compare 265/265. |
+
+`upper('straße'), lower('ÉCOLE')` on that Postgres is `STRAßE|École`, the same
+string RedlineDB and SQLite return. Cases `20047`–`20049` are not in the
+failure allowlist. Do not change `upper`/`lower`.
+
+The repair commit after this note clears six of the eight SQLite failures
+(`soundex`, default-on `UPDATE`/`DELETE … LIMIT`, `.session` exit 1) and two
+Postgres failures (`20029`, `20058`). `10405` and `12023` stay failed.
+`postgres-regression.json` keeps 136 ids.
+
 ## Governing decisions — 2026-09-18
 
 Canonical checkout: `/home/ubuntu/redlineDB`; integration owner: root agent.

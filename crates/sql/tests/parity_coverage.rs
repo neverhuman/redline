@@ -1021,13 +1021,12 @@ fn not_ilike_propagates_null() {
 }
 
 #[test]
-fn ilike_unicode_folds_caf_e_to_caf_e_acute() {
+fn ilike_locale_c_does_not_fold_non_ascii() {
     let (_d, c) = open();
-    // BEYOND-CASE-20058: PG's ILIKE applies Unicode folding via libc
-    // locale, so `'CAFÉ' ILIKE 'café'` is true. The ASCII-only `cafe`
-    // form remains false because É and e are different chars.
-    assert_eq!(q1(&c, "SELECT 'CAFÉ' ILIKE 'café'"), SqlValue::Integer(1));
+    // BEYOND-CASE-20058 against Postgres 16.15 locale C: both are false.
+    assert_eq!(q1(&c, "SELECT 'CAFÉ' ILIKE 'café'"), SqlValue::Integer(0));
     assert_eq!(q1(&c, "SELECT 'CAFÉ' ILIKE 'cafe'"), SqlValue::Integer(0));
+    assert_eq!(q1(&c, "SELECT 'CAFÉ' ILIKE 'CAF_'"), SqlValue::Integer(1));
 }
 
 #[test]

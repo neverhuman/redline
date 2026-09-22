@@ -3,6 +3,15 @@ use std::fs;
 use std::io::{self, Read, Write};
 use std::path::PathBuf;
 use std::process::exit;
+use std::sync::atomic::{AtomicI32, Ordering};
+
+/// Process exit used for a SQL failure. SQLite's shell uses 1. The Postgres
+/// corpus compares against `psql`, which uses 3. `--error-exit` selects it.
+static SQL_ERROR_EXIT: AtomicI32 = AtomicI32::new(1);
+
+fn sql_error_exit() -> i32 {
+    SQL_ERROR_EXIT.load(Ordering::Relaxed)
+}
 
 use clap::Parser;
 use redlinedb::{Database, OpenOptions, OwnedStep, RqlProgram, RqlStatement};
@@ -132,6 +141,10 @@ struct Cli {
     #[arg(long)]
     stats: bool,
 
+    /// Exit status for a SQL error. Default 1 matches the SQLite shell.
+    #[arg(long = "error-exit")]
+    error_exit: Option<i32>,
+
     #[arg(long, num_args = 1)]
     heap: Option<Vec<String>>,
 
@@ -252,6 +265,9 @@ pub fn run() {
     }
 
     let cli = Cli::parse_from(args);
+    if let Some(code) = cli.error_exit {
+        SQL_ERROR_EXIT.store(code, Ordering::Relaxed);
+    }
 
     if cli.help {
         print_sqlite_help();
@@ -507,7 +523,7 @@ pub fn run() {
         if let Err(e) = run_input(&mut state, cmd) {
             eprintln!("{e}");
             if state.bail {
-                exit(1);
+                exit(sql_error_exit());
             }
         }
     }
@@ -517,11 +533,11 @@ pub fn run() {
         if let Err(e) = run_input(&mut state, &sql) {
             flush_output_or_exit(&mut state);
             eprintln!("{e}");
-            exit(1);
+            exit(sql_error_exit());
         }
         if state.had_error {
             flush_output_or_exit(&mut state);
-            exit(1);
+            exit(sql_error_exit());
         }
         flush_output_or_exit(&mut state);
         if !cli.readonly && !cli.deserialize {
@@ -543,12 +559,12 @@ pub fn run() {
             flush_output_or_exit(&mut state);
             eprintln!("{e}");
             if state.bail {
-                exit(1);
+                exit(sql_error_exit());
             }
         }
         if state.had_error {
             flush_output_or_exit(&mut state);
-            exit(1);
+            exit(sql_error_exit());
         }
         flush_output_or_exit(&mut state);
     } else {

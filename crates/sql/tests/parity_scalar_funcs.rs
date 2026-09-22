@@ -678,11 +678,23 @@ fn like_function_form_two_and_three_arg() {
 }
 
 #[test]
-fn soundex_returns_error_when_compiled_out() {
-    // SQLite 3.53.1 reference binary is built without SQLITE_SOUNDEX, so
-    // calls to soundex() should surface as an "unsupported"/"no such
-    // function" error — we mirror that.
+fn soundex_matches_sqlite_codes() {
     let (_d, c) = open();
-    let mut stmt = c.prepare("SELECT soundex('Robert')").expect("prepare");
-    assert!(stmt.step().is_err(), "soundex unexpectedly succeeded");
+    assert_eq!(
+        q1(&c, "SELECT soundex('Robert')"),
+        SqlValue::Text(Arc::from("R163"))
+    );
+    assert_eq!(
+        q1(&c, "SELECT soundex('Rupert')"),
+        SqlValue::Text(Arc::from("R163"))
+    );
+    assert_eq!(
+        q1(&c, "SELECT soundex('X')"),
+        SqlValue::Text(Arc::from("X000"))
+    );
+    assert_eq!(
+        q1(&c, "SELECT soundex('')"),
+        SqlValue::Text(Arc::from("?000"))
+    );
+    assert_eq!(q1(&c, "SELECT soundex(NULL)"), SqlValue::Null);
 }

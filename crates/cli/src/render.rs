@@ -1054,7 +1054,19 @@ fn format_real(value: f64) -> String {
     redlinedb::format_real_sqlite(value)
 }
 
+fn postgres_result_dialect() -> bool {
+    std::env::var("REDLINEDB_RESULT_DIALECT").ok().as_deref() == Some("postgres")
+}
+
 fn format_blob_text(bytes: &[u8]) -> String {
+    if postgres_result_dialect() {
+        let mut out = String::with_capacity(bytes.len() * 2 + 2);
+        out.push_str("\\x");
+        for byte in bytes {
+            let _ = std::fmt::Write::write_fmt(&mut out, format_args!("{byte:02x}"));
+        }
+        return out;
+    }
     if bytes.iter().all(|byte| *byte == 0) {
         return String::new();
     }

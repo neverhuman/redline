@@ -63,40 +63,30 @@ fn delete_using_is_unsupported() {
 
 #[test]
 fn delete_limit_is_supported() {
-    // WS-A2f-rewrite: the parser layer keeps rejecting `DELETE ... LIMIT n`
-    // by default (parity case 00220 expects the SQLite autoconf
-    // amalgamation's rejection), but the opt-in PRAGMA
-    // `redline_dml_order_limit_rewrite = ON` enables the pre-parse rewrite
-    // to the `WHERE rowid IN (SELECT rowid FROM t LIMIT n)` form. With the
-    // PRAGMA off the statement still errors; with it on it executes.
+    // Default on, matching SQLITE_ENABLE_UPDATE_DELETE_LIMIT. OFF rejects.
     let (_d, c) = open();
     c.execute("CREATE TABLE t(id INTEGER)").expect("create");
     c.execute("INSERT INTO t VALUES (1),(2),(3)")
         .expect("insert");
-    let res = c.execute("DELETE FROM t LIMIT 1");
+    c.execute("DELETE FROM t LIMIT 1").expect("default rewrite");
+    c.execute("PRAGMA redline_dml_order_limit_rewrite = OFF")
+        .expect("pragma off");
+    // Fresh text so the prepared-statement cache does not reuse the rewrite.
+    let res = c.execute("DELETE FROM t LIMIT 2");
     assert_errors(res);
-    c.execute("PRAGMA redline_dml_order_limit_rewrite = ON")
-        .expect("pragma on");
-    c.execute("DELETE FROM t LIMIT 1").expect("rewrite path");
 }
 
 #[test]
 fn delete_order_by_is_supported() {
-    // WS-A2f-rewrite: same story as `delete_limit_is_supported` — default
-    // rejection, opt-in PRAGMA lowers the SQL into the rowid-IN-subquery
-    // form. A bare `DELETE ... ORDER BY id` (no LIMIT) is meaningless and
-    // still rejected even with the PRAGMA on; the rewrite only fires for
-    // shapes that carry a LIMIT clause.
+    // ORDER BY without LIMIT stays rejected. ORDER BY LIMIT runs by default.
     let (_d, c) = open();
     c.execute("CREATE TABLE t(id INTEGER)").expect("create");
     c.execute("INSERT INTO t VALUES (1),(2),(3)")
         .expect("insert");
     let res = c.execute("DELETE FROM t ORDER BY id");
     assert_errors(res);
-    c.execute("PRAGMA redline_dml_order_limit_rewrite = ON")
-        .expect("pragma on");
     c.execute("DELETE FROM t ORDER BY id LIMIT 1")
-        .expect("rewrite path");
+        .expect("default rewrite");
 }
 
 #[test]

@@ -12,6 +12,11 @@ gitignored `target/` and no longer exists.
   RedlineDB passes                123/148 (83.1%)
   remaining                       25 cases, listed below
 
+2026-09-22 rerun against Postgres 16.15 locale C: `20029` (bytea hex) and
+`20058` (ILIKE, ASCII-only fold) passed and left
+`postgres-regression.json`. `20029` is removed from the list below.
+`20058` was not in this 25-case triage.
+
 ## By root cause
 
 -  9  error-classification
@@ -75,8 +80,6 @@ gitignored `target/` and no longer exists.
       exit-code mismatch: reference=3 target=1 target_stderr=Error: 1002: unsupported sql: only DROP TABLE, DROP INDEX, DROP VIEW, DROP SCHEMA, and DROP SEQ
 - `20023` DOMAIN_REJECTS_NEG  [unsupported-statement]
       exit-code mismatch: reference=3 target=1 target_stderr=Error: 1002: unsupported sql: statement not supported yet: DropDomain(DropDomain { if_exists: t
-- `20029` BYTEA_HEX_LITERAL  [output-rendering]
-      stdout mismatch: reference="\\x01ab|2\n" target="^A�|2\n" target_stderr=
 ### BEYOND_SCHEMAS_SEQUENCES
 
 - `20247` GENERATED_ALWAYS_AS_IDENTITY_REJECTS_EXPLICIT  [error-classification]

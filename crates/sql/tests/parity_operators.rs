@@ -183,9 +183,11 @@ fn redline_ilike_matches_irrespective_of_case() {
 }
 
 #[test]
-fn redline_ilike_handles_unicode_case_folding() {
+fn redline_ilike_does_not_fold_non_ascii() {
     let pair = Pair::new();
     let rows = pair.redline_rows("SELECT 'Äpfel' ILIKE 'ä%'");
+    assert_eq!(rows, vec![vec![SqlValue::Integer(0)]]);
+    let rows = pair.redline_rows("SELECT 'Äpfel' ILIKE 'Ä%'");
     assert_eq!(rows, vec![vec![SqlValue::Integer(1)]]);
 }
 

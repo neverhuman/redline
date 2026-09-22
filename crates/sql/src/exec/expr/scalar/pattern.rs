@@ -74,8 +74,10 @@ pub(crate) fn ilike_result(
     if matches!(value, SqlValue::Null) || matches!(pattern, SqlValue::Null) {
         return Ok(SqlValue::Null);
     }
-    let text = value_to_string(value).to_lowercase();
-    let pattern = value_to_string(pattern).to_lowercase();
+    // Locale C, which the Postgres 16.15 oracle uses, folds ASCII only.
+    // `to_lowercase()` made `'CAFÉ' ILIKE 'café'` true and failed case 20058.
+    let text = value_to_string(value).to_ascii_lowercase();
+    let pattern = value_to_string(pattern).to_ascii_lowercase();
     let escape = match escape_char {
         Some(Value::SingleQuotedString(s)) if s.chars().count() == 1 => {
             Some(s.chars().next().unwrap())

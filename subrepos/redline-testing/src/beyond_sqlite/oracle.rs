@@ -360,7 +360,7 @@ fn run_one_case_against_target(
         };
     }
 
-    if ref_norm == tgt_norm {
+    if ref_norm == tgt_norm && reference.exit_code == 0 {
         TargetOutcome {
             status: "passed".to_owned(),
             diagnostic: None,
@@ -373,14 +373,22 @@ fn run_one_case_against_target(
             target_elapsed_ns,
         }
     } else {
-        TargetOutcome {
-            status: "failed".to_owned(),
-            diagnostic: Some(format!(
+        let diagnostic = if ref_norm == tgt_norm {
+            format!(
+                "matching nonzero exit is not a semantic pass: reference={} target={} target_stderr={}",
+                reference.exit_code, target.exit_code, target_stderr_head
+            )
+        } else {
+            format!(
                 "stdout mismatch: reference={:?} target={:?} target_stderr={}",
                 truncate(&ref_norm, 256),
                 truncate(&tgt_norm, 256),
                 target_stderr_head
-            )),
+            )
+        };
+        TargetOutcome {
+            status: "failed".to_owned(),
+            diagnostic: Some(diagnostic),
             reference_exit: reference.exit_code,
             target_exit: Some(target.exit_code),
             reference_stdout: truncate(&ref_norm, 1024),
@@ -401,7 +409,13 @@ struct TargetOutput {
 
 fn invoke_target(target_bin: &Path, stdin: &str, timeout: Duration) -> Result<TargetOutput> {
     let mut command = Command::new(target_bin);
-    command.arg("-batch").arg("-bail").arg(":memory:");
+    command
+        .arg("-batch")
+        .arg("-bail")
+        .arg("--error-exit")
+        .arg("3")
+        .arg(":memory:");
+    command.env("REDLINEDB_RESULT_DIALECT", "postgres");
     command
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())

@@ -1124,3 +1124,52 @@ fn dot_parameter_list_and_clear_round_trip() {
     );
     assert!(out.trim_end().ends_with("done"), "stdout={out}");
 }
+
+#[test]
+fn dot_session_is_an_unknown_command() {
+    let (out, err, code) = run_script(None, ".session\n");
+    assert_eq!(code, 1, "stdout={out} stderr={err}");
+    assert!(out.is_empty(), "stdout={out}");
+    assert!(
+        err.contains("unknown command or invalid arguments: \"session\""),
+        "stderr={err}"
+    );
+}
+
+#[test]
+fn sql_error_exit_defaults_to_one_and_can_be_three() {
+    let (out, err, code) = run_script(None, "SELECT * FROM missing_table;\n");
+    assert_eq!(code, 1, "stdout={out} stderr={err}");
+    let (out, err, code) = run_script_with_args(
+        &["--error-exit", "3"],
+        None,
+        "SELECT * FROM missing_table;\n",
+    );
+    assert_eq!(code, 3, "stdout={out} stderr={err}");
+}
+
+#[test]
+fn postgres_dialect_renders_blob_as_hex() {
+    let bin = cargo_bin("redlinedb-cli");
+    let mut cmd = Command::new(bin);
+    cmd.args(["-batch", "-bail", ":memory:"])
+        .env("REDLINEDB_RESULT_DIALECT", "postgres")
+        .stdin(std::process::Stdio::piped())
+        .stdout(std::process::Stdio::piped())
+        .stderr(std::process::Stdio::piped());
+    let mut child = cmd.spawn().expect("spawn");
+    {
+        use std::io::Write;
+        child
+            .stdin
+            .as_mut()
+            .unwrap()
+            .write_all(b"SELECT x'01ab';\n")
+            .unwrap();
+    }
+    let output = child.wait_with_output().unwrap();
+    let stdout = String::from_utf8(output.stdout).unwrap();
+    let stderr = String::from_utf8(output.stderr).unwrap();
+    assert!(output.status.success(), "stderr={stderr} stdout={stdout}");
+    assert_eq!(stdout, "\\x01ab\n");
+}

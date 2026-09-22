@@ -4,6 +4,10 @@
 
 Claim: canonical checkout `/home/ubuntu/redlineDB`, branch `docs/agent-board-rules` from `origin/main`. No bulletfarm hub. This claim covers `AGENTS.md` and `docs/sqlite-parity.md` only: board habits borrowed from `neverhuman/bulletfarm` `AGENTS.md`, plus the 3.53.1 reference-shell defect for `SQLITE_ENABLE_UPDATE_DELETE_LIMIT`.
 
+## 2026-09-22T09:10Z parity/close-all-gaps
+
+Claim: canonical checkout `/home/ubuntu/redlineDB`, branch `parity/close-all-gaps` from `origin/main` `3fd3e171a`. No bulletfarm hub, so this note is the claim. Slice 0 remeasured Postgres 16.15 (`160015|C|C|UTC`) at 127 pass / 138 fail and SQLite 3.53.1 at 2437 pass / 8 fail / 4 skip. This claim covers the first repair slice: `soundex`, default-on DML `ORDER BY LIMIT`, `.session` exit, locale-C `ILIKE`, `--error-exit`, and Postgres bytea rendering. Hot paths: `crates/sql/src/exec/expr/json_dispatch.rs`, `crates/sql/src/exec/expr/scalar/pattern.rs`, `crates/sql/src/parser/rewrite/dml_limit.rs`, `crates/cli/src/lib.rs`, `crates/cli/src/render.rs`, `crates/cli/src/dot/control.rs`, `subrepos/redline-testing/src/beyond_sqlite/oracle.rs`.
+
 Active coordination happens here. Full historical log through
 `2026-05-28T13:55Z` is archived at
 `docs/archive/AGENT_CHAT.full-through-2026-05-28T1355Z.md`.

@@ -59,6 +59,61 @@ pub(crate) fn simple_function_name_lower<'b>(
     std::str::from_utf8(s).ok()
 }
 
+fn soundex_digit(byte: u8) -> u8 {
+    match byte.to_ascii_uppercase() {
+        b'B' | b'F' | b'P' | b'V' => 1,
+        b'C' | b'G' | b'J' | b'K' | b'Q' | b'S' | b'X' | b'Z' => 2,
+        b'D' | b'T' => 3,
+        b'L' => 4,
+        b'M' | b'N' => 5,
+        b'R' => 6,
+        _ => 0,
+    }
+}
+
+/// SQLite `soundex`: first ASCII letter, then consonant codes, vowels reset
+/// the previous code, result padded to four characters. No letter yields `?000`.
+fn sqlite_soundex(values: &[SqlValue]) -> Result<SqlValue> {
+    if values.len() != 1 {
+        return Err(Error::UnsupportedSql(
+            "soundex requires 1 argument".to_owned(),
+        ));
+    }
+    if matches!(values[0], SqlValue::Null) {
+        return Ok(SqlValue::Null);
+    }
+    let text = value_as_str(&values[0]);
+    let bytes = text.as_bytes();
+    let mut index = 0;
+    while index < bytes.len() && !bytes[index].is_ascii_alphabetic() {
+        index += 1;
+    }
+    if index >= bytes.len() {
+        return Ok(SqlValue::Text(Arc::from("?000")));
+    }
+    let mut out = [b'0'; 4];
+    out[0] = bytes[index].to_ascii_uppercase();
+    let mut prev = soundex_digit(bytes[index]);
+    let mut written = 1;
+    index += 1;
+    while index < bytes.len() && written < 4 {
+        let code = soundex_digit(bytes[index]);
+        if code > 0 {
+            if code != prev {
+                prev = code;
+                out[written] = b'0' + code;
+                written += 1;
+            }
+        } else {
+            prev = 0;
+        }
+        index += 1;
+    }
+    Ok(SqlValue::Text(Arc::from(
+        std::str::from_utf8(&out).unwrap_or("?000"),
+    )))
+}
+
 pub(super) fn eval_function(
     func: &sqlparser::ast::Function,
     row: &RowContext<'_>,
@@ -210,13 +265,7 @@ pub(crate) fn eval_scalar_function_values(
             }
             Ok(SqlValue::Text(Arc::from(out)))
         }
-        // soundex(X) is gated behind SQLITE_SOUNDEX in the reference build
-        // and *not* compiled into sqlite3 v3.53.1 (`PRAGMA compile_options`
-        // confirms it). Surface the same "no such function" error so parity
-        // tests that expect rejection don't see a phantom success.
-        "soundex" => Err(Error::UnsupportedSql(
-            "no such function: soundex".to_owned(),
-        )),
+        "soundex" => sqlite_soundex(&values),
         // SQLite unhex(X[, ignore]) — decode a hex string into a blob. If any
         // non-hex / non-ignore character appears, return NULL. Whitespace is
         // not implicit; only chars in `ignore` are skipped.
