@@ -148,11 +148,7 @@ pub fn check(raw_path: &Path, baseline_path: Option<&Path>, readme: Option<&Path
                 || reference["server_binary_sha256"] == policy.server_binary_sha256,
             "unknown reference digest"
         );
-        newly_passing = policy
-            .failed_cases
-            .difference(&failures)
-            .cloned()
-            .collect();
+        newly_passing = policy.failed_cases.difference(&failures).cloned().collect();
         failures.is_subset(&policy.failed_cases)
     } else {
         failures.is_empty()
@@ -301,17 +297,22 @@ mod tests {
         assert!(err.contains("BEYOND-CASE-20021"), "{err}");
 
         // ... and the artifact records which ones, not just that some exist.
-        let report: Value =
-            serde_json::from_slice(&fs::read(dir.path().join("postgres-qualification.json")).unwrap())
-                .unwrap();
-        assert_eq!(report["newly_passing"], serde_json::json!(["BEYOND-CASE-20021"]));
+        let report: Value = serde_json::from_slice(
+            &fs::read(dir.path().join("postgres-qualification.json")).unwrap(),
+        )
+        .unwrap();
+        assert_eq!(
+            report["newly_passing"],
+            serde_json::json!(["BEYOND-CASE-20021"])
+        );
 
         // An exact baseline still passes, and records nothing newly passing.
         let exact = baseline(dir.path(), &[]);
         check(&raw, Some(&exact), None).unwrap();
-        let report: Value =
-            serde_json::from_slice(&fs::read(dir.path().join("postgres-qualification.json")).unwrap())
-                .unwrap();
+        let report: Value = serde_json::from_slice(
+            &fs::read(dir.path().join("postgres-qualification.json")).unwrap(),
+        )
+        .unwrap();
         assert_eq!(report["newly_passing"], serde_json::json!([]));
     }
 
