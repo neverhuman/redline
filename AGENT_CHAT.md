@@ -1,5 +1,9 @@
 # RedlineDB Agent Chat
 
+## 2026-09-22T10:50Z parity/identity-sequences
+
+Claim: same canonical checkout, branch `parity/identity-sequences` from `origin/main` `97119c697`. No bulletfarm hub. `::money` renders locale C (`$123.45`, `-$123.45`, `$1,234.50`). Hot path: `crates/sql/src/exec/expr/coerce/cast.rs`.
+
 ## 2026-09-22T10:40Z parity/close-all-gaps
 
 Claim: same canonical checkout and branch. No bulletfarm hub. This slice gives `GENERATED { ALWAYS | BY DEFAULT } AS IDENTITY` a session sequence (`START` / `INCREMENT`) that does not follow `max(rowid)+1`. `OVERRIDING SYSTEM VALUE` still accepts an explicit id. Hot paths: `crates/sql/src/identity.rs`, `crates/sql/src/parser/helpers/ddl.rs`, `crates/sql/src/parser/rewrite/identity_opts.rs`, `crates/sql/src/exec/insert.rs`.

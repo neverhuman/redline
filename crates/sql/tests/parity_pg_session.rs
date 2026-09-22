@@ -17,6 +17,23 @@ fn q1(conn: &Arc<Connection>, sql: &str) -> SqlValue {
 }
 
 #[test]
+fn money_renders_locale_c() {
+    let (_d, c) = open();
+    assert_eq!(
+        q1(&c, "SELECT 123.45::money"),
+        SqlValue::Text(Arc::from("$123.45"))
+    );
+    assert_eq!(
+        q1(&c, "SELECT (-123.45)::money"),
+        SqlValue::Text(Arc::from("-$123.45"))
+    );
+    assert_eq!(
+        q1(&c, "SELECT 1234.5::money"),
+        SqlValue::Text(Arc::from("$1,234.50"))
+    );
+}
+
+#[test]
 fn show_wal_level_and_replication_role() {
     let (_d, c) = open();
     assert_eq!(

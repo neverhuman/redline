@@ -117,6 +117,12 @@ pub(crate) fn cast_value(
     // by stripping a trailing `+HH[:MM]` / `Z` offset from any text input.
     // The result remains text-shaped so downstream `datetime()`-style
     // functions see a plain UTC literal.
+    // Locale C `money` prints `$` and two decimal places. `123.45::money`
+    // is `$123.45`. Stored as text so the list renderer does not reformat it.
+    if type_name.eq_ignore_ascii_case("money") {
+        return Ok(cast_to_money(&value));
+    }
+
     if type_name.eq_ignore_ascii_case("timestamp with time zone")
         || type_name.eq_ignore_ascii_case("timestamptz")
         || type_name.eq_ignore_ascii_case("timestamp")
@@ -129,6 +135,43 @@ pub(crate) fn cast_value(
     }
 
     Ok(value)
+}
+
+fn cast_to_money(value: &SqlValue) -> SqlValue {
+    let amount = match value {
+        SqlValue::Null => return SqlValue::Null,
+        SqlValue::Integer(v) => *v as f64,
+        SqlValue::Real(v) => *v,
+        SqlValue::Text(text) => match text.trim().parse::<f64>() {
+            Ok(parsed) => parsed,
+            Err(_) => return value.clone(),
+        },
+        SqlValue::Blob(_) => return value.clone(),
+    };
+    if !amount.is_finite() {
+        return value.clone();
+    }
+    let negative = amount.is_sign_negative() && amount != 0.0;
+    let cents = (amount.abs() * 100.0).round() as i64;
+    let text = format!(
+        "{}${}.{:02}",
+        if negative { "-" } else { "" },
+        group_thousands(cents / 100),
+        cents % 100
+    );
+    SqlValue::Text(Arc::from(text))
+}
+
+fn group_thousands(dollars: i64) -> String {
+    let digits = dollars.to_string();
+    let mut out = String::with_capacity(digits.len() + digits.len() / 3);
+    for (index, ch) in digits.chars().enumerate() {
+        if index > 0 && (digits.len() - index).is_multiple_of(3) {
+            out.push(',');
+        }
+        out.push(ch);
+    }
+    out
 }
 
 /// Normalize a value for a date/time-shaped PG cast. We strip any trailing
