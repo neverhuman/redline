@@ -47,3 +47,19 @@ fn search_path_show_and_current_schema() {
         SqlValue::Text(Arc::from("\"\""))
     );
 }
+
+#[test]
+fn timestamp_subtraction_is_a_day_interval() {
+    let (_d, c) = open();
+    assert_eq!(
+        q1(
+            &c,
+            "SELECT '2025-01-02'::timestamp - '2025-01-01'::timestamp"
+        ),
+        SqlValue::Text(Arc::from("1 day"))
+    );
+    assert_eq!(
+        q1(&c, "SELECT '2025-01-01'::date - '2025-01-03'::date"),
+        SqlValue::Text(Arc::from("-2 days"))
+    );
+}

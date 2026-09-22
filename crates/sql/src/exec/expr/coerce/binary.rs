@@ -45,15 +45,21 @@ pub(crate) fn eval_binary(
         }
         BinaryOperator::Minus => match try_json_delete(&left_value, &right_value) {
             Some(v) => v,
-            None => match try_pg_decimal_arith(&left_value, &right_value, PgDecimalOp::Sub) {
-                Some(v) => v,
-                None => arithmetic(
-                    left_value,
-                    right_value,
-                    |a, b| Some(a.wrapping_sub(b)),
-                    |a, b| Some(a - b),
-                )?,
-            },
+            None => {
+                if let Some(v) = try_timestamp_diff(&left_value, &right_value) {
+                    v
+                } else {
+                    match try_pg_decimal_arith(&left_value, &right_value, PgDecimalOp::Sub) {
+                        Some(v) => v,
+                        None => arithmetic(
+                            left_value,
+                            right_value,
+                            |a, b| Some(a.wrapping_sub(b)),
+                            |a, b| Some(a - b),
+                        )?,
+                    }
+                }
+            }
         },
         BinaryOperator::Multiply => {
             match try_pg_decimal_arith(&left_value, &right_value, PgDecimalOp::Mul) {
@@ -349,6 +355,37 @@ pub(crate) fn pg_regex_result(
     };
     let matched = crate::regexp::regex_match(&effective_text, &effective_pattern)?;
     Ok(SqlValue::Integer(if matched ^ negated { 1 } else { 0 }))
+}
+
+/// `'2025-01-02'::timestamp - '2025-01-01'::timestamp` is the text `1 day`.
+/// Only date-shaped text is recognized so numeric text subtraction is unchanged.
+fn try_timestamp_diff(left: &SqlValue, right: &SqlValue) -> Option<SqlValue> {
+    let (SqlValue::Text(left), SqlValue::Text(right)) = (left, right) else {
+        return None;
+    };
+    let (left, right) = (left.as_ref(), right.as_ref());
+    let days = civil_days(left)? - civil_days(right)?;
+    let unit = if days.abs() == 1 { "day" } else { "days" };
+    Some(SqlValue::Text(Arc::from(format!("{days} {unit}"))))
+}
+
+fn civil_days(text: &str) -> Option<i64> {
+    let date = text.get(..10)?;
+    let mut parts = date.split('-');
+    let year: i32 = parts.next()?.parse().ok()?;
+    let month: u32 = parts.next()?.parse().ok()?;
+    let day: u32 = parts.next()?.parse().ok()?;
+    if parts.next().is_some() || !(1..=12).contains(&month) || !(1..=31).contains(&day) {
+        return None;
+    }
+    // Howard Hinnant's civil-from-days, inverted.
+    let y = if month <= 2 { year - 1 } else { year };
+    let era = if y >= 0 { y } else { y - 399 } / 400;
+    let yoe = (y - era * 400) as u32;
+    let mp = if month > 2 { month - 3 } else { month + 9 };
+    let doy = (153 * mp + 2) / 5 + day - 1;
+    let doe = yoe * 365 + yoe / 4 - yoe / 100 + doy;
+    Some(era as i64 * 146097 + doe as i64 - 719468)
 }
 
 pub(crate) fn compare_binary(

@@ -1,14 +1,13 @@
 {
   "schema_version": "redline-postgres-regression-v1",
   "previous_source_commit": "2b55087b3026fb90fe3bd6174460e43bd5e9dbdc",
-  "reason": "collation cases passed against Postgres 16.15. 124 failures remain.",
+  "reason": "timestamp subtraction and collations passed. 123 failures remain.",
   "corpus_sha256": "90a0d6242f6153dd4d2099c0f58d0c9b96cc3a6dd02cbc85c935d8204d8aedd0",
   "reference_settings": "160015|C|C|UTC",
   "image_digest": "sha256:efdf07c2f9d4df592783dcc8ea5f6db02efbf5f6452b527225ff5e58364570e9",
   "server_binary_sha256": "201d8daff9a5bd9df70b820471b965c39f5a776d677f395232c477d051270722",
   "failed_cases": [
     "BEYOND-CASE-20005",
-    "BEYOND-CASE-20010",
     "BEYOND-CASE-20020",
     "BEYOND-CASE-20021",
     "BEYOND-CASE-20022",
