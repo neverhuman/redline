@@ -1,7 +1,7 @@
 {
   "schema_version": "redline-postgres-regression-v1",
   "previous_source_commit": "4e742765a75fe94dff26ef02c33b323c1b718345",
-  "reason": "LATERAL generate_series expands per outer row. 99 failures remain.",
+  "reason": "LISTEN and UNLISTEN track session channels. 93 failures remain.",
   "corpus_sha256": "01a25cfc48176a535919354a6bddf48f87692857857c24777dcf9b4841bd0a9d",
   "reference_settings": "160015|C|C|UTC",
   "image_digest": "sha256:efdf07c2f9d4df592783dcc8ea5f6db02efbf5f6452b527225ff5e58364570e9",
@@ -97,13 +97,7 @@
     "BEYOND-CASE-20427",
     "BEYOND-CASE-20428",
     "BEYOND-CASE-20429",
-    "BEYOND-CASE-20430",
-    "BEYOND-CASE-20433",
-    "BEYOND-CASE-20434",
-    "BEYOND-CASE-20437",
     "BEYOND-CASE-20438",
-    "BEYOND-CASE-20439",
-    "BEYOND-CASE-20440",
     "BEYOND-CASE-20441",
     "BEYOND-CASE-20442"
   ]

@@ -40,6 +40,12 @@ listener is a successful no-op. The beyond gate is then 162 passed, 103 failed,
 0 skipped, and `20431`, `20432`, and `20443` left the allowlist.
 `CROSS JOIN LATERAL generate_series` expands once per outer row. The beyond
 gate is then 163 passed, 102 failed, 0 skipped, and `20106` left the allowlist.
+`LISTEN` / `UNLISTEN` keep a session channel set, and `pg_listening_channels()`
+reads it. Rollback drops a listen that has not committed. The beyond gate is
+then 169 passed, 96 failed, 0 skipped, and `20430`, `20433`, `20434`, `20437`,
+`20439`, and `20440` left the allowlist. `20438` (`LISTEN ALL`) still errors on
+both sides, so it stays listed until stderr is asserted. `20441` and `20442`
+need plpgsql.
 
 ## Governing decisions — 2026-09-18
 

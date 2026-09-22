@@ -6,6 +6,7 @@ mod error;
 mod exec;
 mod identity;
 mod json;
+mod listen;
 mod parser;
 mod planner;
 mod regexp;

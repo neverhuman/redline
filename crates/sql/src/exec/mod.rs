@@ -842,6 +842,26 @@ pub fn execute_prepared(
             runtime: RuntimeState::Done,
             affected_rows: 0,
         }),
+        PreparedKind::Listen { channel } => {
+            with_session_reentrant(conn, |session| {
+                crate::listen::listen(session, channel);
+                Ok(())
+            })?;
+            Ok(ExecutionResult {
+                runtime: RuntimeState::Done,
+                affected_rows: 0,
+            })
+        }
+        PreparedKind::Unlisten { channel } => {
+            with_session_reentrant(conn, |session| {
+                crate::listen::unlisten(session, channel);
+                Ok(())
+            })?;
+            Ok(ExecutionResult {
+                runtime: RuntimeState::Done,
+                affected_rows: 0,
+            })
+        }
         PreparedKind::ShowVariable { name } => {
             let value = if name.eq_ignore_ascii_case("transaction_isolation") {
                 let iso =
@@ -1025,7 +1045,9 @@ fn template_writes(kind: &PreparedKind) -> bool {
         | PreparedKind::CreateCollation { .. }
         | PreparedKind::DropCollation { .. }
         | PreparedKind::ShowVariable { .. }
-        | PreparedKind::Notify => false,
+        | PreparedKind::Notify
+        | PreparedKind::Listen { .. }
+        | PreparedKind::Unlisten { .. } => false,
         PreparedKind::CreateTable(_)
         | PreparedKind::CreateTempTable(_)
         | PreparedKind::CreateTableAsSelect(_)

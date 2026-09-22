@@ -131,6 +131,9 @@ fn parse_prepared_template_impl(conn: &Connection, sql: &str) -> Result<Prepared
     if let Some(rewritten) = rewrite_pg_catalog_query(conn, sql) {
         return parse_prepared_template_impl(conn, &rewritten);
     }
+    if let Some(rewritten) = crate::listen::rewrite_pg_listening_channels(conn, sql) {
+        return parse_prepared_template_impl(conn, &rewritten);
+    }
     // Track J: strip Postgres `::regclass` and similar cast suffixes that
     // RedlineDB has no need to evaluate; the wrapped string is the natural
     // identifier the parity probes care about.

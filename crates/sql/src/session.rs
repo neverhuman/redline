@@ -208,6 +208,10 @@ pub struct SessionState {
     /// Identity columns keyed by `folded_table \u{1} folded_column`.
     /// The counter is independent of explicit inserts and of rowid.
     pub pg_identities: std::collections::BTreeMap<String, IdentityColumn>,
+    /// Channels registered by `LISTEN`. Sorted so an unordered read is stable.
+    pub pg_listening: std::collections::BTreeSet<String>,
+    /// `pg_listening` as of `BEGIN`. Restored on rollback.
+    pub pg_listening_tx_snapshot: Option<std::collections::BTreeSet<String>>,
 }
 
 /// Postgres `GENERATED { ALWAYS | BY DEFAULT } AS IDENTITY` for one column.
@@ -312,6 +316,8 @@ impl Default for SessionState {
             search_path: "\"$user\", public".to_owned(),
             pg_collations: std::collections::BTreeMap::new(),
             pg_identities: std::collections::BTreeMap::new(),
+            pg_listening: std::collections::BTreeSet::new(),
+            pg_listening_tx_snapshot: None,
         }
     }
 }
@@ -375,6 +381,8 @@ impl SessionState {
         self.search_path = "\"$user\", public".to_owned();
         self.pg_collations.clear();
         self.pg_identities.clear();
+        self.pg_listening.clear();
+        self.pg_listening_tx_snapshot = None;
     }
 
     /// Reset journal + savepoint stack at a transaction boundary.

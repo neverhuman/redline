@@ -365,6 +365,8 @@ pub(crate) fn build_plan(
         }
         PreparedKind::ShowVariable { .. } => simple_node(PhysicalKind::Constant, "SHOW".to_owned()),
         PreparedKind::Notify => simple_node(PhysicalKind::Constant, "NOTIFY".to_owned()),
+        PreparedKind::Listen { .. } => simple_node(PhysicalKind::Constant, "LISTEN".to_owned()),
+        PreparedKind::Unlisten { .. } => simple_node(PhysicalKind::Constant, "UNLISTEN".to_owned()),
         PreparedKind::AlterIndex { .. } => {
             simple_node(PhysicalKind::Constant, "ALTER INDEX".to_owned())
         }

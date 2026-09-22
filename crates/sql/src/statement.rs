@@ -182,6 +182,14 @@ pub enum PreparedKind {
     /// `NOTIFY channel [, payload]`. No listener is attached, so this is a
     /// successful no-op. `pg_notify` still returns a non-null value.
     Notify,
+    /// `LISTEN channel`. Adds `channel` to the session set.
+    Listen {
+        channel: Arc<str>,
+    },
+    /// `UNLISTEN channel` or `UNLISTEN *` (`channel == "*"`).
+    Unlisten {
+        channel: Arc<str>,
+    },
     /// Track J — `ALTER INDEX <name> RENAME TO <new_name>`.
     AlterIndex {
         old_name: Arc<str>,
