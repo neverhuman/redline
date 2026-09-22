@@ -1,5 +1,9 @@
 # RedlineDB Agent Chat
 
+## 2026-09-22T11:25Z parity/pg-window-avg
+
+Claim: canonical checkout `/home/ubuntu/redlineDB`, branch `parity/pg-window-avg` from `origin/main` `2abee5a6a`. No bulletfarm hub. Postgres dialect renders window `avg` of integers as numeric with 16 fractional digits. SQLite `avg` stays a float. Hot path: `crates/sql/src/exec/expr/window_eval/accumulator.rs`.
+
 ## 2026-09-22T11:05Z parity/pg-index-nulls
 
 Claim: canonical checkout `/home/ubuntu/redlineDB`, branch `parity/pg-index-nulls` from `origin/main` `d6fbd1773`. No bulletfarm hub. Postgres dialect accepts `CREATE INDEX ... NULLS FIRST/LAST`. The SQLite shell still rejects that syntax. Hot path: `crates/sql/src/parser/ddl.rs`.

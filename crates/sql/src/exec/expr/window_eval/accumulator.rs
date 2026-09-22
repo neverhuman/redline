@@ -2,6 +2,7 @@
 //! evaluated over a window-frame slice.
 
 use std::cmp::Ordering;
+use std::sync::Arc;
 
 use crate::value::{SqlValue, compare_values};
 
@@ -111,6 +112,18 @@ impl Accumulator {
         }
     }
 
+    fn avg_value(&self) -> SqlValue {
+        if self.count == 0 {
+            return SqlValue::Null;
+        }
+        // Postgres `avg` of integers is numeric, shown with 16 fractional
+        // digits (`15.0000000000000000`). SQLite keeps a float.
+        if crate::value::postgres_result_dialect() && !self.is_real && !self.int_sum_overflow {
+            return pg_integer_avg(self.int_sum, self.count);
+        }
+        SqlValue::Real(self.sum / self.count as f64)
+    }
+
     fn update_min_max(&mut self, v: &SqlValue) {
         match &self.min {
             None => self.min = Some(v.clone()),
@@ -142,13 +155,7 @@ impl Accumulator {
                 }
             }
             AccumulatorKind::Total => SqlValue::Real(self.sum),
-            AccumulatorKind::Avg => {
-                if self.count == 0 {
-                    SqlValue::Null
-                } else {
-                    SqlValue::Real(self.sum / self.count as f64)
-                }
-            }
+            AccumulatorKind::Avg => self.avg_value(),
             AccumulatorKind::Min => self.min.unwrap_or(SqlValue::Null),
             AccumulatorKind::Max => self.max.unwrap_or(SqlValue::Null),
             AccumulatorKind::Unknown => SqlValue::Null,
@@ -169,16 +176,30 @@ impl Accumulator {
                 }
             }
             AccumulatorKind::Total => SqlValue::Real(self.sum),
-            AccumulatorKind::Avg => {
-                if self.count == 0 {
-                    SqlValue::Null
-                } else {
-                    SqlValue::Real(self.sum / self.count as f64)
-                }
-            }
+            AccumulatorKind::Avg => self.avg_value(),
             AccumulatorKind::Min => self.min.clone().unwrap_or(SqlValue::Null),
             AccumulatorKind::Max => self.max.clone().unwrap_or(SqlValue::Null),
             AccumulatorKind::Unknown => SqlValue::Null,
         }
     }
+}
+
+/// Integer `avg` as Postgres numeric text. Truncates extra digits, which
+/// matches `avg` of `(1),(1),(2)` → `1.3333333333333333`.
+fn pg_integer_avg(sum: i64, count: i64) -> SqlValue {
+    if count == 0 {
+        return SqlValue::Null;
+    }
+    let negative = (sum < 0) ^ (count < 0);
+    let sum = sum.unsigned_abs();
+    let count = count.unsigned_abs();
+    let whole = sum / count;
+    let frac = (sum % count) as u128 * 10u128.pow(16) / count as u128;
+    let body = format!("{whole}.{frac:016}");
+    let text = if negative && (whole != 0 || frac != 0) {
+        format!("-{body}")
+    } else {
+        body
+    };
+    SqlValue::Text(Arc::from(text))
 }

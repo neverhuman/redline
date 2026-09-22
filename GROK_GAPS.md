@@ -28,7 +28,9 @@ left the allowlist. Explicit `GENERATED ALWAYS` inserts still fail both shells, 
 `20136` and `20247` stay listed until stderr is asserted. In the Postgres
 result dialect, `CREATE INDEX ... NULLS FIRST/LAST` is accepted; the SQLite
 shell still rejects it. The beyond gate is then 147 passed, 118 failed, 0 skipped,
-and `20357` left the allowlist.
+and `20357` left the allowlist. Window `avg` of integers renders Postgres numeric
+scale in that dialect (`15.0000000000000000`). The beyond gate is then
+148 passed, 117 failed, 0 skipped, and `20117` left the allowlist.
 
 ## Governing decisions — 2026-09-18
 
