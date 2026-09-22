@@ -4,6 +4,10 @@
 
 Claim: canonical checkout `/home/ubuntu/redlineDB`, rebased onto `origin/main` `162b582b5`. `RUSTC_WRAPPER` must point at the repo-root script so nested workspaces can run local `just pr-ci`. No engine behavior change.
 
+## 2026-09-22T20:05Z parity/pg-sql-fn
+
+Claim: same checkout. `gh-role` eligibility is now "did not open the pull request". `AGENTS.md` matches that rule and names `jeryu` and `jepsont` as store entries with no token.
+
 ## 2026-09-22T19:48Z parity/pg-sql-fn
 
 Claim: canonical checkout `/home/ubuntu/redlineDB`, still on `parity/pg-sql-fn`. Record the writer/reviewer roles, the credential paths, and the approval order in `AGENTS.md`. No engine behavior change. No bulletfarm hub.

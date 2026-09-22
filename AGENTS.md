@@ -33,9 +33,8 @@ task-ordered, not a numbered PR sequence. Consumer deployment locks and database
 - **Correct, do not reject**: a PR that misses its acceptance gets `REVIEW: changes <sha>` and is fixed on
   the same branch. Closing is only for a verified exact duplicate, with the salvaged content credited in
   the survivor. Merge waits for an eligible review of the exact head and for
-  `RedlineDB/required` on that same head. The reviewer login, the opener, and every
-  commit author and committer are different accounts. The steps and the credential
-  paths are in Publication and review.
+  `RedlineDB/required` on that same head. The reviewer must not be the account that
+  opened the pull request. The steps and the credential paths are in Publication and review.
 - **Parallelism**: at most four open PRs, each one lane, each rebased on a freshly fetched `origin/main`
   (protection is strict, so this is mandatory), each disjoint from the others on the hot files —
   `crates/sql/src/exec/**`, `crates/sql/src/parser*`, `crates/sql/src/{planner,statement}.rs`,
@@ -70,8 +69,8 @@ uses the git helper still needs `gh-role` for `gh pr` and `gh api`.
 
 | Role | Login | Use it for |
 | --- | --- | --- |
-| `writer` | `jepsontaylor` | New commits, pushes, `pr create`, `pr merge` |
-| `reviewer` | `neverhuman` | `APPROVE` when that login did not open the pull request and did not author or commit any commit on it |
+| `writer` | `jepsontaylor` | New commits, pushes, `pr create`, `pr merge`. May also `APPROVE` a pull request this login did not open. |
+| `reviewer` | `neverhuman` | `APPROVE` when that login did not open the pull request. |
 
 New commits use `Jepson Taylor <130782313+jepsontaylor@users.noreply.github.com>`.
 
@@ -87,9 +86,10 @@ output is kept. The writer file ends in `.env` and is still a raw token, not a s
 | `/home/ubuntu/.config/jopedime/bin/github-writer-credential.py` | `0700` | Git HTTPS `get` helper. It answers only for `neverhuman/RedlineDB` and `veox-ai/JopeDime`, as `jepsontaylor`. |
 | `/etc/jope-runner/github-pat` | root-owned, not readable by `ubuntu` | Runner registration. It cannot approve a pull request. Leave it unchanged. |
 
-`jeppsontaylor` (two p's) is the third reviewer for a pull request that already involves
-both logins above. That credential lives on the operator Mac. It is not installed on
-this host. Do not copy it here.
+`/home/ubuntu/.config/gh/hosts.yml` also names `jeryu` and `jepsont`. Neither has a
+usable token (`gh auth token --user` fails). They are not reviewers. `jeppsontaylor`
+(two p's) lives on the operator Mac and is not installed here. Do not copy it onto
+this host. The two working logins are `jepsontaylor` and `neverhuman`.
 
 Preflight, with the full path so a noninteractive shell does not pick up another `gh`:
 
@@ -119,15 +119,14 @@ Order for `neverhuman/RedlineDB`:
   -f commit_id=<full sha> -f event=APPROVE -f body="$(cat <review-file>)"
 ```
 
-The helper refuses the approval when the selected login opened the pull request or
-authored or committed any commit. A commit whose `author.login` is null (the `jekko`
-commits use `bot@jekko.ai`) is unassociated. Find out who produced it, then add
+The helper refuses the approval when the selected login opened the pull request.
+The other working login may approve even if it authored or committed the code; the
+review body says so. A commit whose `author.login` is null (the `jekko` commits use
+`bot@jekko.ai`) is unassociated. Find out who produced it, then add
 `--ack-unassociated` to the same command. The flag records that check. It does not
-invent a login, and it does not make a participant eligible.
+invent a login.
 
-4. When `jepsontaylor` and `neverhuman` are both already in the opener, author, or
-   committer set, stop. The third login has to approve. Rewriting author or committer
-   so that one of the two becomes eligible is not a review.
+4. Rewriting author or committer so that a login stops being the opener is not a review.
 5. The writer merges after `RedlineDB/required` is success on that same SHA. No admin
    bypass:
 
