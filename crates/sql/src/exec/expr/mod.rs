@@ -434,20 +434,13 @@ pub(crate) fn eval_scalar(
             negated,
         } => in_subquery_result(expr, subquery, *negated, row, bindings)?,
         Expr::Subquery(subquery) => eval_subquery_value(subquery, row, bindings)?,
-        Expr::IsNull(expr) => SqlValue::Integer(
-            if matches!(eval_scalar(expr, row, bindings)?, SqlValue::Null) {
-                1
-            } else {
-                0
-            },
-        ),
-        Expr::IsNotNull(expr) => SqlValue::Integer(
-            if !matches!(eval_scalar(expr, row, bindings)?, SqlValue::Null) {
-                1
-            } else {
-                0
-            },
-        ),
+        Expr::IsNull(expr) => {
+            crate::value::postgres_bool(matches!(eval_scalar(expr, row, bindings)?, SqlValue::Null))
+        }
+        Expr::IsNotNull(expr) => crate::value::postgres_bool(!matches!(
+            eval_scalar(expr, row, bindings)?,
+            SqlValue::Null
+        )),
         Expr::IsTrue(expr) => sql_truth_result(eval_scalar(expr, row, bindings)?),
         Expr::IsNotTrue(expr) => sql_truth_result_not(eval_scalar(expr, row, bindings)?),
         Expr::IsFalse(expr) => sql_false_result(eval_scalar(expr, row, bindings)?),

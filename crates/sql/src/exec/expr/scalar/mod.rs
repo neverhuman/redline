@@ -26,6 +26,7 @@ use super::*;
 
 pub(crate) mod math;
 pub(crate) mod pattern;
+pub(crate) mod pg_session;
 pub(crate) mod row;
 pub(crate) mod value;
 // Phase 6 R2-A: opt-in ScalarProgram VM hot-path dispatch.

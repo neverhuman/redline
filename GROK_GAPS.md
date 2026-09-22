@@ -33,6 +33,9 @@ scale in that dialect (`15.0000000000000000`). The beyond gate is then
 148 passed, 117 failed, 0 skipped, and `20117` left the allowlist. Postgres
 `real` addition is float4, so `0.1::real + 0.2::real = 0.3::real`. The beyond
 gate is then 149 passed, 116 failed, 0 skipped, and `20005` left the allowlist.
+Session functions (`pg_backend_pid`, `txid_current`, `pg_current_xact_id`,
+advisory lock, WAL LSN, `pg_notify`, `repeat`) then leave ten more cases.
+The beyond gate is 159 passed, 106 failed, 0 skipped.
 
 ## Governing decisions — 2026-09-18
 

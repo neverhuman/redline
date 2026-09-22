@@ -35,6 +35,15 @@ pub fn postgres_result_dialect() -> bool {
     std::env::var("REDLINEDB_RESULT_DIALECT").ok().as_deref() == Some("postgres")
 }
 
+/// Boolean result for the active result dialect: `t`/`f` under Postgres, else `1`/`0`.
+pub fn postgres_bool(yes: bool) -> SqlValue {
+    if postgres_result_dialect() {
+        SqlValue::Text(Arc::from(if yes { "t" } else { "f" }))
+    } else {
+        SqlValue::Integer(if yes { 1 } else { 0 })
+    }
+}
+
 pub fn is_truthy(value: &SqlValue) -> bool {
     if postgres_result_dialect()
         && let OwnedValue::Text(text) = value

@@ -117,6 +117,9 @@ pub(crate) fn eval_scalar_function_values(
     name: &str,
     mut values: Vec<SqlValue>,
 ) -> Result<SqlValue> {
+    if let Some(result) = super::scalar::pg_session::try_eval(name, &values) {
+        return result;
+    }
     match name {
         "last_insert_rowid" => {
             if !values.is_empty() {

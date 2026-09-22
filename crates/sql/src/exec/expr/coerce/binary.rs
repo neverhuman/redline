@@ -23,13 +23,13 @@ pub(crate) fn eval_binary(
     };
     Ok(match op {
         BinaryOperator::And => match (truthy_opt(&left_value), truthy_opt(&right_value)) {
-            (Some(false), _) | (_, Some(false)) => SqlValue::Integer(0),
-            (Some(true), Some(true)) => SqlValue::Integer(1),
+            (Some(false), _) | (_, Some(false)) => crate::value::postgres_bool(false),
+            (Some(true), Some(true)) => crate::value::postgres_bool(true),
             _ => SqlValue::Null,
         },
         BinaryOperator::Or => match (truthy_opt(&left_value), truthy_opt(&right_value)) {
-            (Some(true), _) | (_, Some(true)) => SqlValue::Integer(1),
-            (Some(false), Some(false)) => SqlValue::Integer(0),
+            (Some(true), _) | (_, Some(true)) => crate::value::postgres_bool(true),
+            (Some(false), Some(false)) => crate::value::postgres_bool(false),
             _ => SqlValue::Null,
         },
         BinaryOperator::Plus => {
@@ -360,7 +360,12 @@ pub(crate) fn pg_regex_result(
         (text.to_string(), pattern_str.to_string())
     };
     let matched = crate::regexp::regex_match(&effective_text, &effective_pattern)?;
-    Ok(SqlValue::Integer(if matched ^ negated { 1 } else { 0 }))
+    let yes = matched ^ negated;
+    if crate::value::postgres_result_dialect() {
+        Ok(SqlValue::Text(Arc::from(if yes { "t" } else { "f" })))
+    } else {
+        Ok(SqlValue::Integer(if yes { 1 } else { 0 }))
+    }
 }
 
 /// `'2025-01-02'::timestamp - '2025-01-01'::timestamp` is the text `1 day`.

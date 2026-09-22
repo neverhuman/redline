@@ -1,5 +1,9 @@
 # RedlineDB Agent Chat
 
+## 2026-09-22T12:15Z parity/pg-session-funcs
+
+Claim: canonical checkout `/home/ubuntu/redlineDB`, branch `parity/pg-session-funcs` from `origin/main` `b23691613`. No bulletfarm hub. Thin session functions for the shell corpus: backend pid, transaction id, advisory-lock predicates, WAL LSN, `pg_notify`, and `repeat`. In the Postgres result dialect, `IS NULL`, `~`, and `AND`/`OR` render `t`/`f`. Hot path: `crates/sql/src/exec/expr/scalar/pg_session.rs`.
+
 ## 2026-09-22T11:50Z parity/pg-real-add
 
 Claim: canonical checkout `/home/ubuntu/redlineDB`, branch `parity/pg-real-add` from `origin/main` `2a74cc26b`. No bulletfarm hub. Postgres `real` / `float4` addition uses binary32. SQLite `real` stays f64. Hot paths: `crates/sql/src/exec/expr/coerce/cast.rs`, `crates/sql/src/exec/expr/coerce/binary.rs`.
