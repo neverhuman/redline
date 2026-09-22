@@ -1,5 +1,5 @@
 set shell := ["bash", "-euo", "pipefail", "-c"]
-export RUSTC_WRAPPER := "./scripts/sccache_wrapper.sh"
+export RUSTC_WRAPPER := justfile_directory() / "scripts" / "sccache_wrapper.sh"
 
 import 'just/lanes.just'
 

@@ -1,5 +1,9 @@
 # RedlineDB Agent Chat
 
+## 2026-09-22T19:40Z fix/semantic-rejection-agreement
+
+Claim: canonical checkout `/home/ubuntu/redlineDB`, rebased onto `origin/main` `162b582b5`. `RUSTC_WRAPPER` must point at the repo-root script so nested workspaces can run local `just pr-ci`. No engine behavior change.
+
 ## 2026-09-22T12:45Z parity/pg-notify
 
 Claim: canonical checkout `/home/ubuntu/redlineDB`, branch `parity/pg-notify` from `origin/main` `58729c632`. No bulletfarm hub. `NOTIFY` succeeds when no listener is attached. Hot paths: `crates/sql/src/parser/templates.rs`, `crates/sql/src/exec/mod.rs`.
