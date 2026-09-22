@@ -168,10 +168,16 @@ fn skip_words<'a>(mut rest: &'a str, words: &[&str]) -> &'a str {
 
 fn strip_prefix_ci<'a>(sql: &'a str, prefix: &str) -> Option<&'a str> {
     let sql = sql.trim_start();
-    if sql.len() < prefix.len() || !sql[..prefix.len()].eq_ignore_ascii_case(prefix) {
+    let prefix_len = prefix.len();
+    // Prefixes are ASCII. A multibyte character can sit on that byte index,
+    // and slicing there panics. Those statements are not materialized views.
+    if prefix_len > sql.len() || !sql.is_char_boundary(prefix_len) {
         return None;
     }
-    let rest = &sql[prefix.len()..];
+    if !sql[..prefix_len].eq_ignore_ascii_case(prefix) {
+        return None;
+    }
+    let rest = &sql[prefix_len..];
     if rest.is_empty() || rest.as_bytes()[0].is_ascii_whitespace() {
         Some(rest)
     } else {
