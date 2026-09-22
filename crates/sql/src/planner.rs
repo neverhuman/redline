@@ -364,6 +364,7 @@ pub(crate) fn build_plan(
             simple_node(PhysicalKind::Constant, "DROP COLLATION".to_owned())
         }
         PreparedKind::ShowVariable { .. } => simple_node(PhysicalKind::Constant, "SHOW".to_owned()),
+        PreparedKind::Notify => simple_node(PhysicalKind::Constant, "NOTIFY".to_owned()),
         PreparedKind::AlterIndex { .. } => {
             simple_node(PhysicalKind::Constant, "ALTER INDEX".to_owned())
         }

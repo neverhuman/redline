@@ -179,6 +179,9 @@ pub enum PreparedKind {
     ShowVariable {
         name: Arc<str>,
     },
+    /// `NOTIFY channel [, payload]`. No listener is attached, so this is a
+    /// successful no-op. `pg_notify` still returns a non-null value.
+    Notify,
     /// Track J — `ALTER INDEX <name> RENAME TO <new_name>`.
     AlterIndex {
         old_name: Arc<str>,

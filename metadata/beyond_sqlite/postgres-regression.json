@@ -1,7 +1,7 @@
 {
   "schema_version": "redline-postgres-regression-v1",
   "previous_source_commit": "2b55087b3026fb90fe3bd6174460e43bd5e9dbdc",
-  "reason": "session functions and repeat passed. 106 failures remain.",
+  "reason": "NOTIFY with no listener is a successful no-op. 103 failures remain.",
   "corpus_sha256": "90a0d6242f6153dd4d2099c0f58d0c9b96cc3a6dd02cbc85c935d8204d8aedd0",
   "reference_settings": "160015|C|C|UTC",
   "image_digest": "sha256:efdf07c2f9d4df592783dcc8ea5f6db02efbf5f6452b527225ff5e58364570e9",
@@ -102,8 +102,6 @@
     "BEYOND-CASE-20428",
     "BEYOND-CASE-20429",
     "BEYOND-CASE-20430",
-    "BEYOND-CASE-20431",
-    "BEYOND-CASE-20432",
     "BEYOND-CASE-20433",
     "BEYOND-CASE-20434",
     "BEYOND-CASE-20437",
@@ -111,7 +109,6 @@
     "BEYOND-CASE-20439",
     "BEYOND-CASE-20440",
     "BEYOND-CASE-20441",
-    "BEYOND-CASE-20442",
-    "BEYOND-CASE-20443"
+    "BEYOND-CASE-20442"
   ]
 }

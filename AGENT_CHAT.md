@@ -1,5 +1,9 @@
 # RedlineDB Agent Chat
 
+## 2026-09-22T12:45Z parity/pg-notify
+
+Claim: canonical checkout `/home/ubuntu/redlineDB`, branch `parity/pg-notify` from `origin/main` `58729c632`. No bulletfarm hub. `NOTIFY` succeeds when no listener is attached. Hot paths: `crates/sql/src/parser/templates.rs`, `crates/sql/src/exec/mod.rs`.
+
 ## 2026-09-22T12:15Z parity/pg-session-funcs
 
 Claim: canonical checkout `/home/ubuntu/redlineDB`, branch `parity/pg-session-funcs` from `origin/main` `b23691613`. No bulletfarm hub. Thin session functions for the shell corpus: backend pid, transaction id, advisory-lock predicates, WAL LSN, `pg_notify`, and `repeat`. In the Postgres result dialect, `IS NULL`, `~`, and `AND`/`OR` render `t`/`f`. Hot path: `crates/sql/src/exec/expr/scalar/pg_session.rs`.

@@ -838,6 +838,10 @@ pub fn execute_prepared(
         }
         // Track J: SHOW <name>. Returns a single-row result with the recalled
         // session value for `transaction_isolation`; other names yield "".
+        PreparedKind::Notify => Ok(ExecutionResult {
+            runtime: RuntimeState::Done,
+            affected_rows: 0,
+        }),
         PreparedKind::ShowVariable { name } => {
             let value = if name.eq_ignore_ascii_case("transaction_isolation") {
                 let iso =
@@ -1020,7 +1024,8 @@ fn template_writes(kind: &PreparedKind) -> bool {
         | PreparedKind::SetSearchPath { .. }
         | PreparedKind::CreateCollation { .. }
         | PreparedKind::DropCollation { .. }
-        | PreparedKind::ShowVariable { .. } => false,
+        | PreparedKind::ShowVariable { .. }
+        | PreparedKind::Notify => false,
         PreparedKind::CreateTable(_)
         | PreparedKind::CreateTempTable(_)
         | PreparedKind::CreateTableAsSelect(_)

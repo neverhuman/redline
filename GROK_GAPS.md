@@ -35,7 +35,9 @@ scale in that dialect (`15.0000000000000000`). The beyond gate is then
 gate is then 149 passed, 116 failed, 0 skipped, and `20005` left the allowlist.
 Session functions (`pg_backend_pid`, `txid_current`, `pg_current_xact_id`,
 advisory lock, WAL LSN, `pg_notify`, `repeat`) then leave ten more cases.
-The beyond gate is 159 passed, 106 failed, 0 skipped.
+The beyond gate is 159 passed, 106 failed, 0 skipped. `NOTIFY` with no
+listener is a successful no-op. The beyond gate is then 162 passed, 103 failed,
+0 skipped, and `20431`, `20432`, and `20443` left the allowlist.
 
 ## Governing decisions — 2026-09-18
 
