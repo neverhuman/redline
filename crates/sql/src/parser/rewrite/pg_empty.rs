@@ -32,14 +32,18 @@ pub(crate) fn rewrite_empty_pg_catalog(sql: &str) -> Option<String> {
         if !from_table(&out.to_ascii_lowercase(), name) {
             continue;
         }
-        let subq = format!("(SELECT NULL AS {column} WHERE 0) AS {name}");
+        let mut subq = String::from("(SELECT NULL AS ");
+        subq.push_str(column);
+        subq.push_str(" WHERE 0) AS ");
+        subq.push_str(name);
         out = replace_table_ident(&out, name, &subq);
     }
     if out == sql { None } else { Some(out) }
 }
 
 fn from_table(lower: &str, name: &str) -> bool {
-    let needle = format!(" from {name}");
+    let mut needle = String::from(" from ");
+    needle.push_str(name);
     let bytes = lower.as_bytes();
     let needle_bytes = needle.as_bytes();
     let mut i = 0usize;

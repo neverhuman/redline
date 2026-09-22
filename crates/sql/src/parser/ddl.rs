@@ -227,7 +227,7 @@ fn bind_create_table_as_select(
     Ok(select_template)
 }
 
-fn build_ctas_columns(select: &SelectPlan) -> Result<Vec<ColumnSpec>> {
+pub(crate) fn build_ctas_columns(select: &SelectPlan) -> Result<Vec<ColumnSpec>> {
     let names = select_plan_output_names(select);
     let affinities = ctas_projection_affinities(select);
     if names.len() != affinities.len() {

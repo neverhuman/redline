@@ -135,4 +135,16 @@ fn materialized_views_snapshot_and_refresh() {
         rows(&conn, "SELECT count(*) FROM mv_new"),
         vec!["4".to_owned()]
     );
+
+    conn.execute("CREATE TABLE keep (id int)").expect("keep");
+    conn.execute("INSERT INTO keep VALUES (1)")
+        .expect("keep row");
+    let err = conn
+        .execute("CREATE MATERIALIZED VIEW evil AS SELECT 1); DROP TABLE keep; --")
+        .expect_err("query text is not spliced into another statement");
+    assert!(
+        err.to_string().contains("SELECT") || err.to_string().contains("parse"),
+        "{err}"
+    );
+    assert_eq!(rows(&conn, "SELECT id FROM keep"), vec!["1".to_owned()]);
 }

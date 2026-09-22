@@ -6,19 +6,49 @@
 
 use std::collections::BTreeMap;
 
+use std::sync::Arc;
+
+use redlinedb_kernel::catalog::{CreateTableSpec, DbName};
+
 use crate::connection::Connection;
 use crate::error::{Error, Result};
-use crate::exec::{execute_prepared, with_session_reentrant};
-use crate::parser::{parse_prepared_template, replace_table_ident};
+use crate::exec::{execute_prepared, materialize_prepared_rows, with_session_reentrant};
+use crate::parser::{build_ctas_columns, parse_prepared_template, replace_table_ident};
 use crate::session::{MatViewDef, SessionState};
-use crate::value::postgres_result_dialect;
+use crate::statement::{CreateTableAsSelectSpec, PreparedKind, PreparedTemplate};
+use crate::value::{SqlValue, postgres_result_dialect};
 
 pub(crate) fn create(conn: &Connection, name: &str, query: &str, populated: bool) -> Result<()> {
-    let folded = name.to_ascii_lowercase();
-    let shape = format!("CREATE TABLE {folded} AS SELECT * FROM ({query}) AS _mv WHERE 0");
-    run_sql(conn, &shape)?;
+    let folded = require_ident(name)?;
+    let select = select_template(conn, query)?;
+    let PreparedKind::Select(plan) = select.kind.clone() else {
+        return Err(not_select());
+    };
     if populated {
-        run_sql(conn, &format!("INSERT INTO {folded} {query}"))?;
+        let columns = build_ctas_columns(&plan)?;
+        execute_prepared(
+            conn,
+            &table_template(
+                conn,
+                query,
+                PreparedKind::CreateTableAsSelect(CreateTableAsSelectSpec {
+                    table: table_spec(&folded, columns),
+                    select: Some(plan),
+                }),
+            ),
+            &[],
+        )?;
+    } else {
+        let columns = build_ctas_columns(&plan)?;
+        execute_prepared(
+            conn,
+            &table_template(
+                conn,
+                query,
+                PreparedKind::CreateTable(table_spec(&folded, columns)),
+            ),
+            &[],
+        )?;
     }
     with_session_reentrant(conn, |session| {
         session.pg_matviews.insert(
@@ -39,7 +69,7 @@ pub(crate) fn refresh(
     concurrently: bool,
     no_data: bool,
 ) -> Result<()> {
-    let folded = name.to_ascii_lowercase();
+    let folded = require_ident(name)?;
     let query = with_session_reentrant(conn, |session| {
         session
             .pg_matviews
@@ -52,9 +82,11 @@ pub(crate) fn refresh(
             "cannot refresh materialized view \"{folded}\" concurrently"
         )));
     }
-    run_sql(conn, &format!("DELETE FROM {folded}"))?;
+    delete_all(conn, &folded)?;
     if !no_data {
-        run_sql(conn, &format!("INSERT INTO {folded} {query}"))?;
+        let select = select_template(conn, &query)?;
+        let rows = materialize_prepared_rows(conn, &select, &[])?;
+        insert_rows(conn, &folded, &rows)?;
     }
     with_session_reentrant(conn, |session| {
         if let Some(view) = session.pg_matviews.get_mut(&folded) {
@@ -66,7 +98,7 @@ pub(crate) fn refresh(
 }
 
 pub(crate) fn drop(conn: &Connection, name: &str, if_exists: bool, cascade: bool) -> Result<()> {
-    let folded = name.to_ascii_lowercase();
+    let folded = require_ident(name)?;
     let targets = with_session_reentrant(conn, |session| {
         if !session.pg_matviews.contains_key(&folded) {
             return if if_exists {
@@ -82,7 +114,9 @@ pub(crate) fn drop(conn: &Connection, name: &str, if_exists: bool, cascade: bool
         })
     })?;
     for target in targets {
-        run_sql(conn, &format!("DROP TABLE IF EXISTS {target}"))?;
+        let mut sql = String::from("DROP TABLE IF EXISTS ");
+        sql.push_str(&target);
+        run_sql(conn, &sql)?;
         with_session_reentrant(conn, |session| {
             session.pg_matviews.remove(&target);
             Ok(())
@@ -92,14 +126,18 @@ pub(crate) fn drop(conn: &Connection, name: &str, if_exists: bool, cascade: bool
 }
 
 pub(crate) fn rename(conn: &Connection, from: &str, to: &str) -> Result<()> {
-    let from = from.to_ascii_lowercase();
-    let to = to.to_ascii_lowercase();
+    let from = require_ident(from)?;
+    let to = require_ident(to)?;
     let exists =
         with_session_reentrant(conn, |session| Ok(session.pg_matviews.contains_key(&from)))?;
     if !exists {
         return Err(missing(&from));
     }
-    run_sql(conn, &format!("ALTER TABLE {from} RENAME TO {to}"))?;
+    let mut sql = String::from("ALTER TABLE ");
+    sql.push_str(&from);
+    sql.push_str(" RENAME TO ");
+    sql.push_str(&to);
+    run_sql(conn, &sql)?;
     with_session_reentrant(conn, |session| {
         if let Some(view) = session.pg_matviews.remove(&from) {
             session.pg_matviews.insert(to, view);
@@ -204,7 +242,11 @@ fn matview_source(views: &[(String, bool)]) -> String {
             sql.push_str(", ");
         }
         let flag = if *populated { "t" } else { "f" };
-        sql.push_str(&format!("('{}', '{flag}')", name.replace('\'', "''")));
+        sql.push_str("('");
+        sql.push_str(&name.replace('\'', "''"));
+        sql.push_str("', '");
+        sql.push_str(flag);
+        sql.push_str("')");
     }
     sql.push_str(") AS pg_matviews(matviewname, ispopulated)");
     sql
@@ -219,11 +261,11 @@ fn index_source(indexes: &[(String, String)]) -> String {
         if idx > 0 {
             sql.push_str(", ");
         }
-        sql.push_str(&format!(
-            "('{}', '{}')",
-            index.replace('\'', "''"),
-            table.replace('\'', "''")
-        ));
+        sql.push_str("('");
+        sql.push_str(&index.replace('\'', "''"));
+        sql.push_str("', '");
+        sql.push_str(&table.replace('\'', "''"));
+        sql.push_str("')");
     }
     sql.push_str(") AS pg_indexes(indexname, tablename)");
     sql
@@ -278,7 +320,8 @@ fn mentions(query: &str, name: &str) -> bool {
 }
 
 fn from_table(lower: &str, name: &str) -> bool {
-    let needle = format!(" from {name}");
+    let mut needle = String::from(" from ");
+    needle.push_str(name);
     let bytes = lower.as_bytes();
     let needle_bytes = needle.as_bytes();
     let mut i = 0usize;
@@ -300,6 +343,95 @@ fn is_ident_byte(b: u8) -> bool {
 
 fn missing(name: &str) -> Error {
     Error::UnsupportedSql(format!("materialized view \"{name}\" does not exist"))
+}
+
+fn not_select() -> Error {
+    Error::UnsupportedSql("materialized view query must be a single SELECT".to_owned())
+}
+
+fn require_ident(name: &str) -> Result<String> {
+    let folded = name.to_ascii_lowercase();
+    let bytes = folded.as_bytes();
+    let ok = !bytes.is_empty()
+        && (bytes[0].is_ascii_alphabetic() || bytes[0] == b'_')
+        && bytes
+            .iter()
+            .all(|byte| byte.is_ascii_alphanumeric() || *byte == b'_');
+    if !ok {
+        return Err(Error::UnsupportedSql(
+            "materialized view name must be a simple identifier".to_owned(),
+        ));
+    }
+    Ok(folded)
+}
+
+fn select_template(conn: &Connection, query: &str) -> Result<PreparedTemplate> {
+    let template = parse_prepared_template(conn, query)?;
+    if !matches!(template.kind, PreparedKind::Select(_)) {
+        return Err(not_select());
+    }
+    Ok(template)
+}
+
+fn table_spec(name: &str, columns: Vec<redlinedb_kernel::catalog::ColumnSpec>) -> CreateTableSpec {
+    CreateTableSpec {
+        schema: None,
+        name: DbName::new(name),
+        if_not_exists: false,
+        columns,
+        constraints: Vec::new(),
+        strict: false,
+        without_rowid: false,
+        normalized_sql: None,
+    }
+}
+
+fn table_template(conn: &Connection, query: &str, kind: PreparedKind) -> PreparedTemplate {
+    PreparedTemplate {
+        sql: Arc::from(query),
+        schema_epoch: conn.schema_epoch(),
+        stats_epoch: 0,
+        optimizer_hash: 0,
+        param_layout: crate::statement::ParamLayout::default(),
+        output_columns: Arc::from([]),
+        readonly: false,
+        kind,
+    }
+}
+
+fn delete_all(conn: &Connection, table: &str) -> Result<()> {
+    let table = require_ident(table)?;
+    let mut sql = String::from("DELETE FROM ");
+    sql.push_str(&table);
+    run_sql(conn, &sql)
+}
+
+fn insert_rows(conn: &Connection, table: &str, rows: &[Vec<SqlValue>]) -> Result<()> {
+    let table = require_ident(table)?;
+    if rows.is_empty() {
+        return Ok(());
+    }
+    let width = rows[0].len();
+    let mut sql = String::from("INSERT INTO ");
+    sql.push_str(&table);
+    sql.push_str(" VALUES (");
+    for idx in 0..width {
+        if idx > 0 {
+            sql.push(',');
+        }
+        sql.push('?');
+    }
+    sql.push(')');
+    let template = parse_prepared_template(conn, &sql)?;
+    for row in rows {
+        let mut bindings = Vec::with_capacity(width + 1);
+        bindings.push(None);
+        for value in row {
+            bindings.push(Some(value.clone()));
+        }
+        execute_prepared(conn, &template, &bindings)?;
+    }
+    Ok(())
 }
 
 fn run_sql(conn: &Connection, sql: &str) -> Result<()> {
