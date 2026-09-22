@@ -148,7 +148,7 @@ pub fn run(config: RunConfig) -> Result<RunSummary> {
             Err(err) => append_skip(
                 &mut summary,
                 &case,
-                &format!("RQL phase-1 rewrite unsupported: {err}"),
+                &format!("RQL phase-1 rewrite unsupported: {err:#}"),
                 &reference,
                 &target,
                 sqlite_version.clone(),
