@@ -62,10 +62,10 @@ mod rewrite;
 #[allow(unused_imports)]
 pub(crate) use rewrite::{
     OnConflictSegment, collect_on_conflict_segments, contains_ignore_ascii_case,
-    dml_order_limit_rewrite_enabled, find_ignore_ascii_case, rewrite_pg_catalog_query,
-    rewrite_sqlite_compat_syntax, set_dml_order_limit_rewrite_enabled, sql_gap_is_trivia,
-    starts_with_create_virtual_table, strip_ignore_ascii_case_prefix, strip_on_conflict_extras,
-    strip_pg_cast_suffixes, strip_registered_pg_schema_prefixes,
+    dml_order_limit_rewrite_enabled, find_ignore_ascii_case, rewrite_empty_pg_catalog,
+    rewrite_pg_catalog_query, rewrite_sqlite_compat_syntax, set_dml_order_limit_rewrite_enabled,
+    sql_gap_is_trivia, starts_with_create_virtual_table, strip_ignore_ascii_case_prefix,
+    strip_on_conflict_extras, strip_pg_cast_suffixes, strip_registered_pg_schema_prefixes,
     try_parse_dml_order_limit_rewrite_pragma,
 };
 
@@ -129,6 +129,9 @@ fn parse_prepared_template_impl(conn: &Connection, sql: &str) -> Result<Prepared
     // session-snapshotted VALUES list so the introspection probes that the
     // beyond-pg parity gates use see the expected names back.
     if let Some(rewritten) = rewrite_pg_catalog_query(conn, sql) {
+        return parse_prepared_template_impl(conn, &rewritten);
+    }
+    if let Some(rewritten) = rewrite_empty_pg_catalog(sql) {
         return parse_prepared_template_impl(conn, &rewritten);
     }
     if let Some(rewritten) = crate::listen::rewrite_pg_listening_channels(conn, sql) {

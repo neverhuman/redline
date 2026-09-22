@@ -4,6 +4,10 @@
 
 Claim: canonical checkout `/home/ubuntu/redlineDB`, rebased onto `origin/main` `162b582b5`. `RUSTC_WRAPPER` must point at the repo-root script so nested workspaces can run local `just pr-ci`. No engine behavior change.
 
+## 2026-09-22T15:25Z parity/pg-lateral
+
+Claim: canonical checkout `/home/ubuntu/redlineDB`, branch `parity/pg-lateral` at `714c75282`. No bulletfarm hub. Empty Postgres catalog reads (`pg_locks`, `pg_replication_slots`, `pg_stat_replication`, `pg_publication`, `pg_subscription`, `pg_publication_tables`, `pg_stat_wal_receiver`) return no rows. Hot path: `crates/sql/src/parser.rs`.
+
 ## 2026-09-22T15:10Z parity/pg-lateral
 
 Claim: canonical checkout `/home/ubuntu/redlineDB`, branch `parity/pg-lateral` at `b4f727169`. No bulletfarm hub. `LISTEN` / `UNLISTEN` track a session channel set that rolls back with the transaction, and `pg_listening_channels()` reads that set. `LISTEN ALL` stays an error. Hot paths: `crates/sql/src/parser/templates.rs`, `crates/sql/src/exec/mod.rs`, `crates/sql/src/connection/session.rs`.

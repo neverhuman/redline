@@ -4,6 +4,7 @@
 mod dml_limit;
 mod identity_opts;
 mod pg_ddl;
+mod pg_empty;
 mod pg_types;
 mod scan;
 mod sqlite_shape;
@@ -12,6 +13,7 @@ mod virtual_table;
 pub(crate) use dml_limit::*;
 pub(crate) use identity_opts::*;
 pub(crate) use pg_ddl::*;
+pub(crate) use pg_empty::*;
 pub(crate) use pg_types::*;
 pub(crate) use scan::*;
 pub(crate) use sqlite_shape::*;

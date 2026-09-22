@@ -45,7 +45,11 @@ reads it. Rollback drops a listen that has not committed. The beyond gate is
 then 169 passed, 96 failed, 0 skipped, and `20430`, `20433`, `20434`, `20437`,
 `20439`, and `20440` left the allowlist. `20438` (`LISTEN ALL`) still errors on
 both sides, so it stays listed until stderr is asserted. `20441` and `20442`
-need plpgsql.
+need plpgsql. Empty single-node catalogs (`pg_locks`, `pg_replication_slots`,
+`pg_stat_replication`, `pg_publication`, `pg_subscription`,
+`pg_publication_tables`, `pg_stat_wal_receiver`) return no rows. The beyond
+gate is then 177 passed, 88 failed, 0 skipped, and `20409`, `20419`, `20420`,
+`20421`, `20424`, `20426`, `20427`, and `20428` left the allowlist.
 
 ## Governing decisions — 2026-09-18
 
