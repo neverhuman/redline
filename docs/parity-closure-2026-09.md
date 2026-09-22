@@ -50,12 +50,19 @@ used.
 
 Measured: 8 failures against the local feature-rich build, **0** against the canonical one.
 
-**1a. The canonical prefix has no stamp.** `existing_shell_is_current()` requires
-`$prefix/.sqlite-reference-sha3`. Neither local prefix has one, so the next
-`just redline-testing-official` run rebuilds into `target/sqlite-reference/3.53.1/` and
-**silently overwrites the feature-rich build** that other evidence refers to. Fix: build the
-canonical reference into its own stamped prefix and make every lane resolve the binary
-through `build-reference.sh` rather than by path.
+**1a. The canonical prefix has no stamp — fixed.** `existing_shell_is_current()` requires
+`$prefix/.sqlite-reference-sha3`. Neither local prefix had one, so the next
+`just redline-testing-official` run would rebuild into `target/sqlite-reference/3.53.1/` and
+**silently overwrite the feature-rich build** that other evidence refers to.
+`build-reference.sh` now refuses to overwrite a prefix holding an unstamped `sqlite3`
+(`REDLINEDB_SQLITE_REFERENCE_FORCE=1` overrides), so the destruction is loud instead of silent.
+
+Fixing that surfaced a second defect: `sqlite_cflags` was defined **after**
+`existing_shell_is_current` ran, so the stamp comparison read an empty flag line and never
+matched the stamp written at the end of a build. **The cache never hit** — every parity run
+rebuilt SQLite from source, about 5.5 minutes of CI on every PR (12:39:33 → 12:45:11 in the
+run for #90). Lifting the flag arrays above the comparison takes a warm invocation from
+5.5 minutes to **0.015 s**, and a changed flag still invalidates correctly.
 
 **1b. `PRAGMA compile_options` lies, and it is upstream's lie, not ours.** The canonical
 build reports `ENABLE_UPDATE_DELETE_LIMIT` in `PRAGMA compile_options`, and then:
@@ -68,8 +75,12 @@ Parse error near line 1: near "ORDER": syntax error
 The autoconf amalgamation ships a **pre-generated `parse.c`**. Defining
 `SQLITE_ENABLE_UPDATE_DELETE_LIMIT` at compile time sets the reported option but cannot add
 the grammar, which lemon must emit from `parse.y`. Any conclusion drawn from
-`compile_options` about the reference's *grammar* is unsound. Record this in
-`docs/sqlite-parity.md` so it is not rediscovered a third time.
+`compile_options` about the reference's *grammar* is unsound.
+
+This is **already recorded**, and more precisely than the paragraph above —
+`docs/sqlite-parity.md:16-23` names the missing `SQLITE_UDL_CAPABLE_PARSER` and cites cases
+00219 and 00220. No further documentation is needed; read that section before re-deriving
+this.
 
 **Consequence for `crates/sql/src/parser/rewrite/dml_limit.rs`:** the 403-line rewrite
 staying default-OFF is **correct**, and `json_dispatch.rs:216-219` rejecting `soundex()`
@@ -307,8 +318,8 @@ Ordered so that nothing is measured against a surface that later moves.
 
 | # | item | § | size | closes |
 |---:|---|---|---|---|
-| 1 | Pin and stamp the canonical reference; resolve it via `build-reference.sh` everywhere | 1a | S | protects all 2445 |
-| 2 | Record the `compile_options`-vs-grammar trap in `docs/sqlite-parity.md` | 1b | XS | — |
+| 1 | ~~Guard the unstamped prefix; fix the never-hitting build cache~~ | 1a | done | protects all 2445 |
+| 2 | ~~Record the `compile_options`-vs-grammar trap~~ — already at `docs/sqlite-parity.md:16-23` | 1b | done | — |
 | 3 | Summary/provenance headline: `target_*` first, `in_scope_*`, `source_commit`, real duration | 4a,4b | S | — |
 | 4 | Runner reads `skip-list.toml`; fail when a deferred case passes; retire the 29 stale | 2d | S | 29 reclassified |
 | 5 | `DISTINCT ON` requires `ORDER BY` | 2c | S | 1 (correctness) |

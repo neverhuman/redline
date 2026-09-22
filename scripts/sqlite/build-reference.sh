@@ -24,6 +24,29 @@ archive_digest() {
   openssl dgst -sha3-256 "$1" | awk '{print $2}'
 }
 
+sqlite_cflags=(
+  -O2
+  -DSQLITE_ENABLE_BYTECODE_VTAB
+  -DSQLITE_ENABLE_COLUMN_METADATA
+  -DSQLITE_ENABLE_DBPAGE_VTAB
+  -DSQLITE_ENABLE_DBSTAT_VTAB
+  -DSQLITE_ENABLE_DESERIALIZE
+  -DSQLITE_ENABLE_EXPLAIN_COMMENTS
+  -DSQLITE_ENABLE_FTS5
+  -DSQLITE_ENABLE_MATH_FUNCTIONS
+  -DSQLITE_ENABLE_OFFSET_SQL_FUNC
+  -DSQLITE_ENABLE_PERCENTILE
+  -DSQLITE_ENABLE_PREUPDATE_HOOK
+  -DSQLITE_ENABLE_RTREE
+  -DSQLITE_ENABLE_VFSTRACE
+  -DSQLITE_ENABLE_SESSION
+  -DSQLITE_ENABLE_STMT_SCANSTATUS
+  -DSQLITE_ENABLE_UPDATE_DELETE_LIMIT
+  -DSQLITE_ENABLE_UNKNOWN_SQL_FUNCTION
+  -DSQLITE_HAVE_ZLIB=1
+)
+sqlite_ldflags=(-lz -lm -ldl -lpthread)
+
 reference_stamp_text() {
   printf '%s\n%s\n' "$archive_sha3" "${sqlite_cflags[*]}"
 }
@@ -65,6 +88,23 @@ if existing_shell_is_current; then
   exit 0
 fi
 
+# A shell with no stamp beside it was not built by this script, so its compile
+# flags are unknown -- and the flags decide the verdict of cases 00166, 00219,
+# 00220 and 11437-11439. Rebuilding into the prefix would overwrite it in
+# place, silently retargeting whoever is using it as an oracle. Stop instead.
+if [ -e "$bin" ] && [ ! -f "$stamp" ]; then
+  printf '%s exists with no %s beside it, so this script did not build it and\n' \
+    "$bin" "$(basename "$stamp")" >&2
+  printf 'its compile flags are unknown. Refusing to overwrite it.\n\n' >&2
+  printf 'Move it aside, or build elsewhere with\n' >&2
+  printf '  REDLINEDB_SQLITE_REFERENCE_PREFIX=<dir> %s\n\n' "$0" >&2
+  printf 'Set REDLINEDB_SQLITE_REFERENCE_FORCE=1 to overwrite it anyway.\n' >&2
+  if [ "${REDLINEDB_SQLITE_REFERENCE_FORCE:-0}" != "1" ]; then
+    exit 1
+  fi
+  printf 'REDLINEDB_SQLITE_REFERENCE_FORCE=1 set; overwriting.\n' >&2
+fi
+
 need_tool awk
 need_tool cc
 need_tool curl
@@ -96,28 +136,6 @@ rm -rf "$source_dir" "$build_dir"
 tar -xzf "$archive_path" -C "$source_parent"
 mkdir -p "$build_dir"
 
-sqlite_cflags=(
-  -O2
-  -DSQLITE_ENABLE_BYTECODE_VTAB
-  -DSQLITE_ENABLE_COLUMN_METADATA
-  -DSQLITE_ENABLE_DBPAGE_VTAB
-  -DSQLITE_ENABLE_DBSTAT_VTAB
-  -DSQLITE_ENABLE_DESERIALIZE
-  -DSQLITE_ENABLE_EXPLAIN_COMMENTS
-  -DSQLITE_ENABLE_FTS5
-  -DSQLITE_ENABLE_MATH_FUNCTIONS
-  -DSQLITE_ENABLE_OFFSET_SQL_FUNC
-  -DSQLITE_ENABLE_PERCENTILE
-  -DSQLITE_ENABLE_PREUPDATE_HOOK
-  -DSQLITE_ENABLE_RTREE
-  -DSQLITE_ENABLE_VFSTRACE
-  -DSQLITE_ENABLE_SESSION
-  -DSQLITE_ENABLE_STMT_SCANSTATUS
-  -DSQLITE_ENABLE_UPDATE_DELETE_LIMIT
-  -DSQLITE_ENABLE_UNKNOWN_SQL_FUNCTION
-  -DSQLITE_HAVE_ZLIB=1
-)
-sqlite_ldflags=(-lz -lm -ldl -lpthread)
 
 jobs="${REDLINEDB_SQLITE_REFERENCE_JOBS:-$(getconf _NPROCESSORS_ONLN 2>/dev/null || printf '2')}"
 
