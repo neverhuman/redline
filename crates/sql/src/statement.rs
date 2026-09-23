@@ -253,6 +253,25 @@ pub enum PreparedKind {
         name: Arc<str>,
         if_exists: bool,
     },
+    /// `CREATE FUNCTION` or `CREATE PROCEDURE` ... `LANGUAGE plpgsql`.
+    CreatePgPl {
+        name: Arc<str>,
+        procedure: bool,
+        args: Vec<crate::session::PgPlArg>,
+        strict: bool,
+        returns_set: bool,
+        returns_trigger: bool,
+        body: Arc<str>,
+    },
+    /// `DO $$ ... $$` anonymous plpgsql block.
+    PgPlDo {
+        body: Arc<str>,
+    },
+    /// `CREATE TRIGGER ... EXECUTE FUNCTION`.
+    CreatePgPlTrigger {
+        table: Arc<str>,
+        function: Arc<str>,
+    },
     /// Track J — `ALTER INDEX <name> RENAME TO <new_name>`.
     AlterIndex {
         old_name: Arc<str>,

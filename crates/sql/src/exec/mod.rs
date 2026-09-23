@@ -988,6 +988,34 @@ pub fn execute_prepared(
                 affected_rows: 0,
             })
         }
+        PreparedKind::CreatePgPl {
+            name,
+            procedure,
+            args,
+            strict,
+            returns_set,
+            returns_trigger,
+            body,
+        } => {
+            crate::pg_pl::install(
+                conn,
+                name,
+                *procedure,
+                args,
+                *strict,
+                *returns_set,
+                *returns_trigger,
+                body,
+            )?;
+            Ok(ExecutionResult {
+                runtime: RuntimeState::Done,
+                affected_rows: 0,
+            })
+        }
+        PreparedKind::PgPlDo { body } => crate::pg_pl::exec_do_done(conn, body),
+        PreparedKind::CreatePgPlTrigger { table, function } => {
+            crate::pg_pl::add_trigger_done(conn, table, function)
+        }
         PreparedKind::ShowVariable { name } => {
             let value = if name.eq_ignore_ascii_case("transaction_isolation") {
                 let iso =
@@ -1185,7 +1213,10 @@ fn template_writes(kind: &PreparedKind) -> bool {
         | PreparedKind::DropMatView { .. }
         | PreparedKind::RenameMatView { .. }
         | PreparedKind::CreateSqlFn { .. }
-        | PreparedKind::DropSqlFn { .. } => true,
+        | PreparedKind::DropSqlFn { .. }
+        | PreparedKind::CreatePgPl { .. }
+        | PreparedKind::PgPlDo { .. }
+        | PreparedKind::CreatePgPlTrigger { .. } => true,
         PreparedKind::CreateTable(_)
         | PreparedKind::CreateTempTable(_)
         | PreparedKind::CreateTableAsSelect(_)

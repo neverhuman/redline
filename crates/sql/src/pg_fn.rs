@@ -19,7 +19,9 @@ pub(crate) fn create(conn: &Connection, name: &str, def: SqlFnDef) -> Result<()>
 pub(crate) fn drop(conn: &Connection, name: &str, if_exists: bool) -> Result<()> {
     let name = name.to_ascii_lowercase();
     with_session_reentrant(conn, |session| {
-        if session.pg_sql_fns.remove(&name).is_none() && !if_exists {
+        let removed_sql = session.pg_sql_fns.remove(&name).is_some();
+        let removed_pl = session.pg_pl_fns.remove(&name).is_some();
+        if !removed_sql && !removed_pl && !if_exists {
             return Err(Error::UnsupportedSql(format!(
                 "function \"{name}\" does not exist"
             )));

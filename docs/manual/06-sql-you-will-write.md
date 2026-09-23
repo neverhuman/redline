@@ -36,7 +36,7 @@ In the Postgres dialect, `schema.table` is one identifier. Creating `auth.users`
 These are the ones that look portable and are not, on this commit:
 
 - `CREATE VIRTUAL TABLE ... USING fts5` (and `rtree`, and `dbstat`)
-- `LANGUAGE plpgsql` and `DO $$ ... $$` blocks
+- plpgsql outside the shapes in [Postgres coverage](05-postgres-coverage.md), including `RAISE EXCEPTION`
 - `CREATE EXTENSION vector`
 - `UPDATE ... ORDER BY ... LIMIT` and the `DELETE` form of the same
 - `soundex()`

@@ -376,6 +376,7 @@ impl Connection {
             if session.pg_matviews_tx_snapshot.is_none() {
                 crate::matview::snapshot_tx(&mut session);
                 crate::pg_fn::snapshot_tx(&mut session);
+                crate::pg_pl::snapshot_tx(&mut session);
             }
             true
         } else {
@@ -463,6 +464,7 @@ impl Connection {
             crate::listen::restore_tx_keep(&mut session);
             crate::matview::restore_tx_keep(&mut session);
             crate::pg_fn::restore_tx_keep(&mut session);
+            crate::pg_pl::restore_tx_keep(&mut session);
             session.sqlite_sequences_dirty.clear();
             (
                 journal_prefix,
@@ -527,6 +529,7 @@ impl Connection {
         crate::listen::snapshot_tx(&mut session);
         crate::matview::snapshot_tx(&mut session);
         crate::pg_fn::snapshot_tx(&mut session);
+        crate::pg_pl::snapshot_tx(&mut session);
         session.sqlite_sequences_dirty.clear();
         session.tx = Some(tx);
         session.failed = false;
@@ -590,6 +593,7 @@ impl Connection {
                 crate::listen::restore_tx(&mut session);
                 crate::matview::restore_tx(&mut session);
                 crate::pg_fn::restore_tx(&mut session);
+                crate::pg_pl::restore_tx(&mut session);
                 return Err(err);
             }
             session.tx = Some(tx);
@@ -640,6 +644,7 @@ impl Connection {
                 crate::listen::restore_tx(&mut session);
                 crate::matview::restore_tx(&mut session);
                 crate::pg_fn::restore_tx(&mut session);
+                crate::pg_pl::restore_tx(&mut session);
                 session.sqlite_sequences_dirty.clear();
                 Err(Error::TransactionState("transaction rolled back"))
             }
@@ -653,6 +658,7 @@ impl Connection {
                 crate::listen::restore_tx(&mut session);
                 crate::matview::restore_tx(&mut session);
                 crate::pg_fn::restore_tx(&mut session);
+                crate::pg_pl::restore_tx(&mut session);
                 session.sqlite_sequences_dirty.clear();
                 Err(err.into())
             }
@@ -677,6 +683,7 @@ impl Connection {
         crate::listen::restore_tx(&mut session);
         crate::matview::restore_tx(&mut session);
         crate::pg_fn::restore_tx(&mut session);
+        crate::pg_pl::restore_tx(&mut session);
         session.sqlite_sequences_dirty.clear();
         // SQLite parity: `PRAGMA defer_foreign_keys` is auto-cleared
         // at the next transaction boundary.

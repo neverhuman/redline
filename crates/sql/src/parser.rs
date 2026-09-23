@@ -112,6 +112,14 @@ fn parse_prepared_template_impl(conn: &Connection, sql: &str) -> Result<Prepared
     if let Some(prepared) = matview_stmt::try_prepare(conn, sql)? {
         return Ok(prepared);
     }
+    if let Some(prepared) = crate::pg_pl::try_prepare(conn, sql)? {
+        return Ok(prepared);
+    }
+    if let Some(rewritten) = crate::pg_pl::rewrite_from(conn, sql) {
+        if rewritten != sql {
+            return parse_prepared_template_impl(conn, &rewritten);
+        }
+    }
     if let Some(prepared) = pg_fn_stmt::try_prepare(conn, sql)? {
         return Ok(prepared);
     }

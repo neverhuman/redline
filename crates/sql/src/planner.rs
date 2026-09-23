@@ -408,6 +408,13 @@ pub(crate) fn build_plan(
         PreparedKind::DropSqlFn { .. } => {
             simple_node(PhysicalKind::Constant, "DROP FUNCTION".to_owned())
         }
+        PreparedKind::CreatePgPl { .. } => {
+            simple_node(PhysicalKind::Constant, "CREATE FUNCTION".to_owned())
+        }
+        PreparedKind::PgPlDo { .. } => simple_node(PhysicalKind::Constant, "DO".to_owned()),
+        PreparedKind::CreatePgPlTrigger { .. } => {
+            simple_node(PhysicalKind::Constant, "CREATE TRIGGER".to_owned())
+        }
         PreparedKind::AlterIndex { .. } => {
             simple_node(PhysicalKind::Constant, "ALTER INDEX".to_owned())
         }

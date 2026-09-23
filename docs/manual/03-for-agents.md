@@ -34,7 +34,7 @@ The same idea applies to virtual tables. `CREATE VIRTUAL TABLE ... USING fts5` f
 
 Agents often emit Postgres even when the file is local. `REDLINEDB_RESULT_DIALECT=postgres` switches result rendering and the Postgres-oriented rewrites the shell corpus uses. Booleans come back as `t` and `f`. Schema-qualified names stay distinct, so `auth.users` and `public.users` do not collapse into one table. `CREATE TYPE ... AS ENUM` compares labels in declaration order. `CREATE DOMAIN ... CHECK (VALUE > n)` accepts a value that passes the check and rejects one that fails. `int4range` is half-open. `point` distance uses `<->`. `CREATE EXTENSION citext` compares text without case and preserves the spelling you stored.
 
-That flag does not turn the process into Postgres. `plpgsql` is still open. `CREATE EXTENSION vector` fails. `LISTEN` records a channel on this connection and restores the set on rollback. It is not a cross-process notification bus. The Postgres chapter is the list.
+That flag does not turn the process into Postgres. The corpus subset of `plpgsql` runs; `RAISE EXCEPTION` still fails, and so does `CREATE EXTENSION vector`. `LISTEN` records a channel on this connection and restores the set on rollback. It is not a cross-process notification bus. The Postgres chapter is the list.
 
 SQLite tests and SQLite scripts should leave the variable unset. The official SQLite lane does.
 
@@ -56,7 +56,7 @@ A useful system prompt for this database is short:
 
 - Prefer parameters, or prefer RQL, when the agent authors the query.
 - Leave `REDLINEDB_RESULT_DIALECT` unset for SQLite scripts. Set it to `postgres` only for Postgres scripts.
-- Do not claim FTS5, R-tree, `dbstat`, `plpgsql`, `vector`, or the Postgres wire protocol.
+- Do not claim FTS5, R-tree, `dbstat`, full `plpgsql`, `vector`, or the Postgres wire protocol.
 - Treat `Strict` as the default. Say so when you report that a commit succeeded.
 - On `UnsupportedSql`, stop and consult the ledger. Do not loop.
 

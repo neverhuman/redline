@@ -242,6 +242,49 @@ pub struct SessionState {
     pub pg_sql_fns: std::collections::BTreeMap<String, SqlFnDef>,
     /// `pg_sql_fns` as of `BEGIN`. Restored on rollback.
     pub pg_sql_fns_tx_snapshot: Option<std::collections::BTreeMap<String, SqlFnDef>>,
+    /// `LANGUAGE plpgsql` functions and procedures, keyed by folded name.
+    pub pg_pl_fns: std::collections::BTreeMap<String, PgPlFn>,
+    /// `pg_pl_fns` as of `BEGIN`. Restored on rollback.
+    pub pg_pl_fns_tx_snapshot: Option<std::collections::BTreeMap<String, PgPlFn>>,
+    /// Postgres `EXECUTE FUNCTION` row triggers. SQLite triggers stay in the catalog.
+    pub pg_pl_triggers: Vec<PgPlTrigger>,
+    /// `pg_pl_triggers` as of `BEGIN`. Restored on rollback.
+    pub pg_pl_triggers_tx_snapshot: Option<Vec<PgPlTrigger>>,
+}
+
+/// One `LANGUAGE plpgsql` function or procedure.
+#[derive(Clone, Debug)]
+pub struct PgPlFn {
+    #[allow(dead_code)]
+    pub procedure: bool,
+    pub args: Vec<PgPlArg>,
+    pub strict: bool,
+    pub returns_set: bool,
+    pub returns_trigger: bool,
+    pub body: String,
+}
+
+/// Argument of a plpgsql function. `Variadic` collects every trailing value.
+#[derive(Clone, Debug)]
+pub struct PgPlArg {
+    pub name: String,
+    pub mode: PgPlMode,
+}
+
+/// Postgres argument mode. `In` is the default when the text omits a mode.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum PgPlMode {
+    In,
+    Out,
+    InOut,
+    Variadic,
+}
+
+/// AFTER INSERT trigger that runs a plpgsql function.
+#[derive(Clone, Debug)]
+pub struct PgPlTrigger {
+    pub table: String,
+    pub function: String,
 }
 
 /// Query and populated flag for one `CREATE MATERIALIZED VIEW`.
@@ -383,6 +426,10 @@ impl Default for SessionState {
             pg_matviews_tx_snapshot: None,
             pg_sql_fns: std::collections::BTreeMap::new(),
             pg_sql_fns_tx_snapshot: None,
+            pg_pl_fns: std::collections::BTreeMap::new(),
+            pg_pl_fns_tx_snapshot: None,
+            pg_pl_triggers: Vec::new(),
+            pg_pl_triggers_tx_snapshot: None,
         }
     }
 }
@@ -463,6 +510,10 @@ impl SessionState {
         self.pg_matviews_tx_snapshot = None;
         self.pg_sql_fns.clear();
         self.pg_sql_fns_tx_snapshot = None;
+        self.pg_pl_fns.clear();
+        self.pg_pl_fns_tx_snapshot = None;
+        self.pg_pl_triggers.clear();
+        self.pg_pl_triggers_tx_snapshot = None;
     }
 
     /// Reset journal + savepoint stack at a transaction boundary.

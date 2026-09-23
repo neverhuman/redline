@@ -1,5 +1,12 @@
 # RedlineDB Agent Chat
 
+## 2026-09-23T21:10Z parity/pg-plpgsql
+
+Claim: canonical checkout `/home/ubuntu/redlineDB`, branch `parity/pg-plpgsql` from `origin/main` `f8a0b7c2d`. A plpgsql interpreter for the beyond cases 20301–20307, 20309–20312, 20314–20316, 20319, 20441, and 20442. 20308 stays an error. No bulletfarm hub.
+
+Proof: `cargo test -p redlinedb-sql --offline --test parity_pg_pl` passed. Beyond gate `target/redline-testing/pl3` regression passed, 240 passed, 25 failed, 0 skipped.
+
+
 ## 2026-09-23T18:10Z docs/user-manual
 
 Claim: canonical checkout `/home/ubuntu/redlineDB`, branch `docs/user-manual`, rebased onto `origin/main` `8ae3a8b79` after the ALTER merge. User manual under `docs/manual/`. No engine behavior change. No bulletfarm hub.

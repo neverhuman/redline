@@ -1,7 +1,7 @@
 {
   "schema_version": "redline-postgres-regression-v1",
   "previous_source_commit": "4e742765a75fe94dff26ef02c33b323c1b718345",
-  "reason": "ALTER INHERIT is a read-time union, and logged-ness, statistics, storage, reloptions, owner, and cluster are session catalog fields. 42 failures remain.",
+  "reason": "plpgsql functions, procedures, and notify-from-plpgsql run. 25 failures remain.",
   "corpus_sha256": "01a25cfc48176a535919354a6bddf48f87692857857c24777dcf9b4841bd0a9d",
   "reference_settings": "160015|C|C|UTC",
   "image_digest": "sha256:efdf07c2f9d4df592783dcc8ea5f6db02efbf5f6452b527225ff5e58364570e9",
@@ -11,22 +11,7 @@
     "BEYOND-CASE-20023",
     "BEYOND-CASE-20103",
     "BEYOND-CASE-20111",
-    "BEYOND-CASE-20301",
-    "BEYOND-CASE-20302",
-    "BEYOND-CASE-20303",
-    "BEYOND-CASE-20304",
-    "BEYOND-CASE-20305",
-    "BEYOND-CASE-20306",
-    "BEYOND-CASE-20307",
     "BEYOND-CASE-20308",
-    "BEYOND-CASE-20309",
-    "BEYOND-CASE-20310",
-    "BEYOND-CASE-20311",
-    "BEYOND-CASE-20312",
-    "BEYOND-CASE-20314",
-    "BEYOND-CASE-20315",
-    "BEYOND-CASE-20316",
-    "BEYOND-CASE-20319",
     "BEYOND-CASE-20340",
     "BEYOND-CASE-20343",
     "BEYOND-CASE-20348",
@@ -46,8 +31,6 @@
     "BEYOND-CASE-20423",
     "BEYOND-CASE-20425",
     "BEYOND-CASE-20429",
-    "BEYOND-CASE-20438",
-    "BEYOND-CASE-20441",
-    "BEYOND-CASE-20442"
+    "BEYOND-CASE-20438"
   ]
 }

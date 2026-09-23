@@ -263,7 +263,8 @@ fn fire_insert_triggers(
             values: values.to_vec(),
         }),
         None,
-    )
+    )?;
+    crate::pg_pl::fire_after_insert(conn, &table.folded, values)
 }
 
 fn fire_insert_hook(table: &Arc<TableDef>, rowid: RowId) {
