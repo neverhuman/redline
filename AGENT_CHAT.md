@@ -1,5 +1,11 @@
 # RedlineDB Agent Chat
 
+## 2026-09-23T12:40Z parity/pg-alter
+
+Claim: canonical checkout `/home/ubuntu/redlineDB`, branch `parity/pg-alter` from `origin/main` `45fc7dbe6`. Postgres ALTER INHERIT is a read-time union, and logged-ness, statistics, storage, reloptions, owner, and cluster are session catalog fields. Cases 20213–20217 and 20219. No bulletfarm hub.
+
+Proof: `cargo test -p redlinedb-sql --offline --test parity_pg_alter` passed. Beyond gate `target/redline-testing/alter2` regression passed, 223 passed, 42 failed, 0 skipped.
+
 ## 2026-09-23T09:05Z parity/pg-range
 
 Claim: canonical checkout `/home/ubuntu/redlineDB`, branch `parity/pg-range` from `origin/main` `500f605f7`. int4range is half-open, point distance is Euclidean, citext compares without case. 20344 and 20345 also passed once point distance existed.

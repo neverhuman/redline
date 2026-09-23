@@ -218,12 +218,21 @@ pub(crate) fn rewrite_pg_catalog_query(conn: &Connection, sql: &str) -> Option<S
         for seq in &sequences {
             rows.push((seq.clone(), "S", true));
         }
+        let (persistence, reloptions) = crate::exec::with_session_reentrant(conn, |session| {
+            Ok((
+                session.pg_relpersistence.clone(),
+                session.pg_reloptions.clone(),
+            ))
+        })
+        .unwrap_or_default();
         let mut subq = String::from("(SELECT ");
         if rows.is_empty() {
-            subq.push_str("NULL AS relname, NULL AS relkind, NULL AS relispopulated WHERE 0");
+            subq.push_str(
+                "NULL AS relname, NULL AS relkind, NULL AS relispopulated, NULL AS relpersistence, NULL AS reloptions WHERE 0",
+            );
         } else {
             subq.push_str(
-                "column1 AS relname, column2 AS relkind, column3 AS relispopulated FROM (VALUES ",
+                "column1 AS relname, column2 AS relkind, column3 AS relispopulated, column4 AS relpersistence, column5 AS reloptions FROM (VALUES ",
             );
             let mut first = true;
             for (name, kind, populated) in &rows {
@@ -233,7 +242,15 @@ pub(crate) fn rewrite_pg_catalog_query(conn: &Connection, sql: &str) -> Option<S
                 first = false;
                 let escaped = name.replace('\'', "''");
                 let flag = if *populated { "t" } else { "f" };
-                subq.push_str(&format!("('{escaped}', '{kind}', '{flag}')"));
+                let folded = name.to_ascii_lowercase();
+                let pers = persistence.get(&folded).map(String::as_str).unwrap_or("p");
+                let opts = match reloptions.get(&folded) {
+                    Some(value) => format!("'{}'", value.replace('\'', "''")),
+                    None => "NULL".to_owned(),
+                };
+                subq.push_str(&format!(
+                    "('{escaped}', '{kind}', '{flag}', '{pers}', {opts})"
+                ));
             }
             subq.push(')');
         }

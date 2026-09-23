@@ -1188,6 +1188,7 @@ impl Connection {
             || crate::listen::sql_reads_listening_channels(normalized)
             || crate::matview::sql_reads_matview_catalog(normalized)
             || crate::pg_fn::sql_reads_pg_proc(normalized)
+            || crate::pg_alter::bypass_statement_cache(self.as_ref())
         {
             let mut template = parse_prepared_template(self.as_ref(), sql)?;
             template.stats_epoch = self.stats_epoch().0;

@@ -847,6 +847,13 @@ pub fn execute_prepared(
                 affected_rows: 0,
             })
         }
+        PreparedKind::PgAlter { sql } => {
+            crate::pg_alter::apply(conn, sql)?;
+            Ok(ExecutionResult {
+                runtime: RuntimeState::Done,
+                affected_rows: 0,
+            })
+        }
         PreparedKind::SetPgCitext { enabled } => {
             crate::pg_type::set_citext(conn, *enabled)?;
             Ok(ExecutionResult {
@@ -1168,6 +1175,7 @@ fn template_writes(kind: &PreparedKind) -> bool {
         | PreparedKind::CreatePgDomain { .. }
         | PreparedKind::DropPgDomain { .. }
         | PreparedKind::SetPgCitext { .. }
+        | PreparedKind::PgAlter { .. }
         | PreparedKind::ShowVariable { .. }
         | PreparedKind::Notify
         | PreparedKind::Listen { .. }

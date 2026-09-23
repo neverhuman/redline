@@ -381,6 +381,9 @@ pub(crate) fn build_plan(
         PreparedKind::SetPgCitext { .. } => {
             simple_node(PhysicalKind::Constant, "CREATE EXTENSION".to_owned())
         }
+        PreparedKind::PgAlter { .. } => {
+            simple_node(PhysicalKind::Constant, "ALTER TABLE".to_owned())
+        }
         PreparedKind::ShowVariable { .. } => simple_node(PhysicalKind::Constant, "SHOW".to_owned()),
         PreparedKind::Notify => simple_node(PhysicalKind::Constant, "NOTIFY".to_owned()),
         PreparedKind::Listen { .. } => simple_node(PhysicalKind::Constant, "LISTEN".to_owned()),

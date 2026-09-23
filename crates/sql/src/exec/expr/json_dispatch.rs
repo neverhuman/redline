@@ -271,6 +271,11 @@ pub(crate) fn eval_scalar_function_values(
                 value_as_str(other).as_ref().to_ascii_uppercase(),
             ))),
         },
+        "array_to_string" => match values.first() {
+            Some(SqlValue::Null) | None => Ok(SqlValue::Null),
+            Some(SqlValue::Text(text)) => Ok(SqlValue::Text(text.clone())),
+            Some(other) => Ok(SqlValue::Text(Arc::from(format!("{other:?}")))),
+        },
         "int4range" => {
             let lo = values.first().and_then(crate::pg_type::as_number);
             let hi = values.get(1).and_then(crate::pg_type::as_number);

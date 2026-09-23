@@ -211,6 +211,22 @@ pub struct SessionState {
     pub pg_domains: std::collections::BTreeMap<String, crate::pg_type::PgDomain>,
     /// `CREATE EXTENSION citext` has been run on this session.
     pub pg_citext: bool,
+    /// Parent folded name to child folded names for `INHERIT`.
+    pub pg_children: std::collections::BTreeMap<String, std::collections::BTreeSet<String>>,
+    /// `relpersistence` override, `p` or `u`.
+    pub pg_relpersistence: std::collections::BTreeMap<String, String>,
+    /// `array_to_string(reloptions, ',')` text.
+    pub pg_reloptions: std::collections::BTreeMap<String, String>,
+    /// `table \u{1} column` to `attstattarget`.
+    pub pg_attstat: std::collections::BTreeMap<String, i64>,
+    /// `table \u{1} column` to `attstorage`.
+    pub pg_attstorage: std::collections::BTreeMap<String, String>,
+    /// Folded table name to `tableowner`.
+    pub pg_tableowner: std::collections::BTreeMap<String, String>,
+    /// Folded table name to the clustered index name.
+    pub pg_clustered: std::collections::BTreeMap<String, String>,
+    /// Bumped by every Postgres ALTER so prepared catalog plans are not reused.
+    pub pg_alter_epoch: u64,
     /// Identity columns keyed by `folded_table \u{1} folded_column`.
     /// The counter is independent of explicit inserts and of rowid.
     pub pg_identities: std::collections::BTreeMap<String, IdentityColumn>,
@@ -352,6 +368,14 @@ impl Default for SessionState {
             pg_enums: std::collections::BTreeMap::new(),
             pg_domains: std::collections::BTreeMap::new(),
             pg_citext: false,
+            pg_children: std::collections::BTreeMap::new(),
+            pg_relpersistence: std::collections::BTreeMap::new(),
+            pg_reloptions: std::collections::BTreeMap::new(),
+            pg_attstat: std::collections::BTreeMap::new(),
+            pg_attstorage: std::collections::BTreeMap::new(),
+            pg_tableowner: std::collections::BTreeMap::new(),
+            pg_clustered: std::collections::BTreeMap::new(),
+            pg_alter_epoch: 0,
             pg_identities: std::collections::BTreeMap::new(),
             pg_listening: std::collections::BTreeSet::new(),
             pg_listening_tx_snapshot: None,
@@ -424,6 +448,14 @@ impl SessionState {
         self.pg_enums.clear();
         self.pg_domains.clear();
         self.pg_citext = false;
+        self.pg_children.clear();
+        self.pg_relpersistence.clear();
+        self.pg_reloptions.clear();
+        self.pg_attstat.clear();
+        self.pg_attstorage.clear();
+        self.pg_tableowner.clear();
+        self.pg_clustered.clear();
+        self.pg_alter_epoch = 0;
         self.pg_identities.clear();
         self.pg_listening.clear();
         self.pg_listening_tx_snapshot = None;

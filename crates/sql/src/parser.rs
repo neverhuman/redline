@@ -121,6 +121,9 @@ fn parse_prepared_template_impl(conn: &Connection, sql: &str) -> Result<Prepared
     if let Some(prepared) = crate::pg_type::try_prepare(conn, sql)? {
         return Ok(prepared);
     }
+    if let Some(prepared) = crate::pg_alter::try_prepare(conn, sql)? {
+        return Ok(prepared);
+    }
     if starts_with_create_virtual_table(stmt) {
         return Err(Error::UnsupportedSql(
             "CREATE VIRTUAL TABLE is not supported without module migration support".to_owned(),
@@ -151,6 +154,19 @@ fn parse_prepared_template_impl(conn: &Connection, sql: &str) -> Result<Prepared
     // Track J: rewrite SELECTs against `pg_namespace` / `pg_class` into a
     // session-snapshotted VALUES list so the introspection probes that the
     // beyond-pg parity gates use see the expected names back.
+    if !crate::pg_alter::expanding() {
+        if let Some(rewritten) = crate::pg_alter::rewrite_inherit(conn, sql) {
+            if rewritten != sql {
+                let _expand = crate::pg_alter::begin_expand();
+                return parse_prepared_template_impl(conn, &rewritten);
+            }
+        }
+    }
+    if let Some(rewritten) = crate::pg_alter::rewrite_catalogs(conn, sql) {
+        if rewritten != sql {
+            return parse_prepared_template_impl(conn, &rewritten);
+        }
+    }
     if let Some(rewritten) = rewrite_pg_catalog_query(conn, sql) {
         return parse_prepared_template_impl(conn, &rewritten);
     }

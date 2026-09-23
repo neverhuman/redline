@@ -197,6 +197,9 @@ pub enum PreparedKind {
     SetPgCitext {
         enabled: bool,
     },
+    PgAlter {
+        sql: Arc<str>,
+    },
     /// Track J — `SHOW <name>` for session-state introspection. Today
     /// returns the recalled `transaction_isolation`; other names return
     /// empty string.
