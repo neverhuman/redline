@@ -561,7 +561,10 @@ fn exec_stmt(conn: &Connection, stmt: &str, env: &mut Env, collect: bool) -> Res
         if let Some((name, after)) = take_ident(rest) {
             if after.trim().is_empty() {
                 if let Some(PlVal::Rec(fields)) = env.get(name) {
-                    let row = fields.iter().map(|(_, value)| value.clone()).collect::<Vec<_>>();
+                    let row = fields
+                        .iter()
+                        .map(|(_, value)| value.clone())
+                        .collect::<Vec<_>>();
                     return Ok(Flow::Rows(vec![row]));
                 }
             }
