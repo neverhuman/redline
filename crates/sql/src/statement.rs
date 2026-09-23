@@ -178,6 +178,22 @@ pub enum PreparedKind {
         name: Arc<str>,
         if_exists: bool,
     },
+    CreatePgEnum {
+        name: Arc<str>,
+        labels: Arc<[String]>,
+    },
+    DropPgEnum {
+        name: Arc<str>,
+        if_exists: bool,
+    },
+    CreatePgDomain {
+        name: Arc<str>,
+        greater_than: i64,
+    },
+    DropPgDomain {
+        name: Arc<str>,
+        if_exists: bool,
+    },
     /// Track J — `SHOW <name>` for session-state introspection. Today
     /// returns the recalled `transaction_isolation`; other names return
     /// empty string.

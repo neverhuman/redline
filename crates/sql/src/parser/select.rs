@@ -990,7 +990,15 @@ fn expr_is_foldable(expr: &Expr) -> bool {
         Expr::UnaryOp { expr, .. } => expr_is_foldable(expr),
         Expr::BinaryOp { left, right, .. } => expr_is_foldable(left) && expr_is_foldable(right),
         Expr::Collate { .. } => false,
-        Expr::Cast { expr, .. } => expr_is_foldable(expr),
+        Expr::Cast {
+            expr, data_type, ..
+        } => {
+            if crate::pg_type::is_registered(&data_type.to_string()) {
+                false
+            } else {
+                expr_is_foldable(expr)
+            }
+        }
         Expr::Ceil { expr, .. } | Expr::Floor { expr, .. } => expr_is_foldable(expr),
         Expr::Substring {
             expr,

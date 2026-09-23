@@ -366,6 +366,18 @@ pub(crate) fn build_plan(
         PreparedKind::DropCollation { .. } => {
             simple_node(PhysicalKind::Constant, "DROP COLLATION".to_owned())
         }
+        PreparedKind::CreatePgEnum { .. } => {
+            simple_node(PhysicalKind::Constant, "CREATE TYPE".to_owned())
+        }
+        PreparedKind::DropPgEnum { .. } => {
+            simple_node(PhysicalKind::Constant, "DROP TYPE".to_owned())
+        }
+        PreparedKind::CreatePgDomain { .. } => {
+            simple_node(PhysicalKind::Constant, "CREATE DOMAIN".to_owned())
+        }
+        PreparedKind::DropPgDomain { .. } => {
+            simple_node(PhysicalKind::Constant, "DROP DOMAIN".to_owned())
+        }
         PreparedKind::ShowVariable { .. } => simple_node(PhysicalKind::Constant, "SHOW".to_owned()),
         PreparedKind::Notify => simple_node(PhysicalKind::Constant, "NOTIFY".to_owned()),
         PreparedKind::Listen { .. } => simple_node(PhysicalKind::Constant, "LISTEN".to_owned()),

@@ -7,6 +7,9 @@ pub(crate) fn eval_binary(
     row: &RowContext<'_>,
     bindings: &[Option<SqlValue>],
 ) -> Result<SqlValue> {
+    if let Some(value) = crate::pg_type::compare_enums(left, op, right, row, bindings)? {
+        return Ok(value);
+    }
     if matches!(op, BinaryOperator::Match) {
         let pattern = eval_scalar(right, row, bindings)?;
         return match_result(left, SqlValue::Null, pattern, row);

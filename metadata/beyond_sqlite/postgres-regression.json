@@ -1,15 +1,13 @@
 {
   "schema_version": "redline-postgres-regression-v1",
   "previous_source_commit": "4e742765a75fe94dff26ef02c33b323c1b718345",
-  "reason": "Postgres schemas keep distinct tables, and DEFAULT nextval inserts sequence values. 58 failures remain.",
+  "reason": "Enum order is declaration order, and a domain check rejects values that fail it. 56 failures remain.",
   "corpus_sha256": "01a25cfc48176a535919354a6bddf48f87692857857c24777dcf9b4841bd0a9d",
   "reference_settings": "160015|C|C|UTC",
   "image_digest": "sha256:efdf07c2f9d4df592783dcc8ea5f6db02efbf5f6452b527225ff5e58364570e9",
   "server_binary_sha256": "201d8daff9a5bd9df70b820471b965c39f5a776d677f395232c477d051270722",
   "failed_cases": [
-    "BEYOND-CASE-20020",
     "BEYOND-CASE-20021",
-    "BEYOND-CASE-20022",
     "BEYOND-CASE-20023",
     "BEYOND-CASE-20026",
     "BEYOND-CASE-20027",

@@ -826,6 +826,34 @@ pub fn execute_prepared(
                 affected_rows: 0,
             })
         }
+        PreparedKind::CreatePgEnum { name, labels } => {
+            crate::pg_type::create_enum(conn, name, labels)?;
+            Ok(ExecutionResult {
+                runtime: RuntimeState::Done,
+                affected_rows: 0,
+            })
+        }
+        PreparedKind::DropPgEnum { name, if_exists } => {
+            crate::pg_type::drop_enum(conn, name, *if_exists)?;
+            Ok(ExecutionResult {
+                runtime: RuntimeState::Done,
+                affected_rows: 0,
+            })
+        }
+        PreparedKind::CreatePgDomain { name, greater_than } => {
+            crate::pg_type::create_domain(conn, name, *greater_than)?;
+            Ok(ExecutionResult {
+                runtime: RuntimeState::Done,
+                affected_rows: 0,
+            })
+        }
+        PreparedKind::DropPgDomain { name, if_exists } => {
+            crate::pg_type::drop_domain(conn, name, *if_exists)?;
+            Ok(ExecutionResult {
+                runtime: RuntimeState::Done,
+                affected_rows: 0,
+            })
+        }
         PreparedKind::DropCollation { name, if_exists } => {
             let folded = name.to_ascii_lowercase();
             with_session_reentrant(conn, |session| {
@@ -1128,6 +1156,10 @@ fn template_writes(kind: &PreparedKind) -> bool {
         | PreparedKind::SetSearchPath { .. }
         | PreparedKind::CreateCollation { .. }
         | PreparedKind::DropCollation { .. }
+        | PreparedKind::CreatePgEnum { .. }
+        | PreparedKind::DropPgEnum { .. }
+        | PreparedKind::CreatePgDomain { .. }
+        | PreparedKind::DropPgDomain { .. }
         | PreparedKind::ShowVariable { .. }
         | PreparedKind::Notify
         | PreparedKind::Listen { .. }

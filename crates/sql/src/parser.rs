@@ -118,6 +118,9 @@ fn parse_prepared_template_impl(conn: &Connection, sql: &str) -> Result<Prepared
     if let Some(prepared) = crate::pg_schema::try_prepare(conn, sql)? {
         return Ok(prepared);
     }
+    if let Some(prepared) = crate::pg_type::try_prepare(conn, sql)? {
+        return Ok(prepared);
+    }
     if starts_with_create_virtual_table(stmt) {
         return Err(Error::UnsupportedSql(
             "CREATE VIRTUAL TABLE is not supported without module migration support".to_owned(),

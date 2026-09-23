@@ -34,6 +34,9 @@ pub(crate) fn cast_value(
     // now use `type_name_contains_ci`, and exact matches use
     // `.eq_ignore_ascii_case(...)`.
     let type_name = data_type.to_string();
+    if let Some(casted) = crate::pg_type::cast_registered(&type_name, &value)? {
+        return Ok(casted);
+    }
 
     if type_name_contains_ci(&type_name, "blob") {
         return Ok(match value {

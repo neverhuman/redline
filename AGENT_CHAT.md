@@ -1,5 +1,9 @@
 # RedlineDB Agent Chat
 
+## 2026-09-23T08:10Z parity/pg-enum
+
+Claim: canonical checkout `/home/ubuntu/redlineDB`, branch `parity/pg-enum` from `origin/main` `ab1c4fe58`. Postgres enum order is declaration order and domain `CHECK (VALUE > n)` rejects failing values. `20021` and `20023` stay errors.
+
 ## 2026-09-23T00:40Z parity/pg-sql-fn
 
 Claim: rebased onto `origin/main` `d87f32b21`. Publication section matches `gh-role`: the reviewer must not have opened the pull request or authored or committed its commits.

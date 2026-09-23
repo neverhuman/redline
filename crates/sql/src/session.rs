@@ -205,6 +205,10 @@ pub struct SessionState {
     /// `CREATE COLLATION` registrations. Value is the ICU strength:
     /// 1 accent-and-case insensitive, 2 case insensitive.
     pub pg_collations: std::collections::BTreeMap<String, u8>,
+    /// `CREATE TYPE name AS ENUM` labels in declaration order.
+    pub pg_enums: std::collections::BTreeMap<String, Vec<String>>,
+    /// `CREATE DOMAIN` checks. The value must be greater than `greater_than`.
+    pub pg_domains: std::collections::BTreeMap<String, crate::pg_type::PgDomain>,
     /// Identity columns keyed by `folded_table \u{1} folded_column`.
     /// The counter is independent of explicit inserts and of rowid.
     pub pg_identities: std::collections::BTreeMap<String, IdentityColumn>,
@@ -343,6 +347,8 @@ impl Default for SessionState {
             transaction_isolation: crate::statement::TransactionIsolationLevel::ReadCommitted,
             search_path: "\"$user\", public".to_owned(),
             pg_collations: std::collections::BTreeMap::new(),
+            pg_enums: std::collections::BTreeMap::new(),
+            pg_domains: std::collections::BTreeMap::new(),
             pg_identities: std::collections::BTreeMap::new(),
             pg_listening: std::collections::BTreeSet::new(),
             pg_listening_tx_snapshot: None,
@@ -412,6 +418,8 @@ impl SessionState {
         self.transaction_isolation = crate::statement::TransactionIsolationLevel::ReadCommitted;
         self.search_path = "\"$user\", public".to_owned();
         self.pg_collations.clear();
+        self.pg_enums.clear();
+        self.pg_domains.clear();
         self.pg_identities.clear();
         self.pg_listening.clear();
         self.pg_listening_tx_snapshot = None;

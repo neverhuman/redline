@@ -11,6 +11,7 @@ mod matview;
 mod parser;
 mod pg_fn;
 mod pg_schema;
+mod pg_type;
 mod planner;
 mod regexp;
 mod rql;
