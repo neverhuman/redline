@@ -141,9 +141,22 @@ pub(crate) fn rewrite_inherit(conn: &Connection, sql: &str) -> Option<String> {
         if children.is_empty() {
             continue;
         }
-        let mut union = format!("(SELECT * FROM {parent}");
-        for child in children {
-            union.push_str(&format!(" UNION ALL SELECT * FROM {child}"));
+        let Some(parent_ident) = plain_ident(&parent) else {
+            continue;
+        };
+        let mut union = String::from("(SELECT * FROM ");
+        union.push_str(parent_ident);
+        let mut included = false;
+        for child in &children {
+            let Some(child_ident) = plain_ident(child) else {
+                continue;
+            };
+            union.push_str(" UNION ALL SELECT * FROM ");
+            union.push_str(child_ident);
+            included = true;
+        }
+        if !included {
+            continue;
         }
         union.push_str(") AS __inh");
         let replaced = crate::parser::replace_table_ident(&out, &parent, &union);
@@ -427,6 +440,21 @@ fn reads_from_catalog(sql: &str, name: &str) -> bool {
 
 fn is_ident_byte(b: u8) -> bool {
     b.is_ascii_alphanumeric() || b == b'_'
+}
+
+/// Table names copied into a generated `FROM` clause. Anything outside a
+/// plain identifier is left unexpanded.
+fn plain_ident(name: &str) -> Option<&str> {
+    let mut chars = name.chars();
+    match chars.next() {
+        Some(first) if first.is_ascii_alphabetic() || first == '_' => {}
+        _ => return None,
+    }
+    if chars.all(|ch| ch.is_ascii_alphanumeric() || ch == '_') {
+        Some(name)
+    } else {
+        None
+    }
 }
 
 fn after_ci<'a>(sql: &'a str, marker: &str) -> Option<&'a str> {
