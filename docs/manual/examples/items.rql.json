@@ -1,0 +1,31 @@
+{
+  "statements": [
+    {
+      "type": "create_table",
+      "table": { "name": "items" },
+      "columns": [
+        { "name": "id", "declared_type": "INTEGER", "primary_key": true },
+        { "name": "label", "declared_type": "TEXT" }
+      ]
+    },
+    {
+      "type": "insert",
+      "table": { "name": "items" },
+      "columns": ["id", "label"],
+      "values": [[
+        { "type": "integer", "value": 1 },
+        { "type": "text", "value": "Ada" }
+      ]]
+    },
+    {
+      "type": "select",
+      "projection": [
+        {
+          "type": "expr",
+          "expr": { "type": "column", "column": { "name": "label" } }
+        }
+      ],
+      "from": { "name": { "name": "items" } }
+    }
+  ]
+}

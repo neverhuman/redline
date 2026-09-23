@@ -1,0 +1,69 @@
+# SQLite coverage
+
+RedlineDB's SQLite story is a measured shell and library comparison, plus a file format of its own.
+
+The official lane builds SQLite 3.53.1 with `scripts/sqlite/build-reference.sh` and compares it to `redlinedb` from the same checkout. The runner is `subrepos/redline-testing`. Engine unit tests are useful, and they are not that lane. A number in this chapter comes from the committed report, not from a unit test.
+
+## The committed result
+
+| | |
+| --- | --- |
+| Corpus | `sqlite_parity`, 2445 cases |
+| Passed | 2441 |
+| Failed | 0 |
+| Skipped | 4 |
+| Repetitions | 3, plus 1 warmup |
+| Report date in the README block | 2026-09-18 |
+| RedlineDB build named in that block | `redlinedb v4.1.0 (SQLite 3.45.1 compatibility)` |
+| Oracle | SQLite 3.53.1, 2026-05-05 |
+| Runner | `redline-testing` 1.0.1 |
+| Source file | `benchmark-results/sqlite-parity/latest/summary.json` |
+
+The README badge that says 2374/2445 is older than this block. The block under `sqlite-parity-report:begin` matches the summary file. Trust the block.
+
+The same block records latency. The median gap is negative, which means the median case was slower than SQLite on that run. The worst gap in the ranked table is a JSON mutation case. The block also counts **361** cases that were faster. Use those figures when you talk about speed. A later bench can move them. This book does not invent a new one.
+
+## What the 4 skips are
+
+The runner probes the target for `fts5`, `rtree`, and `dbstat`. A case that needs one of those features is skipped when the probe fails. The committed summary counts 4 skipped cases and 0 failures. `CREATE VIRTUAL TABLE` without a migrated module returns: `CREATE VIRTUAL TABLE is not supported without module migration support`.
+
+Full-text search, R-trees, and `dbstat` are the practical consequence. A script that starts with `CREATE VIRTUAL TABLE ... USING fts5` will not run here. The same is true of `rtree` and `dbstat`.
+
+`pragma_module_list` still returns those names, along with `fts3`, `fts4`, and `dbpage`. The implementation comment says the list exists so a probe sees the SQLite names, and that the modules themselves are not implemented. A name in that list is not a loaded module.
+
+## What the passing surface feels like
+
+On the statements the corpus compares, you can expect the ordinary SQLite shape:
+
+- `CREATE TABLE`, `INSERT`, `UPDATE`, `DELETE`, `SELECT`
+- joins, compound `UNION` / `INTERSECT` / `EXCEPT`, and common table expressions, including recursive ones
+- window functions (`row_number`, `rank`, `lag`, `lead`, and the usual frames)
+- views and row triggers, with the gaps called out in `docs/sqlite-parity.md` (for example, `INSTEAD OF` triggers on views)
+- `RETURNING`, savepoints, and generated columns
+- JSON and math functions that the 3.53.1 oracle was built with
+
+`docs/sqlite-parity.md` is the feature ledger. Its status column is `pass`, `partial`, `fail`, `not-started`, or `rejects-by-design`. Read it when you are about to depend on one feature. The official 2441 is the corpus result. The ledger is the map of which SQL features that result is made of.
+
+## Two SQLite behaviors this build shares with the reference shell
+
+The reference shell is built without `SQLITE_SOUNDEX`. `soundex()` is a missing function there, and it is a missing function here. Turning it on in RedlineDB alone would make the parity diff worse, so this build leaves it off.
+
+The reference parser was generated without the grammar for `UPDATE` or `DELETE` ... `ORDER BY` ... `LIMIT`. Those statements are a syntax error on the oracle (`near "ORDER"`). RedlineDB does not accept them either. A flag that only Redline understood would not be SQLite compatibility.
+
+The reference shell does enable the session extension. `.session` with no arguments prints help and exits 0. That is a shell command, not a SQL function.
+
+## Files
+
+A Redline database file is not a SQLite database file. Pages carry the `RDPG` magic. The write-ahead log carries `RDWL`. Tools that inspect SQLite format 3 headers will not describe this file correctly. Take a logical dump (SQL text) when you need to move rows into SQLite, and load a dump when you need to move rows out. The file itself stays in the engine that wrote it.
+
+## How to re-check
+
+From a build of this repository:
+
+```bash
+just redline-testing-official
+```
+
+That is the long lane. `just fast` is the short local check. It does not replace the official corpus. The report generator expects `benchmark-results/sqlite-parity/latest/provenance.json` before it rewrites the README block.
+
+Next, if you are moving statements: [SQL you will write](06-sql-you-will-write.md). If the scripts came from Postgres: [Postgres coverage](05-postgres-coverage.md).

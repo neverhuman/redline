@@ -1,5 +1,9 @@
 # RedlineDB Agent Chat
 
+## 2026-09-23T18:10Z docs/user-manual
+
+Claim: canonical checkout `/home/ubuntu/redlineDB`, branch `docs/user-manual`, rebased onto `origin/main` `8ae3a8b79` after the ALTER merge. User manual under `docs/manual/`. No engine behavior change. No bulletfarm hub.
+
 ## 2026-09-23T12:40Z parity/pg-alter
 
 Claim: canonical checkout `/home/ubuntu/redlineDB`, branch `parity/pg-alter` from `origin/main` `45fc7dbe6`. Postgres ALTER INHERIT is a read-time union, and logged-ness, statistics, storage, reloptions, owner, and cluster are session catalog fields. Cases 20213–20217 and 20219. No bulletfarm hub.

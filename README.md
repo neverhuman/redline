@@ -30,6 +30,10 @@ CI executes both reference lanes and uploads their raw results and provenance.
 A passing regression gate means recorded failures have not increased; it does
 not establish full SQL, ABI, database-file, or PostgreSQL wire compatibility.
 
+The book for operators and for people embedding the engine is
+[docs/manual](docs/manual/README.md). It is written against a named commit
+and it says which file to trust when a badge and a report disagree.
+
 <!-- POSTGRES_PARITY_START -->
 PostgreSQL **16.15** SQL-shell corpus: **127 / 265 passed**, **138 failed**, **0 skipped**. Corpus qualification: **failed**. Regression gate: **passed**.
 
