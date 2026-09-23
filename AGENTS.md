@@ -33,8 +33,9 @@ task-ordered, not a numbered PR sequence. Consumer deployment locks and database
 - **Correct, do not reject**: a PR that misses its acceptance gets `REVIEW: changes <sha>` and is fixed on
   the same branch. Closing is only for a verified exact duplicate, with the salvaged content credited in
   the survivor. Merge waits for an eligible review of the exact head and for
-  `RedlineDB/required` on that same head. The reviewer must not be the account that
-  opened the pull request. The steps and the credential paths are in Publication and review.
+  `RedlineDB/required` on that same head. The reviewer must not have opened the pull
+  request and must not have authored or committed any commit on it. The steps and the
+  credential paths are in Publication and review.
 - **Parallelism**: at most four open PRs, each one lane, each rebased on a freshly fetched `origin/main`
   (protection is strict, so this is mandatory), each disjoint from the others on the hot files —
   `crates/sql/src/exec/**`, `crates/sql/src/parser*`, `crates/sql/src/{planner,statement}.rs`,
@@ -69,8 +70,8 @@ uses the git helper still needs `gh-role` for `gh pr` and `gh api`.
 
 | Role | Login | Use it for |
 | --- | --- | --- |
-| `writer` | `jepsontaylor` | New commits, pushes, `pr create`, `pr merge`. May also `APPROVE` a pull request this login did not open. |
-| `reviewer` | `neverhuman` | `APPROVE` when that login did not open the pull request. |
+| `writer` | `jepsontaylor` | New commits, pushes, `pr create`, `pr merge`. Approves only a pull request this login did not open and did not author or commit. |
+| `reviewer` | `neverhuman` | `APPROVE` when that login did not open the pull request and did not author or commit any commit on it. |
 
 New commits use `Jepson Taylor <130782313+jepsontaylor@users.noreply.github.com>`.
 
@@ -119,14 +120,14 @@ Order for `neverhuman/RedlineDB`:
   -f commit_id=<full sha> -f event=APPROVE -f body="$(cat <review-file>)"
 ```
 
-The helper refuses the approval when the selected login opened the pull request.
-The other working login may approve even if it authored or committed the code; the
-review body says so. A commit whose `author.login` is null (the `jekko` commits use
-`bot@jekko.ai`) is unassociated. Find out who produced it, then add
-`--ack-unassociated` to the same command. The flag records that check. It does not
-invent a login.
+The helper refuses the approval when the selected login opened the pull request or
+authored or committed any commit. When both working logins are in that set, stop.
+`jeryu` and `jepsont` are not a third reviewer. A commit whose `author.login` is null
+(the `jekko` commits use `bot@jekko.ai`) is unassociated. Find out who produced it,
+then add `--ack-unassociated` to the same command. The flag records that check. It
+does not invent a login.
 
-4. Rewriting author or committer so that a login stops being the opener is not a review.
+4. Rewriting author or committer so a login becomes eligible is not a review.
 5. The writer merges after `RedlineDB/required` is success on that same SHA. No admin
    bypass:
 

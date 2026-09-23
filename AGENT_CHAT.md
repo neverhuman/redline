@@ -1,5 +1,9 @@
 # RedlineDB Agent Chat
 
+## 2026-09-23T00:40Z parity/pg-sql-fn
+
+Claim: rebased onto `origin/main` `d87f32b21`. Publication section matches `gh-role`: the reviewer must not have opened the pull request or authored or committed its commits.
+
 ## 2026-09-22T19:40Z fix/semantic-rejection-agreement
 
 Claim: canonical checkout `/home/ubuntu/redlineDB`, rebased onto `origin/main` `162b582b5`. `RUSTC_WRAPPER` must point at the repo-root script so nested workspaces can run local `just pr-ci`. No engine behavior change.
