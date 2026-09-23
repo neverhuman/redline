@@ -1,6 +1,6 @@
 # Start here
 
-You need a `redlinedb` binary that matches the manual you are reading, then one file on disk.
+You need a `redlinedb` binary that matches the manual you are reading, then one directory on disk. The engine puts `data.redline`, `wal/`, and `owner.lock` inside that directory.
 
 ## Install a release binary
 
@@ -12,7 +12,9 @@ curl -fsSL https://raw.githubusercontent.com/neverhuman/RedlineDB/main/install.s
 
 The installer checks the release checksum and defaults to `~/.local`. It installs `redlinedb` and `redlinedb-server`. It leaves the system `sqlite3` in place.
 
-To pin a version and a prefix:
+The git tag `v4.1.0` is an ancestor of commit `45fc7dbe`, not that commit. A package installed with `VERSION=v4.1.0` is the tagged release. The Postgres types in this book (enums, domains, half-open `int4range`, citext) landed after that tag. Build the commit below when you need those types. The crate's version string is still `4.1.0`, so `--version` does not tell the two builds apart.
+
+To pin the tagged release and a prefix:
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/neverhuman/RedlineDB/main/install.sh | \
@@ -55,11 +57,13 @@ The same statements are in [`examples/first.sql`](examples/first.sql). Dot-comma
 
 ## The same database from Rust
 
-Add the crate by git tag. Commit `Cargo.lock` in the application so the build stays reproducible.
+Add the crate by git revision when you want the commit this book describes. Commit `Cargo.lock` in the application so the build stays reproducible.
 
 ```toml
-redlinedb = { git = "https://github.com/neverhuman/RedlineDB", tag = "v4.1.0" }
+redlinedb = { git = "https://github.com/neverhuman/RedlineDB", rev = "45fc7dbe608ddafc949ec6ecf5264262ad7a4d1a" }
 ```
+
+`tag = "v4.1.0"` is the older release. Use it only when you have decided that the tagged tree is enough.
 
 ```rust
 use redlinedb::Database;

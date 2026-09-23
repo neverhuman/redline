@@ -45,7 +45,7 @@ These are in the engine on this commit, and the corpus cases that cover them are
 
 **SQL functions.** `LANGUAGE SQL` functions run. `LATERAL` is accepted on the forms the corpus covers. `DEFAULT nextval(...)` together with `ALTER SEQUENCE ... OWNED BY` inserts sequence values.
 
-**Session state.** `LISTEN` and `UNLISTEN` record channels on this connection. A listen that has not committed is gone after rollback. `pg_listening_channels()` reads that set. This is not a cross-process `NOTIFY` bus. The three notify cases in the open list are still open.
+**Session state.** `LISTEN` and `UNLISTEN` record channels on this connection. A listen that has not committed is gone after rollback. `pg_listening_channels()` reads that set. `NOTIFY` is accepted and does not deliver a payload to any session. The open listen/notify cases are `LISTEN ALL`, which is a syntax error, and `pg_notify` inside a function or a trigger.
 
 **Catalogs the shell can see.** Empty shims exist for several `pg_*` views the corpus only counts (`pg_locks`, publication and subscription views, replication slots). `pg_class`, `pg_namespace`, and `pg_constraint` can be rewritten from the session snapshot so a name probe returns rows. Materialized views have a session catalog. Read `docs/sqlite-parity.md` and the SQL crate when you need the exact column list. A shim that answers `count(*)` is not the full Postgres catalog.
 
@@ -62,7 +62,7 @@ The 48 names are in the [ledger](appendix-coverage.md). They fall into a few job
 | 3 | `SELECT ... FOR KEY SHARE`, `FOR NO KEY UPDATE`, and `LOCK TABLE` |
 | 3 | `NOTIFY` from a function or trigger, and `LISTEN ALL` |
 | 2 | An enum label that is not in the type, and a domain value that fails its check. These are errors on Postgres too. They stay failures until the corpus declares the message. |
-| 2 | `MERGE ... WHEN NOT MATCHED BY SOURCE` (a Postgres 17 clause; this oracle is 16.15) and `DISTINCT ON` |
+| 2 | `MERGE ... WHEN NOT MATCHED BY SOURCE` (a Postgres 17 clause; this oracle is 16.15) and the `DISTINCT ON` form whose expressions are not the leftmost `ORDER BY` terms. Other `DISTINCT ON` cases are not in the open list |
 
 `plpgsql` is the largest gap. A function whose language is `sql` can already run. A function whose language is `plpgsql` cannot. If your application is a pile of `DO $$ ... $$` blocks, it is a Postgres application, and this engine will not run it yet.
 

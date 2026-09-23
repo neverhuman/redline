@@ -2,11 +2,11 @@
 
 ## Where the bytes are
 
-`Database::create` takes a filesystem path. That path is the database. The write-ahead log lives beside it under the engine's own names. Copy the database file alone, while the process is running, and you have copied a file that may not include the last commits still in the log. Use the backup commands below, or shut the process down and copy the set of files the engine closed.
+`Database::create` takes a directory path. The engine rejects a regular file at that path. Inside the directory, the heap image is `data.redline` and the write-ahead log is `wal/`. Copying the directory copies both. Copying `data.redline` alone leaves the log behind, and a crash recovery on that lone file is not a supported backup. Use the backup commands below, or shut the process down and copy the whole directory.
 
 `:memory:` and an empty filename are process-local. They are the right target for a test and the wrong target for a notebook you want tomorrow.
 
-The file is a Redline file. Page magic `RDPG`, log magic `RDWL`. File-system tools, backup agents, and SQLite `.dump` readers that assume format 3 will misread it. Dump to SQL when a foreign tool has to see the rows.
+Page and log constants are `RDPG` and `RDWL` stored little-endian, as [Why RedlineDB](01-why-redlinedb.md) describes. Tools that assume a SQLite format 3 header will misread `data.redline`. Dump to SQL when a foreign tool has to see the rows.
 
 ## Backup and stats from the shell
 
@@ -44,7 +44,7 @@ Each package carries dependency notices, an SBOM, and the parent commit it was b
 
 ## Upgrading
 
-A 4.1.0 file opens in a 4.1.0 engine. A future version may bump the catalog format. Read the release notes before you point a new binary at an old file, and take a physical backup first. The manual you are reading describes commit `45fc7dbe`. If `redlinedb --version` names a different build, re-read the coverage chapters against that build's `summary.json` and `postgres-regression.json` before you repeat these numbers.
+A directory written by this commit opens in an engine built from this commit. A future version may bump the catalog format. Read the release notes before you point a new binary at an old directory, and take a physical backup first. This manual describes commit `45fc7dbe`. `--version` still prints `4.1.0` for the older git tag of that number, so the version line does not tell those builds apart. Re-read the coverage chapters against the `summary.json` and `postgres-regression.json` in the checkout you are actually running before you repeat a count.
 
 ## Logs and quiet mode
 

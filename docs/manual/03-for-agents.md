@@ -22,7 +22,7 @@ If you do send SQL, keep values in parameters. The Rust `Params` trait is the su
 
 `BEGIN`, and `Connection::begin` with any `BeginMode`, starts a snapshot. `Deferred`, `Immediate`, and `Exclusive` differ only in whether the begin lock is reserved. A commit that had not been published when the snapshot was taken stays invisible to that transaction. Serializable isolation is refused inside the kernel, and `Connection` has no method that requests it. The calls are in [Transactions and durability](07-transactions.md).
 
-`Strict` durability, the default, flushes the write-ahead record before that commit is published. An agent that must not tell a user "saved" before a crash would still find the row should leave the default alone. Set `REDLINEDB_DEFAULT_DURABILITY=normal` only for a benchmark or a throwaway file. `unsafe_dev` skips work that `normal` still does. It is for development, and the name is the warning.
+`Strict` durability, the default, flushes the write-ahead record before that commit is published. An agent that must not tell a user "saved" before a crash would still find the row should leave the default alone. Set `REDLINEDB_DEFAULT_DURABILITY=normal` only for a benchmark or a throwaway directory. `unsafe_dev` (also `unsafe-dev` and `off`) skips work that `normal` still does. It is for development, and the name is the warning. The accepted names are listed in [Transactions and durability](07-transactions.md).
 
 ## The process boundary stays in Rust
 

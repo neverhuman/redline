@@ -18,7 +18,7 @@ fn open() -> redlinedb::Result<Database> {
 }
 ```
 
-`Database::create` is the shorter call. It turns `create: true` on and keeps every other default, including `Strict`. Use `open_with_options` when you need to change one of those defaults. `Database::open` opens an existing file with default options.
+`Database::create` is the shorter call. It sets `create: true` and keeps every other default, including `Strict`. Use `open_with_options` when you need to change one of those defaults. `Database::open` also uses `OpenOptions::default()`, and that default has `create: true`, so a missing directory is created. The path is a directory in every case. A regular file at that path returns `database path exists as a regular file`.
 
 `query_row` maps one column into a Rust type that implements `FromValue`. `execute` runs a statement that does not return the rows you want to walk. `prepare` returns a `Statement` you can `step`.
 
@@ -28,7 +28,7 @@ Do not add a dependency on `redlinedb-kernel` or `redlinedb-sql` in an applicati
 
 ## C
 
-`crates/ffi` presents a SQLite-shaped C ABI. Symbols keep `sqlite3_*` names so a program written to that API can be aimed at this library. The header shipped with the product is `crates/ffi/include/redlinedb.h`.
+`crates/ffi` presents a SQLite-shaped C ABI. Symbols keep `sqlite3_*` names so a program written to that API can be aimed at this library. The headers in the tree are `contracts/c-abi/redlinedb.h` and `contracts/c-abi/sqlite3.h`. `scripts/install-from-source.sh` installs both. The release package script copies `sqlite3.h`.
 
 The ABI covers the calls the FFI tests exercise. It does not grow a SQLite feature that the SQL engine refuses. A C program that calls into FTS5, R-tree, or `dbstat` meets the same absence the shell meets. Link the library. Do not `dlopen` an extension from SQL. There is no `load_extension` entry point to receive it.
 
@@ -72,6 +72,6 @@ It is a way to look at a database you already run. It is not a second engine. Qu
 
 ## Pools
 
-`PoolBuilder` configures a `Pool` of connections on one `Database`. Use it when many tasks in one process need a connection and you do not want each task to call `connect` with its own policy. Session state is per connection. A pooled connection returned dirty — mid-transaction, or with a listen channel you did not mean to share — will surprise the next checkout. Commit or roll back before you return it.
+`PoolBuilder` configures a `Pool` of connections on one `Database`. Use it when many tasks in one process need a connection and you do not want each task to call `connect` with its own policy. Session state is per connection. Dropping a pooled connection rolls back an open transaction before the connection returns to the idle list, so the next checkout does not inherit that transaction. A listen channel set on the connection is not cleared by that drop. Clear it yourself if the next borrower should not see it.
 
 Next: [Files and day-to-day operation](09-operate.md) for backups and for the rule about one writing process.

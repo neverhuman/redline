@@ -2,7 +2,7 @@
 
 This is the book for people who will open a database, send it SQL, and embed it in a program. It was written against commit `45fc7dbe608ddafc949ec6ecf5264262ad7a4d1a` (version 4.1.0, 23 September 2026). When a number in a later chapter disagrees with a generated badge, the chapter says which file is the measurement.
 
-RedlineDB is an embedded SQL engine written in Rust. A program links it, or a person runs the `redlinedb` shell. The file it creates uses Redline pages (`RDPG`) and a Redline write-ahead log (`RDWL`). The shell accepts a large SQLite-shaped vocabulary. A separate mode renders a slice of Postgres 16.15 results. Both compatibility programs are measured, and both are unfinished.
+RedlineDB is an embedded SQL engine written in Rust. A program links it, or a person runs the `redlinedb` shell. The path you pass is a directory. Inside it, pages live in `data.redline` and the write-ahead log lives in `wal/`. Page and log constants are the ASCII codes for `RDPG` and `RDWL`, stored little-endian. The shell accepts a large SQLite-shaped vocabulary. A separate mode renders a slice of Postgres 16.15 results. Both compatibility programs are measured, and both are unfinished.
 
 ## Ten minutes
 

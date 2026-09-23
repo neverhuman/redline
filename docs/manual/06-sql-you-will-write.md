@@ -11,7 +11,7 @@ The dialect is an environment variable, `REDLINEDB_RESULT_DIALECT`.
 | unset | SQLite scripts, the official SQLite corpus, and Rust examples in this book |
 | `postgres` | Scripts you would run in `psql`, and the beyond-SQLite corpus |
 
-One process should stick to one value. A connection opened under the Postgres dialect stores Postgres session state (enums, domains, citext, listen channels, schemas). Mixing the two in one file is how a later `SELECT` sees a name or a boolean you did not expect.
+One process should stick to one value. A connection opened under the Postgres dialect stores Postgres session state (enums, domains, citext, listen channels, schemas). Mixing the two in one directory is how a later `SELECT` sees a name or a boolean you did not expect.
 
 ## Types that differ by dialect
 
@@ -27,7 +27,7 @@ One process should stick to one value. A connection opened under the Postgres di
 
 ## Names
 
-Unquoted identifiers are folded to lower case in the Postgres dialect, which is what Postgres does. Quoted identifiers keep their case. In the SQLite dialect, the usual SQLite rules apply.
+The catalog stores every table name folded to ASCII lowercase. `"Users"` and `users` are one table. Quote style does not preserve case in the name the engine looks up.
 
 In the Postgres dialect, `schema.table` is one identifier. Creating `auth.users` does not also create a table named `users` that another schema can see. Drop the qualified name you created.
 
@@ -42,7 +42,7 @@ These are the ones that look portable and are not, on this commit:
 - `soundex()`
 - `MERGE` with `WHEN NOT MATCHED BY SOURCE`
 - `ALTER TABLE ... INHERIT`
-- `SELECT ... FOR UPDATE` and the other row-lock forms in the open list
+- `SELECT ... FOR KEY SHARE`, `FOR NO KEY UPDATE`, and `LOCK TABLE`
 - `LISTEN ALL`
 
 `LANGUAGE sql` functions, ordinary `SELECT` and DML, `WITH`, windows, and the types in the previous section are the statements to build on.
@@ -63,7 +63,7 @@ RQL avoids the question. The value is a JSON field. See [For agents](03-for-agen
 
 `UnsupportedSql` means the parser or the planner recognized the statement and will not run it. Changing whitespace will not help.
 
-`UnsupportedIsolation` means something asked the kernel for serializable isolation. SQL `BEGIN` and `Connection::begin` do not do that. They start a snapshot. See [Transactions and durability](07-transactions.md).
+The kernel's message for serializable isolation is `unsupported isolation level`. The Rust facade surfaces that as a generic error, not as its own `ErrorCode`. SQL `BEGIN` and `Connection::begin` do not ask for serializable isolation. They start a snapshot. See [Transactions and durability](07-transactions.md).
 
 A domain check failure and an unknown enum label are data errors. They are supposed to fail. The open list still contains those two cases because the corpus has not yet declared the exact error text the gate should require. The rejection itself is the Postgres behavior.
 

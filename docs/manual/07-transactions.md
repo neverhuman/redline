@@ -12,7 +12,7 @@ Application code starts a transaction with SQL `BEGIN` or with `Connection::begi
 | `Immediate` | Starts a snapshot transaction and reserves the begin lock. |
 | `Exclusive` | Starts a snapshot transaction and reserves the begin lock. |
 
-All three modes call the kernel with `Isolation::Snapshot`. The rows you read stay the rows that were published when that snapshot was taken. A commit that publishes later stays invisible until you begin again. That is the mode an agent wants when it reads several tables and must not observe a torn write from a peer.
+A statement outside `BEGIN` uses the kernel's read-committed path. All three begin modes call the kernel with `Isolation::Snapshot`. The rows you read inside that transaction stay the rows that were published when the snapshot was taken. A commit that publishes later stays invisible until you begin again. That is the mode an agent wants when it reads several tables and must not observe a torn write from a peer.
 
 The kernel also knows `Isolation::ReadCommitted` and `Isolation::Serializable`. Read committed is used on some internal statement paths. Serializable is refused: `Engine::begin(Isolation::Serializable)` returns `UnsupportedIsolation`. There is no method on `Connection` that asks for serializable isolation and succeeds. Stay on `BeginMode`.
 
@@ -34,7 +34,7 @@ conn.commit()?;
 | `Normal` | Schema changes are written and the durability barrier is lighter. The parity harness sets this when it is measuring SQL rather than fsync. |
 | `UnsafeDev` | Skips shutdown flush work that the other modes still do. For development processes you can afford to throw away. |
 
-If `REDLINEDB_DEFAULT_DURABILITY` is unset, `OpenOptions::default()` selects `Strict`. The accepted values are `strict`, `normal`, and `unsafe_dev`. Any other string panics the first time default options are built, so a misspelled mode does not become a silent `Strict` or a silent `UnsafeDev`.
+If `REDLINEDB_DEFAULT_DURABILITY` is unset, `OpenOptions::default()` selects `Strict`. `strict` and `full` select Strict. `normal` selects Normal. `unsafe_dev`, `unsafe-dev`, and `off` select UnsafeDev. Any other string panics the first time default options are built. The panic text names `strict`, `normal`, and `unsafe_dev`.
 
 `REDLINEDB_QUIET_DURABILITY=1` suppresses the one-line notice the library prints the first time a non-default mode is selected through the environment.
 
@@ -42,13 +42,13 @@ The order on the strict path is the product rule: durable, then visible. Code th
 
 ## Locks and busy waits
 
-`OpenOptions.busy_timeout` defaults to five seconds. A lock wait that exceeds it returns to the caller. Row-lock syntax from Postgres (`FOR SHARE`, `FOR UPDATE`, `LOCK TABLE`) is still in the open Postgres list. A timeout is not those locks. It is how long this process will wait when the engine's own lock manager is busy.
+`OpenOptions.busy_timeout` defaults to five seconds. A lock wait that exceeds it returns to the caller. The Postgres row-lock forms still open on this commit are `FOR KEY SHARE`, `FOR NO KEY UPDATE`, and `LOCK TABLE`. `FOR UPDATE` and `FOR SHARE` are not in that open list. A timeout is how long this process will wait when the engine's own lock manager is busy. It is not those SQL clauses.
 
 `InterruptHandle`, exported next to `Connection`, cancels a statement. Use it for an agent deadline. Use `busy_timeout` for a lock wait. They are different clocks.
 
-## Several connections, one file
+## Several connections, one directory
 
-`Database::connect` opens another connection on the same engine. `Pool` checks connections out. Each connection has its own snapshot and its own session state (listen channels, Postgres types created in that session). The file and the write-ahead log are shared.
+`Database::connect` opens another connection on the same engine. `Pool` checks connections out. Each connection has its own session state (listen channels, Postgres types created in that session). The directory, `data.redline`, and `wal/` are shared. A connection inside `BEGIN` has its own snapshot. A connection that has not begun a transaction reads through the read-committed path.
 
 A reader on one connection does not have to finish before a writer on another connection commits. The reader keeps the snapshot it started with. The writer publishes a new one, subject to the durability mode.
 

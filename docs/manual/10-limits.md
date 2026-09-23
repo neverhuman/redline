@@ -4,7 +4,7 @@ This page is the one to hand to someone who is about to promise RedlineDB as a d
 
 ## The file
 
-The database file is a Redline file. SQLite format 3 tools do not open it. Postgres does not open it. Moving a deployment means a SQL dump, a restore, or a backup API. It does not mean copying the file onto a `sqlite3` binary.
+The database path is a directory containing `data.redline` and `wal/`. SQLite format 3 tools do not open that image. Postgres does not open it. Moving a deployment means a SQL dump, a restore, or the backup API. It does not mean handing the directory to a `sqlite3` binary.
 
 ## SQLite
 
@@ -26,9 +26,9 @@ Still open, in plain language:
 - text search, trigram similarity, and GiST/GIN index methods
 - the `vector` extension
 - `ALTER TABLE` inheritance and the storage, statistics, owner, and cluster forms
-- row locks (`FOR SHARE`, `FOR UPDATE`, and `LOCK TABLE`)
+- row locks that are still open: `FOR KEY SHARE`, `FOR NO KEY UPDATE`, and `LOCK TABLE`
 - publications, exported snapshots, and logical decoding
-- `NOTIFY` delivered from a function or a trigger to another session
+- `pg_notify` inside a function or a trigger (plain `NOTIFY` is accepted and delivers nothing)
 - `MERGE` syntax that belongs to Postgres 17
 - two error strings (a bad enum label, a domain check) that Postgres also rejects, and that the gate will not count as agreed until the expected text is declared
 
@@ -46,7 +46,7 @@ An agent loop that retries `UnsupportedSql` will not make progress. The [ledger]
 
 ## Speed
 
-Do not plan a migration on the hope that every query gets faster. Measure the queries you run, with `just bench` or the official runner at `--repetitions 3`, and keep the raw output. A change that wins a microbenchmark and loses a parity pass is not a win the project keeps.
+Do not plan a migration on the hope that every query gets faster. Measure the queries you run. The performance recipes in `just/lanes.just` are `perf-full`, `perf-pgo`, `perf-bolt`, and `phase9-certify`. The official parity runner accepts `--repetitions 3`. Keep the raw output. A change that wins a microbenchmark and loses a parity pass is not a win the project keeps.
 
 ## Process model
 

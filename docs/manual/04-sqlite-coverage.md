@@ -54,7 +54,7 @@ The reference shell does enable the session extension. `.session` with no argume
 
 ## Files
 
-A Redline database file is not a SQLite database file. Pages carry the `RDPG` magic. The write-ahead log carries `RDWL`. Tools that inspect SQLite format 3 headers will not describe this file correctly. Take a logical dump (SQL text) when you need to move rows into SQLite, and load a dump when you need to move rows out. The file itself stays in the engine that wrote it.
+The path you open is a directory. `data.redline` holds pages. `wal/` holds the log. The constants are `RDPG` and `RDWL` stored little-endian, so a hex dump does not begin with those four letters. Tools that inspect SQLite format 3 headers will not describe `data.redline` correctly. Take a logical dump (SQL text) when you need to move rows into SQLite, and load a dump when you need to move rows out. The directory stays with the engine that wrote it.
 
 ## How to re-check
 
