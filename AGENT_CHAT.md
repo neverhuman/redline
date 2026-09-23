@@ -1,5 +1,9 @@
 # RedlineDB Agent Chat
 
+## 2026-09-23T09:05Z parity/pg-range
+
+Claim: canonical checkout `/home/ubuntu/redlineDB`, branch `parity/pg-range` from `origin/main` `500f605f7`. int4range is half-open, point distance is Euclidean, citext compares without case. 20344 and 20345 also passed once point distance existed.
+
 ## 2026-09-23T08:10Z parity/pg-enum
 
 Claim: canonical checkout `/home/ubuntu/redlineDB`, branch `parity/pg-enum` from `origin/main` `ab1c4fe58`. Postgres enum order is declaration order and domain `CHECK (VALUE > n)` rejects failing values. `20021` and `20023` stay errors.

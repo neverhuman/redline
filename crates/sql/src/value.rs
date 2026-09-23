@@ -10,6 +10,24 @@ pub use redlinedb_kernel::catalog::{
 pub type SqlValue = OwnedValue;
 pub type SqlValueRef<'a> = ValueRef<'a>;
 
+fn compare_text_maybe_citext(left: &str, right: &str) -> Ordering {
+    let (left_ci, left_text) = split_citext(left);
+    let (right_ci, right_text) = split_citext(right);
+    if left_ci || right_ci {
+        return left_text
+            .to_ascii_lowercase()
+            .cmp(&right_text.to_ascii_lowercase());
+    }
+    left.cmp(right)
+}
+
+fn split_citext(text: &str) -> (bool, &str) {
+    match text.strip_prefix('\u{E000}') {
+        Some(rest) => (true, rest),
+        None => (false, text),
+    }
+}
+
 pub fn compare_values(left: &SqlValue, right: &SqlValue) -> Ordering {
     use OwnedValue::*;
     match (left, right) {
@@ -22,7 +40,7 @@ pub fn compare_values(left: &SqlValue, right: &SqlValue) -> Ordering {
         (Real(a), Integer(b)) => a.partial_cmp(&(*b as f64)).unwrap_or(Ordering::Equal),
         (Integer(_) | Real(_), Text(_) | Blob(_)) => Ordering::Less,
         (Text(_) | Blob(_), Integer(_) | Real(_)) => Ordering::Greater,
-        (Text(a), Text(b)) => a.as_ref().cmp(b.as_ref()),
+        (Text(a), Text(b)) => compare_text_maybe_citext(a, b),
         (Blob(a), Blob(b)) => a.as_ref().cmp(b.as_ref()),
         (Text(_), Blob(_)) => Ordering::Less,
         (Blob(_), Text(_)) => Ordering::Greater,

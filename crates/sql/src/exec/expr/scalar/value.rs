@@ -697,6 +697,11 @@ pub(crate) fn pg_array_contained(values: &[SqlValue]) -> Result<SqlValue> {
 /// `pg_array_overlap(lhs, rhs)` — PG `lhs && rhs`. Returns 1 when the two
 /// JSON arrays share at least one element, else 0.
 pub(crate) fn pg_array_overlap(values: &[SqlValue]) -> Result<SqlValue> {
+    if values.len() == 2 {
+        if let Some(yes) = crate::pg_type::range_overlaps(&values[0], &values[1]) {
+            return Ok(crate::value::postgres_bool(yes));
+        }
+    }
     pg_array_set_op(values, ArraySetOp::Overlap)
 }
 

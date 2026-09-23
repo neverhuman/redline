@@ -1020,6 +1020,7 @@ fn write_text_value_ref<W: Write>(
         }
         ValueRef::Real(v) => write!(out, "{}", format_real(v)).map_err(|err| err.to_string()),
         ValueRef::Text(v) => {
+            let v = v.strip_prefix('\u{E000}').unwrap_or(v);
             if escape_symbol {
                 out.write_all(escape_symbolic(v).as_bytes())
                     .map_err(|err| err.to_string())

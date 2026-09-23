@@ -847,6 +847,13 @@ pub fn execute_prepared(
                 affected_rows: 0,
             })
         }
+        PreparedKind::SetPgCitext { enabled } => {
+            crate::pg_type::set_citext(conn, *enabled)?;
+            Ok(ExecutionResult {
+                runtime: RuntimeState::Done,
+                affected_rows: 0,
+            })
+        }
         PreparedKind::DropPgDomain { name, if_exists } => {
             crate::pg_type::drop_domain(conn, name, *if_exists)?;
             Ok(ExecutionResult {
@@ -1160,6 +1167,7 @@ fn template_writes(kind: &PreparedKind) -> bool {
         | PreparedKind::DropPgEnum { .. }
         | PreparedKind::CreatePgDomain { .. }
         | PreparedKind::DropPgDomain { .. }
+        | PreparedKind::SetPgCitext { .. }
         | PreparedKind::ShowVariable { .. }
         | PreparedKind::Notify
         | PreparedKind::Listen { .. }

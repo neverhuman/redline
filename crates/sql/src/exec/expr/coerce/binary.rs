@@ -10,6 +10,13 @@ pub(crate) fn eval_binary(
     if let Some(value) = crate::pg_type::compare_enums(left, op, right, row, bindings)? {
         return Ok(value);
     }
+    if op.to_string() == "<->" {
+        let left_value = eval_scalar(left, row, bindings)?;
+        let right_value = eval_scalar(right, row, bindings)?;
+        if let Some(distance) = crate::pg_type::point_distance(&left_value, &right_value) {
+            return Ok(distance);
+        }
+    }
     if matches!(op, BinaryOperator::Match) {
         let pattern = eval_scalar(right, row, bindings)?;
         return match_result(left, SqlValue::Null, pattern, row);
@@ -135,7 +142,13 @@ pub(crate) fn eval_binary(
         }
         BinaryOperator::Arrow => crate::json::scalar::arrow_json(&left_value, &right_value)?,
         BinaryOperator::LongArrow => crate::json::scalar::arrow_sql(&left_value, &right_value)?,
-        BinaryOperator::AtArrow => crate::json::jsonb::op_at_arrow(&left_value, &right_value)?,
+        BinaryOperator::AtArrow => {
+            if let Some(yes) = crate::pg_type::range_contains(&left_value, &right_value) {
+                crate::value::postgres_bool(yes)
+            } else {
+                crate::json::jsonb::op_at_arrow(&left_value, &right_value)?
+            }
+        }
         BinaryOperator::ArrowAt => crate::json::jsonb::op_arrow_at(&left_value, &right_value)?,
         BinaryOperator::HashArrow => crate::json::jsonb::op_hash_arrow(&left_value, &right_value)?,
         BinaryOperator::HashLongArrow => {

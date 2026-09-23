@@ -271,6 +271,26 @@ pub(crate) fn eval_scalar_function_values(
                 value_as_str(other).as_ref().to_ascii_uppercase(),
             ))),
         },
+        "int4range" => {
+            let lo = values.first().and_then(crate::pg_type::as_number);
+            let hi = values.get(1).and_then(crate::pg_type::as_number);
+            match (lo, hi) {
+                (Some(lo), Some(hi)) => Ok(crate::pg_type::int4range_value(lo as i64, hi as i64)),
+                _ => Err(Error::UnsupportedSql(
+                    "int4range requires two integers".to_owned(),
+                )),
+            }
+        }
+        "point" => {
+            let x = values.first().and_then(crate::pg_type::as_number);
+            let y = values.get(1).and_then(crate::pg_type::as_number);
+            match (x, y) {
+                (Some(x), Some(y)) => Ok(crate::pg_type::point_value(x, y)),
+                _ => Err(Error::UnsupportedSql(
+                    "point requires two numbers".to_owned(),
+                )),
+            }
+        }
         "abs" => match values.first() {
             // SQLite: abs(NULL) is NULL, not an error.
             Some(SqlValue::Null) | None => Ok(SqlValue::Null),

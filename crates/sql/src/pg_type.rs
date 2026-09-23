@@ -22,6 +22,36 @@ pub(crate) struct PgDomain {
 pub(crate) fn try_prepare(conn: &Connection, sql: &str) -> Result<Option<PreparedTemplate>> {
     let trimmed = sql.trim().trim_end_matches(';').trim();
     let schema_epoch = conn.schema_epoch();
+    if let Some(rest) = strip_prefix_ci(trimmed, "drop extension") {
+        let (if_exists, name) = drop_name(rest);
+        if name.eq_ignore_ascii_case("citext") {
+            return Ok(Some(crate::parser::templates::template(
+                sql,
+                schema_epoch,
+                false,
+                PreparedKind::SetPgCitext { enabled: false },
+            )));
+        }
+        let _ = if_exists;
+        return Ok(None);
+    }
+    if let Some(rest) = strip_prefix_ci(trimmed, "create extension") {
+        let rest = rest.trim_start();
+        let rest = strip_prefix_ci(rest, "if not exists")
+            .unwrap_or(rest)
+            .trim_start();
+        let (name, _) = take_ident(rest)
+            .ok_or_else(|| Error::UnsupportedSql("CREATE EXTENSION requires a name".to_owned()))?;
+        if name.eq_ignore_ascii_case("citext") {
+            return Ok(Some(crate::parser::templates::template(
+                sql,
+                schema_epoch,
+                false,
+                PreparedKind::SetPgCitext { enabled: true },
+            )));
+        }
+        return Ok(None);
+    }
     if let Some(rest) = strip_prefix_ci(trimmed, "drop type") {
         let (if_exists, name) = drop_name(rest);
         return Ok(Some(crate::parser::templates::template(
@@ -132,9 +162,82 @@ pub(crate) fn is_registered(type_name: &str) -> bool {
     };
     let key = type_name.to_ascii_lowercase();
     crate::exec::with_session_reentrant(conn, |session| {
-        Ok(session.pg_enums.contains_key(&key) || session.pg_domains.contains_key(&key))
+        Ok(session.pg_enums.contains_key(&key)
+            || session.pg_domains.contains_key(&key)
+            || (key == "citext" && session.pg_citext))
     })
     .unwrap_or(false)
+}
+
+pub(crate) const CITEXT_MARK: char = '\u{E000}';
+
+pub(crate) fn set_citext(conn: &Connection, enabled: bool) -> Result<()> {
+    crate::exec::with_session_reentrant(conn, |session| {
+        session.pg_citext = enabled;
+        Ok(())
+    })
+}
+
+pub(crate) fn int4range_value(lo: i64, hi: i64) -> SqlValue {
+    SqlValue::Text(Arc::from(format!("range:{lo}:{hi}")))
+}
+
+pub(crate) fn parse_range(value: &SqlValue) -> Option<(i64, i64)> {
+    let SqlValue::Text(text) = value else {
+        return None;
+    };
+    let rest = text.strip_prefix("range:")?;
+    let (lo, hi) = rest.split_once(':')?;
+    Some((lo.parse().ok()?, hi.parse().ok()?))
+}
+
+pub(crate) fn range_contains(range: &SqlValue, value: &SqlValue) -> Option<bool> {
+    let (lo, hi) = parse_range(range)?;
+    let n = match value {
+        SqlValue::Integer(n) => *n,
+        SqlValue::Text(text) => text.parse().ok()?,
+        _ => return None,
+    };
+    Some(n >= lo && n < hi)
+}
+
+pub(crate) fn range_overlaps(left: &SqlValue, right: &SqlValue) -> Option<bool> {
+    let (a, b) = parse_range(left)?;
+    let (c, d) = parse_range(right)?;
+    Some(a < d && c < b)
+}
+
+pub(crate) fn point_value(x: f64, y: f64) -> SqlValue {
+    SqlValue::Text(Arc::from(format!("point:{x}:{y}")))
+}
+
+pub(crate) fn parse_point(value: &SqlValue) -> Option<(f64, f64)> {
+    let SqlValue::Text(text) = value else {
+        return None;
+    };
+    let rest = text.strip_prefix("point:")?;
+    let (x, y) = rest.split_once(':')?;
+    Some((x.parse().ok()?, y.parse().ok()?))
+}
+
+pub(crate) fn point_distance(left: &SqlValue, right: &SqlValue) -> Option<SqlValue> {
+    let (x1, y1) = parse_point(left)?;
+    let (x2, y2) = parse_point(right)?;
+    let d = ((x2 - x1).powi(2) + (y2 - y1).powi(2)).sqrt();
+    if (d - d.round()).abs() < 1e-9 {
+        Some(SqlValue::Integer(d.round() as i64))
+    } else {
+        Some(SqlValue::Real(d))
+    }
+}
+
+pub(crate) fn as_number(value: &SqlValue) -> Option<f64> {
+    match value {
+        SqlValue::Integer(n) => Some(*n as f64),
+        SqlValue::Real(n) => Some(*n),
+        SqlValue::Text(text) => text.parse().ok(),
+        _ => None,
+    }
 }
 
 /// `Some` when `type_name` is a registered enum or domain.
@@ -146,12 +249,24 @@ pub(crate) fn cast_registered(type_name: &str, value: &SqlValue) -> Result<Optio
         return Ok(None);
     };
     let key = type_name.to_ascii_lowercase();
-    let (labels, domain) = crate::exec::with_session_reentrant(&conn, |session| {
+    let (labels, domain, citext) = crate::exec::with_session_reentrant(&conn, |session| {
         Ok((
             session.pg_enums.get(&key).cloned(),
             session.pg_domains.get(&key).cloned(),
+            key == "citext" && session.pg_citext,
         ))
     })?;
+    if citext {
+        let text = match value {
+            SqlValue::Text(text) => text.to_string(),
+            SqlValue::Integer(n) => n.to_string(),
+            SqlValue::Null => return Ok(Some(SqlValue::Null)),
+            _ => return Err(Error::UnsupportedSql("cannot cast to citext".to_owned())),
+        };
+        return Ok(Some(SqlValue::Text(Arc::from(format!(
+            "{CITEXT_MARK}{text}"
+        )))));
+    }
     if let Some(labels) = labels {
         let text = match value {
             SqlValue::Text(text) => text.to_string(),
