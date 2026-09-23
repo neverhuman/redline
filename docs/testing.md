@@ -143,6 +143,72 @@ cross-check, run:
 rtk scripts/ci-local.sh all
 ```
 
+## Publication and review
+
+Two logins, one job each. `/home/ubuntu/.local/bin/gh-role` loads the named existing
+credential into the child `gh` process. It leaves the global active account alone and
+it does not print the credential. A `GH_TOKEN` already exported in the parent shell is
+cleared for that child. The git commit email does not choose the API user.
+
+| Role | Login | Use it for |
+| --- | --- | --- |
+| `writer` | `jepsontaylor` | New commits, pushes, `pr create`, `pr merge`. Approves only a pull request this login did not open and did not author or commit. |
+| `reviewer` | `neverhuman` | `APPROVE` when that login did not open the pull request and did not author or commit any commit on it. |
+
+New commits use `Jepson Taylor <130782313+jepsontaylor@users.noreply.github.com>`.
+
+Leave credential files unread. Do not `cat` them, do not `source` them, and do not run
+`gh auth token` in a shell whose output is kept. The writer file ends in `.env` and is
+still a raw token.
+
+| Path | Mode | Role |
+| --- | --- | --- |
+| `/home/ubuntu/.local/bin/gh-role` | `0700` | Router. Arguments start with `writer` or `reviewer`. |
+| `/home/ubuntu/.config/gh/hosts.yml` | `0600` | GitHub CLI account store. A name in this file is not a working role until `gh-role` shows that login. |
+| `/home/ubuntu/.config/jopedime/secrets/gh.env` | `0600` | Writer token consumed by the git helper. |
+| `/home/ubuntu/.config/jopedime/bin/github-writer-credential.py` | `0700` | Git HTTPS helper for `neverhuman/RedlineDB` and `veox-ai/JopeDime`, as `jepsontaylor`. |
+| `/etc/jope-runner/github-pat` | root-owned, not readable by `ubuntu` | Runner registration. It cannot approve a pull request. Leave it unchanged. |
+
+`hosts.yml` also names `jeryu` and `jepsont`. Neither has a usable token. They are not
+reviewers. `jeppsontaylor` (two p's) lives on the operator Mac and is not installed
+here. Do not copy it onto this host.
+
+```sh
+/home/ubuntu/.local/bin/gh-role writer api user --jq .login
+/home/ubuntu/.local/bin/gh-role reviewer api user --jq .login
+/home/ubuntu/.local/bin/gh-role eligible reviewer neverhuman/RedlineDB <PR>
+```
+
+The first two logins are `jepsontaylor` and `neverhuman`. `eligible` prints who is
+excluded. Exit 0 means that role may approve. `reviewer pr create` is refused.
+
+1. `just pr-ci` exits 0, then one push of that head.
+2. The writer opens the pull request.
+3. An eligible reviewer approves the full head SHA after the push:
+
+```sh
+/home/ubuntu/.local/bin/gh-role reviewer api --method POST \
+  repos/neverhuman/RedlineDB/pulls/<PR>/reviews \
+  -f commit_id=<full sha> -f event=APPROVE -f body="$(cat <review-file>)"
+```
+
+The helper refuses the approval when the selected login opened the pull request or
+authored or committed any commit. When both working logins are in that set, stop.
+A commit whose `author.login` is null (`jekko <bot@jekko.ai>`) needs
+`--ack-unassociated` after the producer is known. That flag does not invent a login.
+Rewriting author or committer so a login becomes eligible is not a review.
+
+4. The writer merges after `RedlineDB/required` is success on that same SHA:
+
+```sh
+/home/ubuntu/.local/bin/gh-role writer pr merge <PR> --repo neverhuman/RedlineDB \
+  --rebase --delete-branch --match-head-commit <full sha>
+```
+
+`main` keeps one required approval, dismissal of reviews after a new push, enforcement
+for admins, strict `RedlineDB/required`, linear history, and a ban on force-push and
+deletion. JopeDime `main` protection still returns HTTP 403 until a paid plan is active.
+
 ## Budgets and kill-switches
 
 Long-running bench lanes carry budgets and a kill-switch so an agent

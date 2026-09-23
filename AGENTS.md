@@ -34,8 +34,8 @@ task-ordered, not a numbered PR sequence. Consumer deployment locks and database
   the same branch. Closing is only for a verified exact duplicate, with the salvaged content credited in
   the survivor. Merge waits for an eligible review of the exact head and for
   `RedlineDB/required` on that same head. The reviewer must not have opened the pull
-  request and must not have authored or committed any commit on it. The steps and the
-  credential paths are in Publication and review.
+  request and must not have authored or committed any commit on it. The steps are in
+  `docs/testing.md`.
 - **Parallelism**: at most four open PRs, each one lane, each rebased on a freshly fetched `origin/main`
   (protection is strict, so this is mandatory), each disjoint from the others on the hot files —
   `crates/sql/src/exec/**`, `crates/sql/src/parser*`, `crates/sql/src/{planner,statement}.rs`,
@@ -59,89 +59,6 @@ task-ordered, not a numbered PR sequence. Consumer deployment locks and database
 - **Write down a reference defect.** When a compile flag or a documented command does not change the
   reference shell, record that next to the flag. Do not hide it in a comment that the next agent will
   "fix" by flipping a default.
-
-## Publication and review
-
-Two logins, one job each. `/home/ubuntu/.local/bin/gh-role` loads the named existing
-credential into the child `gh` process. It leaves the global active account alone and
-it does not print the credential. A `GH_TOKEN` already exported in the parent shell is
-cleared for that child. The git commit email does not choose the API user; a push that
-uses the git helper still needs `gh-role` for `gh pr` and `gh api`.
-
-| Role | Login | Use it for |
-| --- | --- | --- |
-| `writer` | `jepsontaylor` | New commits, pushes, `pr create`, `pr merge`. Approves only a pull request this login did not open and did not author or commit. |
-| `reviewer` | `neverhuman` | `APPROVE` when that login did not open the pull request and did not author or commit any commit on it. |
-
-New commits use `Jepson Taylor <130782313+jepsontaylor@users.noreply.github.com>`.
-
-Credential files. Query identity with the commands below. Leave the file contents unread:
-do not `cat` them, do not `source` them, and do not run `gh auth token` in a shell whose
-output is kept. The writer file ends in `.env` and is still a raw token, not a shell script.
-
-| Path | Mode | Role |
-| --- | --- | --- |
-| `/home/ubuntu/.local/bin/gh-role` | `0700` | Router. Arguments start with `writer` or `reviewer`. |
-| `/home/ubuntu/.config/gh/hosts.yml` | `0600` | GitHub CLI account store. A user name in this file is not a working role until `gh-role` can show that login. |
-| `/home/ubuntu/.config/jopedime/secrets/gh.env` | `0600` | Writer token consumed by the git helper. |
-| `/home/ubuntu/.config/jopedime/bin/github-writer-credential.py` | `0700` | Git HTTPS `get` helper. It answers only for `neverhuman/RedlineDB` and `veox-ai/JopeDime`, as `jepsontaylor`. |
-| `/etc/jope-runner/github-pat` | root-owned, not readable by `ubuntu` | Runner registration. It cannot approve a pull request. Leave it unchanged. |
-
-`/home/ubuntu/.config/gh/hosts.yml` also names `jeryu` and `jepsont`. Neither has a
-usable token (`gh auth token --user` fails). They are not reviewers. `jeppsontaylor`
-(two p's) lives on the operator Mac and is not installed here. Do not copy it onto
-this host. The two working logins are `jepsontaylor` and `neverhuman`.
-
-Preflight, with the full path so a noninteractive shell does not pick up another `gh`:
-
-```sh
-/home/ubuntu/.local/bin/gh-role writer api user --jq .login
-/home/ubuntu/.local/bin/gh-role reviewer api user --jq .login
-/home/ubuntu/.local/bin/gh-role eligible reviewer neverhuman/RedlineDB <PR>
-/home/ubuntu/.local/bin/gh-role preflight --repo neverhuman/RedlineDB
-```
-
-The first two logins are `jepsontaylor` and `neverhuman`. `eligible` prints who is
-excluded and why. Exit 0 means that role may approve. `reviewer pr create` is refused.
-
-Order for `neverhuman/RedlineDB`:
-
-1. `just pr-ci` exits 0 on the commit that will be pushed. `just fast` is only the
-   iteration lane. Push that one green head. A red local lane stays unpushed, so GitHub
-   is not asked to re-run the same failure.
-2. Open the pull request as the writer:
-   `gh-role writer pr create --repo neverhuman/RedlineDB --body-file <prepared-body>`.
-3. The reviewer reads the diff at the full head SHA. An eligible reviewer approves that
-   SHA, after the push:
-
-```sh
-/home/ubuntu/.local/bin/gh-role reviewer api --method POST \
-  repos/neverhuman/RedlineDB/pulls/<PR>/reviews \
-  -f commit_id=<full sha> -f event=APPROVE -f body="$(cat <review-file>)"
-```
-
-The helper refuses the approval when the selected login opened the pull request or
-authored or committed any commit. When both working logins are in that set, stop.
-`jeryu` and `jepsont` are not a third reviewer. A commit whose `author.login` is null
-(the `jekko` commits use `bot@jekko.ai`) is unassociated. Find out who produced it,
-then add `--ack-unassociated` to the same command. The flag records that check. It
-does not invent a login.
-
-4. Rewriting author or committer so a login becomes eligible is not a review.
-5. The writer merges after `RedlineDB/required` is success on that same SHA. No admin
-   bypass:
-
-```sh
-/home/ubuntu/.local/bin/gh-role writer pr merge <PR> --repo neverhuman/RedlineDB \
-  --rebase --delete-branch --match-head-commit <full sha>
-```
-
-The writer pushes. An eligible reviewer approves after that push, because a new push
-dismisses the previous approval. `main` keeps one required approval, dismissal of stale
-reviews, approval of the latest push, enforcement for admins, strict `RedlineDB/required`,
-linear history, and a ban on force-push and deletion. JopeDime `main` protection still
-returns HTTP 403 until a paid plan is active, so a review there is not yet enforced by
-the server.
 
 ## Workspace boundary
 
