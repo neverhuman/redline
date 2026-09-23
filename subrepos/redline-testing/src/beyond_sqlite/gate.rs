@@ -205,8 +205,8 @@ pub fn check(raw_path: &Path, baseline_path: Option<&Path>, readme: Option<&Path
     );
     ensure!(
         newly_passing.is_empty(),
-        "regression baseline is stale: {} case(s) it records as failing now pass. \
-         Remove them from the baseline so it stops overstating what is broken: {}",
+        "regression baseline lists failures that now pass: {} case(s). \
+         Remove them from the baseline so it stops claiming they are broken: {}",
         newly_passing.len(),
         newly_passing.iter().cloned().collect::<Vec<_>>().join(", ")
     );
@@ -289,11 +289,14 @@ mod tests {
         let dir = bundle();
         let raw = dir.path().join("beyond_sqlite.raw.jsonl");
         // Every case in the bundle passes, so a baseline that claims one fails
-        // is stale. The subset ratchet alone is happy with this -- an empty set
+        // is behind the live result. The subset ratchet alone is happy with this -- an empty set
         // is a subset of anything -- which is the hole being closed.
-        let stale = baseline(dir.path(), &["BEYOND-CASE-20021"]);
-        let err = check(&raw, Some(&stale), None).unwrap_err().to_string();
-        assert!(err.contains("regression baseline is stale"), "{err}");
+        let behind = baseline(dir.path(), &["BEYOND-CASE-20021"]);
+        let err = check(&raw, Some(&behind), None).unwrap_err().to_string();
+        assert!(
+            err.contains("regression baseline lists failures that now pass"),
+            "{err}"
+        );
         assert!(err.contains("BEYOND-CASE-20021"), "{err}");
 
         // ... and the artifact records which ones, not just that some exist.
