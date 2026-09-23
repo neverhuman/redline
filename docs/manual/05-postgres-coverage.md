@@ -17,15 +17,15 @@ Leave it unset for SQLite work. The official SQLite lane does not set it.
 | Corpus | `beyond_sqlite`, 265 cases |
 | Oracle | PostgreSQL 16.15, settings `160015\|C\|C\|UTC` |
 | Image the gate accepts | `sha256:efdf07c2f9d4df592783dcc8ea5f6db02efbf5f6452b527225ff5e58364570e9` |
-| Open failures in the policy on this commit | 48 |
+| Open failures in the policy on this commit | 42 |
 | Policy file | `metadata/beyond_sqlite/postgres-regression.json` |
-| Policy reason | int4range is half-open, point distance is Euclidean, and citext ignores case |
+| Policy reason | ALTER INHERIT is a read-time union, and the catalog flags are session fields |
 
 The policy's `failed_cases` array is the list the gate allows. A run passes the regression check when every failure is in that list and every case in that list still fails. When a case starts passing, it has to leave the list. The list is not a trophy. It is the set of known misses.
 
-The README block between `POSTGRES_PARITY_START` and `POSTGRES_PARITY_END` still reports **127 passed, 138 failed** from commit `090dbc9b`. That block is generated, and it has not been regenerated on this commit. Until CI writes a new block, quote the policy file: **48** named failures out of **265** cases.
+The README block between `POSTGRES_PARITY_START` and `POSTGRES_PARITY_END` still reports **127 passed, 138 failed** from commit `090dbc9b`. That block is generated, and it has not been regenerated on this commit. Until CI writes a new block, quote the policy file: **42** named failures out of **265** cases.
 
-A matching non-zero exit is not a pass. The runner counts agreement on an error only when the case declares the text the target must produce. Several of the 48 are errors we intend to keep, once that text is declared. They are listed in the [ledger](appendix-coverage.md).
+A matching non-zero exit is not a pass. The runner counts agreement on an error only when the case declares the text the target must produce. Several of the 42 are errors we intend to keep, once that text is declared. They are listed in the [ledger](appendix-coverage.md).
 
 ## What already behaves like Postgres
 
@@ -47,17 +47,18 @@ These are in the engine on this commit, and the corpus cases that cover them are
 
 **Session state.** `LISTEN` and `UNLISTEN` record channels on this connection. A listen that has not committed is gone after rollback. `pg_listening_channels()` reads that set. `NOTIFY` is accepted and does not deliver a payload to any session. The open listen/notify cases are `LISTEN ALL`, which is a syntax error, and `pg_notify` inside a function or a trigger.
 
+**Table flags.** `ALTER TABLE ... INHERIT` makes a later read of the parent return the parent rows and the child rows. `NO INHERIT` drops the child from that read. `SET UNLOGGED` then `SET LOGGED` reports `relpersistence` as `u` then `p`. `SET STATISTICS 250` reads back `250`. `SET STORAGE EXTERNAL` reads back `e`. `array_to_string(reloptions, ',')` reads back `autovacuum_enabled=true` after `SET (autovacuum_enabled = true)`. `OWNER TO CURRENT_USER` reports `tableowner` as `redlinedb`. `SET WITHOUT CLUSTER` leaves the clustered-index count at `0`.
+
 **Catalogs the shell can see.** Empty shims exist for several `pg_*` views the corpus only counts (`pg_locks`, publication and subscription views, replication slots). `pg_class`, `pg_namespace`, and `pg_constraint` can be rewritten from the session snapshot so a name probe returns rows. Materialized views have a session catalog. Read `docs/sqlite-parity.md` and the SQL crate when you need the exact column list. A shim that answers `count(*)` is not the full Postgres catalog.
 
 ## What is still open
 
-The 48 names are in the [ledger](appendix-coverage.md). They fall into a few jobs:
+The 42 names are in the [ledger](appendix-coverage.md). They fall into a few jobs:
 
 | Open cases | Job |
 | ---: | --- |
 | 16 | `plpgsql` functions and procedures: loops, exceptions, `RETURN NEXT`, `OUT` parameters, recursion |
 | 12 | Text search, trigram, GiST, GIN, and the `vector` extension |
-| 6 | `ALTER TABLE` forms: inheritance, logged-ness, statistics, storage, autovacuum, owner, cluster |
 | 4 | Publications, snapshots, and logical decoding |
 | 3 | `SELECT ... FOR KEY SHARE`, `FOR NO KEY UPDATE`, and `LOCK TABLE` |
 | 3 | `NOTIFY` from a function or trigger, and `LISTEN ALL` |

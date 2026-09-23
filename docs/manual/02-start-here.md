@@ -12,7 +12,7 @@ curl -fsSL https://raw.githubusercontent.com/neverhuman/RedlineDB/main/install.s
 
 The installer checks the release checksum and defaults to `~/.local`. It installs `redlinedb` and `redlinedb-server`. It leaves the system `sqlite3` in place.
 
-The git tag `v4.1.0` is an ancestor of commit `45fc7dbe`, not that commit. A package installed with `VERSION=v4.1.0` is the tagged release. The Postgres types in this book (enums, domains, half-open `int4range`, citext) landed after that tag. Build the commit below when you need those types. The crate's version string is still `4.1.0`, so `--version` does not tell the two builds apart.
+The git tag `v4.1.0` is an ancestor of commit `8ae3a8b79`, not that commit. A package installed with `VERSION=v4.1.0` is the tagged release. The Postgres types in this book (enums, domains, half-open `int4range`, citext) landed after that tag. Build the commit below when you need those types. The crate's version string is still `4.1.0`, so `--version` does not tell the two builds apart.
 
 To pin the tagged release and a prefix:
 
@@ -34,7 +34,7 @@ The toolchain file in the repository asks for Rust 1.95.0. You also need a C/C++
 ```bash
 git clone https://github.com/neverhuman/redlineDB
 cd redlineDB
-git checkout 45fc7dbe608ddafc949ec6ecf5264262ad7a4d1a
+git checkout 8ae3a8b791d4edab88cf8513ad0d99ef709a1202
 ./scripts/build-from-source.sh
 ./scripts/install-from-source.sh
 ```
@@ -60,7 +60,7 @@ The same statements are in [`examples/first.sql`](examples/first.sql). Dot-comma
 Add the crate by git revision when you want the commit this book describes. Commit `Cargo.lock` in the application so the build stays reproducible.
 
 ```toml
-redlinedb = { git = "https://github.com/neverhuman/RedlineDB", rev = "45fc7dbe608ddafc949ec6ecf5264262ad7a4d1a" }
+redlinedb = { git = "https://github.com/neverhuman/RedlineDB", rev = "8ae3a8b791d4edab88cf8513ad0d99ef709a1202" }
 ```
 
 `tag = "v4.1.0"` is the older release. Use it only when you have decided that the tagged tree is enough.

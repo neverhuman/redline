@@ -1,6 +1,6 @@
 # Limits
 
-This page is the one to hand to someone who is about to promise RedlineDB as a drop-in. Every line here is true of commit `45fc7dbe`.
+This page is the one to hand to someone who is about to promise RedlineDB as a drop-in. Every line here is true of commit `8ae3a8b79`.
 
 ## The file
 
@@ -18,14 +18,13 @@ The C ABI uses `sqlite3_*` names for the calls it implements. A symbol existing 
 
 ## Postgres
 
-The shell comparison has 265 cases. The regression policy names 48 that still fail. The README's generated Postgres paragraph is older (127 passed, 138 failed) and should not be quoted as the current policy.
+The shell comparison has 265 cases. The regression policy names 42 that still fail. The README's generated Postgres paragraph is older (127 passed, 138 failed) and should not be quoted as the current policy.
 
 Still open, in plain language:
 
 - `plpgsql`, including anonymous `DO` blocks
 - text search, trigram similarity, and GiST/GIN index methods
 - the `vector` extension
-- `ALTER TABLE` inheritance and the storage, statistics, owner, and cluster forms
 - row locks that are still open: `FOR KEY SHARE`, `FOR NO KEY UPDATE`, and `LOCK TABLE`
 - publications, exported snapshots, and logical decoding
 - `pg_notify` inside a function or a trigger (plain `NOTIFY` is accepted and delivers nothing)
@@ -54,4 +53,4 @@ One `Database` value owns the file for writing. Other agents in the same process
 
 ## What a later commit can change
 
-The 48 open Postgres cases are a work list, not a law. When one starts passing, the policy file loses that id and this chapter goes stale in that one row. The SQLite summary file moves when a new official run is committed. If you are reading this on a commit other than `45fc7dbe608ddafc949ec6ecf5264262ad7a4d1a`, regenerate your confidence from those two files before you repeat a count.
+The 42 open Postgres cases are a work list, not a law. When one starts passing, the policy file loses that id and this chapter goes stale in that one row. The SQLite summary file moves when a new official run is committed. If you are reading this on a commit other than `8ae3a8b791d4edab88cf8513ad0d99ef709a1202`, regenerate your confidence from those two files before you repeat a count.

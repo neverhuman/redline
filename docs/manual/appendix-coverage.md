@@ -1,6 +1,6 @@
 # Coverage ledger
 
-Copied from the files named below, at commit `45fc7dbe608ddafc949ec6ecf5264262ad7a4d1a`. Nothing rewrites this page on build. When the policy or the SQLite summary changes, edit this page in the same commit so the counts stay tied to those files.
+Copied from the files named below, at commit `8ae3a8b791d4edab88cf8513ad0d99ef709a1202`. Nothing rewrites this page on build. When the policy or the SQLite summary changes, edit this page in the same commit so the counts stay tied to those files.
 
 ## SQLite
 
@@ -22,25 +22,19 @@ The README block under `sqlite-parity-report:begin` repeats these counts and dat
 
 Corpus size, from `subrepos/redline-testing/corpus/beyond_sqlite/generated_manifest.json`: **265** cases.
 
-Open failures, from `metadata/beyond_sqlite/postgres-regression.json`: **48** cases.
+Open failures, from `metadata/beyond_sqlite/postgres-regression.json`: **42** cases.
 
-Policy reason, copied from that file: int4range is half-open, point distance is Euclidean, and citext ignores case. 48 failures remain.
+Policy reason, copied from that file: ALTER INHERIT is a read-time union, and logged-ness, statistics, storage, reloptions, owner, and cluster are session catalog fields. 42 failures remain.
 
 Oracle settings the gate requires: `160015|C|C|UTC`.
 
-The generated README paragraph between `POSTGRES_PARITY_START` and `POSTGRES_PARITY_END` still says 127 passed and 138 failed, attributed to commit `090dbc9b`. It has not been rewritten for `45fc7dbe`. Use the table below.
+The generated README paragraph between `POSTGRES_PARITY_START` and `POSTGRES_PARITY_END` still says 127 passed and 138 failed, attributed to commit `090dbc9b`. It has not been rewritten for `8ae3a8b79`. Use the table below.
 
 | Category | Case | Name | What the case is about |
 | --- | ---: | --- | --- |
 | BEYOND_LISTEN_NOTIFY | 20438 | `LISTEN_INVALID_CHANNEL_NAME_ALL` | LISTEN ALL is a syntax error (ALL is not a valid identifier here, unlike UNLISTEN *) |
 | BEYOND_LISTEN_NOTIFY | 20441 | `NOTIFY_INSIDE_FUNCTION` | pg_notify called inside a PL/pgSQL function executes cleanly |
 | BEYOND_LISTEN_NOTIFY | 20442 | `NOTIFY_INSIDE_TRIGGER` | NOTIFY via pg_notify inside an AFTER INSERT trigger fires without error |
-| BEYOND_MIGRATION_ERGONOMICS | 20213 | `ALTER_TABLE_INHERIT_NO_INHERIT` | ALTER TABLE INHERIT then NO INHERIT — attach and detach a child |
-| BEYOND_MIGRATION_ERGONOMICS | 20214 | `ALTER_TABLE_SET_LOGGED_UNLOGGED` | ALTER TABLE SET UNLOGGED / SET LOGGED toggles relpersistence ('u' vs 'p') |
-| BEYOND_MIGRATION_ERGONOMICS | 20215 | `ALTER_COLUMN_SET_STATISTICS` | ALTER COLUMN SET STATISTICS updates planner target |
-| BEYOND_MIGRATION_ERGONOMICS | 20216 | `ALTER_COLUMN_SET_STORAGE` | ALTER COLUMN SET STORAGE EXTERNAL changes attstorage to 'e' |
-| BEYOND_MIGRATION_ERGONOMICS | 20217 | `ALTER_TABLE_SET_AUTOVACUUM_OPTION` | ALTER TABLE SET (autovacuum_enabled = true) — table-level storage parameter (SET TABLESPACE substitute) |
-| BEYOND_MIGRATION_ERGONOMICS | 20219 | `ALTER_TABLE_OWNER_AND_WITHOUT_CLUSTER` | ALTER TABLE OWNER TO CURRENT_USER (idempotent) + SET WITHOUT CLUSTER clears clustered marker |
 | BEYOND_MVCC_LOCKING | 20404 | `SELECT_FOR_KEY_SHARE` | SELECT ... FOR KEY SHARE acquires a weaker key-share lock |
 | BEYOND_MVCC_LOCKING | 20405 | `SELECT_FOR_NO_KEY_UPDATE` | SELECT ... FOR NO KEY UPDATE allows concurrent FOR KEY SHARE |
 | BEYOND_MVCC_LOCKING | 20412 | `LOCK_TABLE_ACCESS_EXCLUSIVE` | LOCK TABLE ... IN ACCESS EXCLUSIVE MODE succeeds in a single tx with no contender |
