@@ -37,7 +37,7 @@ and it says which file to trust when a badge and a report disagree.
 <!-- POSTGRES_PARITY_START -->
 PostgreSQL **16.15** SQL-shell corpus: **265 / 265 passed**, **0 failed**, **0 skipped**. Corpus qualification: **passed**. Regression gate: **passed**.
 
-All corpus cases run in CI; known failures remain failures. PostgreSQL wire/client and full application compatibility remain unverified. Source: `8c0222102d547608e51cc70308a48b89dac81e75`; corpus SHA-256: `b240a7204eeb46893ea1f06e715a144f6cd962efe8f41041582e52ca975cd5be`.
+All corpus cases run in CI; known failures remain failures. PostgreSQL wire/client and full application compatibility remain unverified. Source: `30fa63cb030d880035ac717a6450b095927d6303` (dirty workspace); corpus SHA-256: `b240a7204eeb46893ea1f06e715a144f6cd962efe8f41041582e52ca975cd5be`.
 <!-- POSTGRES_PARITY_END -->
 
 ## What's new in v4.0.9 → v4.1.0 (W7 startup optimization)
@@ -362,9 +362,9 @@ below is a dated historical measurement from
 Current acceptance evidence is attached to the GitHub CI run.
 
 <!-- sqlite-parity-report:begin -->
-**SQLite parity coverage:** **2441 / 2445** cases passed in CI. Failed: **0**. Skipped: **4**. Updated 2026-09-23.
+**SQLite parity coverage:** **2445 / 2445** cases passed in CI. Failed: **0**. Skipped: **0**. Updated 2026-09-24.
 
-**SQLite parity latency:** median gap **-93.21%**, worst gap **-60539.39%**, faster cases **71**.
+**SQLite parity latency:** median gap **-470.97%**, worst gap **-29821.13%**, faster cases **43**.
 
 **Benchmark metadata:** RedlineDB target version **redlinedb v4.1.0 (SQLite 3.45.1 compatibility)**, SQLite reference version **3.53.1 2026-05-05 10:34:17 c88b22011a54b4f6fbd149e9f8e4de77658ce58143a1af0e3785e4e6475127e9 (64-bit)**, redline-testing runner version **redline-testing 1.0.1**.
 
@@ -377,31 +377,31 @@ Current acceptance evidence is attached to the GitHub CI run.
 
 | Rank | Case | Priority | Profile | Category | SQLite median ns | RedlineDB median ns | Improvement |
 | ---: | --- | --- | --- | --- | ---: | ---: | ---: |
-| 1 | SCALAR_STRING_014 | P1 | memory | GEN_SQL_SCALAR | 3271541 | 1983842407 | -60539.39% |
-| 2 | SCALAR_NULL_COALESCE_003 | P1 | memory | GEN_SQL_SCALAR | 4048812 | 2076704698 | -51191.70% |
-| 3 | SELECT_WHERE_ORDER_LIMIT_OFFSET | P0 | memory | SQL_SELECT | 3121136 | 1438786471 | -45998.17% |
-| 4 | BETWEEN_IN_ISNULL_IS | P0 | memory | SQL_OPERATORS | 2963498 | 1295900371 | -43096.68% |
-| 5 | CASE_COALESCE_NULLIF_IIF | P0 | memory | SQL_EXPRESSIONS | 2446459 | 1287487199 | -42816.24% |
-| 6 | OPT_PCACHETRACE_CATALOG | P4 | catalog | CLI_OPTION_CATALOG | 2719837 | 1271967891 | -42298.93% |
-| 7 | DOT_SHA3SUM | P0 | memory | CLI_DOT_COMMAND | 3984610 | 1655618704 | -41450.33% |
-| 8 | SCALAR_ARITH_029 | P1 | memory | GEN_SQL_SCALAR | 2884509 | 1217638170 | -40487.94% |
-| 9 | OPT_IFEXISTS_NEGATIVE_TEMPFILE | P3 | tempfile | CLI_OPTION_TEMPFILE_DIAGNOSTIC | 2745295 | 1205216244 | -40073.87% |
-| 10 | DOT_ECHO | P0 | memory | CLI_DOT_COMMAND | 3308120 | 1271142790 | -38324.93% |
-| 11 | CORE_STRING_FUNCTIONS | P0 | memory | SQL_FUNCTIONS | 2189143 | 1130105267 | -37570.18% |
-| 12 | DOT_LOG | P0 | memory | CLI_DOT_COMMAND | 2431982 | 1114328382 | -37044.28% |
-| 13 | OPT_BOX_MODE | P2 | memory | CLI_OPTION | 6190705 | 2170527813 | -34961.08% |
-| 14 | BEGIN_MODES | P0 | memory | SQL_TRANSACTION | 2232895 | 1010166811 | -33572.23% |
-| 15 | CAST_AND_TYPE_AFFINITY | P0 | memory | SQL_EXPRESSIONS | 2778338 | 974403986 | -32380.13% |
-| 16 | BLOBS_HEX_ZEROBLOB | P0 | memory | SQL_FUNCTIONS | 3935999 | 1241722316 | -31447.83% |
-| 17 | CHECK_CONSTRAINT_FAILURE | P0 | memory | SQL_CONSTRAINTS_NEGATIVE | 2774180 | 927759438 | -30825.31% |
-| 18 | FOREIGN_KEY_FAILURE | P0 | memory | SQL_FOREIGN_KEYS_NEGATIVE | 2219389 | 889704175 | -29556.81% |
-| 19 | SCALAR_CAST_TYPEOF_033 | P1 | memory | GEN_SQL_SCALAR | 2767828 | 861415521 | -28613.85% |
-| 20 | CREATE_VIEW | P0 | memory | SQL_VIEW | 2228728 | 836626603 | -27787.55% |
-| 21 | LIKE_GLOB_MATCH_ESCAPE | P0 | memory | SQL_OPERATORS | 2804838 | 790784412 | -26259.48% |
-| 22 | OPT_MARKDOWN_MODE | P2 | memory | CLI_OPTION | 2681034 | 789695512 | -26223.18% |
-| 23 | PERCENTILE_FUNCTIONS_OPTIONAL | P3 | memory | SQL_FUNCTIONS_OPTIONAL | 2312336 | 786093145 | -26103.10% |
-| 24 | PRAGMA_USER_VERSION | P0 | memory | SQL_PRAGMA | 2980580 | 783484088 | -26016.14% |
-| 25 | DATE_TIME_FUNCTIONS | P0 | memory | SQL_FUNCTIONS | 2295805 | 763127837 | -25337.59% |
+| 1 | PARTIAL_INDEX | P0 | memory | SQL_INDEX | 3047144 | 911739772 | -29821.13% |
+| 2 | CHECK_CONSTRAINT_FAILURE | P0 | memory | SQL_CONSTRAINTS_NEGATIVE | 3456378 | 908472310 | -26183.94% |
+| 3 | TEMP_TABLE_TEMP_SCHEMA | P0 | memory | SQL_TEMP | 3785040 | 992305133 | -26116.50% |
+| 4 | SUBQUERIES_EXISTS_IN | P0 | memory | SQL_SELECT | 3742951 | 917873034 | -24422.71% |
+| 5 | SCHEMA_SQLITE_SCHEMA | P0 | memory | SQL_SCHEMA | 4113482 | 999957150 | -24209.26% |
+| 6 | WITH_MATERIALIZED_HINTS | P0 | memory | SQL_CTE | 2886891 | 687605831 | -22820.19% |
+| 7 | INDEXED_BY | P0 | memory | SQL_INDEX | 2879487 | 685922665 | -22764.09% |
+| 8 | DOT_PRINT | P0 | memory | CLI_DOT_COMMAND | 2361768 | 685558227 | -22751.94% |
+| 9 | DELETE_BASIC | P0 | memory | SQL_DELETE | 3336762 | 722818715 | -21562.28% |
+| 10 | DOT_SCHEMA_TABLES_INDEXES | P0 | memory | CLI_DOT_COMMAND | 3189524 | 660208320 | -20599.27% |
+| 11 | INSTEAD_OF_TRIGGER_ON_VIEW | P0 | memory | SQL_TRIGGER | 2916608 | 612825241 | -20327.51% |
+| 12 | WINDOW_NAMED_WINDOW | P0 | memory | SQL_WINDOW | 6223634 | 1265723631 | -20237.37% |
+| 13 | TABLE_CONSTRAINTS_SUCCESS | P0 | memory | SQL_CONSTRAINTS | 2682785 | 607672453 | -20155.75% |
+| 14 | DOT_DUMP | P0 | memory | CLI_DOT_COMMAND | 2839993 | 597795027 | -19826.50% |
+| 15 | CREATE_VIRTUAL_TABLE_RTREE_OPTIONAL | P2 | memory | SQL_VIRTUAL_TABLE_OPTIONAL | 3203330 | 632614508 | -19648.65% |
+| 16 | LITERALS_AND_TYPEOF | P0 | memory | SQL_EXPRESSIONS | 3491035 | 679937354 | -19376.67% |
+| 17 | PRAGMA_USER_VERSION | P0 | memory | SQL_PRAGMA | 2757767 | 579729371 | -19224.31% |
+| 18 | CORE_FORMAT_QUOTE_HEX | P0 | memory | SQL_FUNCTIONS | 3306686 | 634109968 | -19076.60% |
+| 19 | DOT_EXPLAIN | P0 | memory | CLI_DOT_COMMAND | 3259356 | 622250031 | -18991.20% |
+| 20 | DOT_TIMER | P3 | memory | CLI_DOT_COMMAND_DIAGNOSTIC | 3434697 | 650431214 | -18837.08% |
+| 21 | SELECT_CORE_EXPRESSIONS | P0 | memory | SQL_SELECT | 2748159 | 567483744 | -18816.12% |
+| 22 | CLI_REGEXP_OPTIONAL | P2 | memory | CLI_EXTENSION_OPTIONAL | 2823471 | 562118686 | -18637.29% |
+| 23 | EXPRESSION_INDEX | P0 | memory | SQL_INDEX | 4164008 | 771148884 | -18419.39% |
+| 24 | UPDATE_RETURNING | P0 | memory | SQL_UPDATE | 2876762 | 551274229 | -18275.81% |
+| 25 | GROUP_BY_HAVING | P0 | memory | SQL_AGGREGATE | 2376285 | 550938004 | -18264.60% |
 
 </details>
 <!-- sqlite-parity-report:end -->
@@ -478,7 +478,7 @@ the parser elimination benefit directly:
   "sqlite_ref": "version-3.53.1",
   "sqlite_score": 22,
   "sqlite_status": "unknown",
-  "updated_date": "2026-09-23"
+  "updated_date": "2026-09-24"
 }
 <!-- sqlite-jankurai-breakdown:end -->
 

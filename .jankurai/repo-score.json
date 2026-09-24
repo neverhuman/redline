@@ -1,6 +1,6 @@
 {
-  "report_fingerprint": "sha256:ebfa4cb65fae00ec17ce7cf2642b093ab3b3e4529bba7872605e2b0aba6204f8",
-  "input_fingerprint": "sha256:c03502fdc05262243460c72ae38614823500b39029209cf8eec5fbdd4a050846",
+  "report_fingerprint": "sha256:04960f13cdcc608efe258e6f176892ca45dd29c9b7c7c47ce457acb3c1841db5",
+  "input_fingerprint": "sha256:0ddce80c81cdcc3c74234ac8e619ae6906035ef23c4457ff788942e3e4b049e7",
   "policy_fingerprint": "sha256:a709fa6bbfe5c3197979cc12ca5bb1dd81019d911b9d064f91eca62ff4fe46cb",
   "manifest_fingerprints": {
     "owner_map": "sha256:fcfd2f491503bfe580b80d8fcf1d590b2e0aeadd8c13916c53b6f0bd0c34d7fd",
@@ -10,7 +10,7 @@
     "proof_lanes": "sha256:e4ca90ddeecc9310c1085d5a323c7d4dbb7361eccae57bf655912b91b230bf7c"
   },
   "dirty_worktree": false,
-  "generated_at": "1790164855",
+  "generated_at": "1790251625",
   "schema_url": "schemas/repo-score.schema.json",
   "standard": "jankurai",
   "standard_version": "0.9.0",
@@ -24,9 +24,9 @@
   "conformance_decision": "pass",
   "conformance_blockers": [],
   "repo": ".",
-  "run_id": "1790164855",
-  "started_at": "1790164855",
-  "elapsed_ms": 22261,
+  "run_id": "1790251625",
+  "started_at": "1790251625",
+  "elapsed_ms": 22858,
   "scope": {
     "mode": "full",
     "paths": []
@@ -53,7 +53,7 @@
     }
   },
   "git": {
-    "head": "45fc7dbe",
+    "head": "30fa63cb0",
     "base": null,
     "changed_files": 0,
     "mode": "full",
@@ -344,7 +344,7 @@
         "security lane present",
         "canonical security lane wrapper present",
         "agent-readiness audit gate found in CI",
-        "rust bad-behavior advisory signals: 4204",
+        "rust bad-behavior advisory signals: 4245",
         "ci bad-behavior advisory signals: 2",
         "git bad-behavior advisory signals: 1",
         "gittools bad-behavior advisory signals: 1",
@@ -358,12 +358,12 @@
       "score": 45,
       "weighted_points": 5.4,
       "evidence": [
-        "largest authored code file: crates/sql/src/parser/pragma.rs (1951 LOC)",
+        "largest authored code file: crates/sql/src/exec/mod.rs (1972 LOC)",
         "code file exceeds 500 LOC",
         "code file exceeds 1000 LOC",
         "most code files stay under 300 LOC",
-        "copy-code advisory classes found: 171 (advisory only, no score impact)",
-        "rust bad-behavior advisory signals: 4204",
+        "copy-code advisory classes found: 179 (advisory only, no score impact)",
+        "rust bad-behavior advisory signals: 4245",
         "ci bad-behavior advisory signals: 2",
         "git bad-behavior advisory signals: 1",
         "gittools bad-behavior advisory signals: 1",
@@ -481,6 +481,7 @@
       "design_tokens": [],
       "geometry_runtime": [],
       "layout_stability": [
+        "crates/sql/src/pg_pl.rs",
         "crates/sql/tests/ws_b3b_simd_json_tokenize.rs"
       ],
       "playwright_visual": [],
@@ -1053,7 +1054,7 @@
   "copy_code": {
     "schema_version": "1.1.0",
     "generated_by": "jankurai copy-code",
-    "generated_at": "2026-09-23T12:00:33.768567277+00:00",
+    "generated_at": "2026-09-24T12:06:43.410089543+00:00",
     "repo": ".",
     "auditor_version": "1.6.11",
     "status": "review",
@@ -1091,20 +1092,20 @@
       ]
     },
     "summary": {
-      "files_scanned": 3620,
-      "files_considered": 468,
-      "active_files": 468,
+      "files_scanned": 3646,
+      "files_considered": 474,
+      "active_files": 474,
       "exact_file_classes": 0,
       "hard_classes": 0,
-      "warning_classes": 171,
+      "warning_classes": 179,
       "hard_instances": 0,
-      "warning_instances": 463,
-      "duplicate_lines": 334,
-      "duplicate_tokens": 1032,
-      "duplicate_bytes": 9589,
-      "total_redundant_lines": 556,
-      "total_redundant_tokens": 1545,
-      "total_redundant_bytes": 14902
+      "warning_instances": 496,
+      "duplicate_lines": 398,
+      "duplicate_tokens": 1242,
+      "duplicate_bytes": 11528,
+      "total_redundant_lines": 649,
+      "total_redundant_tokens": 1865,
+      "total_redundant_bytes": 17736
     },
     "classes": [
       {
@@ -1264,6 +1265,42 @@
         ]
       },
       {
+        "id": "copy-code-unit-rust-2038067242ae731d",
+        "kind": "exact_unit_same_name",
+        "severity": "warning",
+        "confidence": "high",
+        "language": "rust",
+        "unit_name": "take_dollar_body",
+        "duplicate_lines": 24,
+        "duplicate_tokens": 84,
+        "duplicate_bytes": 721,
+        "instance_count": 2,
+        "total_redundant_lines": 24,
+        "total_redundant_tokens": 84,
+        "total_redundant_bytes": 721,
+        "effective_severity": "warning",
+        "hard_fail": false,
+        "fingerprint": "68fef0e774ce6064",
+        "reason": "same-name semantic unit copied across multiple files",
+        "recommended_action": "keep the named unit in one owner and call it from the other sites",
+        "instances": [
+          {
+            "path": "crates/sql/src/parser/pg_fn_stmt.rs",
+            "language": "rust",
+            "start_line": 246,
+            "end_line": 270,
+            "unit_name": "take_dollar_body"
+          },
+          {
+            "path": "crates/sql/src/pg_pl.rs",
+            "language": "rust",
+            "start_line": 1293,
+            "end_line": 1317,
+            "unit_name": "take_dollar_body"
+          }
+        ]
+      },
+      {
         "id": "copy-code-body-rust-288f2d33c4682e4a",
         "kind": "exact_unit_different_name",
         "severity": "warning",
@@ -1383,29 +1420,29 @@
           {
             "path": "crates/sql/src/exec/expr/coerce/binary.rs",
             "language": "rust",
-            "start_line": 489,
-            "end_line": 490,
+            "start_line": 511,
+            "end_line": 512,
             "unit_name": "sql_false_result"
           },
           {
             "path": "crates/sql/src/exec/expr/coerce/binary.rs",
             "language": "rust",
-            "start_line": 496,
-            "end_line": 497,
+            "start_line": 518,
+            "end_line": 519,
             "unit_name": "sql_false_result_not"
           },
           {
             "path": "crates/sql/src/exec/expr/coerce/binary.rs",
             "language": "rust",
-            "start_line": 605,
-            "end_line": 606,
+            "start_line": 627,
+            "end_line": 628,
             "unit_name": "decimal_from_value"
           },
           {
             "path": "crates/sql/src/exec/expr/json_dispatch.rs",
             "language": "rust",
-            "start_line": 802,
-            "end_line": 803,
+            "start_line": 813,
+            "end_line": 814,
             "unit_name": "pg_sequence_name"
           },
           {
@@ -1449,6 +1486,49 @@
             "start_line": 643,
             "end_line": 644,
             "unit_name": "arrow_path"
+          }
+        ]
+      },
+      {
+        "id": "copy-code-unit-rust-cc2e6f84f0a403a8",
+        "kind": "exact_unit_same_name",
+        "severity": "warning",
+        "confidence": "high",
+        "language": "rust",
+        "unit_name": "take_ident",
+        "duplicate_lines": 11,
+        "duplicate_tokens": 42,
+        "duplicate_bytes": 354,
+        "instance_count": 3,
+        "total_redundant_lines": 22,
+        "total_redundant_tokens": 84,
+        "total_redundant_bytes": 708,
+        "effective_severity": "warning",
+        "hard_fail": false,
+        "fingerprint": "bed612eb136a25d4",
+        "reason": "same-name semantic unit copied across multiple files",
+        "recommended_action": "keep the named unit in one owner and call it from the other sites",
+        "instances": [
+          {
+            "path": "crates/sql/src/parser/pg_fn_stmt.rs",
+            "language": "rust",
+            "start_line": 272,
+            "end_line": 283,
+            "unit_name": "take_ident"
+          },
+          {
+            "path": "crates/sql/src/pg_pl.rs",
+            "language": "rust",
+            "start_line": 1341,
+            "end_line": 1352,
+            "unit_name": "take_ident"
+          },
+          {
+            "path": "crates/sql/src/pg_pub.rs",
+            "language": "rust",
+            "start_line": 205,
+            "end_line": 216,
+            "unit_name": "take_ident"
           }
         ]
       },
@@ -1595,6 +1675,90 @@
         ]
       },
       {
+        "id": "copy-code-body-rust-1a163c5fc7d1a227",
+        "kind": "exact_unit_different_name",
+        "severity": "warning",
+        "confidence": "medium",
+        "language": "rust",
+        "duplicate_lines": 2,
+        "duplicate_tokens": 5,
+        "duplicate_bytes": 44,
+        "instance_count": 9,
+        "total_redundant_lines": 16,
+        "total_redundant_tokens": 40,
+        "total_redundant_bytes": 352,
+        "effective_severity": "warning",
+        "hard_fail": false,
+        "fingerprint": "e3d226e192a95527",
+        "reason": "same body appears under different names across files",
+        "recommended_action": "choose one owner for the shared body or intentionally differentiate the behavior",
+        "instances": [
+          {
+            "path": "crates/kernel/src/json/path_bytecode.rs",
+            "language": "rust",
+            "start_line": 138,
+            "end_line": 140,
+            "unit_name": "is_ident"
+          },
+          {
+            "path": "crates/sql/src/json/jsonb.rs",
+            "language": "rust",
+            "start_line": 1062,
+            "end_line": 1064,
+            "unit_name": "is_jsonpath_member_byte"
+          },
+          {
+            "path": "crates/sql/src/listen.rs",
+            "language": "rust",
+            "start_line": 146,
+            "end_line": 148,
+            "unit_name": "is_ident_byte"
+          },
+          {
+            "path": "crates/sql/src/matview.rs",
+            "language": "rust",
+            "start_line": 340,
+            "end_line": 342,
+            "unit_name": "is_ident_byte"
+          },
+          {
+            "path": "crates/sql/src/parser/rewrite/pg_ddl.rs",
+            "language": "rust",
+            "start_line": 342,
+            "end_line": 344,
+            "unit_name": "is_pg_ident_char"
+          },
+          {
+            "path": "crates/sql/src/parser/rewrite/pg_ddl.rs",
+            "language": "rust",
+            "start_line": 1347,
+            "end_line": 1349,
+            "unit_name": "is_identifier_char"
+          },
+          {
+            "path": "crates/sql/src/parser/rewrite/pg_empty.rs",
+            "language": "rust",
+            "start_line": 62,
+            "end_line": 64,
+            "unit_name": "is_ident_byte"
+          },
+          {
+            "path": "crates/sql/src/pg_fn.rs",
+            "language": "rust",
+            "start_line": 217,
+            "end_line": 219,
+            "unit_name": "is_ident_byte"
+          },
+          {
+            "path": "crates/sql/src/pg_pub.rs",
+            "language": "rust",
+            "start_line": 201,
+            "end_line": 203,
+            "unit_name": "is_ident_byte"
+          }
+        ]
+      },
+      {
         "id": "copy-code-unit-rust-17c997c926894f93",
         "kind": "exact_unit_same_name",
         "severity": "warning",
@@ -1631,79 +1795,38 @@
         ]
       },
       {
-        "id": "copy-code-body-rust-1a163c5fc7d1a227",
-        "kind": "exact_unit_different_name",
+        "id": "copy-code-unit-rust-27466cf656e14c63",
+        "kind": "exact_unit_same_name",
         "severity": "warning",
-        "confidence": "medium",
+        "confidence": "high",
         "language": "rust",
-        "duplicate_lines": 2,
-        "duplicate_tokens": 5,
-        "duplicate_bytes": 44,
-        "instance_count": 8,
-        "total_redundant_lines": 14,
-        "total_redundant_tokens": 35,
-        "total_redundant_bytes": 308,
+        "unit_name": "sql_literal",
+        "duplicate_lines": 13,
+        "duplicate_tokens": 36,
+        "duplicate_bytes": 395,
+        "instance_count": 2,
+        "total_redundant_lines": 13,
+        "total_redundant_tokens": 36,
+        "total_redundant_bytes": 395,
         "effective_severity": "warning",
         "hard_fail": false,
-        "fingerprint": "daefb58ae840ef6b",
-        "reason": "same body appears under different names across files",
-        "recommended_action": "choose one owner for the shared body or intentionally differentiate the behavior",
+        "fingerprint": "09787b94462b1433",
+        "reason": "same-name semantic unit copied across multiple files",
+        "recommended_action": "keep the named unit in one owner and call it from the other sites",
         "instances": [
-          {
-            "path": "crates/kernel/src/json/path_bytecode.rs",
-            "language": "rust",
-            "start_line": 138,
-            "end_line": 140,
-            "unit_name": "is_ident"
-          },
-          {
-            "path": "crates/sql/src/json/jsonb.rs",
-            "language": "rust",
-            "start_line": 1062,
-            "end_line": 1064,
-            "unit_name": "is_jsonpath_member_byte"
-          },
-          {
-            "path": "crates/sql/src/listen.rs",
-            "language": "rust",
-            "start_line": 146,
-            "end_line": 148,
-            "unit_name": "is_ident_byte"
-          },
-          {
-            "path": "crates/sql/src/matview.rs",
-            "language": "rust",
-            "start_line": 340,
-            "end_line": 342,
-            "unit_name": "is_ident_byte"
-          },
-          {
-            "path": "crates/sql/src/parser/rewrite/pg_ddl.rs",
-            "language": "rust",
-            "start_line": 325,
-            "end_line": 327,
-            "unit_name": "is_pg_ident_char"
-          },
-          {
-            "path": "crates/sql/src/parser/rewrite/pg_ddl.rs",
-            "language": "rust",
-            "start_line": 1330,
-            "end_line": 1332,
-            "unit_name": "is_identifier_char"
-          },
-          {
-            "path": "crates/sql/src/parser/rewrite/pg_empty.rs",
-            "language": "rust",
-            "start_line": 62,
-            "end_line": 64,
-            "unit_name": "is_ident_byte"
-          },
           {
             "path": "crates/sql/src/pg_fn.rs",
             "language": "rust",
-            "start_line": 215,
-            "end_line": 217,
-            "unit_name": "is_ident_byte"
+            "start_line": 165,
+            "end_line": 178,
+            "unit_name": "sql_literal"
+          },
+          {
+            "path": "crates/sql/src/pg_pl.rs",
+            "language": "rust",
+            "start_line": 1209,
+            "end_line": 1222,
+            "unit_name": "sql_literal"
           }
         ]
       },
@@ -1905,15 +2028,15 @@
           {
             "path": "crates/sql/src/statement.rs",
             "language": "rust",
-            "start_line": 449,
-            "end_line": 450,
+            "start_line": 490,
+            "end_line": 491,
             "unit_name": "as_str"
           },
           {
             "path": "crates/sql/src/statement.rs",
             "language": "rust",
-            "start_line": 746,
-            "end_line": 747,
+            "start_line": 787,
+            "end_line": 788,
             "unit_name": "as_mut"
           }
         ]
@@ -1947,8 +2070,8 @@
           {
             "path": "crates/sql/src/parser/rewrite/pg_ddl.rs",
             "language": "rust",
-            "start_line": 283,
-            "end_line": 293,
+            "start_line": 300,
+            "end_line": 310,
             "unit_name": "contains_token_ci_bytes"
           }
         ]
@@ -1993,6 +2116,183 @@
             "start_line": 141,
             "end_line": 146,
             "unit_name": "eval"
+          }
+        ]
+      },
+      {
+        "id": "copy-code-body-rust-a26140eb2113749e",
+        "kind": "exact_unit_different_name",
+        "severity": "warning",
+        "confidence": "medium",
+        "language": "rust",
+        "duplicate_lines": 1,
+        "duplicate_tokens": 4,
+        "duplicate_bytes": 31,
+        "instance_count": 9,
+        "total_redundant_lines": 8,
+        "total_redundant_tokens": 32,
+        "total_redundant_bytes": 248,
+        "effective_severity": "warning",
+        "hard_fail": false,
+        "fingerprint": "04da9264ef144824",
+        "reason": "same body appears under different names across files",
+        "recommended_action": "choose one owner for the shared body or intentionally differentiate the behavior",
+        "instances": [
+          {
+            "path": "crates/sql/src/parser/matview_stmt.rs",
+            "language": "rust",
+            "start_line": 169,
+            "end_line": 170,
+            "unit_name": "strip_prefix_ci"
+          },
+          {
+            "path": "crates/sql/src/parser/matview_stmt.rs",
+            "language": "rust",
+            "start_line": 202,
+            "end_line": 203,
+            "unit_name": "take_ident"
+          },
+          {
+            "path": "crates/sql/src/parser/pg_fn_stmt.rs",
+            "language": "rust",
+            "start_line": 285,
+            "end_line": 286,
+            "unit_name": "strip_prefix_ci"
+          },
+          {
+            "path": "crates/sql/src/pg_pl.rs",
+            "language": "rust",
+            "start_line": 1354,
+            "end_line": 1355,
+            "unit_name": "strip_prefix_ci"
+          },
+          {
+            "path": "crates/sql/src/pg_pub.rs",
+            "language": "rust",
+            "start_line": 218,
+            "end_line": 219,
+            "unit_name": "strip_prefix_ci"
+          },
+          {
+            "path": "crates/sql/src/pg_search.rs",
+            "language": "rust",
+            "start_line": 322,
+            "end_line": 323,
+            "unit_name": "strip_prefix_ci"
+          },
+          {
+            "path": "crates/sql/src/pg_search.rs",
+            "language": "rust",
+            "start_line": 338,
+            "end_line": 339,
+            "unit_name": "take_ident"
+          },
+          {
+            "path": "crates/sql/src/virtual_module.rs",
+            "language": "rust",
+            "start_line": 185,
+            "end_line": 186,
+            "unit_name": "take_ident"
+          },
+          {
+            "path": "crates/sql/src/virtual_module.rs",
+            "language": "rust",
+            "start_line": 198,
+            "end_line": 199,
+            "unit_name": "strip_prefix_ci"
+          }
+        ]
+      },
+      {
+        "id": "copy-code-unit-rust-c61ccacd0b022514",
+        "kind": "exact_unit_same_name",
+        "severity": "warning",
+        "confidence": "high",
+        "language": "rust",
+        "unit_name": "is_ident_byte",
+        "duplicate_lines": 2,
+        "duplicate_tokens": 5,
+        "duplicate_bytes": 44,
+        "instance_count": 5,
+        "total_redundant_lines": 8,
+        "total_redundant_tokens": 20,
+        "total_redundant_bytes": 176,
+        "effective_severity": "warning",
+        "hard_fail": false,
+        "fingerprint": "3a0acca9ca04afcf",
+        "reason": "same-name semantic unit copied across multiple files",
+        "recommended_action": "keep the named unit in one owner and call it from the other sites",
+        "instances": [
+          {
+            "path": "crates/sql/src/listen.rs",
+            "language": "rust",
+            "start_line": 146,
+            "end_line": 148,
+            "unit_name": "is_ident_byte"
+          },
+          {
+            "path": "crates/sql/src/matview.rs",
+            "language": "rust",
+            "start_line": 340,
+            "end_line": 342,
+            "unit_name": "is_ident_byte"
+          },
+          {
+            "path": "crates/sql/src/parser/rewrite/pg_empty.rs",
+            "language": "rust",
+            "start_line": 62,
+            "end_line": 64,
+            "unit_name": "is_ident_byte"
+          },
+          {
+            "path": "crates/sql/src/pg_fn.rs",
+            "language": "rust",
+            "start_line": 217,
+            "end_line": 219,
+            "unit_name": "is_ident_byte"
+          },
+          {
+            "path": "crates/sql/src/pg_pub.rs",
+            "language": "rust",
+            "start_line": 201,
+            "end_line": 203,
+            "unit_name": "is_ident_byte"
+          }
+        ]
+      },
+      {
+        "id": "copy-code-unit-rust-cccb0bdd41529bd9",
+        "kind": "exact_unit_same_name",
+        "severity": "warning",
+        "confidence": "high",
+        "language": "rust",
+        "unit_name": "plain_ident",
+        "duplicate_lines": 7,
+        "duplicate_tokens": 25,
+        "duplicate_bytes": 226,
+        "instance_count": 2,
+        "total_redundant_lines": 7,
+        "total_redundant_tokens": 25,
+        "total_redundant_bytes": 226,
+        "effective_severity": "warning",
+        "hard_fail": false,
+        "fingerprint": "657077aded087582",
+        "reason": "same-name semantic unit copied across multiple files",
+        "recommended_action": "keep the named unit in one owner and call it from the other sites",
+        "instances": [
+          {
+            "path": "crates/sql/src/pg_pl.rs",
+            "language": "rust",
+            "start_line": 1251,
+            "end_line": 1258,
+            "unit_name": "plain_ident"
+          },
+          {
+            "path": "crates/sql/src/pg_pub.rs",
+            "language": "rust",
+            "start_line": 192,
+            "end_line": 199,
+            "unit_name": "plain_ident"
           }
         ]
       },
@@ -2132,8 +2432,8 @@
           {
             "path": "crates/sql/src/connection/session.rs",
             "language": "rust",
-            "start_line": 1275,
-            "end_line": 1275,
+            "start_line": 1290,
+            "end_line": 1290,
             "unit_name": "_keep_txn_use"
           },
           {
@@ -2288,56 +2588,6 @@
         ]
       },
       {
-        "id": "copy-code-unit-rust-c61ccacd0b022514",
-        "kind": "exact_unit_same_name",
-        "severity": "warning",
-        "confidence": "high",
-        "language": "rust",
-        "unit_name": "is_ident_byte",
-        "duplicate_lines": 2,
-        "duplicate_tokens": 5,
-        "duplicate_bytes": 44,
-        "instance_count": 4,
-        "total_redundant_lines": 6,
-        "total_redundant_tokens": 15,
-        "total_redundant_bytes": 132,
-        "effective_severity": "warning",
-        "hard_fail": false,
-        "fingerprint": "7b48aca9b880c6ff",
-        "reason": "same-name semantic unit copied across multiple files",
-        "recommended_action": "keep the named unit in one owner and call it from the other sites",
-        "instances": [
-          {
-            "path": "crates/sql/src/listen.rs",
-            "language": "rust",
-            "start_line": 146,
-            "end_line": 148,
-            "unit_name": "is_ident_byte"
-          },
-          {
-            "path": "crates/sql/src/matview.rs",
-            "language": "rust",
-            "start_line": 340,
-            "end_line": 342,
-            "unit_name": "is_ident_byte"
-          },
-          {
-            "path": "crates/sql/src/parser/rewrite/pg_empty.rs",
-            "language": "rust",
-            "start_line": 62,
-            "end_line": 64,
-            "unit_name": "is_ident_byte"
-          },
-          {
-            "path": "crates/sql/src/pg_fn.rs",
-            "language": "rust",
-            "start_line": 215,
-            "end_line": 217,
-            "unit_name": "is_ident_byte"
-          }
-        ]
-      },
-      {
         "id": "copy-code-unit-rust-dce20c3f2037350a",
         "kind": "exact_unit_same_name",
         "severity": "warning",
@@ -2486,6 +2736,70 @@
         ]
       },
       {
+        "id": "copy-code-unit-rust-7f336a6c7b54a0e6",
+        "kind": "exact_unit_same_name",
+        "severity": "warning",
+        "confidence": "high",
+        "language": "rust",
+        "unit_name": "strip_prefix_ci",
+        "duplicate_lines": 1,
+        "duplicate_tokens": 4,
+        "duplicate_bytes": 31,
+        "instance_count": 6,
+        "total_redundant_lines": 5,
+        "total_redundant_tokens": 20,
+        "total_redundant_bytes": 155,
+        "effective_severity": "warning",
+        "hard_fail": false,
+        "fingerprint": "478084d5783637b3",
+        "reason": "same-name semantic unit copied across multiple files",
+        "recommended_action": "keep the named unit in one owner and call it from the other sites",
+        "instances": [
+          {
+            "path": "crates/sql/src/parser/matview_stmt.rs",
+            "language": "rust",
+            "start_line": 169,
+            "end_line": 170,
+            "unit_name": "strip_prefix_ci"
+          },
+          {
+            "path": "crates/sql/src/parser/pg_fn_stmt.rs",
+            "language": "rust",
+            "start_line": 285,
+            "end_line": 286,
+            "unit_name": "strip_prefix_ci"
+          },
+          {
+            "path": "crates/sql/src/pg_pl.rs",
+            "language": "rust",
+            "start_line": 1354,
+            "end_line": 1355,
+            "unit_name": "strip_prefix_ci"
+          },
+          {
+            "path": "crates/sql/src/pg_pub.rs",
+            "language": "rust",
+            "start_line": 218,
+            "end_line": 219,
+            "unit_name": "strip_prefix_ci"
+          },
+          {
+            "path": "crates/sql/src/pg_search.rs",
+            "language": "rust",
+            "start_line": 322,
+            "end_line": 323,
+            "unit_name": "strip_prefix_ci"
+          },
+          {
+            "path": "crates/sql/src/virtual_module.rs",
+            "language": "rust",
+            "start_line": 198,
+            "end_line": 199,
+            "unit_name": "strip_prefix_ci"
+          }
+        ]
+      },
+      {
         "id": "copy-code-body-rust-c46d1af1be6d0b7f",
         "kind": "exact_unit_different_name",
         "severity": "warning",
@@ -2507,15 +2821,15 @@
           {
             "path": "crates/sql/src/exec/mod.rs",
             "language": "rust",
-            "start_line": 1752,
-            "end_line": 1757,
+            "start_line": 1775,
+            "end_line": 1780,
             "unit_name": "step_select_runtime"
           },
           {
             "path": "crates/sql/src/exec/mod.rs",
             "language": "rust",
-            "start_line": 1767,
-            "end_line": 1772,
+            "start_line": 1790,
+            "end_line": 1795,
             "unit_name": "step_select_runtime_inner"
           }
         ]
@@ -2627,6 +2941,42 @@
         ]
       },
       {
+        "id": "copy-code-unit-rust-38cd71df3c0c2023",
+        "kind": "exact_unit_same_name",
+        "severity": "warning",
+        "confidence": "high",
+        "language": "rust",
+        "unit_name": "done",
+        "duplicate_lines": 5,
+        "duplicate_tokens": 6,
+        "duplicate_bytes": 92,
+        "instance_count": 2,
+        "total_redundant_lines": 5,
+        "total_redundant_tokens": 6,
+        "total_redundant_bytes": 92,
+        "effective_severity": "warning",
+        "hard_fail": false,
+        "fingerprint": "2fcfb83a8b0f56c0",
+        "reason": "same-name semantic unit copied across multiple files",
+        "recommended_action": "keep the named unit in one owner and call it from the other sites",
+        "instances": [
+          {
+            "path": "crates/sql/src/pg_pl.rs",
+            "language": "rust",
+            "start_line": 204,
+            "end_line": 209,
+            "unit_name": "done"
+          },
+          {
+            "path": "crates/sql/src/pg_pub.rs",
+            "language": "rust",
+            "start_line": 181,
+            "end_line": 186,
+            "unit_name": "done"
+          }
+        ]
+      },
+      {
         "id": "copy-code-unit-rust-d38ffff3c586fd30",
         "kind": "exact_unit_same_name",
         "severity": "warning",
@@ -2656,8 +3006,8 @@
           {
             "path": "crates/sql/src/session.rs",
             "language": "rust",
-            "start_line": 541,
-            "end_line": 545,
+            "start_line": 632,
+            "end_line": 636,
             "unit_name": "drop"
           }
         ]
@@ -2691,8 +3041,8 @@
           {
             "path": "crates/sql/src/exec/expr/json_dispatch.rs",
             "language": "rust",
-            "start_line": 859,
-            "end_line": 863,
+            "start_line": 870,
+            "end_line": 874,
             "unit_name": "eval_highlight_function"
           }
         ]
@@ -2999,6 +3349,55 @@
         ]
       },
       {
+        "id": "copy-code-body-rust-e6bfe4684433b2d4",
+        "kind": "exact_unit_different_name",
+        "severity": "warning",
+        "confidence": "medium",
+        "language": "rust",
+        "duplicate_lines": 1,
+        "duplicate_tokens": 5,
+        "duplicate_bytes": 42,
+        "instance_count": 4,
+        "total_redundant_lines": 3,
+        "total_redundant_tokens": 15,
+        "total_redundant_bytes": 126,
+        "effective_severity": "warning",
+        "hard_fail": false,
+        "fingerprint": "2489522240a696f9",
+        "reason": "same body appears under different names across files",
+        "recommended_action": "choose one owner for the shared body or intentionally differentiate the behavior",
+        "instances": [
+          {
+            "path": "crates/kernel/src/catalog/ops.rs",
+            "language": "rust",
+            "start_line": 1488,
+            "end_line": 1489,
+            "unit_name": "is_ident_char"
+          },
+          {
+            "path": "crates/sql/src/parser/rewrite/sqlite_shape.rs",
+            "language": "rust",
+            "start_line": 1016,
+            "end_line": 1017,
+            "unit_name": "is_word_char"
+          },
+          {
+            "path": "crates/sql/src/parser/split.rs",
+            "language": "rust",
+            "start_line": 171,
+            "end_line": 172,
+            "unit_name": "is_ident_byte"
+          },
+          {
+            "path": "crates/sql/src/pg_alter.rs",
+            "language": "rust",
+            "start_line": 441,
+            "end_line": 442,
+            "unit_name": "is_ident_byte"
+          }
+        ]
+      },
+      {
         "id": "copy-code-body-rust-95939217ddea0b4e",
         "kind": "exact_unit_different_name",
         "severity": "warning",
@@ -3020,29 +3419,29 @@
           {
             "path": "crates/sql/src/statement.rs",
             "language": "rust",
-            "start_line": 1047,
-            "end_line": 1048,
+            "start_line": 1088,
+            "end_line": 1089,
             "unit_name": "column_i64"
           },
           {
             "path": "crates/sql/src/statement.rs",
             "language": "rust",
-            "start_line": 1055,
-            "end_line": 1056,
+            "start_line": 1096,
+            "end_line": 1097,
             "unit_name": "column_f64"
           },
           {
             "path": "crates/sql/src/statement.rs",
             "language": "rust",
-            "start_line": 1063,
-            "end_line": 1064,
+            "start_line": 1104,
+            "end_line": 1105,
             "unit_name": "column_text"
           },
           {
             "path": "crates/sql/src/statement.rs",
             "language": "rust",
-            "start_line": 1070,
-            "end_line": 1071,
+            "start_line": 1111,
+            "end_line": 1112,
             "unit_name": "column_blob"
           }
         ]
@@ -3237,334 +3636,16 @@
           {
             "path": "crates/sql/src/parser.rs",
             "language": "rust",
-            "start_line": 334,
-            "end_line": 337,
+            "start_line": 377,
+            "end_line": 380,
             "unit_name": "parse_detach_template"
           },
           {
             "path": "crates/sql/src/parser.rs",
             "language": "rust",
-            "start_line": 355,
-            "end_line": 358,
+            "start_line": 398,
+            "end_line": 401,
             "unit_name": "parse_attach_template"
-          }
-        ]
-      },
-      {
-        "id": "copy-code-unit-rust-e37f347c33ed3453",
-        "kind": "exact_unit_same_name",
-        "severity": "warning",
-        "confidence": "high",
-        "language": "rust",
-        "unit_name": "validate_db",
-        "duplicate_lines": 3,
-        "duplicate_tokens": 5,
-        "duplicate_bytes": 48,
-        "instance_count": 2,
-        "total_redundant_lines": 3,
-        "total_redundant_tokens": 5,
-        "total_redundant_bytes": 48,
-        "effective_severity": "warning",
-        "hard_fail": false,
-        "fingerprint": "ca2db8bdda40fd00",
-        "reason": "same-name semantic unit copied across multiple files",
-        "recommended_action": "keep the named unit in one owner and call it from the other sites",
-        "instances": [
-          {
-            "path": "crates/ffi/src/sqlite3_api/hooks.rs",
-            "language": "rust",
-            "start_line": 72,
-            "end_line": 75,
-            "unit_name": "validate_db"
-          },
-          {
-            "path": "crates/ffi/src/sqlite3_api/hooks_fire.rs",
-            "language": "rust",
-            "start_line": 37,
-            "end_line": 40,
-            "unit_name": "validate_db"
-          }
-        ]
-      },
-      {
-        "id": "copy-code-unit-rust-7b7555bc73bd00fc",
-        "kind": "exact_unit_same_name",
-        "severity": "warning",
-        "confidence": "high",
-        "language": "rust",
-        "unit_name": "partial_cmp",
-        "duplicate_lines": 3,
-        "duplicate_tokens": 4,
-        "duplicate_bytes": 37,
-        "instance_count": 2,
-        "total_redundant_lines": 3,
-        "total_redundant_tokens": 4,
-        "total_redundant_bytes": 37,
-        "effective_severity": "warning",
-        "hard_fail": false,
-        "fingerprint": "816eec9f8bcc346a",
-        "reason": "same-name semantic unit copied across multiple files",
-        "recommended_action": "keep the named unit in one owner and call it from the other sites",
-        "instances": [
-          {
-            "path": "crates/kernel/src/vector/flat.rs",
-            "language": "rust",
-            "start_line": 57,
-            "end_line": 60,
-            "unit_name": "partial_cmp"
-          },
-          {
-            "path": "crates/kernel/src/vector/hnsw/searcher.rs",
-            "language": "rust",
-            "start_line": 47,
-            "end_line": 50,
-            "unit_name": "partial_cmp"
-          }
-        ]
-      },
-      {
-        "id": "copy-code-unit-rust-a38c7998908cf6b7",
-        "kind": "exact_unit_same_name",
-        "severity": "warning",
-        "confidence": "high",
-        "language": "rust",
-        "unit_name": "default",
-        "duplicate_lines": 3,
-        "duplicate_tokens": 2,
-        "duplicate_bytes": 27,
-        "instance_count": 2,
-        "total_redundant_lines": 3,
-        "total_redundant_tokens": 2,
-        "total_redundant_bytes": 27,
-        "effective_severity": "warning",
-        "hard_fail": false,
-        "fingerprint": "3b36f96e5448d26d",
-        "reason": "same-name semantic unit copied across multiple files",
-        "recommended_action": "keep the named unit in one owner and call it from the other sites",
-        "instances": [
-          {
-            "path": "crates/kernel/src/engine/tx/status.rs",
-            "language": "rust",
-            "start_line": 306,
-            "end_line": 309,
-            "unit_name": "default"
-          },
-          {
-            "path": "crates/sql/src/exec/hot_row.rs",
-            "language": "rust",
-            "start_line": 576,
-            "end_line": 579,
-            "unit_name": "default"
-          }
-        ]
-      },
-      {
-        "id": "copy-code-body-rust-6e0528ce706c9c6d",
-        "kind": "exact_unit_different_name",
-        "severity": "warning",
-        "confidence": "medium",
-        "language": "rust",
-        "duplicate_lines": 1,
-        "duplicate_tokens": 7,
-        "duplicate_bytes": 61,
-        "instance_count": 3,
-        "total_redundant_lines": 2,
-        "total_redundant_tokens": 14,
-        "total_redundant_bytes": 122,
-        "effective_severity": "warning",
-        "hard_fail": false,
-        "fingerprint": "90ac7135d5fcb8b1",
-        "reason": "same body appears under different names across files",
-        "recommended_action": "choose one owner for the shared body or intentionally differentiate the behavior",
-        "instances": [
-          {
-            "path": "crates/sql/src/connection/database.rs",
-            "language": "rust",
-            "start_line": 622,
-            "end_line": 623,
-            "unit_name": "explicit_volatile_root_remains_in_options"
-          },
-          {
-            "path": "crates/sql/src/connection/database.rs",
-            "language": "rust",
-            "start_line": 636,
-            "end_line": 637,
-            "unit_name": "unusable_shared_memory_candidate_uses_process_scratch"
-          },
-          {
-            "path": "crates/sql/src/connection/database.rs",
-            "language": "rust",
-            "start_line": 670,
-            "end_line": 671,
-            "unit_name": "writable_candidate_is_selected_and_probe_is_removed"
-          }
-        ]
-      },
-      {
-        "id": "copy-code-body-rust-a6bb2961c73f03c2",
-        "kind": "exact_unit_different_name",
-        "severity": "warning",
-        "confidence": "medium",
-        "language": "rust",
-        "duplicate_lines": 1,
-        "duplicate_tokens": 7,
-        "duplicate_bytes": 59,
-        "instance_count": 3,
-        "total_redundant_lines": 2,
-        "total_redundant_tokens": 14,
-        "total_redundant_bytes": 118,
-        "effective_severity": "warning",
-        "hard_fail": false,
-        "fingerprint": "3838f9b848b02c9d",
-        "reason": "same body appears under different names across files",
-        "recommended_action": "choose one owner for the shared body or intentionally differentiate the behavior",
-        "instances": [
-          {
-            "path": "crates/sql/src/exec/expr/json_dispatch.rs",
-            "language": "rust",
-            "start_line": 997,
-            "end_line": 998,
-            "unit_name": "last_insert_rowid_value"
-          },
-          {
-            "path": "crates/sql/src/exec/expr/json_dispatch.rs",
-            "language": "rust",
-            "start_line": 1009,
-            "end_line": 1010,
-            "unit_name": "changes_value"
-          },
-          {
-            "path": "crates/sql/src/exec/expr/json_dispatch.rs",
-            "language": "rust",
-            "start_line": 1022,
-            "end_line": 1023,
-            "unit_name": "total_changes_value"
-          }
-        ]
-      },
-      {
-        "id": "copy-code-body-rust-f833924643090700",
-        "kind": "exact_unit_different_name",
-        "severity": "warning",
-        "confidence": "medium",
-        "language": "rust",
-        "duplicate_lines": 1,
-        "duplicate_tokens": 6,
-        "duplicate_bytes": 44,
-        "instance_count": 3,
-        "total_redundant_lines": 2,
-        "total_redundant_tokens": 12,
-        "total_redundant_bytes": 88,
-        "effective_severity": "warning",
-        "hard_fail": false,
-        "fingerprint": "225d9882e71d762e",
-        "reason": "same body appears under different names across files",
-        "recommended_action": "choose one owner for the shared body or intentionally differentiate the behavior",
-        "instances": [
-          {
-            "path": "crates/redlinedb-sqlx/src/driver.rs",
-            "language": "rust",
-            "start_line": 399,
-            "end_line": 400,
-            "unit_name": "commit"
-          },
-          {
-            "path": "crates/redlinedb-sqlx/src/driver.rs",
-            "language": "rust",
-            "start_line": 414,
-            "end_line": 415,
-            "unit_name": "rollback"
-          },
-          {
-            "path": "crates/redlinedb-sqlx/src/driver.rs",
-            "language": "rust",
-            "start_line": 429,
-            "end_line": 430,
-            "unit_name": "start_rollback"
-          }
-        ]
-      },
-      {
-        "id": "copy-code-body-rust-c45d151237d10255",
-        "kind": "exact_unit_different_name",
-        "severity": "warning",
-        "confidence": "medium",
-        "language": "rust",
-        "duplicate_lines": 1,
-        "duplicate_tokens": 6,
-        "duplicate_bytes": 36,
-        "instance_count": 3,
-        "total_redundant_lines": 2,
-        "total_redundant_tokens": 12,
-        "total_redundant_bytes": 72,
-        "effective_severity": "warning",
-        "hard_fail": false,
-        "fingerprint": "e1ab9bc46ce56589",
-        "reason": "same body appears under different names across files",
-        "recommended_action": "choose one owner for the shared body or intentionally differentiate the behavior",
-        "instances": [
-          {
-            "path": "crates/sql/src/json/path.rs",
-            "language": "rust",
-            "start_line": 543,
-            "end_line": 544,
-            "unit_name": "mutate_set_creates_member"
-          },
-          {
-            "path": "crates/sql/src/json/path.rs",
-            "language": "rust",
-            "start_line": 551,
-            "end_line": 552,
-            "unit_name": "mutate_insert_skips_existing"
-          },
-          {
-            "path": "crates/sql/src/json/path.rs",
-            "language": "rust",
-            "start_line": 559,
-            "end_line": 560,
-            "unit_name": "mutate_replace_skips_missing"
-          }
-        ]
-      },
-      {
-        "id": "copy-code-body-rust-b7b29d332b4ef4b7",
-        "kind": "exact_unit_different_name",
-        "severity": "warning",
-        "confidence": "medium",
-        "language": "rust",
-        "duplicate_lines": 1,
-        "duplicate_tokens": 5,
-        "duplicate_bytes": 42,
-        "instance_count": 3,
-        "total_redundant_lines": 2,
-        "total_redundant_tokens": 10,
-        "total_redundant_bytes": 84,
-        "effective_severity": "warning",
-        "hard_fail": false,
-        "fingerprint": "b9612b45043f095e",
-        "reason": "same body appears under different names across files",
-        "recommended_action": "choose one owner for the shared body or intentionally differentiate the behavior",
-        "instances": [
-          {
-            "path": "crates/cli/src/render.rs",
-            "language": "rust",
-            "start_line": 410,
-            "end_line": 411,
-            "unit_name": "center_pad"
-          },
-          {
-            "path": "crates/cli/src/render.rs",
-            "language": "rust",
-            "start_line": 430,
-            "end_line": 431,
-            "unit_name": "left_pad"
-          },
-          {
-            "path": "crates/cli/src/render.rs",
-            "language": "rust",
-            "start_line": 444,
-            "end_line": 445,
-            "unit_name": "right_pad"
           }
         ]
       }
@@ -3573,7 +3654,7 @@
       "hard classes are limited to exact active-source file matches and substantial exact same-name units",
       "warning classes include same-body different-name units and token/block duplication",
       "tests, fixtures, stories, config, Docker, and migrations are omitted unless --include-tests is set",
-      "showing the top 50 classes and omitting 121 lower-ranked classes"
+      "showing the top 50 classes and omitting 129 lower-ranked classes"
     ]
   },
   "profile_structure": {
@@ -3859,7 +3940,7 @@
       "problem": "`Code shape and semantic surface` scored 45 below the standard floor of 85",
       "agent_fix": "split large or ambiguous authored code into smaller semantic modules with focused tests",
       "evidence": [
-        "largest authored code file: crates/sql/src/parser/pragma.rs (1951 LOC)",
+        "largest authored code file: crates/sql/src/exec/mod.rs (1972 LOC)",
         "code file exceeds 500 LOC",
         "code file exceeds 1000 LOC",
         "most code files stay under 300 LOC"
@@ -3869,7 +3950,7 @@
       "confidence": 0.76,
       "evidence_kind": "repository-scan",
       "rerun_command": "just fast",
-      "fingerprint": "sha256:30b9addb1c90686f81395eea308052f5ce7ef8c5cd91e200059881474d643438",
+      "fingerprint": "sha256:361ea01bc8add4188c596b87ce72755189ce67764fc3741459b64d8b2d985b05",
       "rule_id": "HLT-001-DEAD-MARKER",
       "tlr": "Entropy",
       "lane": "fast",
@@ -4000,14 +4081,14 @@
       "problem": "enum `Step` has 2 divergent definitions across modules where one consistent definition is expected",
       "agent_fix": "define `Step` once in a shared module and import it everywhere, or reconcile the diverging definitions so one canonical shape is used; redundant variety lets the copies drift apart",
       "evidence": [
-        "enum `Step` is defined with diverging shapes in 2 modules (crates/redlinedb/src/iter.rs:13, crates/sql/src/statement.rs:830)"
+        "enum `Step` is defined with diverging shapes in 2 modules (crates/redlinedb/src/iter.rs:13, crates/sql/src/statement.rs:871)"
       ],
       "check_id": "HLT-046-UNNECESSARY-VARIETY:copy-code",
       "hardness": "soft",
       "confidence": 0.88,
       "evidence_kind": "repository-scan",
       "rerun_command": "cargo run -p jankurai -- copy-code . --json target/jankurai/copy-code.json --md target/jankurai/copy-code.md",
-      "fingerprint": "sha256:c172c8aa6d15123a78f58f489e735758436cb33681620d22796fafe717e1758d",
+      "fingerprint": "sha256:4ae7e536d954d302d2575f0987733fa5a648b6cb3c9b69826f66e8e08a45b21f",
       "rule_id": "HLT-046-UNNECESSARY-VARIETY",
       "tlr": "Maintainability entropy",
       "lane": "copy-code",
@@ -4046,14 +4127,14 @@
       "problem": "enum `JoinKind` has 2 divergent definitions across modules where one consistent definition is expected",
       "agent_fix": "define `JoinKind` once in a shared module and import it everywhere, or reconcile the diverging definitions so one canonical shape is used; redundant variety lets the copies drift apart",
       "evidence": [
-        "enum `JoinKind` is defined with diverging shapes in 2 modules (crates/sql/src/planner.rs:113, crates/sql/src/statement.rs:576)"
+        "enum `JoinKind` is defined with diverging shapes in 2 modules (crates/sql/src/planner.rs:113, crates/sql/src/statement.rs:617)"
       ],
       "check_id": "HLT-046-UNNECESSARY-VARIETY:copy-code",
       "hardness": "soft",
       "confidence": 0.88,
       "evidence_kind": "repository-scan",
       "rerun_command": "cargo run -p jankurai -- copy-code . --json target/jankurai/copy-code.json --md target/jankurai/copy-code.md",
-      "fingerprint": "sha256:a147640f33f053db108eb7d1be136a09e5c9f66c50a1be0aa352032af0906a80",
+      "fingerprint": "sha256:c3e0c9b7afcb206c9644249a1ded3ce37152a4beab44ee533f4a0ba5f29fc5fe",
       "rule_id": "HLT-046-UNNECESSARY-VARIETY",
       "tlr": "Maintainability entropy",
       "lane": "copy-code",

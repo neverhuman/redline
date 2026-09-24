@@ -2,7 +2,7 @@
   "schema_version": "redline-testing-manifest-v1",
   "suite": "sqlite_parity",
   "command_line": [
-    "/home/ubuntu/actions-runners/xbabe2-4/_work/RedlineDB/RedlineDB/target/ci/redline-testing/local-a6ec29c1cbfd/bin/redline-testing",
+    "/home/ubuntu/actions-runners/xbabe2-2/_work/RedlineDB/RedlineDB/target/ci/redline-testing/local-b28c41d40009/bin/redline-testing",
     "report",
     "--suite",
     "sqlite_parity",
@@ -28,7 +28,7 @@
     "--jankurai-score",
     ".jankurai/repo-score.json",
     "--updated-date",
-    "2026-09-23",
+    "2026-09-24",
     "--expected-repetitions",
     "3",
     "--expected-warmup",
