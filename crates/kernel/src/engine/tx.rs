@@ -5,6 +5,7 @@ use crate::format::{Csn, TxId};
 use crate::index::BtreeIndex;
 use crate::txn::{Isolation, Snapshot};
 use crate::{Error, Result};
+use std::collections::HashSet;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Weak};
 
@@ -20,7 +21,10 @@ pub struct Txn {
     snapshot: Snapshot,
     pending_schema_snapshot: Option<Arc<SchemaSnapshot>>,
     pending_index_handles: Vec<PendingIndexHandle>,
+    /// Insertion order. Release walks this so unlock order stays stable.
     row_locks: Vec<RowKey>,
+    /// Membership for `has_row_lock`. The vec alone is O(n) per probe.
+    row_lock_set: HashSet<RowKey>,
     open: bool,
     lifecycle: Option<Arc<TxnLifecycle>>,
     /// Lane A5-triggers: depth counter for nested trigger fires. The SQL
@@ -51,6 +55,7 @@ impl Txn {
             pending_schema_snapshot: None,
             pending_index_handles: Vec::new(),
             row_locks: Vec::new(),
+            row_lock_set: HashSet::new(),
             open: true,
             lifecycle: Some(lifecycle),
             trigger_depth: 0,
@@ -128,14 +133,17 @@ impl Txn {
     }
 
     pub(crate) fn has_row_lock(&self, key: RowKey) -> bool {
-        self.row_locks.contains(&key)
+        self.row_lock_set.contains(&key)
     }
 
     pub(crate) fn push_row_lock(&mut self, key: RowKey) {
-        self.row_locks.push(key);
+        if self.row_lock_set.insert(key) {
+            self.row_locks.push(key);
+        }
     }
 
     pub(crate) fn drain_row_locks(&mut self) -> impl Iterator<Item = RowKey> + '_ {
+        self.row_lock_set.clear();
         self.row_locks.drain(..)
     }
 }
@@ -197,5 +205,29 @@ mod tests {
         assert!(!tx.has_row_lock(second));
         let locked: Vec<_> = tx.drain_row_locks().collect();
         assert_eq!(locked, vec![first]);
+        assert!(!tx.has_row_lock(first));
+    }
+
+    #[test]
+    fn row_lock_membership_ignores_duplicates_and_keeps_order() {
+        let txs = ConcurrentTxStatus::new();
+        let mut tx = txs.begin_txn(Isolation::Snapshot);
+        let keys: Vec<RowKey> = (0..64)
+            .map(|i| RowKey {
+                rel_id: RelId(3),
+                row_id: RowId(i),
+            })
+            .collect();
+        for key in &keys {
+            tx.push_row_lock(*key);
+            tx.push_row_lock(*key);
+        }
+        assert!(tx.has_row_lock(keys[40]));
+        assert!(!tx.has_row_lock(RowKey {
+            rel_id: RelId(9),
+            row_id: RowId(40),
+        }));
+        let locked: Vec<_> = tx.drain_row_locks().collect();
+        assert_eq!(locked, keys);
     }
 }

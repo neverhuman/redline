@@ -433,17 +433,9 @@ fn encode_key_into(values: &[SqlValue], buf: &mut Vec<u8>) -> crate::Result<()> 
 /// otherwise we run the scalar reference.
 #[inline]
 fn sum_i64_dispatch(col: &[i64]) -> (i64, i64) {
-    #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
-    {
-        if col.len() >= 4 && std::is_x86_feature_detected!("avx2") {
-            // SAFETY: `is_x86_feature_detected!("avx2")` returned true,
-            // satisfying the `target_feature = "avx2"` precondition of
-            // `sum_i64_avx2`.
-            unsafe {
-                return sum_i64_avx2(col);
-            }
-        }
-    }
+    // The AVX2 kernel adds with wrapping lanes. `sum_i64_scalar` saturates.
+    // A morsel of large i64 values makes those answers disagree, so the
+    // dispatched SUM stays on the saturating scalar path.
     sum_i64_scalar(col)
 }
 
@@ -458,8 +450,12 @@ pub(crate) fn sum_i64_scalar(col: &[i64]) -> (i64, i64) {
 }
 
 #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
+#[allow(dead_code)]
 #[target_feature(enable = "avx2")]
-/// AVX2 `SUM(i64)` reduction. Accumulates four 64-bit lanes via
+/// AVX2 `SUM(i64)` reduction. Not used: `_mm256_add_epi64` wraps, and
+/// `sum_i64_scalar` saturates. Kept so a saturating lane kernel can
+/// replace the dispatcher without rediscovering the load/store shape.
+/// Accumulates four 64-bit lanes via
 /// `_mm256_add_epi64` (wrapping) and folds the tail with the scalar
 /// reference. The wrapping accumulation matches `i64::wrapping_add`, NOT
 /// `saturating_add` — the dispatcher caps the fast path at column lengths
@@ -546,6 +542,16 @@ mod tests {
         let (s_scal, n_scal) = sum_i64_scalar(&col);
         // SIMD uses wrapping; scalar uses saturating — for shrunken inputs
         // these agree exactly.
+        assert_eq!(s_disp, s_scal);
+        assert_eq!(n_disp, n_scal);
+    }
+
+    #[test]
+    fn dispatch_sum_saturates_like_scalar() {
+        let col = [i64::MAX, i64::MAX, 1, 1];
+        let (s_disp, n_disp) = sum_i64_dispatch(&col);
+        let (s_scal, n_scal) = sum_i64_scalar(&col);
+        assert_eq!(s_disp, i64::MAX);
         assert_eq!(s_disp, s_scal);
         assert_eq!(n_disp, n_scal);
     }

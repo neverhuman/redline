@@ -198,14 +198,9 @@ fn pool_present_dispatches_parallel_for_hash_agg() {
     let dispatch_decision =
         dispatch_decision.expect("ORDER BY covering plan must observe the gate");
     match dispatch_decision {
-        ParallelCoveringDecision::Dispatch { worker_count } => {
-            assert!(
-                worker_count >= 1 && worker_count <= pool.current_num_threads().max(1),
-                "worker_count clamped to pool size: {dispatch_decision:?}"
-            );
-        }
+        ParallelCoveringDecision::FallbackDownstreamNotAggregator => {}
         other => panic!(
-            "expected Dispatch for ORDER BY (SpillSort) downstream with pool installed, got {other:?}"
+            "ORDER BY covering scans stay serial; the parallel scan does not sort, got {other:?}"
         ),
     }
     ensure_outer_row_stack_drained();
@@ -228,8 +223,8 @@ fn pool_present_dispatches_parallel_for_spill_sort() {
     });
     let decision = decision.expect("gate must have observed the covering plan");
     match decision {
-        ParallelCoveringDecision::Dispatch { worker_count: _ } => {}
-        other => panic!("expected Dispatch for SpillSort downstream, got {other:?}"),
+        ParallelCoveringDecision::FallbackDownstreamNotAggregator => {}
+        other => panic!("ORDER BY must not dispatch an unordered covering scan, got {other:?}"),
     }
     ensure_outer_row_stack_drained();
 }
@@ -277,22 +272,14 @@ fn result_set_matches_serial_dispatch() {
 
     let decision = decision.expect("parallel run must have observed the covering plan");
     assert!(
-        decision.would_dispatch(),
-        "parallel run must have dispatched: {decision:?}"
+        !decision.would_dispatch(),
+        "ORDER BY covering scans stay serial: {decision:?}"
     );
-
-    // ORDER BY downstream gives deterministic ordering already; the
-    // sort here is a defence-in-depth against any future change that
-    // weakens the post-dispatch ordering guarantee.
-    let mut serial_sorted = serial.clone();
-    let mut parallel_sorted = parallel.clone();
-    serial_sorted.sort();
-    parallel_sorted.sort();
     assert_eq!(
-        serial_sorted, parallel_sorted,
-        "parallel dispatch must produce the same row set as the serial baseline"
+        serial, parallel,
+        "ORDER BY results stay in index order on both paths"
     );
-    assert!(!serial_sorted.is_empty(), "test data must include rows");
+    assert!(!serial.is_empty(), "test data must include rows");
     ensure_outer_row_stack_drained();
 }
 

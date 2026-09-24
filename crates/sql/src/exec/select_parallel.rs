@@ -74,8 +74,8 @@ pub(crate) fn decide_parallel_covering_scan(
 /// covering scan emits rows) is a `HashAggregator` or `SpillSort`
 /// — both tolerate unordered input which is what the parallel
 /// scan produces. Today this is approximated by the presence of
-/// `GROUP BY` / aggregate projections (→ HashAggregator) or a
-/// non-empty `ORDER BY` (→ SpillSort).
+/// `GROUP BY` / aggregate projections (→ HashAggregator). ORDER BY is
+/// not included: the parallel covering scan does not sort after merge.
 fn plan_downstream_is_aggregator_or_spill_sort(plan: &SelectPlan) -> bool {
     if !plan.group_by.is_empty() {
         return true;
@@ -83,9 +83,9 @@ fn plan_downstream_is_aggregator_or_spill_sort(plan: &SelectPlan) -> bool {
     if super::agg::select_requires_aggregation(plan) {
         return true;
     }
-    if !plan.order_by.is_empty() {
-        return true;
-    }
+    // ORDER BY does not tolerate an unordered parallel covering scan.
+    // A later sort would have to run after the workers merge. Until that
+    // sort is on this path, an ORDER BY plan stays serial.
     false
 }
 

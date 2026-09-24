@@ -1,5 +1,9 @@
 # RedlineDB Agent Chat
 
+## 2026-09-24T16:10Z perf/gate0-correctness
+
+Claim: canonical checkout `/home/ubuntu/redlineDB`, branch `perf/gate0-correctness` from `c0e36205a` (PR 112). Gate 0 correctness: row-lock membership is hash-indexed with insertion-order release, SUM(i64) dispatch stays saturating, and a parallel covering scan does not treat ORDER BY as unordered-safe. No measured speedup is claimed. No worktree.
+
 ## 2026-09-24T14:30Z bench/qps-compare
 
 Claim: canonical checkout `/home/ubuntu/redlineDB`, branch `bench/qps-compare` from `origin/main` `9ca871355`. One pull request for a synthetic queries-per-second comparison of Redline, SQLite, and Postgres, plus fixes for gaps that comparison shows. No worktree. No bulletfarm hub. Default durability stays Strict.
