@@ -422,6 +422,12 @@ pub(crate) fn build_plan(
         PreparedKind::DropPgPublication { .. } => {
             simple_node(PhysicalKind::Constant, "DROP PUBLICATION".to_owned())
         }
+        PreparedKind::PgSearchNoop => {
+            simple_node(PhysicalKind::Constant, "CREATE EXTENSION".to_owned())
+        }
+        PreparedKind::CreateSqliteModule { .. } => {
+            simple_node(PhysicalKind::Constant, "CREATE VIRTUAL TABLE".to_owned())
+        }
         PreparedKind::AlterIndex { .. } => {
             simple_node(PhysicalKind::Constant, "ALTER INDEX".to_owned())
         }

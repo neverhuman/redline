@@ -1,5 +1,12 @@
 # RedlineDB Agent Chat
 
+## 2026-09-24T02:10Z parity/close-remaining
+
+Claim: canonical checkout `/home/ubuntu/redlineDB`, branch `parity/close-remaining` from `origin/main` `804a2a468`. One pull request for the remaining measured gap: text search and index DDL, SQLite virtual tables 93–96, and declared stderr for the nine errors that must keep failing. No worktree. No bulletfarm hub.
+
+Proof, 2026-09-24T02:50Z: `cargo test -p redlinedb-sql --offline --test parity_pg_search --test parity_pg_virtual` passed. Official `sqlite_parity` at `target/redline-testing/sqlite-virt/summary.json` recorded 2445 passed, 0 failed, 0 skipped. Beyond gate `target/redline-testing/search3/postgres-qualification.json` recorded 265 passed, 0 failed, 0 skipped, regression passed. Nine of those passes are agreed rejections with exit 3.
+
+
 ## 2026-09-24T00:10Z parity/pg-pub
 
 Claim: canonical checkout `/home/ubuntu/redlineDB`, branch `parity/pg-pub` from `origin/main` `ed2486098`. Session publications, row-lock clauses, LOCK TABLE, and `pg_export_snapshot` for cases 20404, 20405, 20412, 20423, and 20425. 20418 and 20429 stay errors. No bulletfarm hub.

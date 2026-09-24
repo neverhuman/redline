@@ -16,6 +16,27 @@ pub(crate) fn eval_binary(
         if let Some(distance) = crate::pg_type::point_distance(&left_value, &right_value) {
             return Ok(distance);
         }
+        if let Some(distance) = crate::pg_search::text_distance(&left_value, &right_value) {
+            return Ok(distance);
+        }
+    }
+    if matches!(op, BinaryOperator::Modulo) {
+        let left_value = eval_scalar(left, row, bindings)?;
+        let right_value = eval_scalar(right, row, bindings)?;
+        if let Some(flag) = crate::pg_search::text_similarity_match(&left_value, &right_value) {
+            return Ok(flag);
+        }
+        return Ok(arithmetic(
+            left_value,
+            right_value,
+            |a, b| if b == 0 { None } else { a.checked_rem(b) },
+            |a, b| if b == 0.0 { None } else { Some(a % b) },
+        )?);
+    }
+    if matches!(op, BinaryOperator::Match) {
+        if let Some(flag) = crate::virtual_module::fts_match(left, right, row, bindings)? {
+            return Ok(flag);
+        }
     }
     if matches!(op, BinaryOperator::Match) {
         let pattern = eval_scalar(right, row, bindings)?;
@@ -99,12 +120,7 @@ pub(crate) fn eval_binary(
                 )?,
             }
         }
-        BinaryOperator::Modulo => arithmetic(
-            left_value,
-            right_value,
-            |a, b| if b == 0 { None } else { a.checked_rem(b) },
-            |a, b| if b == 0.0 { None } else { Some(a % b) },
-        )?,
+        BinaryOperator::Modulo => unreachable!("text and numeric modulo are handled above"),
         BinaryOperator::Eq => {
             compare_with_collation(left_value, right_value, |o| o == Ordering::Equal)?
         }
@@ -155,7 +171,13 @@ pub(crate) fn eval_binary(
             crate::json::jsonb::op_hash_long_arrow(&left_value, &right_value)?
         }
         BinaryOperator::HashMinus => crate::json::jsonb::op_hash_minus(&left_value, &right_value)?,
-        BinaryOperator::AtAt => crate::json::jsonb::op_at_at(&left_value, &right_value)?,
+        BinaryOperator::AtAt => {
+            if crate::pg_search::is_ts_value(&left_value) {
+                crate::pg_search::ts_match(&left_value, &right_value)
+            } else {
+                crate::json::jsonb::op_at_at(&left_value, &right_value)?
+            }
+        }
         BinaryOperator::AtQuestion => {
             crate::json::jsonb::op_at_question(&left_value, &right_value)?
         }

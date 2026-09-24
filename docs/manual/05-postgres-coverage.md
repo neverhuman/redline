@@ -17,15 +17,13 @@ Leave it unset for SQLite work. The official SQLite lane does not set it.
 | Corpus | `beyond_sqlite`, 265 cases |
 | Oracle | PostgreSQL 16.15, settings `160015\|C\|C\|UTC` |
 | Image the gate accepts | `sha256:efdf07c2f9d4df592783dcc8ea5f6db02efbf5f6452b527225ff5e58364570e9` |
-| Open failures in the policy on this commit | 20 |
+| Open failures in the policy on this commit | 0 |
 | Policy file | `metadata/beyond_sqlite/postgres-regression.json` |
-| Policy reason | row locks, LOCK TABLE, snapshot export, and CREATE PUBLICATION run |
+| Policy reason | text search and the nine declared rejections agree; no open failures remain |
 
-The policy's `failed_cases` array is the list the gate allows. A run passes the regression check when every failure is in that list and every case in that list still fails. When a case starts passing, it has to leave the list. The list is not a trophy. It is the set of known misses.
+The policy's `failed_cases` array is the list the gate allows. On this branch that array is empty. A local gate recorded 265 passed, 0 failed, 0 skipped, and the regression check passed. The README block between `POSTGRES_PARITY_START` and `POSTGRES_PARITY_END` is that generated result.
 
-The README block between `POSTGRES_PARITY_START` and `POSTGRES_PARITY_END` still reports **127 passed, 138 failed** from commit `090dbc9b`. That block is generated, and it has not been regenerated on this commit. Until CI writes a new block, quote the policy file: **20** named failures out of **265** cases.
-
-A matching non-zero exit is not a pass. The runner counts agreement on an error only when the case declares the text the target must produce. Several of the 20 are errors we intend to keep, once that text is declared. They are listed in the [ledger](appendix-coverage.md).
+Nine of the 265 passes are agreed rejections. Both engines exit 3, stdout matches, and the case declares `expected_target_stderr_contains`. The target produced that text, and setup completed. Those statements still fail. The [ledger](appendix-coverage.md) names them. The other 256 passes return rows.
 
 ## What already behaves like Postgres
 
@@ -41,7 +39,8 @@ These are in the engine on this commit, and the corpus cases that cover them are
 - `CREATE DOMAIN ... CHECK (VALUE > n)` returns the base value when the check passes and rejects the value when it fails.
 - `int4range(lo, hi)` is half-open. `int4range(1, 10)` contains 5 and does not contain 10. Overlap (`&&`) uses the same bounds.
 - `point(x, y)` and the `<->` operator. `point(0,0) <-> point(3,4)` is `5`.
-- `CREATE EXTENSION citext` compares and orders without case, and the value keeps the spelling you wrote. `CREATE EXTENSION vector` fails. The vector extension is not bundled.
+- `CREATE EXTENSION citext` compares and orders without case, and the value keeps the spelling you wrote. `CREATE EXTENSION pg_trgm`, `btree_gin`, and `btree_gist` are accepted. `CREATE EXTENSION vector` fails with `extension "vector" is not available`.
+- `to_tsvector`, `to_tsquery`, `setweight`, `ts_rank`, `@@`, `similarity`, `word_similarity`, `%`, and text `<->` match the corpus rows. `USING gin` and `USING gist` are stored as ordinary indexes. The cases compare rows, not plans.
 
 **SQL functions.** `LANGUAGE SQL` functions run. `LATERAL` is accepted on the forms the corpus covers. `DEFAULT nextval(...)` together with `ALTER SEQUENCE ... OWNED BY` inserts sequence values.
 
@@ -51,28 +50,31 @@ These are in the engine on this commit, and the corpus cases that cover them are
 
 **Catalogs the shell can see.** Empty shims exist for several `pg_*` views the corpus only counts (`pg_locks`, publication and subscription views, replication slots). `pg_class`, `pg_namespace`, and `pg_constraint` can be rewritten from the session snapshot so a name probe returns rows. Materialized views have a session catalog. Read `docs/sqlite-parity.md` and the SQL crate when you need the exact column list. A shim that answers `count(*)` is not the full Postgres catalog.
 
-## What is still open
+## Agreed errors
 
-The 20 names are in the [ledger](appendix-coverage.md). They fall into a few jobs:
+These nine statements fail on both engines. The corpus records the RedlineDB text, so the gate counts them as passes. They are not queries you can build on.
 
-| Open cases | Job |
+| Case | What you get |
 | ---: | --- |
-| 1 | `RAISE EXCEPTION` inside `DO`. The other corpus plpgsql bodies run |
-| 12 | Text search, trigram, GiST, GIN, and the `vector` extension |
-| 2 | Logical decoding while `wal_level` is below `logical`. Publications and `pg_export_snapshot` already run |
-| 1 | `LISTEN ALL` |
-| 2 | An enum label that is not in the type, and a domain value that fails its check. These are errors on Postgres too. They stay failures until the corpus declares the message. |
-| 2 | `MERGE ... WHEN NOT MATCHED BY SOURCE` (a Postgres 17 clause; this oracle is 16.15) and the `DISTINCT ON` form whose expressions are not the leftmost `ORDER BY` terms. Other `DISTINCT ON` cases are not in the open list |
+| 20021 | `invalid input value for enum color: "purple"` |
+| 20023 | `value for domain positive_int2 violates check constraint "positive_int2_check"` |
+| 20103 | `syntax error at or near "BY"` for `MERGE ... WHEN NOT MATCHED BY SOURCE` |
+| 20111 | `SELECT DISTINCT ON expressions must match initial ORDER BY expressions` |
+| 20308 | `ERROR: boom` from `RAISE EXCEPTION` |
+| 20340 | `extension "vector" is not available` |
+| 20418 | `logical decoding requires wal_level >= logical` |
+| 20429 | the same logical-decoding error from `pg_logical_slot_peek_changes` |
+| 20438 | `syntax error at or near "ALL"` for `LISTEN ALL` |
 
-The corpus plpgsql bodies run: assignment, `IF`, loops, `RETURN NEXT`, `RETURN QUERY`, `CALL`, `STRICT`, `VARIADIC int[]`, and `PERFORM pg_notify` from a function or an `AFTER INSERT` trigger. `RAISE EXCEPTION` still fails. A plpgsql program outside those shapes is still unsupported.
+The corpus plpgsql bodies run: assignment, `IF`, loops, `RETURN NEXT`, `RETURN QUERY`, `CALL`, `STRICT`, `VARIADIC int[]`, and `PERFORM pg_notify` from a function or an `AFTER INSERT` trigger. `RAISE EXCEPTION` aborts with the message above. A plpgsql program outside those shapes is still unsupported.
 
-GiST and GIN in that table are index methods the corpus asks for. Point distance works without a GiST index. Do not read a passing distance expression as proof that `USING gist` changes the plan.
+`USING gin` and `USING gist` in the passing index cases become ordinary indexes. Point distance works. A passing overlap query is not a different access plan.
 
 ## A practical migration order
 
 1. Run the schema and the queries with the dialect variable set, against a throwaway file.
 2. Anything that returns `UnsupportedSql` is a stop. Look the statement up in the ledger before you rewrite it.
-3. Keep `plpgsql`, `NOTIFY` between sessions, logical replication, and `vector` on Postgres.
+3. Keep cross-session `NOTIFY`, logical replication, and `vector` on Postgres. Corpus `plpgsql` runs; `RAISE EXCEPTION` aborts.
 4. Move the rest — tables, SQL functions, enums, ranges, citext, and ordinary `SELECT` — when the shell output matches the `psql` output you care about.
 
 The gate command used in CI is the `beyond_sqlite` suite of `redline-testing`, with `REDLINE_TESTING_POSTGRES_URL` pointing at the pinned server and `REDLINE_TESTING_POSTGRES_IMAGE` set to the digest above. `ops/ci/parity.sh` fills the image digest in when it finds that local server.

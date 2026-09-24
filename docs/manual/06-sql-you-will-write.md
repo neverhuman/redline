@@ -35,8 +35,8 @@ In the Postgres dialect, `schema.table` is one identifier. Creating `auth.users`
 
 These are the ones that look portable and are not, on this commit:
 
-- `CREATE VIRTUAL TABLE ... USING fts5` (and `rtree`, and `dbstat`)
-- plpgsql outside the shapes in [Postgres coverage](05-postgres-coverage.md), including `RAISE EXCEPTION`
+- `CREATE VIRTUAL TABLE` for a module other than `fts5`, `rtree`, or `dbstat`
+- plpgsql outside the shapes in [Postgres coverage](05-postgres-coverage.md). `RAISE EXCEPTION` aborts
 - `CREATE EXTENSION vector`
 - `UPDATE ... ORDER BY ... LIMIT` and the `DELETE` form of the same
 - `soundex()`

@@ -120,6 +120,9 @@ pub(crate) fn eval_scalar_function_values(
     if let Some(result) = super::scalar::pg_session::try_eval(name, &values) {
         return result;
     }
+    if let Some(result) = crate::pg_search::try_eval(name, &values) {
+        return result;
+    }
     match name {
         "last_insert_rowid" => {
             if !values.is_empty() {

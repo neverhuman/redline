@@ -309,7 +309,7 @@ fn query_map_maps_rows_and_preserves_order_after_callback_error() {
 fn create_virtual_table_is_unsupported_without_module_migration() {
     let (_dir, _db, conn) = new_db();
 
-    let err = conn.execute("CREATE VIRTUAL TABLE boxes USING rtree (id, x1, x2, y1, y2)");
+    let err = conn.execute("CREATE VIRTUAL TABLE boxes USING nosuch (id, x1, x2, y1, y2)");
     match err {
         Ok(v) => panic!("expected failure, got ok({v:?})"),
         Err(Error::UnsupportedSql(message)) => assert!(

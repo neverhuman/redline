@@ -283,6 +283,14 @@ pub enum PreparedKind {
         name: Arc<str>,
         if_exists: bool,
     },
+    /// `CREATE EXTENSION` for pg_trgm, btree_gin, or btree_gist.
+    PgSearchNoop,
+    /// `CREATE VIRTUAL TABLE ... USING fts5|rtree|dbstat`.
+    CreateSqliteModule {
+        module: Arc<str>,
+        name: Arc<str>,
+        columns: Arc<str>,
+    },
     /// Track J — `ALTER INDEX <name> RENAME TO <new_name>`.
     AlterIndex {
         old_name: Arc<str>,

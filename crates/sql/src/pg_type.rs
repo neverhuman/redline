@@ -186,9 +186,17 @@ pub(crate) fn parse_range(value: &SqlValue) -> Option<(i64, i64)> {
     let SqlValue::Text(text) = value else {
         return None;
     };
-    let rest = text.strip_prefix("range:")?;
-    let (lo, hi) = rest.split_once(':')?;
-    Some((lo.parse().ok()?, hi.parse().ok()?))
+    if let Some(rest) = text.strip_prefix("range:") {
+        let (lo, hi) = rest.split_once(':')?;
+        return Some((lo.parse().ok()?, hi.parse().ok()?));
+    }
+    let trimmed = text.trim();
+    if trimmed.starts_with('[') && trimmed.ends_with(')') {
+        let inner = &trimmed[1..trimmed.len() - 1];
+        let (lo, hi) = inner.split_once(',')?;
+        return Some((lo.trim().parse().ok()?, hi.trim().parse().ok()?));
+    }
+    None
 }
 
 pub(crate) fn range_contains(range: &SqlValue, value: &SqlValue) -> Option<bool> {
@@ -242,6 +250,11 @@ pub(crate) fn as_number(value: &SqlValue) -> Option<f64> {
 
 /// `Some` when `type_name` is a registered enum or domain.
 pub(crate) fn cast_registered(type_name: &str, value: &SqlValue) -> Result<Option<SqlValue>> {
+    if type_name.eq_ignore_ascii_case("int4range") {
+        if let Some((lo, hi)) = parse_range(value) {
+            return Ok(Some(int4range_value(lo, hi)));
+        }
+    }
     if !crate::value::postgres_result_dialect() {
         return Ok(None);
     }

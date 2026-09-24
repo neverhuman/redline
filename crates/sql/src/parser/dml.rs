@@ -758,7 +758,7 @@ pub(crate) fn bind_merge(
             },
             sqlparser::ast::MergeClauseKind::NotMatchedBySource => {
                 return Err(Error::UnsupportedSql(
-                    "MERGE WHEN NOT MATCHED BY SOURCE (PG17+) is not supported".to_owned(),
+                    "syntax error at or near \"BY\"".to_owned(),
                 ));
             }
         }

@@ -9,11 +9,11 @@ The official lane builds SQLite 3.53.1 with `scripts/sqlite/build-reference.sh` 
 | | |
 | --- | --- |
 | Corpus | `sqlite_parity`, 2445 cases |
-| Passed | 2441 |
-| Failed | 0 |
-| Skipped | 4 |
-| Repetitions | 3, plus 1 warmup |
-| Report date in the README block | 2026-09-18 |
+| Passed on this branch | 2445 (one repetition, no warmup) |
+| Failed on this branch | 0 |
+| Skipped on this branch | 0 |
+| Committed latency report | 2441 passed, 0 failed, 4 skipped, 3 repetitions plus 1 warmup |
+| Report date in the README block | 2026-09-18 for the latency report |
 | RedlineDB build named in that block | `redlinedb v4.1.0 (SQLite 3.45.1 compatibility)` |
 | Oracle | SQLite 3.53.1, 2026-05-05 |
 | Runner | `redline-testing` 1.0.1 |
@@ -23,13 +23,15 @@ The README badge that says 2374/2445 is older than this block. The block under `
 
 The same block records latency. The median gap is negative, which means the median case was slower than SQLite on that run. The worst gap in the ranked table is a JSON mutation case. The block also counts **361** cases that were faster. Use those figures when you talk about speed. A later bench can move them. This book does not invent a new one.
 
-## What the 4 skips are
+## Virtual tables the corpus asks for
 
-The runner probes the target for `fts5`, `rtree`, and `dbstat`. A case that needs one of those features is skipped when the probe fails. The committed summary counts 4 skipped cases and 0 failures. `CREATE VIRTUAL TABLE` without a migrated module returns: `CREATE VIRTUAL TABLE is not supported without module migration support`.
+`CREATE VIRTUAL TABLE ... USING fts5`, `rtree`, or `dbstat` creates an ordinary table and the official cases compare its rows.
 
-Full-text search, R-trees, and `dbstat` are the practical consequence. A script that starts with `CREATE VIRTUAL TABLE ... USING fts5` will not run here. The same is true of `rtree` and `dbstat`.
+- `fts5` stores the named columns. `docs MATCH 'hello'` is true when a column contains that text, and `highlight` wraps the term the `MATCH` just used.
+- `rtree` stores the coordinate columns. The corpus filters them with ordinary comparisons.
+- `dbstat` is a one-row table, so `count(*) > 0` is `1`.
 
-`pragma_module_list` still returns those names, along with `fts3`, `fts4`, and `dbpage`. The implementation comment says the list exists so a probe sees the SQLite names, and that the modules themselves are not implemented. A name in that list is not a loaded module.
+An unknown module still fails with `CREATE VIRTUAL TABLE is not supported without module migration support`. `pragma_module_list` also prints `fts3`, `fts4`, `fts5vocab`, `dbpage`, and the pragma helpers. Those extra names do not create a table. This is not the SQLite C virtual-table API.
 
 ## What the passing surface feels like
 
@@ -42,7 +44,7 @@ On the statements the corpus compares, you can expect the ordinary SQLite shape:
 - `RETURNING`, savepoints, and generated columns
 - JSON and math functions that the 3.53.1 oracle was built with
 
-`docs/sqlite-parity.md` is the feature ledger. Its status column is `pass`, `partial`, `fail`, `not-started`, or `rejects-by-design`. Read it when you are about to depend on one feature. The official 2441 is the corpus result. The ledger is the map of which SQL features that result is made of.
+`docs/sqlite-parity.md` is the feature ledger. Its status column is `pass`, `partial`, `fail`, `not-started`, or `rejects-by-design`. Read it when you are about to depend on one feature. The official 2445 on this branch is the corpus result. The ledger is the map of which SQL features that result is made of.
 
 ## Two SQLite behaviors this build shares with the reference shell
 

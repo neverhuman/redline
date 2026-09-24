@@ -35,9 +35,9 @@ The book for operators and for people embedding the engine is
 and it says which file to trust when a badge and a report disagree.
 
 <!-- POSTGRES_PARITY_START -->
-PostgreSQL **16.15** SQL-shell corpus: **217 / 265 passed**, **48 failed**, **0 skipped**. Corpus qualification: **failed**. Regression gate: **passed**.
+PostgreSQL **16.15** SQL-shell corpus: **265 / 265 passed**, **0 failed**, **0 skipped**. Corpus qualification: **passed**. Regression gate: **passed**.
 
-All corpus cases run in CI; known failures remain failures. PostgreSQL wire/client and full application compatibility remain unverified. Source: `45fc7dbe608ddafc949ec6ecf5264262ad7a4d1a` (dirty workspace); corpus SHA-256: `01a25cfc48176a535919354a6bddf48f87692857857c24777dcf9b4841bd0a9d`.
+All corpus cases run in CI; known failures remain failures. PostgreSQL wire/client and full application compatibility remain unverified. Source: `unrecorded` (dirty workspace); corpus SHA-256: `b240a7204eeb46893ea1f06e715a144f6cd962efe8f41041582e52ca975cd5be`.
 <!-- POSTGRES_PARITY_END -->
 
 ## What's new in v4.0.9 → v4.1.0 (W7 startup optimization)

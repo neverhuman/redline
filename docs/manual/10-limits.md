@@ -8,7 +8,7 @@ The database path is a directory containing `data.redline` and `wal/`. SQLite fo
 
 ## SQLite
 
-The official corpus recorded 2441 passes, 0 failures, and 4 skips out of 2445 on the run dated 2026-09-18. The skips are the cases that need `fts5`, `rtree`, or `dbstat`. `CREATE VIRTUAL TABLE` for an unmigrated module fails with a clear error. `pragma_module_list` still prints those module names. The print is not an implementation.
+A local official run on this branch recorded 2445 passes, 0 failures, and 0 skips out of 2445, with one repetition. `fts5`, `rtree`, and `dbstat` are ordinary tables for the corpus statements. An unknown module still fails. `pragma_module_list` also prints names that do not create a table. The committed latency summary is still the earlier run (2441 passed, 4 skipped, 3 repetitions).
 
 `soundex()` is absent, matching a reference build that was not compiled with it. `UPDATE` and `DELETE` with `ORDER BY` ... `LIMIT` are syntax errors, matching a reference parser that was not generated with that grammar.
 
@@ -18,18 +18,13 @@ The C ABI uses `sqlite3_*` names for the calls it implements. A symbol existing 
 
 ## Postgres
 
-The shell comparison has 265 cases. The regression policy names 20 that still fail. The README's generated Postgres paragraph is older (127 passed, 138 failed) and should not be quoted as the current policy.
+The shell comparison has 265 cases. The regression policy's failure list is empty. A local gate recorded 265 passed and 0 failed. Nine of those passes are agreed errors, listed in [Postgres coverage](05-postgres-coverage.md): a bad enum label, a failing domain check, `MERGE ... WHEN NOT MATCHED BY SOURCE`, a `DISTINCT ON` order mismatch, `RAISE EXCEPTION`, `CREATE EXTENSION vector`, logical decoding while `wal_level` is `replica`, and `LISTEN ALL`.
 
-Still open, in plain language:
+Still outside the corpus, in plain language:
 
-- `RAISE EXCEPTION`, and plpgsql outside the corpus shapes (assignment, `IF`, loops, `RETURN NEXT`, `RETURN QUERY`, `CALL`, `STRICT`, one `VARIADIC int[]`)
-- text search, trigram similarity, and GiST/GIN index methods
+- plpgsql outside the shapes that run (assignment, `IF`, loops, `RETURN NEXT`, `RETURN QUERY`, `CALL`, `STRICT`, one `VARIADIC int[]`)
 - the `vector` extension
-- logical decoding while `wal_level` is below `logical`
-- publications, exported snapshots, and logical decoding
-- `pg_notify` inside a function or a trigger (plain `NOTIFY` is accepted and delivers nothing)
-- `MERGE` syntax that belongs to Postgres 17
-- two error strings (a bad enum label, a domain check) that Postgres also rejects, and that the gate will not count as agreed until the expected text is declared
+- logical decoding and cross-session `NOTIFY` (`pg_notify` inside a corpus function returns a row and delivers nothing)
 
 `LISTEN` on this connection works, and it rolls back with the transaction. It does not fan out to other processes.
 
@@ -53,4 +48,4 @@ One `Database` value owns the file for writing. Other agents in the same process
 
 ## What a later commit can change
 
-The 20 open Postgres cases are a work list, not a law. When one starts passing, the policy file loses that id and this chapter goes stale in that one row. The SQLite summary file moves when a new official run is committed. If you are reading this on a commit other than `8ae3a8b791d4edab88cf8513ad0d99ef709a1202`, regenerate your confidence from those two files before you repeat a count.
+The policy file and a fresh `sqlite_parity` run are the counts to repeat. The committed latency summary moves when a new official report is committed. If you are reading this on a later commit, regenerate your confidence from those files before you repeat a count.

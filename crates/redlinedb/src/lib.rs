@@ -331,7 +331,7 @@ mod tests {
 
         let err = conn
             .execute(
-                "create\nvirtual\ttable boxes USING rtree (id, x1, x2, y1, y2)",
+                "create\nvirtual\ttable boxes USING nosuch (id, x1, x2, y1, y2)",
                 (),
             )
             .expect_err("virtual table without a module must fail");

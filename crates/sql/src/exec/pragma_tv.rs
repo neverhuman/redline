@@ -378,10 +378,10 @@ impl TvFunc for PragmaModuleList {
                 "pragma_module_list takes no arguments".to_owned(),
             ));
         }
-        // SQLite's vtab module registry. RedlineDB does not actually
-        // implement these modules — we surface the SQLite-spec names so
-        // callers probing the list see the standard FTS / RTree /
-        // table-info module entries. Each row is a single text column.
+        // Names SQLite prints from pragma_module_list. fts5, rtree, and
+        // dbstat store rows in ordinary tables (see virtual_module.rs).
+        // The other names are catalog entries only. This list is not the
+        // SQLite C virtual-table API.
         const MODULES: &[&str] = &[
             "bytecode",
             "dbpage",

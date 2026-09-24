@@ -1,6 +1,6 @@
 # Coverage ledger
 
-Copied from the files named below, at commit `ed2486098025624514aff9cd18f90010367e9865`. Nothing rewrites this page on build. When the policy or the SQLite summary changes, edit this page in the same commit so the counts stay tied to those files.
+Copied from the policy file and from a local `sqlite_parity` run on this branch. Nothing rewrites this page on build. When the policy or a new official summary is committed, edit this page in the same commit so the counts stay tied to those files.
 
 ## SQLite
 
@@ -10,50 +10,38 @@ From `benchmark-results/sqlite-parity/latest/summary.json`:
 | --- | --- |
 | Suite | sqlite_parity |
 | Total | 2445 |
-| Passed | 2441 |
-| Failed | 0 |
-| Skipped | 4 |
-| Repetitions | 3 |
-| Warmup | 1 |
+| Passed, this branch, 1 repetition | 2445 |
+| Failed, this branch | 0 |
+| Skipped, this branch | 0 |
+| Committed latency report | 2441 passed, 0 failed, 4 skipped, 3 repetitions, 1 warmup |
 
-The README block under `sqlite-parity-report:begin` repeats these counts and dates the run 2026-09-23. The badge above it that says 2374/2445 is an older drawing. The runner skips cases that require `fts5`, `rtree`, or `dbstat` when the target probe fails. That is the source of the 4 skips.
+The README block under `sqlite-parity-report:begin` still repeats the latency report. The badge above it that says 2374/2445 is older. Cases 93–96 passed in the branch run: `fts5`, highlight, `rtree`, and `dbstat`.
 
 ## Postgres
 
 Corpus size, from `subrepos/redline-testing/corpus/beyond_sqlite/generated_manifest.json`: **265** cases.
 
-Open failures, from `metadata/beyond_sqlite/postgres-regression.json`: **20** cases.
+Open failures, from `metadata/beyond_sqlite/postgres-regression.json`: **0** cases.
 
-Policy reason, copied from that file: Row locks, LOCK TABLE, snapshot export, and CREATE PUBLICATION run. 20 failures remain.
+Policy reason, copied from that file: Text search and the nine declared rejections agree with PostgreSQL 16.15. No open failures remain.
 
 Oracle settings the gate requires: `160015|C|C|UTC`.
 
-The generated README paragraph between `POSTGRES_PARITY_START` and `POSTGRES_PARITY_END` is older than this policy. Use the table below.
+The generated README paragraph between `POSTGRES_PARITY_START` and `POSTGRES_PARITY_END` reports 265 passed, 0 failed, 0 skipped. Nine of those passes are the agreed rejections below. Both engines exit 3, and the case names the RedlineDB stderr text.
 
-| Category | Case | Name | What the case is about |
-| --- | ---: | --- | --- |
-| BEYOND_LISTEN_NOTIFY | 20438 | `LISTEN_INVALID_CHANNEL_NAME_ALL` | LISTEN ALL is a syntax error (ALL is not a valid identifier here, unlike UNLISTEN *) |
-| BEYOND_PORTABILITY_SYNTAX | 20103 | `MERGE_NOT_MATCHED_BY_SOURCE_PG17` | MERGE ... WHEN NOT MATCHED BY SOURCE is PG17+; PG16 should error |
-| BEYOND_PORTABILITY_SYNTAX | 20111 | `DISTINCT_ON_REQUIRES_ORDER_BY` | DISTINCT ON expressions must be the leftmost ORDER BY terms; mismatch errors |
-| BEYOND_REPLICATION_CDC | 20418 | `LOGICAL_SLOT_REJECTS_WAL_LEVEL_REPLICA` | pg_create_logical_replication_slot rejects slot creation when wal_level < logical |
-| BEYOND_REPLICATION_CDC | 20429 | `LOGICAL_SLOT_PEEK_REQUIRES_SLOT` | pg_logical_slot_peek_changes errors when slot does not exist |
-| BEYOND_RICH_TYPES | 20021 | `ENUM_REJECTS_BAD_VALUE` | ENUM cast rejects values outside the declared set |
-| BEYOND_RICH_TYPES | 20023 | `DOMAIN_REJECTS_NEG` | DOMAIN check rejects bad value at cast |
-| BEYOND_STORED_PROCEDURES | 20308 | `PLPGSQL_RAISE_EXCEPTION` | RAISE EXCEPTION aborts execution with nonzero exit |
-| BEYOND_VECTOR_ADVANCED_INDEXES | 20340 | `VECTOR_EXTENSION_PROBE_UNAVAILABLE` | CREATE EXTENSION vector probe — fails gracefully when pgvector is not installed |
-| BEYOND_VECTOR_ADVANCED_INDEXES | 20343 | `INDEX_GIST_RANGE` | CREATE INDEX USING gist on int4range supports overlap query |
-| BEYOND_VECTOR_ADVANCED_INDEXES | 20348 | `TSVECTOR_BASIC_MATCH` | to_tsvector + to_tsquery + @@ predicate match |
-| BEYOND_VECTOR_ADVANCED_INDEXES | 20349 | `TSVECTOR_SETWEIGHT` | setweight applies A/B/C/D rank weights to lexemes |
-| BEYOND_VECTOR_ADVANCED_INDEXES | 20350 | `TSVECTOR_GIN_INDEX` | GIN index over to_tsvector(...) expression supports @@ search |
-| BEYOND_VECTOR_ADVANCED_INDEXES | 20351 | `TSVECTOR_TS_RANK` | ts_rank returns a deterministic non-negative score for a match |
-| BEYOND_VECTOR_ADVANCED_INDEXES | 20352 | `PG_TRGM_EXTENSION_AND_SIMILARITY` | CREATE EXTENSION pg_trgm IF NOT EXISTS + similarity() returns expected score |
-| BEYOND_VECTOR_ADVANCED_INDEXES | 20353 | `PG_TRGM_GIN_INDEX` | GIN index with gin_trgm_ops supports % similarity search |
-| BEYOND_VECTOR_ADVANCED_INDEXES | 20354 | `PG_TRGM_GIST_INDEX` | GiST index with gist_trgm_ops supports % similarity search |
-| BEYOND_VECTOR_ADVANCED_INDEXES | 20355 | `PG_TRGM_WORD_SIMILARITY` | word_similarity + <-> trigram distance are deterministic |
-| BEYOND_VECTOR_ADVANCED_INDEXES | 20358 | `BTREE_GIN_SCALAR` | btree_gin extension enables GIN over plain scalar columns |
-| BEYOND_VECTOR_ADVANCED_INDEXES | 20359 | `BTREE_GIST_SCALAR` | btree_gist extension enables GiST over plain scalar columns |
+| Case | Name | Declared text |
+| ---: | --- | --- |
+| 20021 | `ENUM_REJECTS_BAD_VALUE` | `invalid input value for enum color: "purple"` |
+| 20023 | `DOMAIN_REJECTS_NEG` | `value for domain positive_int2 violates check constraint "positive_int2_check"` |
+| 20103 | `MERGE_NOT_MATCHED_BY_SOURCE_PG17` | `syntax error at or near "BY"` |
+| 20111 | `DISTINCT_ON_REQUIRES_ORDER_BY` | `SELECT DISTINCT ON expressions must match initial ORDER BY expressions` |
+| 20308 | `PLPGSQL_RAISE_EXCEPTION` | `ERROR: boom` |
+| 20340 | `VECTOR_EXTENSION_PROBE_UNAVAILABLE` | `extension "vector" is not available` |
+| 20418 | `LOGICAL_SLOT_REJECTS_WAL_LEVEL_REPLICA` | `logical decoding requires wal_level >= logical` |
+| 20429 | `LOGICAL_SLOT_PEEK_REQUIRES_SLOT` | `logical decoding requires wal_level >= logical` |
+| 20438 | `LISTEN_INVALID_CHANNEL_NAME_ALL` | `syntax error at or near "ALL"` |
 
-A case leaves this table when a raw beyond-SQLite JSONL record shows `status` passed and the policy file drops the id. A shared non-zero exit stays a failure until the case declares `expected_target_stderr_contains` and the target produces that text.
+A case leaves the open list when a raw beyond-SQLite JSONL record shows `status` passed and the policy file drops the id. A shared non-zero exit counts as that pass only after `expected_target_stderr_contains` is set and the target produces that text.
 
 ## Where the other chapters point
 

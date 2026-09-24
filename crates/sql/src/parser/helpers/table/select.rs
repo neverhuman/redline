@@ -328,6 +328,15 @@ pub(crate) fn bind_select_table_factor(
             name, alias, args, ..
         } => {
             if args.is_some() {
+                if let [part] = name.0.as_slice()
+                    && let Ok(func_name) = object_name_part_to_string(part)
+                    && (func_name.eq_ignore_ascii_case("pg_logical_slot_peek_changes")
+                        || func_name.eq_ignore_ascii_case("pg_logical_slot_get_changes"))
+                {
+                    return Err(Error::UnsupportedSql(
+                        "logical decoding requires wal_level >= logical".to_owned(),
+                    ));
+                }
                 return Err(Error::UnsupportedSql(
                     "table-valued functions are not supported".to_owned(),
                 ));

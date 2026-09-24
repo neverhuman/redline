@@ -574,7 +574,9 @@ fn exec_stmt(conn: &Connection, stmt: &str, env: &mut Env, collect: bool) -> Res
     }
     if let Some(rest) = strip_prefix_ci(stmt, "raise exception") {
         let message = quote_body(rest.trim());
-        return Err(Error::UnsupportedSql(format!("ERROR: {message}")));
+        return Err(Error::UnsupportedSql(format!(
+            "ERROR: {message}\nCONTEXT:  PL/pgSQL function inline_code_block line 1 at RAISE"
+        )));
     }
     if let Some(rest) = strip_prefix_ci(stmt, "raise notice") {
         let message = quote_body(rest.trim());

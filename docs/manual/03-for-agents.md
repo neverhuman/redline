@@ -28,13 +28,13 @@ If you do send SQL, keep values in parameters. The Rust `Params` trait is the su
 
 There is no `load_extension` entry point in the engine. A statement that asks for one fails. Native code enters the process through the host program's link line. An agent cannot turn that on by sending SQL.
 
-The same idea applies to virtual tables. `CREATE VIRTUAL TABLE ... USING fts5` fails, and the same is true of `rtree` and `dbstat`. The official SQLite lane skips the cases that require those modules. `pragma_module_list` still prints those names. The list is a SQLite-shaped catalog of names, and the comment in `crates/sql/src/exec/pragma_tv.rs` says the modules are not implemented. Trust a `CREATE VIRTUAL TABLE` that succeeds. Do not trust the name alone.
+`CREATE VIRTUAL TABLE ... USING fts5`, `rtree`, or `dbstat` creates an ordinary table. `MATCH` scans that row's text, and `highlight` wraps the term. An unknown module still fails. `pragma_module_list` also prints names that do not create a table (`fts3`, `fts4`, `dbpage`). Trust a `CREATE VIRTUAL TABLE` that succeeds.
 
 ## Two dialects, one flag
 
 Agents often emit Postgres even when the file is local. `REDLINEDB_RESULT_DIALECT=postgres` switches result rendering and the Postgres-oriented rewrites the shell corpus uses. Booleans come back as `t` and `f`. Schema-qualified names stay distinct, so `auth.users` and `public.users` do not collapse into one table. `CREATE TYPE ... AS ENUM` compares labels in declaration order. `CREATE DOMAIN ... CHECK (VALUE > n)` accepts a value that passes the check and rejects one that fails. `int4range` is half-open. `point` distance uses `<->`. `CREATE EXTENSION citext` compares text without case and preserves the spelling you stored.
 
-That flag does not turn the process into Postgres. The corpus subset of `plpgsql` runs; `RAISE EXCEPTION` still fails, and so does `CREATE EXTENSION vector`. `LISTEN` records a channel on this connection and restores the set on rollback. It is not a cross-process notification bus. The Postgres chapter is the list.
+That flag does not turn the process into Postgres. The corpus subset of `plpgsql` runs. `RAISE EXCEPTION` aborts with `ERROR: boom`. `CREATE EXTENSION vector` fails with `extension "vector" is not available`. Text search, trigram, and the GIN/GiST forms in the corpus return rows; those indexes are ordinary indexes. `LISTEN` records a channel on this connection and restores the set on rollback. It is not a cross-process notification bus. The Postgres chapter is the list.
 
 SQLite tests and SQLite scripts should leave the variable unset. The official SQLite lane does.
 

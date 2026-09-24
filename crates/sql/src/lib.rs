@@ -14,6 +14,7 @@ mod pg_fn;
 mod pg_pl;
 mod pg_pub;
 mod pg_schema;
+mod pg_search;
 mod pg_type;
 mod planner;
 mod regexp;
@@ -22,6 +23,7 @@ mod session;
 mod statement;
 pub mod udf;
 pub mod value;
+mod virtual_module;
 
 pub use connection::{
     Connection, Database, DbOptions, OptimizerConfig, QueryMemoryConfig, RqlStats, StatsConfig,
