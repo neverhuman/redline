@@ -573,6 +573,7 @@ impl BtreeIndex {
         right: Option<PageId>,
         high_key: Vec<u8>,
     ) -> Result<()> {
+        crate::observe::add_rewrite_leaf();
         let page_id = page.header()?.page_id;
         let rel_id = page.header()?.rel_id;
         page.reinitialize_with_special(

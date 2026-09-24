@@ -56,7 +56,7 @@ pub(crate) fn collect_join_rows(
         let mut next = Vec::new();
         for prefix in &joined {
             for row in &rows {
-                let mut combined = prefix.clone();
+                let mut combined = clone_join_prefix(prefix);
                 combined.push(joined_row_from_table_row(
                     table,
                     Some(row.clone()),
@@ -106,7 +106,7 @@ pub(crate) fn collect_join_source_rows(
                     break;
                 };
                 for row in rows {
-                    let mut combined = prefix.clone();
+                    let mut combined = clone_join_prefix(prefix);
                     combined.push(joined_row_from_table_row(
                         &step.right,
                         Some(row.clone()),
@@ -133,7 +133,7 @@ pub(crate) fn collect_join_source_rows(
         for prefix in &joined {
             let mut matched = false;
             for (right_idx, row) in right_rows.iter().enumerate() {
-                let mut combined = prefix.clone();
+                let mut combined = clone_join_prefix(prefix);
                 combined.push(joined_row_from_table_row(
                     &step.right,
                     Some(row.clone()),
@@ -151,7 +151,7 @@ pub(crate) fn collect_join_source_rows(
                     crate::statement::JoinKind::Left | crate::statement::JoinKind::Full
                 )
             {
-                let mut combined = prefix.clone();
+                let mut combined = clone_join_prefix(prefix);
                 combined.push(joined_row_from_table_row(
                     &step.right,
                     None,
@@ -184,6 +184,11 @@ pub(crate) fn collect_join_source_rows(
     }
 
     Ok(joined.into_iter().map(SqlRow::Joined).collect())
+}
+
+fn clone_join_prefix(prefix: &[JoinedRow]) -> Vec<JoinedRow> {
+    redlinedb_kernel::observe::add_join_prefix_clone();
+    prefix.to_vec()
 }
 
 fn prefix_shape_for_unmatched_right(joined: &[Vec<JoinedRow>]) -> Vec<JoinedRow> {
@@ -266,27 +271,31 @@ pub(crate) fn load_table_row_by_rowid(
         }
         return Ok(None);
     }
-    if let Some(payload) = engine.get_for_relation(tx, table.relation_id, rowid)?
-        && let Some((table_id, values)) = decode_sql_row(&payload)?
-        && table_id == table.table_id.0
-    {
-        let mut values = values;
-        if values.len() < table.columns.len() {
-            values.resize(table.columns.len(), SqlValue::Null);
-            values = build_default_values(table, values)?;
-        }
-        // Phase-11 SQL-D A6: materialise VIRTUAL generated columns at
-        // read time. STORED columns were already computed and persisted
-        // at write time, so we leave their slots alone.
-        values = materialize_virtual_generated_columns(table, values)?;
-        return Ok(Some(TableRow {
-            rowid,
-            values,
-            table: Arc::clone(table),
-            alias: None,
-        }));
+    let Some(payload) = engine.get_for_relation(tx, table.relation_id, rowid)? else {
+        return Ok(None);
+    };
+    redlinedb_kernel::observe::add_sql_row_decode();
+    let Some((table_id, values)) = decode_sql_row(&payload)? else {
+        return Ok(None);
+    };
+    if table_id != table.table_id.0 {
+        return Ok(None);
     }
-    Ok(None)
+    let mut values = values;
+    if values.len() < table.columns.len() {
+        values.resize(table.columns.len(), SqlValue::Null);
+        values = build_default_values(table, values)?;
+    }
+    // Phase-11 SQL-D A6: materialise VIRTUAL generated columns at
+    // read time. STORED columns were already computed and persisted
+    // at write time, so we leave their slots alone.
+    values = materialize_virtual_generated_columns(table, values)?;
+    Ok(Some(TableRow {
+        rowid,
+        values,
+        table: Arc::clone(table),
+        alias: None,
+    }))
 }
 
 /// Phase-11 SQL-D A6: evaluate every VIRTUAL generated column expression

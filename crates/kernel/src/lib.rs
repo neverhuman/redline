@@ -37,6 +37,7 @@ pub mod index;
 pub mod integrity;
 pub mod io;
 pub mod json;
+pub mod observe;
 pub mod storage;
 pub mod telemetry;
 pub mod txn;

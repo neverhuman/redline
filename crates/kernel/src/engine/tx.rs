@@ -133,6 +133,7 @@ impl Txn {
     }
 
     pub(crate) fn has_row_lock(&self, key: RowKey) -> bool {
+        crate::observe::add_row_lock_probe();
         self.row_lock_set.contains(&key)
     }
 

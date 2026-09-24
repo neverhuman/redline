@@ -59,10 +59,7 @@ impl<Fs: FileSystem> PageFile<Fs> {
         }
         let offset = self.offset(page_id)?;
         let mut bytes = vec![0; self.page_size];
-        let mut file = self
-            .file
-            .lock()
-            .map_err(|_| Error::CorruptPage("page file mutex poisoned"))?;
+        let mut file = self.lock_file()?;
         file.read_exact_at(offset, &mut bytes)?;
         Page::from_bytes(bytes)
     }
@@ -77,10 +74,7 @@ impl<Fs: FileSystem> PageFile<Fs> {
         }
         let offset = self.offset(page_id)?;
         let mut bytes = vec![0; self.page_size];
-        let mut file = self
-            .file
-            .lock()
-            .map_err(|_| Error::CorruptPage("page file mutex poisoned"))?;
+        let mut file = self.lock_file()?;
         file.read_exact_at(offset, &mut bytes)?;
         Ok(bytes)
     }
@@ -98,11 +92,18 @@ impl<Fs: FileSystem> PageFile<Fs> {
             return Err(Error::CorruptPage("page id zero is invalid"));
         }
         let offset = self.offset(page_id)?;
-        let mut file = self
+        let mut file = self.lock_file()?;
+        file.write_all_at(offset, page.as_bytes())
+    }
+
+    fn lock_file(&self) -> Result<std::sync::MutexGuard<'_, Fs::File>> {
+        let started = std::time::Instant::now();
+        let guard = self
             .file
             .lock()
             .map_err(|_| Error::CorruptPage("page file mutex poisoned"))?;
-        file.write_all_at(offset, page.as_bytes())
+        crate::observe::add_page_file_mutex_wait(started.elapsed());
+        Ok(guard)
     }
 
     pub fn sync_data(&self) -> Result<()> {
@@ -149,6 +150,7 @@ mod tests {
         let path = dir.path().join("pages.redline");
         let page_size = 16 * 1024;
 
+        let before = crate::observe::snapshot();
         let page_file = PageFile::create(&path, page_size).expect("create");
         let page = Page::new(page_size, PageKind::Heap, PageId(1), RelId(42)).expect("page");
         page_file.write_page(&page).expect("write page");
@@ -161,5 +163,7 @@ mod tests {
             reread.header().expect("header"),
             page.header().expect("header")
         );
+        let after = crate::observe::snapshot();
+        assert!(after.page_file_mutex_acquires >= before.page_file_mutex_acquires + 2);
     }
 }

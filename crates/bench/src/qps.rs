@@ -57,6 +57,8 @@ pub struct EngineReport {
     pub durability: String,
     pub sum_amount: i64,
     pub phases: Vec<Phase>,
+    /// Gate 0 counters for the Redline run. Absent for SQLite and Postgres.
+    pub observe: Option<redlinedb_kernel::observe::ObserveSnapshot>,
 }
 
 #[derive(Debug, Serialize)]
@@ -205,6 +207,7 @@ fn schema_sql() -> &'static str {
 }
 
 fn run_redline(scale: &Scale) -> Result<EngineReport> {
+    let before = redlinedb_kernel::observe::snapshot();
     let dir = tempfile::tempdir().context("redline temp dir")?;
     let path = dir.path().join("qps.redline");
     let mut options = redlinedb::OpenOptions::default();
@@ -226,6 +229,7 @@ fn run_redline(scale: &Scale) -> Result<EngineReport> {
         durability: "strict".to_owned(),
         sum_amount,
         phases,
+        observe: Some(redlinedb_kernel::observe::snapshot().since(before)),
     })
 }
 
@@ -393,6 +397,7 @@ fn run_sqlite(scale: &Scale) -> Result<EngineReport> {
         durability: "wal+synchronous=full".to_owned(),
         sum_amount,
         phases,
+        observe: None,
     })
 }
 
@@ -530,6 +535,7 @@ fn run_postgres_on(scale: &Scale, client: &mut postgres::Client) -> Result<Engin
         durability: "synchronous_commit=on".to_owned(),
         sum_amount,
         phases,
+        observe: None,
     })
 }
 

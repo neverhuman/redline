@@ -15,6 +15,7 @@ impl Engine {
         row_id: RowId,
     ) -> Result<Option<Vec<u8>>> {
         tx.ensure_open()?;
+        crate::observe::add_relation_get();
         self.refresh_read_committed(tx);
         let snapshot = tx.snapshot().clone();
         self.heap

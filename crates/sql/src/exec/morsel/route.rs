@@ -56,8 +56,6 @@ fn record_decline(counter: &std::sync::atomic::AtomicU64) {
 /// the decline reason is recorded with the appropriate counter — but the
 /// scan + emit loop is wired in W4-A2b, not here.
 pub fn route_primitive_scan(plan: &crate::statement::SelectPlan) -> Result<RouteDecision> {
-    use crate::statement::SelectSource;
-
     // 1. Route mode gate. When the env var isn't set we bail immediately so
     //    the only cost in default builds is one OnceLock read + branch.
     let mode = match morsel_route_mode() {
@@ -67,6 +65,16 @@ pub fn route_primitive_scan(plan: &crate::statement::SelectPlan) -> Result<Route
             return Ok(RouteDecision::Decline(DeclineReason::Disabled));
         }
     };
+    let _ = mode;
+    decide_enabled_route(plan)
+}
+
+/// Routing decision once `REDLINE_MORSEL_ROUTE` is on. Still declines:
+/// `ORDER BY` and `OFFSET` are `Shape`, and an otherwise eligible `LIMIT`
+/// plan is `NotYetImplemented`. Tests call this directly so they do not
+/// have to set the process-wide route env.
+fn decide_enabled_route(plan: &crate::statement::SelectPlan) -> Result<RouteDecision> {
+    use crate::statement::SelectSource;
 
     // 2. Eligibility gate. The W4-T classifier already knows how to spot
     //    PrimitiveScan-shaped plans. Anything else stays on tuple path.
@@ -119,7 +127,6 @@ pub fn route_primitive_scan(plan: &crate::statement::SelectPlan) -> Result<Route
     //    unchanged. The Shape bucket is reused for "would have routed but
     //    no scan yet" because that's the closest match — the eventual
     //    win is wired by W4-A2b, not this commit.
-    let _ = mode;
     record_decline(&MORSEL_ROUTE_FALLBACK_SHAPE);
     Ok(RouteDecision::Decline(DeclineReason::NotYetImplemented))
 }
@@ -823,5 +830,86 @@ mod tests {
         assert_eq!(PredicateOp::Le.reverse(), PredicateOp::Ge);
         assert_eq!(PredicateOp::Gt.reverse(), PredicateOp::Lt);
         assert_eq!(PredicateOp::Ge.reverse(), PredicateOp::Le);
+    }
+
+    #[test]
+    fn order_by_and_offset_decline_and_limit_stays_unimplemented() {
+        use std::sync::Arc;
+
+        use crate::statement::{SelectPlan, SelectSource};
+        use redlinedb_kernel::catalog::{
+            Affinity, ColumnDef, ColumnId, SchemaId, TableDef, TableId,
+        };
+        use redlinedb_kernel::format::RelId;
+        use sqlparser::ast::{
+            Expr, Ident, OrderByExpr, OrderByOptions, SelectItem, Value, WildcardAdditionalOptions,
+        };
+
+        let table = Arc::new(TableDef {
+            table_id: TableId::new(1),
+            schema_id: SchemaId::new(1),
+            relation_id: RelId::new(1),
+            name: "t".into(),
+            folded: "t".into(),
+            columns: vec![ColumnDef {
+                column_id: ColumnId::new(1),
+                ordinal: 0,
+                name: "id".into(),
+                folded: "id".into(),
+                declared_type: Some("INTEGER".into()),
+                affinity: Affinity::Integer,
+                not_null: false,
+                default_value: None,
+                default_expr: None,
+                generated: None,
+            }],
+            indexes: Vec::new(),
+            constraints: Vec::new(),
+            checks: Vec::new(),
+            foreign_keys: Vec::new(),
+            rowid_alias_column: None,
+            flags: 0,
+            normalized_sql: None,
+        });
+        let one = Expr::value(Value::Number("1".to_owned(), false));
+        let base = |order_by, limit, offset| SelectPlan {
+            source: SelectSource::Table(Arc::clone(&table)),
+            distinct: false,
+            distinct_on: Vec::new(),
+            projection: vec![SelectItem::Wildcard(WildcardAdditionalOptions::default())],
+            selection: None,
+            group_by: Vec::new(),
+            having: None,
+            order_by,
+            limit,
+            offset,
+            table_hint: None,
+        };
+        let ordered = base(
+            vec![OrderByExpr {
+                expr: Expr::Identifier(Ident::new("id")),
+                options: OrderByOptions {
+                    asc: None,
+                    nulls_first: None,
+                },
+                with_fill: None,
+            }],
+            None,
+            None,
+        );
+        let offset = base(Vec::new(), None, Some(one.clone()));
+        let limited = base(Vec::new(), Some(one), None);
+        assert!(matches!(
+            decide_enabled_route(&ordered).unwrap(),
+            RouteDecision::Decline(DeclineReason::Shape)
+        ));
+        assert!(matches!(
+            decide_enabled_route(&offset).unwrap(),
+            RouteDecision::Decline(DeclineReason::Shape)
+        ));
+        assert!(matches!(
+            decide_enabled_route(&limited).unwrap(),
+            RouteDecision::Decline(DeclineReason::NotYetImplemented)
+        ));
     }
 }

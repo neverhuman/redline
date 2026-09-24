@@ -78,6 +78,14 @@ impl<'a> MorselBuilder<'a> {
         if values.len() != self.columns.len() {
             return Err("row width mismatch");
         }
+        // Check every column before appending. A mismatch on a later
+        // column must not leave the earlier columns one row longer than
+        // `len`, or `finish` would ship a torn morsel.
+        for (col, v) in self.columns.iter().zip(values.iter()) {
+            if !column_accepts(col, v) {
+                return Err("row/column kind mismatch");
+            }
+        }
         for (col, v) in self.columns.iter_mut().zip(values.iter()) {
             match (col, v) {
                 (BuilderColumn::I64(buf), ValueRef::Integer(x)) => buf.push(*x),
@@ -91,7 +99,7 @@ impl<'a> MorselBuilder<'a> {
                 (BuilderColumn::Null(n), ValueRef::Null) => {
                     *n += 1;
                 }
-                _ => return Err("row/column kind mismatch"),
+                _ => unreachable!("push_row preflight accepted this row"),
             }
         }
         self.validity.set(self.len);
@@ -127,5 +135,63 @@ impl<'a> MorselBuilder<'a> {
             validity: self.validity,
             len: len as u16,
         }
+    }
+}
+
+fn column_accepts(col: &BuilderColumn<'_>, value: &ValueRef<'_>) -> bool {
+    matches!(
+        (col, value),
+        (BuilderColumn::I64(_), ValueRef::Integer(_))
+            | (BuilderColumn::F64(_), ValueRef::Real(_))
+            | (BuilderColumn::Text(_), ValueRef::Text(_))
+            | (BuilderColumn::Blob(_), ValueRef::Blob(_))
+            | (BuilderColumn::Null(_), ValueRef::Null)
+    )
+}
+
+#[cfg(test)]
+mod tests {
+    use bumpalo::Bump;
+    use redlinedb_kernel::catalog::ValueRef;
+
+    use super::*;
+
+    #[test]
+    fn mismatch_does_not_grow_earlier_columns() {
+        let bump = Bump::new();
+        let kinds = [ColumnKind::I64, ColumnKind::Text];
+        let mut builder = MorselBuilder::with_capacity(&bump, &kinds, 4);
+        builder
+            .push_row(&[ValueRef::Integer(1), ValueRef::Text("a")])
+            .unwrap();
+        assert!(
+            builder
+                .push_row(&[ValueRef::Integer(2), ValueRef::Integer(3)])
+                .is_err()
+        );
+        assert!(
+            builder
+                .push_row(&[ValueRef::Integer(4), ValueRef::Null])
+                .is_err()
+        );
+        builder
+            .push_row(&[ValueRef::Integer(5), ValueRef::Text("b")])
+            .unwrap();
+        let morsel = builder.finish();
+        assert_eq!(morsel.len(), 2);
+        assert_eq!(morsel.columns[0].len(), 2);
+        assert_eq!(morsel.columns[1].len(), 2);
+        assert!(matches!(
+            morsel.columns[0].get(0),
+            Some(ValueRef::Integer(1))
+        ));
+        assert!(matches!(
+            morsel.columns[0].get(1),
+            Some(ValueRef::Integer(5))
+        ));
+        assert!(matches!(
+            morsel.columns[1].get(1),
+            Some(ValueRef::Text("b"))
+        ));
     }
 }

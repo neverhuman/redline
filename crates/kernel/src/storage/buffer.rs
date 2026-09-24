@@ -734,6 +734,7 @@ impl Inner {
                     .map(|(page_id, frame)| (*page_id, Arc::clone(frame))),
             );
         }
+        crate::observe::add_all_frames(frames.len() as u64);
         Ok(frames)
     }
 

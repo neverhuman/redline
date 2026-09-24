@@ -101,6 +101,7 @@ impl Page {
     pub(crate) fn refresh_checksum(&mut self) -> Result<()> {
         write_u32(&mut self.bytes, CHECKSUM_OFFSET, 0)?;
         let checksum = checksum_page_bytes(&self.bytes);
+        crate::observe::add_checksum_bytes(self.bytes.len() as u64);
         write_u32(&mut self.bytes, CHECKSUM_OFFSET, checksum)
     }
 }

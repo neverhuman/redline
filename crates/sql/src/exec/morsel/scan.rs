@@ -80,13 +80,13 @@ impl<'a, S: ScanSource> MorselScan<'a, S> {
         while pushed < cap {
             match self.source.next_row()? {
                 Some(row) => {
-                    // push_row only errors on shape mismatch / overflow;
-                    // both are programmer bugs in this layer, so surface
-                    // via a plain panic in debug builds. Release builds
-                    // simply skip the row to keep the scan moving.
-                    if let Err(_msg) = builder.push_row(row) {
-                        debug_assert!(false, "MorselScan push_row failed: {_msg}");
-                        continue;
+                    // A failed push used to be skipped in release builds,
+                    // which dropped the row and, on a partial append, left
+                    // later rows aligned to the wrong slots. Surface it.
+                    if let Err(msg) = builder.push_row(row) {
+                        return Err(crate::error::Error::UnsupportedSql(format!(
+                            "morsel row: {msg}"
+                        )));
                     }
                     pushed += 1;
                 }
@@ -111,5 +111,46 @@ impl<'a, S: ScanSource> MorselScan<'a, S> {
     /// and any final partial morsel has been emitted.
     pub fn exhausted(&self) -> bool {
         self.exhausted
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use bumpalo::Bump;
+    use redlinedb_kernel::catalog::ValueRef;
+
+    use super::super::builder::ColumnKind;
+    use super::{MorselScan, RowRef, ScanSource};
+    use crate::Result;
+
+    struct Once {
+        row: Vec<ValueRef<'static>>,
+        done: bool,
+    }
+
+    impl ScanSource for Once {
+        fn next_row(&mut self) -> Result<Option<RowRef<'_>>> {
+            if self.done {
+                return Ok(None);
+            }
+            self.done = true;
+            Ok(Some(self.row.as_slice()))
+        }
+    }
+
+    #[test]
+    fn kind_mismatch_is_returned() {
+        let bump = Bump::new();
+        let mut scan = MorselScan::new(
+            Once {
+                row: vec![ValueRef::Integer(1), ValueRef::Integer(2)],
+                done: false,
+            },
+            &bump,
+            &[ColumnKind::I64, ColumnKind::Text],
+            4,
+        );
+        let err = scan.next_morsel().expect_err("kind mismatch");
+        assert!(err.to_string().contains("kind mismatch"));
     }
 }

@@ -1,5 +1,9 @@
 # RedlineDB Agent Chat
 
+## 2026-09-24T18:45Z perf/gate0-correctness
+
+Claim: canonical checkout `/home/ubuntu/redlineDB`, branch `perf/gate0-correctness` rebased onto `origin/main` `9a545805551304d22872fd8f0dbf9d36715d9e80` (pull request 112). Gate 0 counters for checksum bytes, leaf rewrites, row-lock probes, `all_frames`, page-file mutex wait, relation gets, SQL row decodes, and join prefix clones. A morsel `push_row` checks kinds before it appends, and a failed push is returned instead of skipped. The three quarantines already on this branch stay: hash-indexed row locks, saturating `SUM(i64)`, and serial `ORDER BY` covering scans. No measured speedup. No worktree.
+
 ## 2026-09-24T16:10Z perf/gate0-correctness
 
 Claim: canonical checkout `/home/ubuntu/redlineDB`, branch `perf/gate0-correctness` from `c0e36205a` (PR 112). Gate 0 correctness: row-lock membership is hash-indexed with insertion-order release, SUM(i64) dispatch stays saturating, and a parallel covering scan does not treat ORDER BY as unordered-safe. No measured speedup is claimed. No worktree.
