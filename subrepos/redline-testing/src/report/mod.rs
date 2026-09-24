@@ -22,7 +22,7 @@ use evidence::{
 };
 use render::{
     ksloc_csv, parse_raw_records, rank_cases, ranked_csv, render_metrics_block,
-    render_report_block, replace_block,
+    render_report_block, render_sqlite_badge, replace_block, replace_block_if_present,
 };
 use svg::build_svg_artifacts;
 use types::{ManifestJson, ProvenanceJson, RawRecord, RenderedReport, SummaryJson};
@@ -33,6 +33,8 @@ use utils::{
 
 const REPORT_BEGIN: &str = "<!-- sqlite-parity-report:begin -->";
 const REPORT_END: &str = "<!-- sqlite-parity-report:end -->";
+const BADGE_BEGIN: &str = "<!-- sqlite-parity-badge:begin -->";
+const BADGE_END: &str = "<!-- sqlite-parity-badge:end -->";
 const METRICS_BEGIN: &str = "<!-- sqlite-parity-metrics:begin -->";
 const METRICS_END: &str = "<!-- sqlite-parity-metrics:end -->";
 const JANKURAI_BREAKDOWN_BEGIN: &str = "<!-- sqlite-jankurai-breakdown:begin -->";
@@ -156,6 +158,14 @@ pub fn generate(options: ReportOptions) -> Result<()> {
     let mut readme = fs::read_to_string(&options.readme)
         .with_context(|| format!("read README {}", options.readme.display()))?;
     readme = replace_block(&readme, REPORT_BEGIN, REPORT_END, &report_block);
+    if options.suite == "sqlite_parity" {
+        readme = replace_block_if_present(
+            &readme,
+            BADGE_BEGIN,
+            BADGE_END,
+            &render_sqlite_badge(&summary),
+        );
+    }
     readme = replace_block(&readme, METRICS_BEGIN, METRICS_END, &metrics_block);
     if let Some(comparison_path) = &options.jankurai_comparison
         && comparison_path.exists()

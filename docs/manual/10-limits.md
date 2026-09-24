@@ -8,7 +8,7 @@ The database path is a directory containing `data.redline` and `wal/`. SQLite fo
 
 ## SQLite
 
-A local official run on this branch recorded 2445 passes, 0 failures, and 0 skips out of 2445, with one repetition. `fts5`, `rtree`, and `dbstat` are ordinary tables for the corpus statements. An unknown module still fails. `pragma_module_list` also prints names that do not create a table. The committed latency summary is still the earlier run (2441 passed, 4 skipped, 3 repetitions).
+The committed official summary is 2445 passes, 0 failures, and 0 skips out of 2445, with 3 repetitions and 1 warmup. `fts5`, `rtree`, and `dbstat` are ordinary tables for the corpus statements. An unknown module still fails. `pragma_module_list` also prints names that do not create a table. The README badge is generated from that same summary.
 
 `soundex()` is absent, matching a reference build that was not compiled with it. `UPDATE` and `DELETE` with `ORDER BY` ... `LIMIT` are syntax errors, matching a reference parser that was not generated with that grammar.
 

@@ -9,19 +9,17 @@ The official lane builds SQLite 3.53.1 with `scripts/sqlite/build-reference.sh` 
 | | |
 | --- | --- |
 | Corpus | `sqlite_parity`, 2445 cases |
-| Passed on this branch | 2445 (one repetition, no warmup) |
-| Failed on this branch | 0 |
-| Skipped on this branch | 0 |
-| Committed latency report | 2441 passed, 0 failed, 4 skipped, 3 repetitions plus 1 warmup |
-| Report date in the README block | 2026-09-18 for the latency report |
+| Passed | 2445 |
+| Failed | 0 |
+| Skipped | 0 |
+| Repetitions | 3, plus 1 warmup |
+| Report date in the README block | 2026-09-24 |
 | RedlineDB build named in that block | `redlinedb v4.1.0 (SQLite 3.45.1 compatibility)` |
 | Oracle | SQLite 3.53.1, 2026-05-05 |
 | Runner | `redline-testing` 1.0.1 |
 | Source file | `benchmark-results/sqlite-parity/latest/summary.json` |
 
-The README badge that says 2374/2445 is older than this block. The block under `sqlite-parity-report:begin` matches the summary file. Trust the block.
-
-The same block records latency. The median gap is negative, which means the median case was slower than SQLite on that run. The worst gap in the ranked table is a JSON mutation case. The block also counts **361** cases that were faster. Use those figures when you talk about speed. A later bench can move them. This book does not invent a new one.
+The README badge and the block under `sqlite-parity-report:begin` are generated from this summary. The same block records latency: median gap **-470.97%**, worst gap **-29821.13%**, and **43** cases faster than SQLite. A later bench moves those figures by regenerating the block. This book does not invent a new one.
 
 ## Virtual tables the corpus asks for
 

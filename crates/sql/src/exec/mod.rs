@@ -41,6 +41,7 @@ pub(crate) mod index_batch;
 pub(crate) mod index_dml;
 pub(crate) mod index_partial;
 pub(crate) mod index_predicate;
+mod join_probe;
 pub(crate) mod policy;
 mod tail;
 use tail::*;

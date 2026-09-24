@@ -18,6 +18,7 @@ num_cpus = "1"
 rand = "0.9"
 rand_chacha = "0.9"
 redlinedb = { path = "../redlinedb" }
+postgres = "0.19"
 # Lane E: bench needs to arm kernel failpoints from inside the
 # `failpoint-matrix` child process. Cargo feature unification ensures the
 # `failpoints` feature also turns on for the kernel inside `redlinedb`.
@@ -52,6 +53,10 @@ path = "src/bin/score_policy.rs"
 [[bin]]
 name = "perf_evidence"
 path = "src/bin/perf_evidence.rs"
+
+[[bin]]
+name = "qps_compare"
+path = "src/bin/qps_compare.rs"
 
 [dev-dependencies]
 # Lane F6: integration tests in `tests/failpoint_matrix.rs` drive

@@ -10,12 +10,13 @@ From `benchmark-results/sqlite-parity/latest/summary.json`:
 | --- | --- |
 | Suite | sqlite_parity |
 | Total | 2445 |
-| Passed, this branch, 1 repetition | 2445 |
-| Failed, this branch | 0 |
-| Skipped, this branch | 0 |
-| Committed latency report | 2441 passed, 0 failed, 4 skipped, 3 repetitions, 1 warmup |
+| Passed | 2445 |
+| Failed | 0 |
+| Skipped | 0 |
+| Repetitions | 3 |
+| Warmup | 1 |
 
-The README block under `sqlite-parity-report:begin` still repeats the latency report. The badge above it that says 2374/2445 is older. Cases 93–96 passed in the branch run: `fts5`, highlight, `rtree`, and `dbstat`.
+The README badge and the block under `sqlite-parity-report:begin` are generated from this file. Cases 93–96 passed: `fts5`, highlight, `rtree`, and `dbstat`.
 
 ## Postgres
 

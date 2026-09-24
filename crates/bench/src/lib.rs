@@ -10,6 +10,7 @@ mod gates;
 mod metrics;
 pub mod perf_evidence;
 pub mod process_metrics;
+pub mod qps;
 mod recover;
 pub mod report;
 pub mod score_policy;

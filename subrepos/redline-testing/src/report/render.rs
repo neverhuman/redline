@@ -244,6 +244,44 @@ pub(crate) fn render_metrics_block(options: &ReportOptions) -> String {
     block
 }
 
+pub(crate) fn render_sqlite_badge(summary: &SummaryJson) -> String {
+    let pct = if summary.total_cases == 0 {
+        0.0
+    } else {
+        (summary.passed_cases as f64) * 100.0 / (summary.total_cases as f64)
+    };
+    let pct_text = if (pct - pct.round()).abs() < 0.001 {
+        format!("{}", pct.round() as u64)
+    } else {
+        format!("{pct:.2}")
+    };
+    let color = if summary.failed_cases > 0 {
+        "red"
+    } else {
+        "brightgreen"
+    };
+    format!(
+        "  <a href=\"#sqlite-parity-status\"><img src=\"https://img.shields.io/badge/sqlite%20parity-{passed}%2F{total}%20({pct}%25)-{color}\" alt=\"sqlite parity {passed}/{total}\"></a>",
+        passed = summary.passed_cases,
+        total = summary.total_cases,
+        pct = pct_text,
+    )
+}
+
+pub(crate) fn replace_block_if_present(
+    text: &str,
+    begin: &str,
+    end: &str,
+    replacement: &str,
+) -> String {
+    match (text.find(begin), text.find(end)) {
+        (Some(begin_index), Some(end_index)) if begin_index < end_index => {
+            replace_block(text, begin, end, replacement)
+        }
+        _ => text.to_owned(),
+    }
+}
+
 pub(crate) fn replace_block(text: &str, begin: &str, end: &str, replacement: &str) -> String {
     match (text.find(begin), text.find(end)) {
         (Some(begin_index), Some(end_index)) if begin_index < end_index => {

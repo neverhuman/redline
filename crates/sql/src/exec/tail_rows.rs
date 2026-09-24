@@ -75,6 +75,7 @@ pub(crate) fn collect_join_source_rows(
     tx: &mut Txn,
     source: &crate::statement::JoinSource,
     bindings: &[Option<SqlValue>],
+    where_selection: &Option<Expr>,
 ) -> Result<Vec<SqlRow>> {
     let base_rows =
         collect_table_rows_with_alias(engine, tx, &source.base.table, source.base.alias.clone())?;
@@ -88,8 +89,43 @@ pub(crate) fn collect_join_source_rows(
             )]
         })
         .collect();
+    crate::exec::join_probe::prefilter_base(&mut joined, &source.base, where_selection, bindings)?;
 
     for step in &source.joins {
+        if step.kind == crate::statement::JoinKind::Inner
+            && crate::exec::join_probe::can_probe(step)
+        {
+            let mut next = Vec::new();
+            let mut failed = false;
+            for prefix in &joined {
+                let Some(rows) = crate::exec::join_probe::probe_inner_equijoin(
+                    engine, tx, prefix, step, bindings,
+                )?
+                else {
+                    failed = true;
+                    break;
+                };
+                for row in rows {
+                    let mut combined = prefix.clone();
+                    combined.push(joined_row_from_table_row(
+                        &step.right,
+                        Some(row.clone()),
+                        Arc::clone(&step.hidden_right_columns),
+                    ));
+                    if selection_passes(
+                        &step.selection,
+                        &SqlRow::Joined(combined.clone()),
+                        bindings,
+                    )? {
+                        next.push(combined);
+                    }
+                }
+            }
+            if !failed {
+                joined = next;
+                continue;
+            }
+        }
         let right_rows =
             collect_table_rows_with_alias(engine, tx, &step.right.table, step.right.alias.clone())?;
         let mut next = Vec::new();

@@ -520,6 +520,7 @@ fn build_select_runtime(
                     tx.as_mut().expect("tx present"),
                     source,
                     bindings,
+                    &plan.selection,
                 )?;
                 SelectRuntimeSource::Batched {
                     node: MaterializeNode::new(order_and_project_rows_with_distinct_on(
@@ -1108,7 +1109,9 @@ pub(super) fn collect_select_rows(
                 .collect())
         }
         SelectSource::Tables(tables) => collect_join_rows(engine, tx, tables),
-        SelectSource::Joined(source) => collect_join_source_rows(engine, tx, source, bindings),
+        SelectSource::Joined(source) => {
+            collect_join_source_rows(engine, tx, source, bindings, selection)
+        }
         SelectSource::SqliteSchema => Ok(sqlite_schema_rows(conn)
             .into_iter()
             .map(SqlRow::SqliteSchema)

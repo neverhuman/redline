@@ -9,7 +9,9 @@
 </p>
 
 <p align="center">
-  <a href="#whats-new-in-v400"><img src="https://img.shields.io/badge/sqlite%20parity-2374%2F2445%20(97.10%25)-brightgreen" alt="sqlite parity"></a>
+  <!-- sqlite-parity-badge:begin -->
+  <a href="#sqlite-parity-status"><img src="https://img.shields.io/badge/sqlite%20parity-2445%2F2445%20(100%25)-brightgreen" alt="sqlite parity 2445/2445"></a>
+  <!-- sqlite-parity-badge:end -->
   <a href="#whats-new-in-v400"><img src="https://img.shields.io/badge/corpus%20cases-2445-blue" alt="corpus cases"></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-Apache--2.0-blue" alt="license"></a>
   <a href="rust-toolchain.toml"><img src="https://img.shields.io/badge/rust-1.95-orange" alt="rust"></a>
@@ -87,13 +89,13 @@ _Cumulative v4.0.8 → v4.1.0: median **−5.3%**, p95 **−22.3%**._
 
 Workspace test count: **1786 → 1990 (+204)** with zero regressions. SIMD wins gated behind runtime `is_x86_feature_detected!` dispatch + the `unsafe-ledger.toml` audit; WAL group-commit and parallel-scan dispatch are feature-flagged so default builds remain byte-identical to v4.0.3.
 
-Updated SQLite-parity-corpus numbers will appear in the auto-generated `## Engine Metrics` block below on the next CI benchmark refresh; the v4.0.0 ratio table in the section that follows is the last hand-measured snapshot, retained for historical context.
+The badge above and the block under `sqlite-parity-report:begin` are rewritten by `redline-testing report` from `benchmark-results/sqlite-parity/latest/summary.json`. The v4.0.0 ratio table in the section that follows is a historical snapshot from that release, not the current pass count.
 
 ## What's new in v4.0.0
 
 **Phase 0-4 SQLite-parity speed-gap closure.** Fourteen named optimizations across the build profile, parser, scalar fast paths, and CTE/aggregate/window hot paths, measured against the external [`redline-testing v1.0.0`](https://github.com/neverhuman/redline-testing) parity harness on the full 2445-case `sqlite_parity` suite. Median per-case latency ratio against SQLite improved from **1.837× → 1.738×** with **zero parity regressions** (identical 2374/2445 pass set in v3.0.0 and v4.0.0; the 67 failures are pre-existing edge cases in `typeof()` reporting, IEEE-754 last-digit precision, fullwidth Unicode case-folding, BLOB hex encoding, and `AUTOINCREMENT` semantics). Jankurai code-health score holds at **85/100 (pass)**.
 
-> **Note on corpus size.** The redline-testing official corpus has grown from 1127 cases (prior CI snapshot) to **2445 cases** in v1.0.0. The v4.0.0 numbers in this section are measured against the larger current corpus. The auto-generated `## Engine Metrics` block below still reflects the previous 1127-case CI snapshot and will be refreshed by the next CI parity report.
+> **Note on corpus size.** The redline-testing official corpus has grown from 1127 cases (prior CI snapshot) to **2445 cases** in v1.0.0. The v4.0.0 numbers in this section are that release's measurement. The current pass count is the generated block under `sqlite-parity-report:begin`.
 
 ### Per-case latency distribution — RedlineDB / SQLite ratio (full 2445-case corpus, passed cases only)
 

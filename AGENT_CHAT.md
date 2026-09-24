@@ -1,5 +1,8 @@
 # RedlineDB Agent Chat
 
+## 2026-09-24T14:30Z bench/qps-compare
+
+Claim: canonical checkout `/home/ubuntu/redlineDB`, branch `bench/qps-compare` from `origin/main` `9ca871355`. One pull request for a synthetic queries-per-second comparison of Redline, SQLite, and Postgres, plus fixes for gaps that comparison shows. No worktree. No bulletfarm hub. Default durability stays Strict.
 
 ## 2026-09-24T13:40Z parity/extra-coverage
 
