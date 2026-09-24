@@ -1016,6 +1016,11 @@ pub fn execute_prepared(
         PreparedKind::CreatePgPlTrigger { table, function } => {
             crate::pg_pl::add_trigger_done(conn, table, function)
         }
+        PreparedKind::PgLockTable => crate::pg_pub::lock_done(),
+        PreparedKind::CreatePgPublication { name } => crate::pg_pub::create_done(conn, name),
+        PreparedKind::DropPgPublication { name, if_exists } => {
+            crate::pg_pub::drop_done(conn, name, *if_exists)
+        }
         PreparedKind::ShowVariable { name } => {
             let value = if name.eq_ignore_ascii_case("transaction_isolation") {
                 let iso =
@@ -1216,7 +1221,10 @@ fn template_writes(kind: &PreparedKind) -> bool {
         | PreparedKind::DropSqlFn { .. }
         | PreparedKind::CreatePgPl { .. }
         | PreparedKind::PgPlDo { .. }
-        | PreparedKind::CreatePgPlTrigger { .. } => true,
+        | PreparedKind::CreatePgPlTrigger { .. }
+        | PreparedKind::PgLockTable
+        | PreparedKind::CreatePgPublication { .. }
+        | PreparedKind::DropPgPublication { .. } => true,
         PreparedKind::CreateTable(_)
         | PreparedKind::CreateTempTable(_)
         | PreparedKind::CreateTableAsSelect(_)

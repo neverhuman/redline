@@ -42,7 +42,7 @@ The order on the strict path is the product rule: durable, then visible. Code th
 
 ## Locks and busy waits
 
-`OpenOptions.busy_timeout` defaults to five seconds. A lock wait that exceeds it returns to the caller. The Postgres row-lock forms still open on this commit are `FOR KEY SHARE`, `FOR NO KEY UPDATE`, and `LOCK TABLE`. `FOR UPDATE` and `FOR SHARE` are not in that open list. A timeout is how long this process will wait when the engine's own lock manager is busy. It is not those SQL clauses.
+`OpenOptions.busy_timeout` defaults to five seconds. A lock wait that exceeds it returns to the caller. `FOR KEY SHARE`, `FOR NO KEY UPDATE`, and `LOCK TABLE` return the same rows as the statement without a wait. A timeout is how long this process will wait when the engine's own lock manager is busy.
 
 `InterruptHandle`, exported next to `Connection`, cancels a statement. Use it for an agent deadline. Use `busy_timeout` for a lock wait. They are different clocks.
 

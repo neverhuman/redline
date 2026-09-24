@@ -106,10 +106,18 @@ pub fn parse_prepared_template(conn: &Connection, sql: &str) -> Result<PreparedT
 fn parse_prepared_template_impl(conn: &Connection, sql: &str) -> Result<PreparedTemplate> {
     let trimmed = sql.trim();
     let stmt = trimmed.trim_end_matches(';').trim();
+    if let Some(rewritten) = crate::pg_pub::rewrite(conn, sql) {
+        if rewritten != sql {
+            return parse_prepared_template_impl(conn, &rewritten);
+        }
+    }
     if let Some(prepared) = collation_stmt::try_prepare(conn, sql)? {
         return Ok(prepared);
     }
     if let Some(prepared) = matview_stmt::try_prepare(conn, sql)? {
+        return Ok(prepared);
+    }
+    if let Some(prepared) = crate::pg_pub::try_prepare(conn, sql)? {
         return Ok(prepared);
     }
     if let Some(prepared) = crate::pg_pl::try_prepare(conn, sql)? {

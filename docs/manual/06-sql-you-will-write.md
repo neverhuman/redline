@@ -41,7 +41,6 @@ These are the ones that look portable and are not, on this commit:
 - `UPDATE ... ORDER BY ... LIMIT` and the `DELETE` form of the same
 - `soundex()`
 - `MERGE` with `WHEN NOT MATCHED BY SOURCE`
-- `SELECT ... FOR KEY SHARE`, `FOR NO KEY UPDATE`, and `LOCK TABLE`
 - `LISTEN ALL`
 
 `LANGUAGE sql` functions, ordinary `SELECT` and DML, `WITH`, windows, and the types in the previous section are the statements to build on.

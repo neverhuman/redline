@@ -415,6 +415,13 @@ pub(crate) fn build_plan(
         PreparedKind::CreatePgPlTrigger { .. } => {
             simple_node(PhysicalKind::Constant, "CREATE TRIGGER".to_owned())
         }
+        PreparedKind::PgLockTable => simple_node(PhysicalKind::Constant, "LOCK TABLE".to_owned()),
+        PreparedKind::CreatePgPublication { .. } => {
+            simple_node(PhysicalKind::Constant, "CREATE PUBLICATION".to_owned())
+        }
+        PreparedKind::DropPgPublication { .. } => {
+            simple_node(PhysicalKind::Constant, "DROP PUBLICATION".to_owned())
+        }
         PreparedKind::AlterIndex { .. } => {
             simple_node(PhysicalKind::Constant, "ALTER INDEX".to_owned())
         }

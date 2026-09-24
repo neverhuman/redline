@@ -17,6 +17,7 @@ pub(crate) fn try_eval(name: &str, values: &[SqlValue]) -> Option<Result<SqlValu
         "pg_notification_queue_usage" => zero(values, || Ok(SqlValue::Real(0.0))),
         "pg_advisory_lock" => one(values, |_| Ok(SqlValue::Integer(1))),
         "pg_advisory_unlock" | "pg_try_advisory_lock" => one(values, |_| Ok(bool_true())),
+        "pg_export_snapshot" => zero(values, || Ok(SqlValue::Text(Arc::from("00000001-1")))),
         "pg_notify" => {
             if values.len() != 2 {
                 Err(Error::UnsupportedSql(

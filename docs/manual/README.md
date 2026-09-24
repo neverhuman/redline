@@ -17,7 +17,7 @@ Read these three, in order, if that is all the time you have.
 | Chapter | You will know |
 | --- | --- |
 | [SQLite coverage](04-sqlite-coverage.md) | What the official 2445-case lane measured, including the 4 skips. |
-| [Postgres coverage](05-postgres-coverage.md) | What the 265-case shell lane measures, and the 25 cases still open on this commit. |
+| [Postgres coverage](05-postgres-coverage.md) | What the 265-case shell lane measures, and the 20 cases still open on this commit. |
 | [SQL you will write](06-sql-you-will-write.md) | Dialects, types, and a few results that surprise people coming from the other engine. |
 | [Transactions and durability](07-transactions.md) | Snapshots, the isolation modes the kernel accepts, and when a commit is durable. |
 | [Embed it](08-embed.md) | Rust, the C ABI, RQL, and the small TCP server. |
@@ -31,7 +31,7 @@ Two lanes produce the compatibility numbers in this book.
 
 The SQLite lane compares `redlinedb` with SQLite 3.53.1 on the official `sqlite_parity` corpus. The figure quoted here is the committed report in [`benchmark-results/sqlite-parity/latest/summary.json`](../../benchmark-results/sqlite-parity/latest/summary.json): **2441 passed, 0 failed, 4 skipped**, out of 2445, dated 2026-09-18 in the README report block. A badge higher in the README still says 2374/2445. That badge is older than the report block. Use the report block.
 
-The Postgres lane compares the shell with PostgreSQL 16.15 on 265 cases. The committed regression policy [`metadata/beyond_sqlite/postgres-regression.json`](../../metadata/beyond_sqlite/postgres-regression.json) names **25** cases that are still failing on this commit. The generated README block between `POSTGRES_PARITY_START` and `POSTGRES_PARITY_END` still shows an older run (127 passed, 138 failed) from commit `090dbc9b`. Use the policy file until CI rewrites that block.
+The Postgres lane compares the shell with PostgreSQL 16.15 on 265 cases. The committed regression policy [`metadata/beyond_sqlite/postgres-regression.json`](../../metadata/beyond_sqlite/postgres-regression.json) names **20** cases that are still failing on this commit. The generated README block between `POSTGRES_PARITY_START` and `POSTGRES_PARITY_END` still shows an older run (127 passed, 138 failed) from commit `090dbc9b`. Use the policy file until CI rewrites that block.
 
 A skip is a case the runner did not compare. A listed failure is a case that ran and did not match. Neither one is a pass.
 

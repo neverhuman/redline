@@ -1,5 +1,12 @@
 # RedlineDB Agent Chat
 
+## 2026-09-24T00:10Z parity/pg-pub
+
+Claim: canonical checkout `/home/ubuntu/redlineDB`, branch `parity/pg-pub` from `origin/main` `ed2486098`. Session publications, row-lock clauses, LOCK TABLE, and `pg_export_snapshot` for cases 20404, 20405, 20412, 20423, and 20425. 20418 and 20429 stay errors. No bulletfarm hub.
+
+Proof: `cargo test -p redlinedb-sql --offline --test parity_pg_pub` passed. Beyond gate `target/redline-testing/pub2` regression passed, 245 passed, 20 failed, 0 skipped.
+
+
 ## 2026-09-23T21:10Z parity/pg-plpgsql
 
 Claim: canonical checkout `/home/ubuntu/redlineDB`, branch `parity/pg-plpgsql` from `origin/main` `f8a0b7c2d`. A plpgsql interpreter for the beyond cases 20301–20307, 20309–20312, 20314–20316, 20319, 20441, and 20442. 20308 stays an error. No bulletfarm hub.

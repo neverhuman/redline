@@ -272,6 +272,17 @@ pub enum PreparedKind {
         table: Arc<str>,
         function: Arc<str>,
     },
+    /// `LOCK TABLE ...`. A single connection does not wait.
+    PgLockTable,
+    /// `CREATE PUBLICATION name ...`.
+    CreatePgPublication {
+        name: Arc<str>,
+    },
+    /// `DROP PUBLICATION [IF EXISTS] name`.
+    DropPgPublication {
+        name: Arc<str>,
+        if_exists: bool,
+    },
     /// Track J — `ALTER INDEX <name> RENAME TO <new_name>`.
     AlterIndex {
         old_name: Arc<str>,

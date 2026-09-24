@@ -1,6 +1,6 @@
 # Coverage ledger
 
-Copied from the files named below, at commit `f8a0b7c2d336677d979dd504325a1e921ad4f73c`. Nothing rewrites this page on build. When the policy or the SQLite summary changes, edit this page in the same commit so the counts stay tied to those files.
+Copied from the files named below, at commit `ed2486098025624514aff9cd18f90010367e9865`. Nothing rewrites this page on build. When the policy or the SQLite summary changes, edit this page in the same commit so the counts stay tied to those files.
 
 ## SQLite
 
@@ -22,25 +22,20 @@ The README block under `sqlite-parity-report:begin` repeats these counts and dat
 
 Corpus size, from `subrepos/redline-testing/corpus/beyond_sqlite/generated_manifest.json`: **265** cases.
 
-Open failures, from `metadata/beyond_sqlite/postgres-regression.json`: **25** cases.
+Open failures, from `metadata/beyond_sqlite/postgres-regression.json`: **20** cases.
 
-Policy reason, copied from that file: plpgsql functions, procedures, and notify-from-plpgsql run. 25 failures remain.
+Policy reason, copied from that file: Row locks, LOCK TABLE, snapshot export, and CREATE PUBLICATION run. 20 failures remain.
 
 Oracle settings the gate requires: `160015|C|C|UTC`.
 
-The generated README paragraph between `POSTGRES_PARITY_START` and `POSTGRES_PARITY_END` is the report merged in `f8a0b7c2d` and still describes an earlier measurement. Use the table below.
+The generated README paragraph between `POSTGRES_PARITY_START` and `POSTGRES_PARITY_END` is older than this policy. Use the table below.
 
 | Category | Case | Name | What the case is about |
 | --- | ---: | --- | --- |
 | BEYOND_LISTEN_NOTIFY | 20438 | `LISTEN_INVALID_CHANNEL_NAME_ALL` | LISTEN ALL is a syntax error (ALL is not a valid identifier here, unlike UNLISTEN *) |
-| BEYOND_MVCC_LOCKING | 20404 | `SELECT_FOR_KEY_SHARE` | SELECT ... FOR KEY SHARE acquires a weaker key-share lock |
-| BEYOND_MVCC_LOCKING | 20405 | `SELECT_FOR_NO_KEY_UPDATE` | SELECT ... FOR NO KEY UPDATE allows concurrent FOR KEY SHARE |
-| BEYOND_MVCC_LOCKING | 20412 | `LOCK_TABLE_ACCESS_EXCLUSIVE` | LOCK TABLE ... IN ACCESS EXCLUSIVE MODE succeeds in a single tx with no contender |
 | BEYOND_PORTABILITY_SYNTAX | 20103 | `MERGE_NOT_MATCHED_BY_SOURCE_PG17` | MERGE ... WHEN NOT MATCHED BY SOURCE is PG17+; PG16 should error |
 | BEYOND_PORTABILITY_SYNTAX | 20111 | `DISTINCT_ON_REQUIRES_ORDER_BY` | DISTINCT ON expressions must be the leftmost ORDER BY terms; mismatch errors |
 | BEYOND_REPLICATION_CDC | 20418 | `LOGICAL_SLOT_REJECTS_WAL_LEVEL_REPLICA` | pg_create_logical_replication_slot rejects slot creation when wal_level < logical |
-| BEYOND_REPLICATION_CDC | 20423 | `PG_EXPORT_SNAPSHOT_SHAPE` | pg_export_snapshot() returns a nonempty string identifier (value is nondeterministic) |
-| BEYOND_REPLICATION_CDC | 20425 | `CREATE_PUBLICATION_FOR_ALL_TABLES` | CREATE PUBLICATION FOR ALL TABLES round-trips with idempotent drop |
 | BEYOND_REPLICATION_CDC | 20429 | `LOGICAL_SLOT_PEEK_REQUIRES_SLOT` | pg_logical_slot_peek_changes errors when slot does not exist |
 | BEYOND_RICH_TYPES | 20021 | `ENUM_REJECTS_BAD_VALUE` | ENUM cast rejects values outside the declared set |
 | BEYOND_RICH_TYPES | 20023 | `DOMAIN_REJECTS_NEG` | DOMAIN check rejects bad value at cast |

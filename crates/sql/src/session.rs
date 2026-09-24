@@ -250,6 +250,10 @@ pub struct SessionState {
     pub pg_pl_triggers: Vec<PgPlTrigger>,
     /// `pg_pl_triggers` as of `BEGIN`. Restored on rollback.
     pub pg_pl_triggers_tx_snapshot: Option<Vec<PgPlTrigger>>,
+    /// Publication names created by `CREATE PUBLICATION`.
+    pub pg_publications: std::collections::BTreeSet<String>,
+    /// `pg_publications` as of `BEGIN`. Restored on rollback.
+    pub pg_publications_tx_snapshot: Option<std::collections::BTreeSet<String>>,
 }
 
 /// One `LANGUAGE plpgsql` function or procedure.
@@ -430,6 +434,8 @@ impl Default for SessionState {
             pg_pl_fns_tx_snapshot: None,
             pg_pl_triggers: Vec::new(),
             pg_pl_triggers_tx_snapshot: None,
+            pg_publications: std::collections::BTreeSet::new(),
+            pg_publications_tx_snapshot: None,
         }
     }
 }
@@ -514,6 +520,8 @@ impl SessionState {
         self.pg_pl_fns_tx_snapshot = None;
         self.pg_pl_triggers.clear();
         self.pg_pl_triggers_tx_snapshot = None;
+        self.pg_publications.clear();
+        self.pg_publications_tx_snapshot = None;
     }
 
     /// Reset journal + savepoint stack at a transaction boundary.

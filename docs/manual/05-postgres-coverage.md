@@ -17,15 +17,15 @@ Leave it unset for SQLite work. The official SQLite lane does not set it.
 | Corpus | `beyond_sqlite`, 265 cases |
 | Oracle | PostgreSQL 16.15, settings `160015\|C\|C\|UTC` |
 | Image the gate accepts | `sha256:efdf07c2f9d4df592783dcc8ea5f6db02efbf5f6452b527225ff5e58364570e9` |
-| Open failures in the policy on this commit | 25 |
+| Open failures in the policy on this commit | 20 |
 | Policy file | `metadata/beyond_sqlite/postgres-regression.json` |
-| Policy reason | plpgsql functions, procedures, and notify-from-plpgsql run |
+| Policy reason | row locks, LOCK TABLE, snapshot export, and CREATE PUBLICATION run |
 
 The policy's `failed_cases` array is the list the gate allows. A run passes the regression check when every failure is in that list and every case in that list still fails. When a case starts passing, it has to leave the list. The list is not a trophy. It is the set of known misses.
 
-The README block between `POSTGRES_PARITY_START` and `POSTGRES_PARITY_END` still reports **127 passed, 138 failed** from commit `090dbc9b`. That block is generated, and it has not been regenerated on this commit. Until CI writes a new block, quote the policy file: **25** named failures out of **265** cases.
+The README block between `POSTGRES_PARITY_START` and `POSTGRES_PARITY_END` still reports **127 passed, 138 failed** from commit `090dbc9b`. That block is generated, and it has not been regenerated on this commit. Until CI writes a new block, quote the policy file: **20** named failures out of **265** cases.
 
-A matching non-zero exit is not a pass. The runner counts agreement on an error only when the case declares the text the target must produce. Several of the 25 are errors we intend to keep, once that text is declared. They are listed in the [ledger](appendix-coverage.md).
+A matching non-zero exit is not a pass. The runner counts agreement on an error only when the case declares the text the target must produce. Several of the 20 are errors we intend to keep, once that text is declared. They are listed in the [ledger](appendix-coverage.md).
 
 ## What already behaves like Postgres
 
@@ -53,14 +53,13 @@ These are in the engine on this commit, and the corpus cases that cover them are
 
 ## What is still open
 
-The 25 names are in the [ledger](appendix-coverage.md). They fall into a few jobs:
+The 20 names are in the [ledger](appendix-coverage.md). They fall into a few jobs:
 
 | Open cases | Job |
 | ---: | --- |
 | 1 | `RAISE EXCEPTION` inside `DO`. The other corpus plpgsql bodies run |
 | 12 | Text search, trigram, GiST, GIN, and the `vector` extension |
-| 4 | Publications, snapshots, and logical decoding |
-| 3 | `SELECT ... FOR KEY SHARE`, `FOR NO KEY UPDATE`, and `LOCK TABLE` |
+| 2 | Logical decoding while `wal_level` is below `logical`. Publications and `pg_export_snapshot` already run |
 | 1 | `LISTEN ALL` |
 | 2 | An enum label that is not in the type, and a domain value that fails its check. These are errors on Postgres too. They stay failures until the corpus declares the message. |
 | 2 | `MERGE ... WHEN NOT MATCHED BY SOURCE` (a Postgres 17 clause; this oracle is 16.15) and the `DISTINCT ON` form whose expressions are not the leftmost `ORDER BY` terms. Other `DISTINCT ON` cases are not in the open list |
