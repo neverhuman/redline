@@ -84,9 +84,11 @@ impl<'a, S: ScanSource> MorselScan<'a, S> {
                     // which dropped the row and, on a partial append, left
                     // later rows aligned to the wrong slots. Surface it.
                     if let Err(msg) = builder.push_row(row) {
-                        return Err(crate::error::Error::UnsupportedSql(format!(
-                            "morsel row: {msg}"
-                        )));
+                        // `scan.rs` is also compiled inside
+                        // `tests/morsel_scan_filter.rs`, whose `Result`
+                        // error is `&'static str`. `Error` implements
+                        // `From<&'static str>`, so `into` works in both.
+                        return Err(msg.into());
                     }
                     pushed += 1;
                 }
