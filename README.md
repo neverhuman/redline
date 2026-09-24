@@ -37,7 +37,7 @@ and it says which file to trust when a badge and a report disagree.
 <!-- POSTGRES_PARITY_START -->
 PostgreSQL **16.15** SQL-shell corpus: **265 / 265 passed**, **0 failed**, **0 skipped**. Corpus qualification: **passed**. Regression gate: **passed**.
 
-All corpus cases run in CI; known failures remain failures. PostgreSQL wire/client and full application compatibility remain unverified. Source: `unrecorded` (dirty workspace); corpus SHA-256: `b240a7204eeb46893ea1f06e715a144f6cd962efe8f41041582e52ca975cd5be`.
+All corpus cases run in CI; known failures remain failures. PostgreSQL wire/client and full application compatibility remain unverified. Source: `8c0222102d547608e51cc70308a48b89dac81e75`; corpus SHA-256: `b240a7204eeb46893ea1f06e715a144f6cd962efe8f41041582e52ca975cd5be`.
 <!-- POSTGRES_PARITY_END -->
 
 ## What's new in v4.0.9 → v4.1.0 (W7 startup optimization)
