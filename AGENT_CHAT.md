@@ -1,5 +1,9 @@
 # RedlineDB Agent Chat
 
+## 2026-09-24T19:45Z perf/ci-safe-locks
+
+Claim: canonical checkout `/home/ubuntu/redlineDB`, branch `perf/ci-safe-locks` from `origin/main` `352339d111558ecf3025732b03e336add4dd3596` (pull request 113). Direct leaf insert stays off unless `REDLINEDB_LEAF_DIRECT_INSERT=1`. Tests lock nested-loop join order and `LIMIT 1` against the full scan. Static row batches now honor that LIMIT/OFFSET; a plain table scan was returning every row. No worktree.
+
 ## 2026-09-24T18:45Z perf/gate0-correctness
 
 Claim: canonical checkout `/home/ubuntu/redlineDB`, branch `perf/gate0-correctness` rebased onto `origin/main` `9a545805551304d22872fd8f0dbf9d36715d9e80` (pull request 112). Gate 0 counters for checksum bytes, leaf rewrites, row-lock probes, `all_frames`, page-file mutex wait, relation gets, SQL row decodes, and join prefix clones. A morsel `push_row` checks kinds before it appends, and a failed push is returned instead of skipped. The three quarantines already on this branch stay: hash-indexed row locks, saturating `SUM(i64)`, and serial `ORDER BY` covering scans. No measured speedup. No worktree.

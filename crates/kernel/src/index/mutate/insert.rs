@@ -79,15 +79,16 @@ impl BtreeIndex {
                 create_tx: tx_id,
                 delete_tx: TxId::ZERO,
             };
-            match entries.binary_search_by(|entry| entry.compare(&candidate)) {
+            let slot = match entries.binary_search_by(|entry| entry.compare(&candidate)) {
                 Ok(pos) => {
                     if self.meta()?.uniqueness == IndexUniqueness::Unique {
                         return Err(Error::WriteConflict);
                     }
-                    entries.insert(pos, candidate);
+                    pos
                 }
-                Err(pos) => entries.insert(pos, candidate),
-            }
+                Err(pos) => pos,
+            };
+            entries.insert(slot, candidate);
             let body_capacity = page_ref
                 .as_bytes()
                 .len()
@@ -113,14 +114,18 @@ impl BtreeIndex {
                 )?;
                 return Ok(());
             }
-            Self::rewrite_leaf(
-                page_ref,
-                self.descriptor().index_id,
-                &entries,
-                header.left,
-                header.right,
-                header.high_key,
-            )?;
+            if super::insert_leaf::direct_leaf_insert_enabled() {
+                super::insert_leaf::insert_one_cell(page_ref, slot, &entries[slot])?;
+            } else {
+                Self::rewrite_leaf(
+                    page_ref,
+                    self.descriptor().index_id,
+                    &entries,
+                    header.left,
+                    header.right,
+                    header.high_key,
+                )?;
+            }
             drop(page);
             if emit_wal {
                 // Lane E failpoint: armed before the leaf-write becomes

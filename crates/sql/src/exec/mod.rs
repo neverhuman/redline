@@ -1885,15 +1885,28 @@ fn step_select_runtime_inner(
             Ok(true)
         }
         SelectRuntimeSource::StaticRows { rows, cursor } => {
-            if *cursor >= rows.len() {
-                finish_select_runtime(conn, runtime)?;
-                *current_row = None;
-                return Ok(true);
+            // Covering scans materialise every row and leave LIMIT/OFFSET
+            // on the runtime. Honor both here. Producers that already
+            // sliced the batch set limit to usize::MAX and offset to 0.
+            while *cursor < rows.len() {
+                let row = rows[*cursor].clone();
+                *cursor += 1;
+                runtime.seen += 1;
+                if runtime.seen <= runtime.offset {
+                    continue;
+                }
+                if runtime.yielded >= runtime.limit {
+                    finish_select_runtime(conn, runtime)?;
+                    *current_row = None;
+                    return Ok(true);
+                }
+                *current_row = Some(row);
+                runtime.yielded += 1;
+                return Ok(false);
             }
-            *current_row = Some(rows[*cursor].clone());
-            *cursor += 1;
-            runtime.yielded += 1;
-            Ok(false)
+            finish_select_runtime(conn, runtime)?;
+            *current_row = None;
+            Ok(true)
         }
         SelectRuntimeSource::Table {
             table,
