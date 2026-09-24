@@ -271,3 +271,44 @@ CREATE TRIGGER beyond_trig_trg AFTER INSERT ON beyond_trig_t FOR EACH ROW EXECUT
     exec(&conn, "INSERT INTO beyond_trig_t VALUES (1)");
     assert_eq!(rows(&conn, "SELECT count(*) FROM beyond_trig_t"), "1");
 }
+
+#[test]
+fn plpgsql_reverse_execute_and_others() {
+    unsafe { std::env::set_var("REDLINEDB_RESULT_DIALECT", "postgres") };
+    let (_dir, conn) = open();
+    script(
+        &conn,
+        "CREATE FUNCTION rev_sum() RETURNS int LANGUAGE plpgsql AS $$
+DECLARE i int; s int := 0;
+BEGIN
+  FOR i IN REVERSE 3..1 LOOP
+    s := s + i;
+  END LOOP;
+  RETURN s;
+END $$",
+    );
+    assert_eq!(rows(&conn, "SELECT rev_sum()"), "6");
+    script(
+        &conn,
+        "CREATE FUNCTION twice(n int) RETURNS int LANGUAGE plpgsql AS $$
+DECLARE r int;
+BEGIN
+  EXECUTE 'SELECT $1 * 2' USING n INTO r;
+  RETURN r;
+END $$",
+    );
+    assert_eq!(rows(&conn, "SELECT twice(21)"), "42");
+    script(
+        &conn,
+        "CREATE FUNCTION catch_inner() RETURNS text LANGUAGE plpgsql AS $$
+BEGIN
+  BEGIN
+    RAISE EXCEPTION 'inner';
+  EXCEPTION WHEN OTHERS THEN
+    RETURN 'caught';
+  END;
+  RETURN 'missed';
+END $$",
+    );
+    assert_eq!(rows(&conn, "SELECT catch_inner()"), "caught");
+}

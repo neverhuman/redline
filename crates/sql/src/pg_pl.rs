@@ -485,8 +485,13 @@ fn exec_body(conn: &Connection, body: &str, env: &mut Env, collect: bool) -> Res
     let main = strip_begin_end(main);
     match exec_stmt_list(conn, main, env, collect) {
         Ok(flow) => Ok(flow),
-        Err(err) if handler_catches(&err) && handler.is_some() => {
-            exec_stmt_list(conn, handler.unwrap_or(""), env, collect)
+        Err(err) if handler.as_ref().is_some_and(|(_, body)| !body.is_empty()) => {
+            let (kind, body) = handler.unwrap_or(("", ""));
+            if handler_catches(&err, kind) {
+                exec_stmt_list(conn, body, env, collect)
+            } else {
+                Err(err)
+            }
         }
         Err(err) => Err(err),
     }
@@ -545,6 +550,9 @@ fn exec_stmt(conn: &Connection, stmt: &str, env: &mut Env, collect: bool) -> Res
     if stmt.is_empty() || stmt.eq_ignore_ascii_case("begin") || stmt.eq_ignore_ascii_case("end") {
         return Ok(Flow::Next);
     }
+    if strip_prefix_ci(stmt, "begin").is_some() {
+        return exec_body(conn, stmt, env, collect);
+    }
     if let Some(rest) = strip_prefix_ci(stmt, "return query") {
         let rows = query_rows(conn, rest.trim(), env)?;
         return Ok(Flow::Rows(rows));
@@ -586,6 +594,9 @@ fn exec_stmt(conn: &Connection, stmt: &str, env: &mut Env, collect: bool) -> Res
     if let Some(rest) = strip_prefix_ci(stmt, "perform") {
         let _ = eval_expr(conn, rest.trim(), env)?;
         return Ok(Flow::Next);
+    }
+    if let Some(rest) = strip_prefix_ci(stmt, "execute") {
+        return exec_dynamic(conn, rest, env);
     }
     if let Some(rest) = strip_prefix_ci(stmt, "if") {
         return exec_if(conn, rest, env, collect);
@@ -666,6 +677,84 @@ fn exec_loop(conn: &Connection, rest: &str, env: &mut Env, collect: bool) -> Res
     ))
 }
 
+fn exec_dynamic(conn: &Connection, rest: &str, env: &mut Env) -> Result<Flow> {
+    let (mut sql, after) = split_sql_literal(rest.trim())?;
+    let after = after.trim_start();
+    let (using_src, into_name) = if let Some(using) = strip_prefix_ci(after, "using") {
+        let using = using.trim_start();
+        let lower = using.to_ascii_lowercase();
+        if let Some(into_at) = find_word(&lower, "into") {
+            (
+                Some(using[..into_at].trim().trim_end_matches(',').trim()),
+                Some(using[into_at + 4..].trim().trim_end_matches(';').trim()),
+            )
+        } else {
+            (Some(using.trim().trim_end_matches(';').trim()), None)
+        }
+    } else if let Some(into) = strip_prefix_ci(after, "into") {
+        (None, Some(into.trim().trim_end_matches(';').trim()))
+    } else {
+        (None, None)
+    };
+    if let Some(args) = using_src {
+        for (index, arg) in split_commas(args).into_iter().enumerate() {
+            let value = eval_expr(conn, arg.trim(), env)?;
+            let marker = format!("${}", index + 1);
+            sql = sql.replace(&marker, &sql_literal(&value));
+        }
+    }
+    let rows = query_rows(conn, &sql, env)?;
+    if let Some(name) = into_name.filter(|name| !name.is_empty()) {
+        let value = rows
+            .first()
+            .and_then(|row| row.first())
+            .cloned()
+            .unwrap_or(SqlValue::Null);
+        env.insert(name, PlVal::Sql(value));
+    }
+    Ok(Flow::Next)
+}
+
+fn split_sql_literal(src: &str) -> Result<(String, &str)> {
+    let src = src.trim_start();
+    let mut chars = src.char_indices();
+    let Some((_, first)) = chars.next() else {
+        return Err(Error::UnsupportedSql(
+            "EXECUTE requires a string".to_owned(),
+        ));
+    };
+    if first != '\'' {
+        return Err(Error::UnsupportedSql(
+            "EXECUTE requires a string".to_owned(),
+        ));
+    }
+    let mut out = String::new();
+    let mut closed = None;
+    let bytes = src;
+    let mut i = 1usize;
+    while i < bytes.len() {
+        let ch = bytes[i..].chars().next().unwrap();
+        let width = ch.len_utf8();
+        if ch == '\'' {
+            if bytes[i + width..].starts_with('\'') {
+                out.push('\'');
+                i += width + 1;
+                continue;
+            }
+            closed = Some(i + width);
+            break;
+        }
+        out.push(ch);
+        i += width;
+    }
+    let Some(end) = closed else {
+        return Err(Error::UnsupportedSql(
+            "EXECUTE string is not closed".to_owned(),
+        ));
+    };
+    Ok((out, &src[end..]))
+}
+
 fn exec_for(conn: &Connection, rest: &str, env: &mut Env, collect: bool) -> Result<Flow> {
     let rest = rest.trim();
     let (var, after) =
@@ -675,19 +764,33 @@ fn exec_for(conn: &Connection, rest: &str, env: &mut Env, collect: bool) -> Resu
         return Err(Error::UnsupportedSql("FOR requires IN".to_owned()));
     };
     let after = after.trim_start();
+    let (after, reverse) = if let Some(rest) = strip_prefix_ci(after, "reverse") {
+        (rest.trim_start(), true)
+    } else {
+        (after, false)
+    };
     if let Some((lo, hi, body)) = range_for(after) {
         let start = as_i64(&eval_expr(conn, lo, env)?)?;
         let end = as_i64(&eval_expr(conn, hi, env)?)?;
         let mut rows = Vec::new();
         let mut cursor = start;
-        while cursor <= end {
+        let step: i64 = if reverse { -1 } else { 1 };
+        loop {
+            let in_range = if reverse {
+                cursor >= end
+            } else {
+                cursor <= end
+            };
+            if !in_range {
+                break;
+            }
             env.insert(var, PlVal::Sql(SqlValue::Integer(cursor)));
             match exec_stmt_list(conn, body, env, collect)? {
                 Flow::Next => {}
                 Flow::Return(value) => return Ok(Flow::Return(value)),
                 Flow::Rows(more) => rows.extend(more),
             }
-            cursor += 1;
+            cursor = cursor.saturating_add(step);
         }
         return if collect {
             Ok(Flow::Rows(rows))
@@ -997,9 +1100,15 @@ fn find_div(expr: &str) -> Option<usize> {
     None
 }
 
-fn handler_catches(err: &Error) -> bool {
-    let text = err.to_string().to_ascii_lowercase();
-    text.contains("division by zero") || text.contains("divide by zero")
+fn handler_catches(err: &Error, kind: &str) -> bool {
+    if kind.eq_ignore_ascii_case("others") {
+        return true;
+    }
+    if kind.eq_ignore_ascii_case("division_by_zero") {
+        let text = err.to_string().to_ascii_lowercase();
+        return text.contains("division by zero") || text.contains("divide by zero");
+    }
+    false
 }
 
 fn strip_begin_end(block: &str) -> &str {
@@ -1021,18 +1130,48 @@ fn split_declare(body: &str) -> (&str, &str) {
     (&body[decl + "declare".len()..begin], &body[begin..])
 }
 
-fn split_exception(block: &str) -> (&str, Option<&str>) {
+fn split_exception(block: &str) -> (&str, Option<(&str, &str)>) {
     let lower = block.to_ascii_lowercase();
-    let Some(at) = find_word(&lower, "exception when") else {
+    let mut depth = 0i32;
+    let mut at = None;
+    let mut i = 0usize;
+    while i < lower.len() {
+        if starts_word(block, i, "begin") {
+            depth += 1;
+        } else if starts_word(block, i, "end") {
+            depth -= 1;
+        } else if depth <= 1 && starts_word(block, i, "exception") {
+            let rest = &lower[i..];
+            if rest.starts_with("exception when") {
+                at = Some(i);
+                break;
+            }
+        }
+        i += lower[i..]
+            .chars()
+            .next()
+            .map(|ch| ch.len_utf8())
+            .unwrap_or(1);
+    }
+    let Some(at) = at else {
         return (block, None);
     };
-    let handler = block[at + "exception".len()..].trim_start();
-    let handler = strip_prefix_ci(handler, "when")
-        .and_then(|rest| strip_prefix_ci(rest.trim_start(), "division_by_zero"))
-        .and_then(|rest| strip_prefix_ci(rest.trim_start(), "then"))
-        .unwrap_or(handler);
-    let handler = strip_suffix_ci(handler.trim(), "end").unwrap_or(handler);
-    (&block[..at], Some(handler.trim()))
+    if !lower[at..].starts_with("exception when") {
+        return (block, None);
+    }
+    let after = block[at + "exception".len()..].trim_start();
+    let Some(when_body) = strip_prefix_ci(after, "when") else {
+        return (block, None);
+    };
+    let when_body = when_body.trim_start();
+    let lower_when = when_body.to_ascii_lowercase();
+    let Some(then_at) = find_word(&lower_when, "then") else {
+        return (block, None);
+    };
+    let kind = when_body[..then_at].trim();
+    let raw = when_body[then_at + 4..].trim();
+    let handler = strip_suffix_ci(raw, "end").unwrap_or(raw);
+    (&block[..at], Some((kind, handler.trim())))
 }
 
 fn split_if(src: &str) -> Vec<(Option<&str>, &str)> {

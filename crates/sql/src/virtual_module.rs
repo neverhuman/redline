@@ -117,10 +117,23 @@ pub(crate) fn fts_match(
     let term = crate::exec::expr::eval_scalar(right, row, bindings)?;
     let term = text_of(&term).to_ascii_lowercase();
     crate::exec::expr::json_dispatch::set_current_match_term(Some(term.clone()));
-    let hit = row_texts(row)
-        .iter()
-        .any(|text| text.to_ascii_lowercase().contains(&term));
+    let hit = row_texts(row).iter().any(|text| term_matches(text, &term));
     Ok(Some(postgres_bool(hit)))
+}
+
+/// `hel*` matches a token that starts with `hel`. Any other term is a substring.
+pub(crate) fn term_matches(text: &str, needle: &str) -> bool {
+    let text = text.to_ascii_lowercase();
+    let needle = needle.to_ascii_lowercase();
+    if let Some(stem) = needle.strip_suffix('*') {
+        if stem.is_empty() {
+            return false;
+        }
+        return text
+            .split(|ch: char| !ch.is_ascii_alphanumeric())
+            .any(|token| token.starts_with(stem));
+    }
+    text.contains(&needle)
 }
 
 fn row_texts(row: &RowContext<'_>) -> Vec<String> {

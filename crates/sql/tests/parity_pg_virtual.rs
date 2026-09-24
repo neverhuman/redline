@@ -111,3 +111,36 @@ fn sqlite_virtual_cases_93_through_96() {
         .unwrap_or_default();
     assert!(err.contains("CREATE VIRTUAL TABLE"), "{err}");
 }
+
+#[test]
+fn sqlite_virtual_prefix_column_axis_and_dbstat() {
+    let (_dir, conn) = open();
+    exec(&conn, "CREATE VIRTUAL TABLE docs USING fts5(title, body)");
+    exec(
+        &conn,
+        "INSERT INTO docs(title,body) VALUES('one','hello world'),('two','other text')",
+    );
+    assert_eq!(
+        rows(
+            &conn,
+            "SELECT title FROM docs WHERE docs MATCH 'hel*' ORDER BY title"
+        ),
+        "one"
+    );
+    assert_eq!(
+        rows(&conn, "SELECT title FROM docs WHERE body MATCH 'world'"),
+        "one"
+    );
+    exec(&conn, "CREATE VIRTUAL TABLE axis USING rtree(id, x1, x2)");
+    exec(&conn, "INSERT INTO axis VALUES(1,0,10),(2,20,30)");
+    assert_eq!(
+        rows(&conn, "SELECT id FROM axis WHERE x1>=0 AND x1<=5"),
+        "1"
+    );
+    exec(&conn, "CREATE TABLE a(x)");
+    exec(&conn, "INSERT INTO a VALUES(1)");
+    exec(&conn, "CREATE TABLE b(y)");
+    exec(&conn, "INSERT INTO b VALUES(2)");
+    exec(&conn, "CREATE VIRTUAL TABLE temp.stat USING dbstat");
+    assert_eq!(rows(&conn, "SELECT count(*)>0 FROM stat"), "1");
+}

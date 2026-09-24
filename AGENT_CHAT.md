@@ -1,5 +1,10 @@
 # RedlineDB Agent Chat
 
+
+## 2026-09-24T13:40Z parity/extra-coverage
+
+Claim: canonical checkout `/home/ubuntu/redlineDB`, branch `parity/extra-coverage` from `origin/main` `7bae457b3`. Extra coverage for column MATCH, FTS prefix, one-axis rtree, dbstat, plpgsql REVERSE, EXECUTE USING, and WHEN OTHERS. No worktree. No bulletfarm hub. Speed measurement stays off this branch until these tests pass. The official median gap is not a license to fail a passing case.
+
 ## 2026-09-24T02:10Z parity/close-remaining
 
 Claim: canonical checkout `/home/ubuntu/redlineDB`, branch `parity/close-remaining` from `origin/main` `804a2a468`. One pull request for the remaining measured gap: text search and index DDL, SQLite virtual tables 93–96, and declared stderr for the nine errors that must keep failing. No worktree. No bulletfarm hub.

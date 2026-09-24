@@ -40,7 +40,13 @@ pub(crate) fn eval_binary(
     }
     if matches!(op, BinaryOperator::Match) {
         let pattern = eval_scalar(right, row, bindings)?;
-        return match_result(left, SqlValue::Null, pattern, row);
+        let left_value = match left {
+            Expr::Identifier(ident) if row_values_for_table_name(row, &ident.value).is_some() => {
+                SqlValue::Null
+            }
+            _ => eval_scalar(left, row, bindings)?,
+        };
+        return match_result(left, left_value, pattern, row);
     }
     let collation = match (collation_from_expr(left), collation_from_expr(right)) {
         (Some(c), _) => Some(c),
@@ -225,11 +231,9 @@ fn match_result(
         }
         _ => vec![left_value],
     };
-    let matched = haystack.iter().any(|value| {
-        value_to_string(value)
-            .to_ascii_lowercase()
-            .contains(&needle)
-    });
+    let matched = haystack
+        .iter()
+        .any(|value| crate::virtual_module::term_matches(&value_to_string(value), &needle));
     Ok(SqlValue::Integer(if matched { 1 } else { 0 }))
 }
 
