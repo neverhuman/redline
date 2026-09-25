@@ -103,7 +103,8 @@ impl Engine {
         } else {
             control.load_latest()?
         };
-        let catalog_store = CatalogStore::new_with_sync_policy(path, catalog_sync_policy(&config));
+        let catalog_store =
+            CatalogStore::new_with_sync_policy(path, catalog_sync_policy(config.commit_durability));
         let loaded_catalog = if volatile {
             None
         } else {
@@ -226,8 +227,10 @@ impl Engine {
             Some(Arc::clone(&wal)),
         )
         .map_err(|_| Error::CorruptPage("create heap failed"))?;
-        let catalog_store =
-            CatalogStore::new_with_sync_policy(path.as_ref(), catalog_sync_policy(&config));
+        let catalog_store = CatalogStore::new_with_sync_policy(
+            path.as_ref(),
+            catalog_sync_policy(config.commit_durability),
+        );
         let initial_catalog = match catalog_store.load().ok().flatten() {
             Some(catalog) => catalog,
             None => bootstrap_schema(RelId(10_000)),
@@ -313,11 +316,10 @@ impl Engine {
     }
 }
 
-fn catalog_sync_policy(config: &EngineConfig) -> CatalogSyncPolicy {
-    match config.commit_durability {
-        // A6-b: Normal durability means write schema changes but do NOT
-        // fsync them — matching the WAL-commit policy.  Only Strict
-        // requires a catalog fsync for power-failure durability.
+pub(super) fn catalog_sync_policy(durability: CommitDurability) -> CatalogSyncPolicy {
+    match durability {
+        // Normal and UnsafeDev write the schema file and skip fsync,
+        // matching the WAL commit policy. Only Strict fsyncs it.
         CommitDurability::Strict => CatalogSyncPolicy::Durable,
         CommitDurability::Normal | CommitDurability::UnsafeDev => CatalogSyncPolicy::Volatile,
     }

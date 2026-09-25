@@ -2,6 +2,9 @@ use std::fs;
 use std::io::Write;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
+#[cfg(test)]
+use std::sync::atomic::AtomicU64;
+use std::sync::atomic::{AtomicU8, Ordering};
 
 use crate::{Error, Result};
 
@@ -20,10 +23,20 @@ use crate::format::{PageId, RelId};
 const MAGIC: u32 = 0x5243_4154; // "RCAT"
 const VERSION: u16 = 1;
 
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 pub struct CatalogStore {
     path: PathBuf,
-    sync_policy: CatalogSyncPolicy,
+    /// Interior-mutable so `Engine::set_commit_durability` can change
+    /// catalog fsync without replacing the store.
+    sync_policy: AtomicU8,
+}
+
+#[cfg(test)]
+static CATALOG_METADATA_SYNCS: AtomicU64 = AtomicU64::new(0);
+
+#[cfg(test)]
+pub(crate) fn catalog_metadata_syncs() -> u64 {
+    CATALOG_METADATA_SYNCS.load(Ordering::Relaxed)
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -35,6 +48,30 @@ pub(crate) enum CatalogSyncPolicy {
 impl CatalogSyncPolicy {
     fn syncs_metadata(self) -> bool {
         matches!(self, Self::Durable)
+    }
+
+    fn to_u8(self) -> u8 {
+        match self {
+            Self::Durable => 1,
+            Self::Volatile => 0,
+        }
+    }
+
+    fn from_u8(value: u8) -> Self {
+        if value == 1 {
+            Self::Durable
+        } else {
+            Self::Volatile
+        }
+    }
+}
+
+impl Clone for CatalogStore {
+    fn clone(&self) -> Self {
+        Self {
+            path: self.path.clone(),
+            sync_policy: AtomicU8::new(self.sync_policy.load(Ordering::Relaxed)),
+        }
     }
 }
 
@@ -49,8 +86,17 @@ impl CatalogStore {
     ) -> Self {
         Self {
             path: base.as_ref().join("schema.redline"),
-            sync_policy,
+            sync_policy: AtomicU8::new(sync_policy.to_u8()),
         }
+    }
+
+    pub(crate) fn set_sync_policy(&self, sync_policy: CatalogSyncPolicy) {
+        self.sync_policy
+            .store(sync_policy.to_u8(), Ordering::Relaxed);
+    }
+
+    fn sync_policy(&self) -> CatalogSyncPolicy {
+        CatalogSyncPolicy::from_u8(self.sync_policy.load(Ordering::Relaxed))
     }
 
     pub fn load(&self) -> Result<Option<Arc<SchemaSnapshot>>> {
@@ -80,9 +126,11 @@ impl CatalogStore {
             // fsync. Crashing here lets the OS keep the staging file in
             // page cache only; recovery must still see the prior atomic
             // snapshot.
-            if self.sync_policy.syncs_metadata() {
+            if self.sync_policy().syncs_metadata() {
                 crate::fail_point!("catalog::save::fsync");
                 file.sync_all()?;
+                #[cfg(test)]
+                CATALOG_METADATA_SYNCS.fetch_add(1, Ordering::Relaxed);
             }
         }
         // Lane E failpoint: armed before the atomic rename. The staging
@@ -96,10 +144,12 @@ impl CatalogStore {
             // makes the rename durable. A crash here may lose the rename even
             // though the inode bytes are durable, exercising the parent-fsync
             // contract.
-            if self.sync_policy.syncs_metadata() {
+            if self.sync_policy().syncs_metadata() {
                 crate::fail_point!("catalog::save::parent_fsync");
                 let dir = fs::File::open(parent)?;
                 dir.sync_all()?;
+                #[cfg(test)]
+                CATALOG_METADATA_SYNCS.fetch_add(1, Ordering::Relaxed);
             }
         }
         Ok(())

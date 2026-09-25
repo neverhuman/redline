@@ -113,6 +113,9 @@ Claim: canonical checkout `/home/ubuntu/redlineDB`, branch `fix/rowid-scan-skips
 ## 2026-09-26T02:56Z fix/heap-reinit-after-wal
 
 Claim: canonical checkout `/home/ubuntu/redlineDB`, branch `fix/heap-reinit-after-wal` from `origin/main` `e220b9a1b0227334d16b5ad37b396a55a63797ee`. A fresh heap page is reinitialized on a private copy and installed only after the WAL append. A crash at `heap::mutation` leaves the allocated page untouched. No speed ratio. No worktree. Push only after the earlier local branches.
+## 2026-09-25T23:13Z fix/catalog-sync-follows-durability
+
+Claim: canonical checkout `/home/ubuntu/redlineDB`, branch `fix/catalog-sync-follows-durability` from `origin/main` `e220b9a1b0227334d16b5ad37b396a55a63797ee`. Catalog fsync follows a later `set_commit_durability` change. Open-time `EngineConfig` stays the open intent. Strict still fsyncs the catalog. Normal and UnsafeDev do not. No speed ratio. No worktree. Push only after `fix/unique-point-before-route` and `fix/rowid-before-route`.
 
 
 ## 2026-09-25T21:01Z fix/wal-pipeline-short-write
