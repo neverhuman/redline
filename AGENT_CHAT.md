@@ -1,5 +1,9 @@
 # RedlineDB Agent Chat
 
+## 2026-09-25T09:00Z docs/parity-record
+
+Claim: canonical checkout `/home/ubuntu/redlineDB`, branch `docs/parity-record` from `origin/main` `d5d1c57bbab97bf43d0b74cdfd0a660aa4bfe6b2`. The Postgres skip list and `docs/beyond-postgres-skips.md` now say the 265-case gate already passes, including the 88 entries that were still marked deferred. No SQL change. No generated README block edit. No worktree.
+
 ## 2026-09-25T01:20Z fix/index-wal-before-page
 
 Claim: canonical checkout `/home/ubuntu/redlineDB`, branch `fix/index-wal-before-page` from `origin/main` `28196cdf31eebc1f466920aa0f2b6200d85e8720`. A non-splitting leaf insert stages the new page privately, appends the WAL record, then installs that page and its LSN under one frame lock. A crash at `index::insert` leaves the leaf unchanged. No worktree.
