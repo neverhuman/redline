@@ -850,6 +850,22 @@ impl PageGuard {
         Ok(())
     }
 
+    /// Replace the resident page and mark it dirty while holding the frame
+    /// lock. Callers stage bytes privately, append the WAL record, then
+    /// publish here so a flush cannot observe the new bytes under the
+    /// previous page LSN.
+    pub(crate) fn install_dirty(&self, new_page: Page, lsn: Lsn) -> Result<()> {
+        let mut frame = self.mutable_frame()?;
+        let page = frame
+            .page
+            .as_mut()
+            .ok_or(Error::CorruptPage("resident frame missing page"))?;
+        *page = new_page;
+        page.set_page_lsn(lsn)?;
+        frame.dirty = true;
+        Ok(())
+    }
+
     fn frame(&self) -> Result<MutexGuard<'_, FrameState>> {
         self.frame
             .state

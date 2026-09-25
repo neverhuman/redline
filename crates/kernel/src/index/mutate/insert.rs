@@ -114,11 +114,14 @@ impl BtreeIndex {
                 )?;
                 return Ok(());
             }
+            // Stage off the live frame. A flush during the WAL append still
+            // sees the previous leaf bytes and the previous page LSN.
+            let mut staged = page_ref.clone();
             if super::insert_leaf::direct_leaf_insert_enabled() {
-                super::insert_leaf::insert_one_cell(page_ref, slot, &entries[slot])?;
+                super::insert_leaf::insert_one_cell(&mut staged, slot, &entries[slot])?;
             } else {
                 Self::rewrite_leaf(
-                    page_ref,
+                    &mut staged,
                     self.descriptor().index_id,
                     &entries,
                     header.left,
@@ -127,13 +130,11 @@ impl BtreeIndex {
                 )?;
             }
             drop(page);
-            if emit_wal {
-                // Lane E failpoint: armed before the leaf-write becomes
-                // visible (mark_dirty + WAL append). A crash here proves the
-                // index entry is either fully reflected post-recovery or
-                // absent.
+            let publish_lsn = if emit_wal {
+                // Armed before the staged leaf is installed. A crash here
+                // leaves the on-buffer leaf unchanged, so the key is absent.
                 crate::fail_point!("index::insert");
-                let end_lsn = self.append_index_delta(
+                self.append_index_delta(
                     tx_id,
                     WalPayload::IndexInsert {
                         tx_id,
@@ -141,11 +142,11 @@ impl BtreeIndex {
                         logical_key: logical_key.to_vec(),
                         row,
                     },
-                )?;
-                guard.mark_dirty(end_lsn)?;
+                )?
             } else {
-                guard.mark_dirty(lsn)?;
-            }
+                lsn
+            };
+            guard.install_dirty(staged, publish_lsn)?;
             drop(leaf_write);
             return Ok(());
         }

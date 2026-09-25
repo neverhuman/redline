@@ -1,5 +1,9 @@
 # RedlineDB Agent Chat
 
+## 2026-09-25T01:20Z fix/index-wal-before-page
+
+Claim: canonical checkout `/home/ubuntu/redlineDB`, branch `fix/index-wal-before-page` from `origin/main` `28196cdf31eebc1f466920aa0f2b6200d85e8720`. A non-splitting leaf insert stages the new page privately, appends the WAL record, then installs that page and its LSN under one frame lock. A crash at `index::insert` leaves the leaf unchanged. No worktree.
+
 ## 2026-09-25T00:40Z perf/leaf-direct-default
 
 Claim: canonical checkout `/home/ubuntu/redlineDB`, branch `perf/leaf-direct-default` from `origin/main` `75ea89c204acd8cd988138815bf88a609e19b7b2`. Non-splitting leaf insert places one cell and checksums once. `REDLINEDB_LEAF_DIRECT_INSERT=0` keeps the full-page rebuild. Durability stays Strict. No worktree.
