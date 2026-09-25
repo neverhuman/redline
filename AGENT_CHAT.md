@@ -1,5 +1,9 @@
 # RedlineDB Agent Chat
 
+## 2026-09-25T19:40Z perf/positional-wal-batch
+
+Claim: canonical checkout `/home/ubuntu/redlineDB`, branch `perf/positional-wal-batch` from `origin/main` `4c622a4fad6211133cd2bcd962375bca38170d0d`. Page and WAL bytes use positional read/write. The WAL writer emits one write for a contiguous run of records and splits the run at a segment boundary. WAL record bytes and durability are unchanged. `wal_pipeline` stays off. No speed ratio. No worktree.
+
 ## 2026-09-25T19:10Z perf/one-pass-scan
 
 Claim: canonical checkout `/home/ubuntu/redlineDB`, branch `perf/one-pass-scan` from `origin/main` `1e21f23caa5842ca2469ec444a6edc4ac4bf36fa`. An unordered table scan keeps the row from the visibility load instead of decoding it again. Index probes stay rowid lookups. Join order and `LIMIT 1` stay as locked. No speed ratio. No worktree.

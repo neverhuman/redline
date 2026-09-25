@@ -377,6 +377,32 @@ fn wal_coordinator_group_flushes_concurrent_targets() {
 }
 
 #[test]
+fn queued_exact_fill_stays_inside_the_segment() {
+    let temp = TempDir::new().unwrap();
+    let segment_bytes = 128;
+    let config = WalConfig {
+        segment_bytes,
+        group_commit_delay_us: 0,
+        ..WalConfig::default()
+    };
+    let coordinator = WalCoordinator::create(temp.path(), config.clone()).unwrap();
+    // 48-byte header + 16-byte payload = 64. Two records fill the segment.
+    let mut last = Lsn::ZERO;
+    for _ in 0..3 {
+        last = coordinator
+            .append(WalRecordKind::PageDelta, TxId(1), vec![b'q'; 16])
+            .unwrap()
+            .end_lsn;
+    }
+    assert!(coordinator.flush_all().unwrap() >= last);
+    let first = temp.path().join(format!("{:020}.wal", 1_u64));
+    let len = std::fs::metadata(&first).unwrap().len();
+    assert_eq!(len, segment_bytes, "queued segment grew to {len}");
+    let mut reader = WalReader::new(temp.path(), config);
+    assert_eq!(reader.scan().unwrap().len(), 3);
+}
+
+#[test]
 fn wal_coordinator_flush_until_returns_when_already_durable() {
     let temp = TempDir::new().unwrap();
     let config = WalConfig {

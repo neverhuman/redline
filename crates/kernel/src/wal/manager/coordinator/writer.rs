@@ -73,17 +73,17 @@ pub(super) fn wal_writer_loop(
         }
 
         let mut last_written = Lsn::ZERO;
-        for record in batch {
+        for record in &batch {
             last_written = record.append.end_lsn;
             // Lane GC: accumulate before the write so a torn-write
             // failpoint doesn't desync the counter from durable
             // state — the failure path returns immediately.
             group_records = group_records.saturating_add(1);
             group_bytes = group_bytes.saturating_add(record.encoded.len() as u64);
-            if let Err(_err) = wal.write_encoded(record.append, &record.encoded) {
-                publish_wal_failure(&shared);
-                return;
-            }
+        }
+        if let Err(_err) = wal.write_encoded_batch(&batch) {
+            publish_wal_failure(&shared);
+            return;
         }
         if last_written != Lsn::ZERO {
             publish_written_lsn(&shared, last_written);

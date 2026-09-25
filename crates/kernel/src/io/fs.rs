@@ -1,6 +1,9 @@
 use std::fs::{self, File, OpenOptions};
-use std::io::{Read, Seek, SeekFrom, Write};
+use std::io::{self, ErrorKind};
 use std::path::Path;
+
+#[cfg(unix)]
+use std::os::unix::fs::FileExt;
 
 use crate::Result;
 
@@ -75,15 +78,11 @@ impl FileHandle for StdFileHandle {
     }
 
     fn read_exact_at(&mut self, offset: u64, buf: &mut [u8]) -> Result<()> {
-        self.0.seek(SeekFrom::Start(offset))?;
-        self.0.read_exact(buf)?;
-        Ok(())
+        read_exact_at(&self.0, offset, buf)
     }
 
     fn write_all_at(&mut self, offset: u64, buf: &[u8]) -> Result<()> {
-        self.0.seek(SeekFrom::Start(offset))?;
-        self.0.write_all(buf)?;
-        Ok(())
+        write_all_at(&self.0, offset, buf)
     }
 
     fn sync_data(&self) -> Result<()> {
@@ -94,5 +93,56 @@ impl FileHandle for StdFileHandle {
     fn set_len(&self, len: u64) -> Result<()> {
         self.0.set_len(len)?;
         Ok(())
+    }
+}
+
+#[cfg(unix)]
+fn read_exact_at(file: &File, offset: u64, buf: &mut [u8]) -> Result<()> {
+    let mut filled = 0;
+    while filled < buf.len() {
+        let n = file.read_at(&mut buf[filled..], offset + filled as u64)?;
+        if n == 0 {
+            return Err(
+                io::Error::new(ErrorKind::UnexpectedEof, "failed to fill whole buffer").into(),
+            );
+        }
+        filled += n;
+    }
+    Ok(())
+}
+
+#[cfg(unix)]
+fn write_all_at(file: &File, offset: u64, buf: &[u8]) -> Result<()> {
+    let mut written = 0;
+    while written < buf.len() {
+        let n = file.write_at(&buf[written..], offset + written as u64)?;
+        if n == 0 {
+            return Err(
+                io::Error::new(ErrorKind::WriteZero, "failed to write whole buffer").into(),
+            );
+        }
+        written += n;
+    }
+    Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn positional_reads_do_not_depend_on_write_order() {
+        let dir = tempfile::tempdir().expect("temp dir");
+        let mut file = StdFileSystem
+            .open_rw_create(&dir.path().join("bytes"))
+            .expect("open");
+        file.write_all_at(8, b"xyz").expect("tail");
+        file.write_all_at(0, b"abcd").expect("head");
+        let mut head = [0_u8; 4];
+        let mut tail = [0_u8; 3];
+        file.read_exact_at(0, &mut head).expect("read head");
+        file.read_exact_at(8, &mut tail).expect("read tail");
+        assert_eq!(&head, b"abcd");
+        assert_eq!(&tail, b"xyz");
     }
 }

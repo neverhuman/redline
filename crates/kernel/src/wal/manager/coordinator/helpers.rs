@@ -136,12 +136,12 @@ pub(super) fn drain_until(
         }
 
         let mut last_written = Lsn::ZERO;
-        for record in batch {
+        for record in &batch {
             last_written = record.append.end_lsn;
             totals.records = totals.records.saturating_add(1);
             totals.bytes = totals.bytes.saturating_add(record.encoded.len() as u64);
-            wal.write_encoded(record.append, &record.encoded)?;
         }
+        wal.write_encoded_batch(&batch)?;
         if last_written != Lsn::ZERO {
             publish_written_lsn(shared, last_written);
         }
