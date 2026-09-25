@@ -4,12 +4,21 @@
 //! `simd.rs`. They are deliberately written in the simplest, easiest-to-audit
 //! form. Performance-sensitive callers should go through [`super::simd`].
 //!
-//! All kernels assume the input slices have equal, non-zero length; the public
-//! entry points in `super` already enforce that contract.
+//! Release builds assert equal length before indexing so a shorter slice is
+//! not read past.
 
 /// Alias matching the name used by the HNSW lane (V2). The canonical type is
 /// [`super::VectorMetric`].
 pub type Metric = super::VectorMetric;
+
+#[inline]
+pub(crate) fn require_equal_len(a: &[f32], b: &[f32]) {
+    assert_eq!(
+        a.len(),
+        b.len(),
+        "distance slices must have the same length"
+    );
+}
 
 /// Squared L2 distance: `Σ (a_i - b_i)^2`.
 ///
@@ -18,7 +27,7 @@ pub type Metric = super::VectorMetric;
 /// in tight loops (and matches pgvector's `<->` operator implementation).
 #[inline]
 pub fn l2_distance_scalar(a: &[f32], b: &[f32]) -> f32 {
-    debug_assert_eq!(a.len(), b.len());
+    require_equal_len(a, b);
     let mut acc = 0.0_f32;
     for i in 0..a.len() {
         let d = a[i] - b[i];
@@ -34,7 +43,7 @@ pub fn l2_distance_scalar(a: &[f32], b: &[f32]) -> f32 {
 /// inspect the input themselves.
 #[inline]
 pub fn cosine_distance_scalar(a: &[f32], b: &[f32]) -> f32 {
-    debug_assert_eq!(a.len(), b.len());
+    require_equal_len(a, b);
     let mut dot = 0.0_f32;
     let mut na = 0.0_f32;
     let mut nb = 0.0_f32;
@@ -53,7 +62,7 @@ pub fn cosine_distance_scalar(a: &[f32], b: &[f32]) -> f32 {
 /// Negative inner product (smaller is "closer", matches pgvector `<#>`).
 #[inline]
 pub fn inner_product_scalar(a: &[f32], b: &[f32]) -> f32 {
-    debug_assert_eq!(a.len(), b.len());
+    require_equal_len(a, b);
     let mut acc = 0.0_f32;
     for i in 0..a.len() {
         acc += a[i] * b[i];

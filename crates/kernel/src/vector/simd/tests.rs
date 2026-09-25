@@ -28,6 +28,24 @@ fn rand_vec(n: usize, seed: u64) -> Vec<f32> {
         .collect()
 }
 
+#[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
+#[test]
+fn avx2_kernel_is_armed_only_when_fma_is_present() {
+    let avx2 = std::is_x86_feature_detected!("avx2");
+    let fma = std::is_x86_feature_detected!("fma");
+    assert_eq!(super::host_avx2_fma(), avx2 && fma);
+}
+
+#[test]
+fn unequal_lengths_panic_before_a_vector_load() {
+    let long = [1.0_f32; 9];
+    let short = [1.0_f32; 2];
+    assert!(std::panic::catch_unwind(|| l2_distance(&long, &short)).is_err());
+    assert!(std::panic::catch_unwind(|| cosine_distance(&long, &short)).is_err());
+    assert!(std::panic::catch_unwind(|| inner_product(&short, &long)).is_err());
+    assert!(std::panic::catch_unwind(|| l2_distance_scalar(&long, &short)).is_err());
+}
+
 #[test]
 fn simd_matches_scalar_l2_various_dims() {
     for &dim in &[8usize, 64, 128, 512, 1536] {

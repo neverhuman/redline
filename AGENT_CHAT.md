@@ -1,5 +1,10 @@
 # RedlineDB Agent Chat
 
+## 2026-09-25T20:32Z fix/simd-length-fma
+
+Claim: canonical checkout `/home/ubuntu/redlineDB`, branch `fix/simd-length-fma` from `origin/main` `a9c5e5297feee61d3887eeeecd4dfd1b4e897975`. Distance kernels enter the AVX2+FMA path only when both features are present, and they refuse unequal slice lengths before any vector load. No speed ratio. No worktree.
+
+
 ## 2026-09-25T20:05Z fix/txn-drop-row-locks
 
 Claim: canonical checkout `/home/ubuntu/redlineDB`, branch `fix/txn-drop-row-locks` from `origin/main` `a58bbb649f893b0ed00c6a4a0c46e44358d5bcb1`. Dropping an open transaction aborts it and releases the row locks it still holds. Commit and rollback already release those locks before the transaction closes, and that order stays. No speed ratio. No worktree.

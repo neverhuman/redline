@@ -18,9 +18,9 @@
 //! # SIMD dispatch
 //!
 //! At compile time, AVX2 and NEON impls are gated on `target_feature` /
-//! `target_arch`. At run time, the AVX2 path additionally checks
-//! `is_x86_feature_detected!("avx2")` so binaries built without `-Ctarget-cpu`
-//! still benefit when the host actually supports AVX2.
+//! `target_arch`. At run time, the AVX2+FMA path checks both
+//! `avx2` and `fma`, and every kernel asserts equal slice length before it
+//! loads.
 //!
 //! See `simd.rs` for the dispatcher and `distance.rs` for the scalar
 //! reference implementations used as a correctness oracle.

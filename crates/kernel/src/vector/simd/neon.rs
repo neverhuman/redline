@@ -9,7 +9,7 @@ use std::arch::aarch64::*;
 /// available. The dispatcher in `simd.rs` relies on the fact that NEON is
 /// part of the AArch64 base ISA.
 pub(super) unsafe fn l2_distance_neon(a: &[f32], b: &[f32]) -> f32 {
-    let len = a.len();
+    let len = a.len().min(b.len());
     let lanes = 4;
     let mut acc = vdupq_n_f32(0.0);
     let mut i = 0;
@@ -44,7 +44,7 @@ pub(super) unsafe fn l2_distance_neon(a: &[f32], b: &[f32]) -> f32 {
 /// available. The dispatcher in `simd.rs` relies on the fact that NEON is
 /// part of the AArch64 base ISA.
 pub(super) unsafe fn cosine_distance_neon(a: &[f32], b: &[f32]) -> f32 {
-    let len = a.len();
+    let len = a.len().min(b.len());
     let lanes = 4;
     let mut dot = vdupq_n_f32(0.0);
     let mut na = vdupq_n_f32(0.0);
@@ -87,7 +87,7 @@ pub(super) unsafe fn cosine_distance_neon(a: &[f32], b: &[f32]) -> f32 {
 /// available. The dispatcher in `simd.rs` relies on the fact that NEON is
 /// part of the AArch64 base ISA.
 pub(super) unsafe fn inner_product_neon(a: &[f32], b: &[f32]) -> f32 {
-    let len = a.len();
+    let len = a.len().min(b.len());
     let lanes = 4;
     let mut acc = vdupq_n_f32(0.0);
     let mut i = 0;

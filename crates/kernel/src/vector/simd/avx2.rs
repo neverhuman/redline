@@ -14,10 +14,10 @@ type Avx2Vec = std::arch::x86_64::__m256;
 /// # Safety
 ///
 /// The caller must only invoke this on a CPU where AVX2 and FMA are
-/// available. The dispatcher in `simd.rs` enforces that by checking
-/// `is_x86_feature_detected!("avx2")` first.
+/// available. The dispatcher in `simd.rs` checks both
+/// `avx2` and `fma` before calling. The loop walks `min(a.len(), b.len())`.
 pub(super) unsafe fn l2_distance_avx2(a: &[f32], b: &[f32]) -> f32 {
-    let len = a.len();
+    let len = a.len().min(b.len());
     let lanes = 8;
     let mut acc = _mm256_setzero_ps();
     let mut i = 0;
@@ -50,10 +50,10 @@ pub(super) unsafe fn l2_distance_avx2(a: &[f32], b: &[f32]) -> f32 {
 /// # Safety
 ///
 /// The caller must only invoke this on a CPU where AVX2 and FMA are
-/// available. The dispatcher in `simd.rs` enforces that by checking
-/// `is_x86_feature_detected!("avx2")` first.
+/// available. The dispatcher in `simd.rs` checks both
+/// `avx2` and `fma` before calling. The loop walks `min(a.len(), b.len())`.
 pub(super) unsafe fn cosine_distance_avx2(a: &[f32], b: &[f32]) -> f32 {
-    let len = a.len();
+    let len = a.len().min(b.len());
     let lanes = 8;
     let mut dot = _mm256_setzero_ps();
     let mut na = _mm256_setzero_ps();
@@ -98,10 +98,10 @@ pub(super) unsafe fn cosine_distance_avx2(a: &[f32], b: &[f32]) -> f32 {
 /// # Safety
 ///
 /// The caller must only invoke this on a CPU where AVX2 and FMA are
-/// available. The dispatcher in `simd.rs` enforces that by checking
-/// `is_x86_feature_detected!("avx2")` first.
+/// available. The dispatcher in `simd.rs` checks both
+/// `avx2` and `fma` before calling. The loop walks `min(a.len(), b.len())`.
 pub(super) unsafe fn inner_product_avx2(a: &[f32], b: &[f32]) -> f32 {
-    let len = a.len();
+    let len = a.len().min(b.len());
     let lanes = 8;
     let mut acc = _mm256_setzero_ps();
     let mut i = 0;
