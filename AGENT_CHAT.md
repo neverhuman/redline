@@ -35,6 +35,9 @@ Claim: canonical checkout `/home/ubuntu/redlineDB`, branch `fix/reusable-page-ch
 ## 2026-09-26T01:05Z fix/unregister-snapshot-once
 
 Claim: canonical checkout `/home/ubuntu/redlineDB`, branch `fix/unregister-snapshot-once` from `origin/main` `e220b9a1b0227334d16b5ad37b396a55a63797ee`. Commit, rollback, and drop each remove the active snapshot once. No speed ratio. No worktree. Push only after the earlier local branches.
+## 2026-09-25T23:46Z fix/prefetch-full-cache
+
+Claim: canonical checkout `/home/ubuntu/redlineDB`, branch `fix/prefetch-full-cache` from `origin/main` `e220b9a1b0227334d16b5ad37b396a55a63797ee`. The default buffer policy does not admit a cold prefetch when the cache has no free frame. Prefetch stays advisory. No speed ratio. No worktree. Push only after the earlier local branches.
 
 
 ## 2026-09-25T21:01Z fix/wal-pipeline-short-write

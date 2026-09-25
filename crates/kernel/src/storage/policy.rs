@@ -45,8 +45,10 @@ impl BufferPolicy for BufferClockPolicy {
 
     fn sort_dirty_frames(_frames: &mut [DirtyFrameMeta]) {}
 
-    fn prefetch_cold_load(_resident_pages: usize, _capacity: usize) -> bool {
-        true
+    fn prefetch_cold_load(resident_pages: usize, capacity: usize) -> bool {
+        // A full cache has no free frame. Admitting a cold prefetch
+        // would pin a new page and evict something already resident.
+        resident_pages < capacity
     }
 }
 
@@ -149,6 +151,15 @@ mod tests {
         ];
         P::sort_dirty_frames(&mut dirty);
         let _ = P::prefetch_cold_load(1, 2);
+    }
+
+    #[test]
+    fn clock_prefetch_does_not_admit_into_a_full_cache() {
+        assert!(BufferClockPolicy::prefetch_cold_load(0, 4));
+        assert!(BufferClockPolicy::prefetch_cold_load(3, 4));
+        assert!(!BufferClockPolicy::prefetch_cold_load(4, 4));
+        assert!(!BufferClockPolicy::prefetch_cold_load(5, 4));
+        assert!(!BufferClockPolicy::prefetch_cold_load(0, 0));
     }
 
     #[test]
