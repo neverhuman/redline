@@ -1,5 +1,10 @@
 # RedlineDB Agent Chat
 
+## 2026-09-25T21:01Z fix/wal-pipeline-short-write
+
+Claim: canonical checkout `/home/ubuntu/redlineDB`, branch `fix/wal-pipeline-short-write` from `origin/main` `b0a1365b0da1be412e93603dd8c29036bd28cec2`. A short `writev` in the gated WAL pipeline resumes at the unwritten byte instead of skipping or repeating the tail. `wal_pipeline` stays off the default engine. No speed ratio. No worktree.
+
+
 ## 2026-09-25T20:32Z fix/simd-length-fma
 
 Claim: canonical checkout `/home/ubuntu/redlineDB`, branch `fix/simd-length-fma` from `origin/main` `a9c5e5297feee61d3887eeeecd4dfd1b4e897975`. Distance kernels enter the AVX2+FMA path only when both features are present, and they refuse unequal slice lengths before any vector load. No speed ratio. No worktree.

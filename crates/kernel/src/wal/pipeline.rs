@@ -685,7 +685,7 @@ fn encode_record_zero_crc(record: &WalRecord) -> Vec<u8> {
 /// uses `IoSlice::advance_slices` semantics manually so the hot path
 /// stays a single syscall on the common case (kernel returns full
 /// length).
-fn write_all_vectored(file: &mut File, buffers: &[Vec<u8>]) -> std::io::Result<()> {
+fn write_all_vectored<W: Write>(file: &mut W, buffers: &[Vec<u8>]) -> std::io::Result<()> {
     // Build the iovec once. Linux IOV_MAX is conservatively 1024;
     // batches that exceed that fall through to a sequential
     // write_all loop so we don't have to deal with iovec splitting
@@ -712,19 +712,12 @@ fn write_all_vectored(file: &mut File, buffers: &[Vec<u8>]) -> std::io::Result<(
                     advance -= slices[0].len();
                     slices.remove(0);
                 } else {
-                    // Partial consumption of the first slice — we
-                    // can't mutate IoSlice::len in-place safely
-                    // without unsafe, so reconstruct a sub-slice
-                    // from the underlying buffer index. To avoid
-                    // unsafe and keep this simple, fall back to
-                    // sequential writes for the remainder.
-                    let consumed_in_first = slices[0].len() - advance;
+                    // The first slice was only partly written. `written`
+                    // already counts those bytes, so the tail starts at
+                    // `total - written`. Adding the unwritten prefix back
+                    // in skipped or repeated the remainder.
                     drop(slices);
-                    return write_tail_sequential(
-                        file,
-                        buffers,
-                        total - written + consumed_in_first,
-                    );
+                    return write_tail_sequential(file, buffers, total - written);
                 }
             }
         }
@@ -742,8 +735,8 @@ fn write_all_vectored(file: &mut File, buffers: &[Vec<u8>]) -> std::io::Result<(
 /// Slow path for the partial-write fallback: figure out which buffer
 /// index and offset correspond to the remaining-byte count, then do
 /// sequential writes from there.
-fn write_tail_sequential(
-    file: &mut File,
+fn write_tail_sequential<W: Write>(
+    file: &mut W,
     buffers: &[Vec<u8>],
     remaining: usize,
 ) -> std::io::Result<()> {
@@ -841,6 +834,8 @@ mod tests {
     use super::*;
     use crate::format::TxId;
     use crate::wal::record::WalRecordKind;
+    use std::io::{self, IoSlice, Write};
+    use std::time::Duration;
     use tempfile::tempdir;
 
     fn make_record(payload: &[u8]) -> WalRecord {
@@ -900,5 +895,79 @@ mod tests {
             .expect("ack recv")
             .expect("ack ok");
         assert!(lsn.0 > 0);
+    }
+
+    /// A writer that accepts at most `max_per_call` bytes from each
+    /// `write` or `write_vectored`, so the short-write tail is forced.
+    struct ShortWriter {
+        out: Vec<u8>,
+        max_per_call: usize,
+    }
+
+    impl Write for ShortWriter {
+        fn write(&mut self, buf: &[u8]) -> io::Result<usize> {
+            let n = buf.len().min(self.max_per_call);
+            if n == 0 {
+                return Err(io::Error::new(
+                    io::ErrorKind::WriteZero,
+                    "short writer refused an empty step",
+                ));
+            }
+            self.out.extend_from_slice(&buf[..n]);
+            Ok(n)
+        }
+
+        fn flush(&mut self) -> io::Result<()> {
+            Ok(())
+        }
+
+        fn write_vectored(&mut self, bufs: &[IoSlice<'_>]) -> io::Result<usize> {
+            let mut left = self.max_per_call;
+            let mut wrote = 0;
+            for buf in bufs {
+                if left == 0 {
+                    break;
+                }
+                let n = buf.len().min(left);
+                self.out.extend_from_slice(&buf[..n]);
+                wrote += n;
+                left -= n;
+            }
+            if wrote == 0 {
+                return Err(io::Error::new(
+                    io::ErrorKind::WriteZero,
+                    "short writer refused an empty vector",
+                ));
+            }
+            Ok(wrote)
+        }
+    }
+
+    #[test]
+    fn vectored_short_write_preserves_every_byte() {
+        let buffers = vec![
+            b"abcdefghij".to_vec(),
+            b"0123456789".to_vec(),
+            b"XYZ".to_vec(),
+        ];
+        let expected: Vec<u8> = buffers.iter().flatten().copied().collect();
+        for max_per_call in [1usize, 3, 6, 10] {
+            let mut writer = ShortWriter {
+                out: Vec::new(),
+                max_per_call,
+            };
+            write_all_vectored(&mut writer, &buffers).unwrap();
+            assert_eq!(writer.out, expected, "max_per_call={max_per_call}");
+        }
+        // A short write that ends inside the second record used to
+        // restart that record and drop the tail.
+        let spanned = vec![vec![1, 2, 3, 4], vec![5, 6, 7, 8], vec![9, 10, 11, 12]];
+        let spanned_expected: Vec<u8> = spanned.iter().flatten().copied().collect();
+        let mut writer = ShortWriter {
+            out: Vec::new(),
+            max_per_call: 6,
+        };
+        write_all_vectored(&mut writer, &spanned).unwrap();
+        assert_eq!(writer.out, spanned_expected);
     }
 }
