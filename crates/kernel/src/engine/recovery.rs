@@ -113,7 +113,7 @@ impl Engine {
         }
         let buffer = Arc::clone(&buffer);
         let phase11_counters = Arc::new(Phase11Counters::default());
-        let locks = RowLockManager::new(config.lock_shards, config.busy_timeout);
+        let locks = Arc::new(RowLockManager::new(config.lock_shards, config.busy_timeout));
         // Wave 1A-F: pipe Phase11 telemetry into the row-lock manager so
         // contended-acquire waits land in `lock_wait_us_buckets`. Same
         // Arc piped into the WAL coordinator so `wal_batch_size_buckets`
@@ -266,7 +266,7 @@ impl Engine {
         let recovered_catalog = recover_catalog_snapshot(&scan_report.records, target)?;
         let catalog = CatalogManager::new(recovered_catalog.unwrap_or(initial_catalog));
         let phase11_counters = Arc::new(Phase11Counters::default());
-        let locks = RowLockManager::new(config.lock_shards, config.busy_timeout);
+        let locks = Arc::new(RowLockManager::new(config.lock_shards, config.busy_timeout));
         // Wave 1A-F: same telemetry pipe on the open path.
         locks.set_phase11_counters(Arc::clone(&phase11_counters));
         wal.set_phase11_counters(Arc::clone(&phase11_counters));

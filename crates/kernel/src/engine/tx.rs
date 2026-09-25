@@ -1,6 +1,7 @@
 use crate::catalog::IndexId as CatalogIndexId;
 use crate::catalog::SchemaSnapshot;
 use crate::engine::lock::RowKey;
+use crate::engine::lock::RowLockManager;
 use crate::format::{Csn, TxId};
 use crate::index::BtreeIndex;
 use crate::txn::{Isolation, Snapshot};
@@ -25,6 +26,9 @@ pub struct Txn {
     row_locks: Vec<RowKey>,
     /// Membership for `has_row_lock`. The vec alone is O(n) per probe.
     row_lock_set: HashSet<RowKey>,
+    /// Present for engine transactions so `Drop` can release locks that
+    /// commit and rollback did not already drain.
+    row_lock_manager: Option<Arc<RowLockManager>>,
     open: bool,
     lifecycle: Option<Arc<TxnLifecycle>>,
     /// Lane A5-triggers: depth counter for nested trigger fires. The SQL
@@ -56,6 +60,7 @@ impl Txn {
             pending_index_handles: Vec::new(),
             row_locks: Vec::new(),
             row_lock_set: HashSet::new(),
+            row_lock_manager: None,
             open: true,
             lifecycle: Some(lifecycle),
             trigger_depth: 0,
@@ -147,6 +152,27 @@ impl Txn {
         self.row_lock_set.clear();
         self.row_locks.drain(..)
     }
+
+    pub(crate) fn attach_row_lock_manager(&mut self, locks: Arc<RowLockManager>) {
+        self.row_lock_manager = Some(locks);
+    }
+}
+
+impl Drop for Txn {
+    fn drop(&mut self) {
+        // Abort before unlock so a waiter does not observe this transaction
+        // as still in progress. Commit and rollback already closed it.
+        if let Some(lifecycle) = &self.lifecycle {
+            lifecycle.abort_if_open();
+        }
+        let Some(locks) = self.row_lock_manager.take() else {
+            return;
+        };
+        let tx_id = self.id;
+        for key in self.drain_row_locks() {
+            locks.unlock(key.rel_id, key.row_id, tx_id);
+        }
+    }
 }
 
 #[derive(Debug)]
@@ -170,16 +196,20 @@ impl TxnLifecycle {
             inner.unregister_active(self.tx_id);
         }
     }
-}
 
-impl Drop for TxnLifecycle {
-    fn drop(&mut self) {
+    fn abort_if_open(&self) {
         if !self.closed.swap(true, Ordering::SeqCst)
             && let Some(inner) = self.inner.upgrade()
         {
             inner.abort(self.tx_id);
             inner.unregister_active(self.tx_id);
         }
+    }
+}
+
+impl Drop for TxnLifecycle {
+    fn drop(&mut self) {
+        self.abort_if_open();
     }
 }
 

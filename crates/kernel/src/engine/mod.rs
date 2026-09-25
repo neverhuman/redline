@@ -191,7 +191,7 @@ pub struct Engine {
     heap: PageBackedHeap,
     catalog: CatalogManager,
     catalog_store: CatalogStore,
-    locks: RowLockManager,
+    locks: Arc<RowLockManager>,
     wal: Arc<WalCoordinator>,
     /// Phase 11 Wave 0: engine-level aggregator for the new
     /// telemetry counters. Lives next to `wal` because it is the

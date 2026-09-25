@@ -33,7 +33,9 @@ impl Engine {
         if isolation == Isolation::Serializable {
             return Err(Error::UnsupportedIsolation);
         }
-        Ok(self.txs.begin_txn(isolation))
+        let mut tx = self.txs.begin_txn(isolation);
+        tx.attach_row_lock_manager(Arc::clone(&self.locks));
+        Ok(tx)
     }
 
     pub fn reserve_begin_lock(&self, tx: &mut Txn) -> Result<()> {

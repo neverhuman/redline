@@ -1112,3 +1112,35 @@ fn ddl_rollback_discards_catalog_changes_and_epoch_validation_detects_stale_snap
         Err(Error::SchemaChanged)
     );
 }
+
+#[test]
+fn row_lock_is_released_on_drop_rollback_and_commit() {
+    let (_temp, engine) = test_engine();
+    engine.set_busy_timeout(Duration::from_millis(200));
+
+    let mut holder = engine.begin(Isolation::Snapshot).unwrap();
+    engine.reserve_begin_lock(&mut holder).unwrap();
+    drop(holder);
+    let mut next = engine.begin(Isolation::Snapshot).unwrap();
+    engine
+        .reserve_begin_lock(&mut next)
+        .expect("drop left the begin lock held");
+    engine.rollback(next).unwrap();
+
+    let mut holder = engine.begin(Isolation::Snapshot).unwrap();
+    engine.reserve_begin_lock(&mut holder).unwrap();
+    engine.rollback(holder).unwrap();
+    let mut next = engine.begin(Isolation::Snapshot).unwrap();
+    engine
+        .reserve_begin_lock(&mut next)
+        .expect("rollback left the begin lock held");
+    engine.rollback(next).unwrap();
+
+    let mut holder = engine.begin(Isolation::Snapshot).unwrap();
+    engine.reserve_begin_lock(&mut holder).unwrap();
+    engine.commit(holder).unwrap();
+    let mut next = engine.begin(Isolation::Snapshot).unwrap();
+    engine
+        .reserve_begin_lock(&mut next)
+        .expect("commit left the begin lock held");
+}

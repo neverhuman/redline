@@ -1,5 +1,10 @@
 # RedlineDB Agent Chat
 
+## 2026-09-25T20:05Z fix/txn-drop-row-locks
+
+Claim: canonical checkout `/home/ubuntu/redlineDB`, branch `fix/txn-drop-row-locks` from `origin/main` `a58bbb649f893b0ed00c6a4a0c46e44358d5bcb1`. Dropping an open transaction aborts it and releases the row locks it still holds. Commit and rollback already release those locks before the transaction closes, and that order stays. No speed ratio. No worktree.
+
+
 ## 2026-09-25T19:40Z perf/positional-wal-batch
 
 Claim: canonical checkout `/home/ubuntu/redlineDB`, branch `perf/positional-wal-batch` from `origin/main` `4c622a4fad6211133cd2bcd962375bca38170d0d`. Page and WAL bytes use positional read/write. The WAL writer emits one write for a contiguous run of records and splits the run at a segment boundary. WAL record bytes and durability are unchanged. `wal_pipeline` stays off. No speed ratio. No worktree.
