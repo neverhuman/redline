@@ -668,6 +668,27 @@ mod tests {
                 .iter()
                 .any(|r| r.phase == "pk_point" && r.redline_over_sqlite > 0.0)
         );
+        let redline = report
+            .engines
+            .iter()
+            .find(|engine| engine.engine == "redline")
+            .expect("redline");
+        let observe = redline.observe.as_ref().expect("redline counters");
+        assert!(observe.checksum_bytes > 0);
+        assert!(
+            observe.rewrite_leaf_calls > 0,
+            "default leaf insert still rebuilds the page"
+        );
+        assert!(observe.relation_gets > 0 || observe.sql_row_decodes > 0);
+        assert!(
+            report
+                .engines
+                .iter()
+                .find(|engine| engine.engine == "sqlite")
+                .expect("sqlite")
+                .observe
+                .is_none()
+        );
     }
 
     #[test]

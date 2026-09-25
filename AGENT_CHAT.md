@@ -1,5 +1,9 @@
 # RedlineDB Agent Chat
 
+## 2026-09-24T20:40Z bench/qps-counter-smoke
+
+Claim: canonical checkout `/home/ubuntu/redlineDB`, branch `bench/qps-counter-smoke` from `origin/main` `c90ed5fc1ff3570c5a2d5c712853bec588f5d626`. The queries-per-second smoke test asserts the Redline counter delta is non-zero for checksum bytes, leaf rebuilds, and row gets or decodes. No speed threshold, no scale change, no Postgres, no default SQL change. No worktree.
+
 ## 2026-09-24T19:45Z perf/ci-safe-locks
 
 Claim: canonical checkout `/home/ubuntu/redlineDB`, branch `perf/ci-safe-locks` from `origin/main` `352339d111558ecf3025732b03e336add4dd3596` (pull request 113). Direct leaf insert stays off unless `REDLINEDB_LEAF_DIRECT_INSERT=1`. Tests lock nested-loop join order and `LIMIT 1` against the full scan. Static row batches now honor that LIMIT/OFFSET; a plain table scan was returning every row. No worktree.
