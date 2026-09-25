@@ -3,6 +3,31 @@ use super::select_parallel::{
 };
 use super::*;
 
+/// One visibility load, then project. The unordered heap scan used to
+/// decode each row to drop invisible versions and decode the survivors
+/// again in the table cursor.
+fn visible_table_scan(
+    conn: &Connection,
+    tx: &mut Txn,
+    table: &Arc<TableDef>,
+    plan: &crate::statement::SelectPlan,
+    bindings: &[Option<SqlValue>],
+) -> Result<SelectRuntimeSource> {
+    let loaded = collect_table_rows(conn.engine(), tx, table)?;
+    let mut projected = Vec::with_capacity(loaded.len());
+    for row in loaded {
+        let row = SqlRow::Table(row);
+        if !selection_passes(&plan.selection, &row, bindings)? {
+            continue;
+        }
+        projected.push(project_row(&plan.projection, &row, bindings)?);
+    }
+    Ok(SelectRuntimeSource::StaticRows {
+        rows: Arc::from(projected),
+        cursor: 0,
+    })
+}
+
 pub(super) fn begin_select_tx(conn: &Connection) -> Result<(SelectRuntimeTx, bool)> {
     if let Some(tx_ptr) = current_tx() {
         return Ok((SelectRuntimeTx::Borrowed(tx_ptr), false));
@@ -400,8 +425,12 @@ fn build_select_runtime(
                     } else {
                         selection_rowid_eq(table, &plan.selection, bindings)?
                     };
-                    let rowids = if let Some(rowid) = rowid_candidate {
-                        vec![rowid]
+                    if let Some(rowid) = rowid_candidate {
+                        SelectRuntimeSource::Table {
+                            table: Arc::clone(table),
+                            rowids: vec![rowid],
+                            cursor: 0,
+                        }
                     } else if let Some(matched) = index_access::try_match_index_access_hinted(
                         conn.engine(),
                         table,
@@ -419,24 +448,24 @@ fn build_select_runtime(
                         // executor can satisfy them, but a lagging
                         // schema snapshot can still exist.
                         if index_access::open_handle(conn.engine(), &matched.index).is_some() {
-                            index_access::execute_index_probe(
+                            let rowids = index_access::execute_index_probe(
                                 conn.engine(),
                                 tx,
                                 table,
                                 &matched.index,
                                 &matched.probe,
-                            )?
+                            )?;
+                            SelectRuntimeSource::Table {
+                                table: Arc::clone(table),
+                                rowids,
+                                cursor: 0,
+                            }
                         } else {
-                            collect_table_rowids(conn.engine(), tx, table)?
+                            visible_table_scan(conn, tx, table, plan, bindings)?
                         }
                     } else {
                         let tx = tx.as_mut().expect("tx present");
-                        collect_table_rowids(conn.engine(), tx, table)?
-                    };
-                    SelectRuntimeSource::Table {
-                        table: Arc::clone(table),
-                        rowids,
-                        cursor: 0,
+                        visible_table_scan(conn, tx, table, plan, bindings)?
                     }
                 } else if let Some(rowids) = try_ordered_index_limit_path(
                     conn,

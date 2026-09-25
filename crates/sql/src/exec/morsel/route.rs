@@ -629,14 +629,10 @@ pub(crate) fn execute_routed_scan(
         }
     };
 
-    let rowids = super::super::collect_table_rowids(engine, tx, table)?;
-    let mut out: Vec<Vec<SqlValue>> = Vec::with_capacity(rowids.len());
+    let rows = super::super::collect_table_rows(engine, tx, table)?;
+    let mut out: Vec<Vec<SqlValue>> = Vec::with_capacity(rows.len());
 
-    for rowid in rowids {
-        let Some(fresh) = super::super::load_table_row_by_rowid(engine, tx, table, rowid)? else {
-            continue;
-        };
-
+    for fresh in rows {
         // W4-A3/A5: predicate evaluation before projection. SQL's three-
         // valued comparison: NULL <op> anything = NULL, treated as
         // "not matching" (same as the tuple path's filter). For a

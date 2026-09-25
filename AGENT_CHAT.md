@@ -1,5 +1,9 @@
 # RedlineDB Agent Chat
 
+## 2026-09-25T19:10Z perf/one-pass-scan
+
+Claim: canonical checkout `/home/ubuntu/redlineDB`, branch `perf/one-pass-scan` from `origin/main` `1e21f23caa5842ca2469ec444a6edc4ac4bf36fa`. An unordered table scan keeps the row from the visibility load instead of decoding it again. Index probes stay rowid lookups. Join order and `LIMIT 1` stay as locked. No speed ratio. No worktree.
+
 ## 2026-09-25T18:40Z fix/kernel-p0-gates
 
 Claim: canonical checkout `/home/ubuntu/redlineDB`, branch `fix/kernel-p0-gates` from `origin/main` `76ba2a52c469c8917929418ff1f4fe8f5b6623cf`. Clock eviction can decay a hot clean frame, a free row lock is not granted ahead of a queued waiter, a WAL segment that fills exactly does not grow past its limit, and a morsel arena offset that does not fit in `u32` aborts instead of truncating. No speed claim. No worktree.
