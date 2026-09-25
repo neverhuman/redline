@@ -675,10 +675,6 @@ mod tests {
             .expect("redline");
         let observe = redline.observe.as_ref().expect("redline counters");
         assert!(observe.checksum_bytes > 0);
-        assert!(
-            observe.rewrite_leaf_calls > 0,
-            "default leaf insert still rebuilds the page"
-        );
         assert!(observe.relation_gets > 0 || observe.sql_row_decodes > 0);
         assert!(
             report

@@ -1,5 +1,9 @@
 # RedlineDB Agent Chat
 
+## 2026-09-25T00:40Z perf/leaf-direct-default
+
+Claim: canonical checkout `/home/ubuntu/redlineDB`, branch `perf/leaf-direct-default` from `origin/main` `75ea89c204acd8cd988138815bf88a609e19b7b2`. Non-splitting leaf insert places one cell and checksums once. `REDLINEDB_LEAF_DIRECT_INSERT=0` keeps the full-page rebuild. Durability stays Strict. No worktree.
+
 ## 2026-09-24T20:40Z bench/qps-counter-smoke
 
 Claim: canonical checkout `/home/ubuntu/redlineDB`, branch `bench/qps-counter-smoke` from `origin/main` `c90ed5fc1ff3570c5a2d5c712853bec588f5d626`. The queries-per-second smoke test asserts the Redline counter delta is non-zero for checksum bytes, leaf rebuilds, and row gets or decodes. No speed threshold, no scale change, no Postgres, no default SQL change. No worktree.

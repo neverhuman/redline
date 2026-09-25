@@ -1,7 +1,7 @@
-//! One-cell leaf insert. Off unless `REDLINEDB_LEAF_DIRECT_INSERT=1`.
+//! One-cell leaf insert. On unless `REDLINEDB_LEAF_DIRECT_INSERT=0`.
 //!
-//! The default path still rebuilds the leaf in `rewrite_leaf`. Official
-//! CI does not set the variable, so suite `all` keeps today's pages.
+//! A non-splitting insert places one cell and checksums the page once.
+//! The full-page rebuild remains for splits and for the env override.
 
 use std::cell::Cell;
 
@@ -20,7 +20,8 @@ pub(super) fn direct_leaf_insert_enabled() -> bool {
     }
     std::env::var("REDLINEDB_LEAF_DIRECT_INSERT")
         .ok()
-        .is_some_and(|value| value == "1")
+        .as_deref()
+        != Some("0")
 }
 
 pub(super) fn insert_one_cell(page: &mut Page, slot: usize, entry: &Entry) -> Result<()> {
@@ -62,8 +63,8 @@ mod tests {
     struct ForceGuard;
 
     impl ForceGuard {
-        fn enable() -> Self {
-            force_direct(Some(true));
+        fn set(value: bool) -> Self {
+            force_direct(Some(value));
             Self
         }
     }
@@ -102,18 +103,30 @@ mod tests {
     }
 
     #[test]
+    fn default_direct_insert_is_on_unless_zero() {
+        force_direct(None);
+        let disabled = std::env::var("REDLINEDB_LEAF_DIRECT_INSERT")
+            .ok()
+            .as_deref()
+            == Some("0");
+        assert_eq!(super::direct_leaf_insert_enabled(), !disabled);
+    }
+
+    #[test]
     fn direct_insert_matches_rewrite_and_skips_rebuild() {
+        let _off = ForceGuard::set(false);
         let (_rewrite_dir, rewrite) = fresh(IndexUniqueness::NonUnique).expect("rewrite index");
         let before_rewrite = observe::snapshot();
         fill(&rewrite, 32).expect("rewrite fill");
         let rewrite_calls = observe::snapshot().since(before_rewrite).rewrite_leaf_calls;
+        drop(_off);
 
-        let _guard = ForceGuard::enable();
+        let _on = ForceGuard::set(true);
         let (_direct_dir, direct) = fresh(IndexUniqueness::NonUnique).expect("direct index");
         let before_direct = observe::snapshot();
         fill(&direct, 32).expect("direct fill");
         let direct_calls = observe::snapshot().since(before_direct).rewrite_leaf_calls;
-        drop(_guard);
+        drop(_on);
 
         assert!(rewrite_calls >= 32, "rewrite path rebuilt {rewrite_calls}");
         assert_eq!(direct_calls, 0, "direct path rebuilt the leaf");
@@ -131,13 +144,15 @@ mod tests {
 
     #[test]
     fn direct_unique_conflict_matches_rewrite() {
+        let _off = ForceGuard::set(false);
         let (_rewrite_dir, rewrite) = fresh(IndexUniqueness::Unique).expect("rewrite unique");
         rewrite.insert_unique(1, b"same", row(1, 0)).expect("first");
         let rewrite_err = rewrite
             .insert_unique(1, b"same", row(2, 0))
             .expect_err("conflict");
+        drop(_off);
 
-        let _guard = ForceGuard::enable();
+        let _on = ForceGuard::set(true);
         let (_direct_dir, direct) = fresh(IndexUniqueness::Unique).expect("direct unique");
         direct.insert_unique(1, b"same", row(1, 0)).expect("first");
         let direct_err = direct
