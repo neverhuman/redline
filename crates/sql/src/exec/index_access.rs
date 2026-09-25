@@ -1305,4 +1305,35 @@ mod unique_point_route_tests {
         assert_eq!(n, 40);
         assert_eq!(take_routed_full_scans(), 1);
     }
+
+    #[test]
+    fn primary_key_equality_does_not_full_scan() {
+        let (_dir, conn) = open();
+        conn.execute("CREATE TABLE t(id INTEGER PRIMARY KEY, v INTEGER)")
+            .unwrap();
+        let mut insert = conn
+            .prepare("INSERT INTO t(id, v) VALUES (?1, ?2)")
+            .unwrap();
+        for i in 0..40 {
+            insert.bind_i64(1, i).unwrap();
+            insert.bind_i64(2, i + 500).unwrap();
+            assert_eq!(insert.step().unwrap(), Step::Done);
+            insert.reset().unwrap();
+        }
+        let _ = take_routed_full_scans();
+        assert_eq!(one_integer(&conn, "SELECT v FROM t WHERE id = 20"), 520);
+        assert_eq!(take_routed_full_scans(), 0);
+
+        let _ = take_routed_full_scans();
+        let mut stmt = conn
+            .prepare("SELECT v FROM t NOT INDEXED WHERE id = 20")
+            .unwrap();
+        assert_eq!(stmt.step().unwrap(), Step::Row);
+        assert_eq!(stmt.step().unwrap(), Step::Done);
+        assert_eq!(
+            take_routed_full_scans(),
+            1,
+            "NOT INDEXED keeps the full scan"
+        );
+    }
 }

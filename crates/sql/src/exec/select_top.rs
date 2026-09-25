@@ -297,9 +297,10 @@ fn build_select_runtime(
         fast_path_rows = Some(rows);
     }
 
-    // Routed full scan. A unique point lookup stays on the index path:
-    // it returns one row, so scan order and index order are the same row.
-    // Non-unique matches still scan, which keeps multi-row order stable.
+    // Routed full scan. A unique index point and an integer primary-key
+    // equality each return one row, so they stay on the direct lookup.
+    // NOT INDEXED does not take the rowid shortcut. Non-unique matches
+    // still scan, which keeps multi-row order stable.
     if fast_path_rows.is_none()
         && super::morsel::morsel_route_mode().is_some()
         && let SelectSource::Table(table) = &plan.source
@@ -310,6 +311,7 @@ fn build_select_runtime(
             bindings,
             plan.table_hint.as_ref(),
         )
+        && !rowid_point_preempts_route(table, &plan.selection, bindings, plan.table_hint.as_ref())?
     {
         let tx_ref = tx.as_mut().expect("tx present");
         if let Some(rows) =
@@ -836,6 +838,18 @@ fn temp_schema_rows(conn: &Connection) -> Vec<SqliteSchemaRow> {
             .collect())
     })
     .unwrap_or_default()
+}
+
+fn rowid_point_preempts_route(
+    table: &Arc<redlinedb_kernel::catalog::TableDef>,
+    selection: &Option<Expr>,
+    bindings: &[Option<SqlValue>],
+    hint: Option<&crate::statement::TableAccessHint>,
+) -> Result<bool> {
+    if matches!(hint, Some(crate::statement::TableAccessHint::NotIndexed)) {
+        return Ok(false);
+    }
+    Ok(selection_rowid_eq(table, selection, bindings)?.is_some())
 }
 
 fn table_rows_for_select(

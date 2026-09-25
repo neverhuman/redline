@@ -1,5 +1,10 @@
 # RedlineDB Agent Chat
 
+## 2026-09-25T22:56Z fix/rowid-before-route
+
+Claim: canonical checkout `/home/ubuntu/redlineDB`, branch `fix/rowid-before-route` from `fix/unique-point-before-route` `f5714d8551f6f695da9a7b0ff336846ad7542e3f`. An integer primary-key equality is not answered by the routed full scan. `NOT INDEXED` still does not take that shortcut. Non-unique matches still scan. No speed ratio. No worktree. Do not push this branch ahead of `fix/unique-point-before-route`.
+
+
 ## 2026-09-25T21:29Z fix/unique-point-before-route
 
 Claim: canonical checkout `/home/ubuntu/redlineDB`, branch `fix/unique-point-before-route` from `origin/main` `e220b9a1b0227334d16b5ad37b396a55a63797ee`. A unique index point lookup is not replaced by the routed full scan. Non-unique predicates keep the current scan so unordered multi-row output stays put. No speed ratio. No worktree.
