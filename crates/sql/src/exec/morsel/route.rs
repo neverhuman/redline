@@ -587,6 +587,18 @@ pub(crate) enum MorselColumnKind {
     Text,
 }
 
+#[cfg(test)]
+thread_local! {
+    static ROUTED_FULL_SCANS: std::cell::Cell<u64> = const { std::cell::Cell::new(0) };
+}
+
+/// How many routed full scans the current thread has started since the
+/// last call. Test-only, so parallel tests do not share the count.
+#[cfg(test)]
+pub(crate) fn take_routed_full_scans() -> u64 {
+    ROUTED_FULL_SCANS.with(|count| count.replace(0))
+}
+
 /// W4-A2b: the actual scan-and-emit. Returns `Some(rows)` on a successful
 /// route, `None` if the routing decides at runtime that the tuple path
 /// must handle this query (e.g. a row has a value of the wrong kind for
@@ -629,6 +641,8 @@ pub(crate) fn execute_routed_scan(
         }
     };
 
+    #[cfg(test)]
+    ROUTED_FULL_SCANS.with(|count| count.set(count.get() + 1));
     let rows = super::super::collect_table_rows(engine, tx, table)?;
     let mut out: Vec<Vec<SqlValue>> = Vec::with_capacity(rows.len());
 
