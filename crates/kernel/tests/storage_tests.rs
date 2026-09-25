@@ -137,6 +137,25 @@ fn buffer_pool_eviction_skips_pinned_pages_and_stays_bounded() {
 }
 
 #[test]
+fn buffer_pool_evicts_a_clean_frame_whose_usage_was_saturated() {
+    let temp = TempDir::new().unwrap();
+    let file =
+        Arc::new(PageFile::create(temp.path().join("data.redline"), TEST_PAGE_SIZE).unwrap());
+    let pool = BufferPool::new(Arc::clone(&file), 1).unwrap();
+    let first = pool.allocate(PageKind::Heap, RelId(1)).unwrap();
+    let first_id = first.page_id();
+    first.mark_dirty(Lsn(1)).unwrap();
+    drop(first);
+    pool.flush_page(first_id, Lsn(1)).unwrap();
+    for _ in 0..4 {
+        drop(pool.pin(first_id).unwrap());
+    }
+    let second = pool.allocate(PageKind::Heap, RelId(1)).unwrap();
+    assert_ne!(second.page_id(), first_id);
+    assert_eq!(pool.resident_pages(), 1);
+}
+
+#[test]
 fn buffer_pool_errors_when_all_pages_are_pinned() {
     let temp = TempDir::new().unwrap();
     let file =

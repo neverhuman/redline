@@ -165,6 +165,29 @@ fn wal_reader_scans_across_segment_rollover() {
 }
 
 #[test]
+fn exact_segment_fill_does_not_grow_past_the_limit() {
+    let temp = TempDir::new().unwrap();
+    // Header is 48 bytes. Payload 16 makes each record 64 bytes.
+    // Two records fill a 128-byte segment exactly; the third rotates.
+    let segment_bytes = 128;
+    let config = WalConfig {
+        segment_bytes,
+        ..WalConfig::default()
+    };
+    let mut manager = WalManager::create(temp.path(), config).unwrap();
+    let payload = vec![b'x'; 16];
+    for _ in 0..3 {
+        manager
+            .append(WalRecordKind::PageDelta, TxId(1), payload.clone())
+            .unwrap();
+    }
+    manager.flush().unwrap();
+    let first = temp.path().join(format!("{:020}.wal", 1_u64));
+    let len = std::fs::metadata(&first).unwrap().len();
+    assert_eq!(len, segment_bytes, "first segment grew to {len}");
+}
+
+#[test]
 fn wal_reader_stops_at_truncated_final_record() {
     let temp = TempDir::new().unwrap();
     let config = WalConfig {

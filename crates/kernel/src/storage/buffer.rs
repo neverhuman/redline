@@ -90,6 +90,10 @@ struct FrameEntry {
     ready: Condvar,
 }
 
+/// Clock hand ceiling. `pin` saturates here; `evict_one` must be allowed
+/// this many decays plus one zero-usage visit.
+const CLOCK_MAX_USAGE: u8 = 5;
+
 #[derive(Debug)]
 pub(crate) struct FrameState {
     pub(crate) page: Option<Page>,
@@ -396,7 +400,7 @@ impl Inner {
                     continue;
                 }
                 state.pin_count += 1;
-                state.usage_count = state.usage_count.saturating_add(1).min(5);
+                state.usage_count = state.usage_count.saturating_add(1).min(CLOCK_MAX_USAGE);
                 drop(state);
                 return Ok(PageGuard { page_id, frame });
             }
@@ -611,7 +615,11 @@ impl Inner {
         }
 
         let start = self.clock_hand.fetch_add(1, Ordering::Relaxed);
-        for idx in 0..frames.len().saturating_mul(2) {
+        // Usage climbs to CLOCK_MAX_USAGE on each pin and only falls here.
+        // Two passes cannot decay a hot frame to zero, so a clean unpinned
+        // page was reported as unevictable.
+        let visits = frames.len().saturating_mul(CLOCK_MAX_USAGE as usize + 1);
+        for idx in 0..visits {
             let (page_id, frame) = &frames[(start + idx) % frames.len()];
             let mut state = frame
                 .state

@@ -44,12 +44,14 @@ impl<'a> BytesArena<'a> {
     /// pushes of bounded size cost O(N) total.
     pub fn push(&mut self, bytes: &[u8]) -> usize {
         let idx = self.len();
-        debug_assert!(
-            self.data.len() + bytes.len() <= u32::MAX as usize,
-            "BytesArena overflow"
-        );
+        let end = self
+            .data
+            .len()
+            .checked_add(bytes.len())
+            .expect("BytesArena length overflow");
+        let end_u32 = u32::try_from(end).expect("BytesArena offset does not fit in u32");
         self.data.extend_from_slice(bytes);
-        self.offsets.push(self.data.len() as u32);
+        self.offsets.push(end_u32);
         idx
     }
 
@@ -85,6 +87,16 @@ mod tests {
         assert_eq!(a.get(2), Some(&b""[..]));
         assert_eq!(a.get(3), Some(&b"morsel"[..]));
         assert_eq!(a.get(4), None);
+    }
+
+    #[test]
+    fn an_offset_past_u32_max_does_not_fit() {
+        let past = (u32::MAX as usize).saturating_add(1);
+        assert!(u32::try_from(past).is_err());
+        let bump = Bump::new();
+        let mut arena = BytesArena::new(&bump, 1);
+        arena.push(b"ok");
+        assert_eq!(*arena.offsets.last().unwrap() as usize, arena.data.len());
     }
 
     #[test]

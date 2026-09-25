@@ -1,5 +1,9 @@
 # RedlineDB Agent Chat
 
+## 2026-09-25T18:40Z fix/kernel-p0-gates
+
+Claim: canonical checkout `/home/ubuntu/redlineDB`, branch `fix/kernel-p0-gates` from `origin/main` `76ba2a52c469c8917929418ff1f4fe8f5b6623cf`. Clock eviction can decay a hot clean frame, a free row lock is not granted ahead of a queued waiter, a WAL segment that fills exactly does not grow past its limit, and a morsel arena offset that does not fit in `u32` aborts instead of truncating. No speed claim. No worktree.
+
 ## 2026-09-25T09:00Z docs/parity-record
 
 Claim: canonical checkout `/home/ubuntu/redlineDB`, branch `docs/parity-record` from `origin/main` `d5d1c57bbab97bf43d0b74cdfd0a660aa4bfe6b2`. The Postgres skip list and `docs/beyond-postgres-skips.md` now say the 265-case gate already passes, including the 88 entries that were still marked deferred. No SQL change. No generated README block edit. No worktree.

@@ -81,12 +81,15 @@ impl RowLockManager {
         // Fast path: lock free or already held by us. Touches no FIFO.
         let state = rows.entry(key).or_default();
         match state.owner {
-            None => {
+            // A free row with nobody waiting can be granted immediately.
+            // A free row that already has waiters belongs to the front of
+            // that queue; a newcomer joins the back instead of cutting in.
+            None if state.waiters.is_empty() => {
                 state.owner = Some(tx_id);
                 return Ok(());
             }
             Some(owner) if owner == tx_id => return Ok(()),
-            Some(_) => {}
+            _ => {}
         }
 
         // Slow path: enqueue ourselves onto the per-row FIFO and park
@@ -121,23 +124,22 @@ impl RowLockManager {
             let state = rows.entry(key).or_default();
             match state.owner {
                 None => {
-                    // Confirm the front-of-FIFO targeting: pop ourselves
-                    // off the head if present, then take ownership.
+                    // Only the waiter at the front may take a free lock.
+                    // A spurious wake of someone further back must keep waiting.
                     if state
                         .waiters
                         .front()
                         .is_some_and(|cv| Arc::ptr_eq(cv, &my_cv))
                     {
                         state.waiters.pop_front();
-                    } else {
-                        // Spurious wake; ensure we're still parked.
-                        if !state.waiters.iter().any(|cv| Arc::ptr_eq(cv, &my_cv)) {
-                            state.waiters.push_back(Arc::clone(&my_cv));
-                        }
+                        state.owner = Some(tx_id);
+                        self.record_lock_wait_us(wait_started.elapsed());
+                        return Ok(());
                     }
-                    state.owner = Some(tx_id);
-                    self.record_lock_wait_us(wait_started.elapsed());
-                    return Ok(());
+                    if !state.waiters.iter().any(|cv| Arc::ptr_eq(cv, &my_cv)) {
+                        state.waiters.push_back(Arc::clone(&my_cv));
+                    }
+                    continue;
                 }
                 Some(owner) if owner == tx_id => {
                     // Re-entrant acquire that snuck in — drop our slot.
@@ -298,6 +300,32 @@ mod tests {
                     .collect::<Vec<_>>(),
             );
         }
+    }
+
+    /// A caller that arrives after the holder unlocks must not take the
+    /// row while an earlier waiter is still at the front of the queue.
+    #[test]
+    fn newcomer_does_not_cut_ahead_of_a_queued_waiter() {
+        let mgr = Arc::new(RowLockManager::new(1, Duration::from_secs(5)));
+        let rel_id = RelId(3);
+        let row_id = RowId(9);
+        mgr.lock(rel_id, row_id, TxId(1)).unwrap();
+
+        let mgr_waiter = Arc::clone(&mgr);
+        let order = Arc::new(std::sync::Mutex::new(Vec::new()));
+        let order_waiter = Arc::clone(&order);
+        let waiter = thread::spawn(move || {
+            mgr_waiter.lock(rel_id, row_id, TxId(2)).unwrap();
+            order_waiter.lock().expect("order").push(2);
+            mgr_waiter.unlock(rel_id, row_id, TxId(2));
+        });
+        thread::sleep(Duration::from_millis(100));
+        mgr.unlock(rel_id, row_id, TxId(1));
+        mgr.lock(rel_id, row_id, TxId(3)).unwrap();
+        order.lock().expect("order").push(3);
+        mgr.unlock(rel_id, row_id, TxId(3));
+        waiter.join().unwrap();
+        assert_eq!(*order.lock().expect("order"), vec![2, 3]);
     }
 
     #[test]
