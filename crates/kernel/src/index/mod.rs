@@ -376,8 +376,13 @@ impl BtreeIndex {
             page_lsn: crate::format::Lsn::ZERO,
             page_bytes: page.as_bytes().to_vec(),
         };
+        let install_fence = wal.begin_page_install()?;
         let append = wal.append(WalRecordKind::PageImage, tx_id, payload.encode()?)?;
-        guard.mark_dirty(append.end_lsn)
+        #[cfg(test)]
+        crate::wal::run_before_page_install_hook();
+        let marked = guard.mark_dirty(append.end_lsn);
+        drop(install_fence);
+        marked
     }
 
     pub(super) fn append_index_delta(

@@ -151,8 +151,15 @@ fn publish_staged(
                 page_lsn: Lsn::ZERO,
                 page_bytes: image.as_bytes().to_vec(),
             };
-            wal.append(WalRecordKind::PageImage, tx_id, payload.encode()?)?
-                .end_lsn
+            let install_fence = wal.begin_page_install()?;
+            let lsn = wal
+                .append(WalRecordKind::PageImage, tx_id, payload.encode()?)?
+                .end_lsn;
+            #[cfg(test)]
+            crate::wal::run_before_page_install_hook();
+            let installed = guard.install_dirty(staged, lsn);
+            drop(install_fence);
+            return installed;
         }
         _ => Lsn(1),
     };

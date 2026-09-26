@@ -118,8 +118,9 @@ impl BtreeIndex {
                 }
             }
             if changed {
+                let mut staged = page_ref.clone();
                 Self::rewrite_leaf(
-                    page_ref,
+                    &mut staged,
                     self.descriptor().index_id,
                     &entries,
                     header.left,
@@ -127,11 +128,13 @@ impl BtreeIndex {
                     header.high_key,
                 )?;
                 drop(page);
-                if emit_wal {
-                    // Lane E failpoint: armed before the delete-mark becomes
-                    // durable; verifies that recovery either restores the
-                    // entry (if pre-fsync) or surfaces the tombstone (if
-                    // post-fsync) but never both.
+                let install_fence = match &self.inner.wal {
+                    Some(wal) if emit_wal => Some(wal.begin_page_install()?),
+                    _ => None,
+                };
+                // Armed before the delete mark is installed. A crash here
+                // leaves the live leaf without the tombstone.
+                let publish_lsn = if emit_wal {
                     crate::fail_point!("index::delete");
                     let end_lsn = self.append_index_delta(
                         tx_id,
@@ -142,10 +145,14 @@ impl BtreeIndex {
                             row,
                         },
                     )?;
-                    guard.mark_dirty(end_lsn)?;
+                    #[cfg(test)]
+                    crate::wal::run_before_page_install_hook();
+                    end_lsn
                 } else {
-                    guard.mark_dirty(lsn)?;
-                }
+                    lsn
+                };
+                guard.install_dirty(staged, publish_lsn)?;
+                drop(install_fence);
                 drop(leaf_write);
                 return Ok(());
             }

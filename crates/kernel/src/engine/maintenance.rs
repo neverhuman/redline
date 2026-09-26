@@ -399,4 +399,117 @@ mod tests {
         let after = engine.checkpoint().unwrap();
         assert!(after.checkpoint_lsn > insert_lsn);
     }
+
+    fn small_engine(dir: &std::path::Path) -> Arc<Engine> {
+        Engine::create(
+            dir,
+            EngineConfig {
+                buffer_pool_pages: 32,
+                wal: crate::wal::WalConfig {
+                    group_commit_delay_us: 0,
+                    ..crate::wal::WalConfig::default()
+                },
+                ..EngineConfig::default()
+            },
+        )
+        .unwrap()
+    }
+
+    fn checkpoint_while<R>(
+        engine: &Arc<Engine>,
+        body: impl FnOnce() -> R,
+    ) -> (R, crate::format::Lsn) {
+        let seen = Arc::new(Mutex::new(None));
+        let seen_hook = Arc::clone(&seen);
+        let hook_engine = Arc::clone(engine);
+        set_before_page_install_hook(Some(Box::new(move || {
+            let checkpoint = hook_engine
+                .checkpoint()
+                .expect("checkpoint while the page image is unpublished");
+            *seen_hook.lock().expect("checkpoint lsn") = Some(checkpoint.checkpoint_lsn);
+        })));
+        let result = body();
+        set_before_page_install_hook(None);
+        let during = seen
+            .lock()
+            .expect("seen lsn")
+            .expect("page publish did not checkpoint before install");
+        (result, during)
+    }
+
+    #[test]
+    fn checkpoint_does_not_pass_an_uninstalled_page_image() {
+        let dir = TempDir::new().unwrap();
+        let engine = small_engine(dir.path());
+        let index = BtreeIndex::create_with_wal(
+            Arc::clone(&engine.buffer),
+            IndexDescriptor::new(IndexId(8), RelId(1), IndexUniqueness::NonUnique),
+            engine.page_wal(),
+        )
+        .unwrap();
+        let (_, during) = checkpoint_while(&engine, || {
+            index.record_initial_page_images(TxId(2)).unwrap()
+        });
+        let records = WalReader::new(&engine.wal_dir, engine.config.wal.clone())
+            .scan()
+            .unwrap();
+        let image_lsn = records
+            .iter()
+            .find(|record| {
+                record.kind == WalRecordKind::PageImage
+                    && matches!(
+                        WalPayload::decode(&record.payload).unwrap(),
+                        WalPayload::PageImage { .. }
+                    )
+            })
+            .expect("page image wal record")
+            .lsn;
+        assert!(
+            during <= image_lsn,
+            "checkpoint {during:?} passed unpublished page image {image_lsn:?}"
+        );
+        let after = engine.checkpoint().unwrap();
+        assert!(after.checkpoint_lsn > image_lsn);
+    }
+
+    #[test]
+    fn checkpoint_does_not_pass_an_uninstalled_index_delete() {
+        let dir = TempDir::new().unwrap();
+        let engine = small_engine(dir.path());
+        let index = BtreeIndex::create_with_wal(
+            Arc::clone(&engine.buffer),
+            IndexDescriptor::new(IndexId(9), RelId(1), IndexUniqueness::NonUnique),
+            engine.page_wal(),
+        )
+        .unwrap();
+        let row = IndexRowRef::new(TuplePtr::new_with_generation(
+            PageId(4),
+            1,
+            PageGeneration::ONE,
+        ));
+        index.insert_tx(TxId(1), b"k", row).unwrap();
+        let (_, during) = checkpoint_while(&engine, || {
+            index.delete_mark_tx(TxId(3), b"k", row).unwrap();
+        });
+        let records = WalReader::new(&engine.wal_dir, engine.config.wal.clone())
+            .scan()
+            .unwrap();
+        let delete_lsn = records
+            .iter()
+            .find(|record| {
+                record.kind == WalRecordKind::PageDelta
+                    && matches!(
+                        WalPayload::decode(&record.payload).unwrap(),
+                        WalPayload::IndexDelete { .. }
+                    )
+            })
+            .expect("index delete wal record")
+            .lsn;
+        assert!(
+            during <= delete_lsn,
+            "checkpoint {during:?} passed unpublished index delete {delete_lsn:?}"
+        );
+        let after = engine.checkpoint().unwrap();
+        assert!(after.checkpoint_lsn > delete_lsn);
+    }
 }
