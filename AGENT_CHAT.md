@@ -42,6 +42,10 @@ Claim: canonical checkout `/home/ubuntu/redlineDB`, branch `fix/prefetch-full-ca
 ## 2026-09-26T05:15Z fix/wal-dir-sync
 
 Claim: canonical checkout `/home/ubuntu/redlineDB`, branch `fix/wal-dir-sync` from `origin/main` `e220b9a1b0227334d16b5ad37b396a55a63797ee`. Creating the first WAL segment and rotating to the next one fsyncs the WAL directory so the new file name is durable. No speed ratio. No worktree. Push only after `fix/unique-point-before-route`.
+## 2026-09-26T02:23Z fix/hnsw-wal-before-install
+
+Claim: canonical checkout `/home/ubuntu/redlineDB`, branch `fix/hnsw-wal-before-install` from `origin/main` `e220b9a1b0227334d16b5ad37b396a55a63797ee`. HNSW page updates are staged privately and installed only after the page image is appended. A crash at `vector::hnsw::page_image` leaves the previous graph in place. No speed ratio. No worktree. Push only after the earlier local branches.
+
 
 ## 2026-09-25T21:01Z fix/wal-pipeline-short-write
 

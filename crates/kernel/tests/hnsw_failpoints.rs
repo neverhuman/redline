@@ -23,6 +23,7 @@ use redlinedb_kernel::failpoints;
 use redlinedb_kernel::format::{PageGeneration, PageId, RowId, TuplePtr, TxId};
 use redlinedb_kernel::storage::{BufferPool, PageFile};
 use redlinedb_kernel::vector::hnsw::{HnswIndex, HnswParams, IndexedRowRef};
+use redlinedb_kernel::wal::{WalConfig, WalCoordinator};
 
 fn make_index(temp: &TempDir, dim: usize) -> HnswIndex {
     let page_file = Arc::new(PageFile::create(temp.path().join("data.redline"), 4096).unwrap());
@@ -99,4 +100,56 @@ fn search_beam_step_failpoint_panics_when_armed() {
         result.is_err(),
         "vector::hnsw::search::beam_step must panic when armed"
     );
+}
+
+#[test]
+fn crash_before_page_image_keeps_the_first_node() {
+    let scenario = fail::FailScenario::setup();
+    let temp = TempDir::new().unwrap();
+    let page_file = Arc::new(PageFile::create(temp.path().join("data.redline"), 4096).unwrap());
+    let buffer = Arc::new(BufferPool::new(Arc::clone(&page_file), 256).unwrap());
+    let wal =
+        Arc::new(WalCoordinator::create(temp.path().join("wal"), WalConfig::default()).unwrap());
+    let mut params = HnswParams::standard(4);
+    params.m = 8;
+    params.m_max0 = 16;
+    params.ef_construction = 64;
+    let idx = HnswIndex::create_with_wal(
+        Arc::clone(&buffer),
+        redlinedb_kernel::format::RelId(1),
+        1,
+        params,
+        Some(wal),
+        1,
+    )
+    .unwrap();
+    idx.insert_tx(TxId(1), &[0.1, 0.2, 0.3, 0.4], row_ref(0))
+        .unwrap();
+    let mut before = Vec::new();
+    for id in 1..16_u64 {
+        if let Ok(guard) = buffer.pin(PageId(id)) {
+            let bytes = guard
+                .with_page(|page| Ok(page.as_bytes().to_vec()))
+                .expect("read");
+            before.push((id, bytes));
+        }
+    }
+    assert!(!before.is_empty(), "the first insert must publish pages");
+    failpoints::cfg("vector::hnsw::page_image", "panic").expect("arm page_image");
+    let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+        idx.insert_tx(TxId(2), &[9.0, 9.0, 9.0, 9.0], row_ref(1))
+    }));
+    failpoints::cfg("vector::hnsw::page_image", "off").expect("disarm page_image");
+    drop(scenario);
+    assert!(result.is_err(), "page_image must panic before install");
+    for (id, bytes) in before {
+        let guard = buffer.pin(PageId(id)).expect("pin");
+        let after = guard
+            .with_page(|page| Ok(page.as_bytes().to_vec()))
+            .expect("read");
+        assert_eq!(
+            after, bytes,
+            "page {id} changed before its image was appended"
+        );
+    }
 }

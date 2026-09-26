@@ -8,11 +8,9 @@ pub(crate) fn append_node_to_page(
     tx_id: TxId,
 ) -> Result<u16> {
     let guard = buffer.pin(page_id)?;
-    let slot = guard.with_page_mut(|page| {
-        let bytes = record.encode();
-        page.insert_cell(&bytes)
-    })?;
-    record_page_image(buffer, page_id, wal, tx_id)?;
+    let mut staged = guard.with_page(|page| Ok(page.clone()))?;
+    let slot = staged.insert_cell(&record.encode())?;
+    publish_staged(guard, staged, wal, tx_id)?;
     Ok(slot)
 }
 
@@ -28,12 +26,9 @@ pub(crate) fn overwrite_node_in_page(
     tx_id: TxId,
 ) -> Result<()> {
     let guard = buffer.pin(page_id)?;
-    guard.with_page_mut(|page| {
-        let bytes = record.encode();
-        page.overwrite_cell(slot, &bytes)
-    })?;
-    record_page_image(buffer, page_id, wal, tx_id)?;
-    Ok(())
+    let mut staged = guard.with_page(|page| Ok(page.clone()))?;
+    staged.overwrite_cell(slot, &record.encode())?;
+    publish_staged(guard, staged, wal, tx_id)
 }
 
 /// Rewrite an HNSW data page from a list of records. Used when a record's
@@ -49,31 +44,29 @@ pub(crate) fn rewrite_data_page(
     tx_id: TxId,
 ) -> Result<usize> {
     let guard = buffer.pin(page_id)?;
-    let written = guard.with_page_mut(|page| {
-        let rel_id = page.header()?.rel_id;
-        page.reinitialize_with_special(
-            PageKind::BtreeLeaf,
-            page_id,
-            rel_id,
-            PageGeneration::ONE,
-            HNSW_SPECIAL_LEN,
-        )?;
-        write_data_page_header(page, next_data_page)?;
-        let capacity = data_page_body_capacity(page.as_bytes().len());
-        let mut used = 0_usize;
-        let mut written = 0_usize;
-        for record in records {
-            let cost = node_record_slot_cost(record);
-            if used + cost > capacity {
-                break;
-            }
-            page.insert_cell(&record.encode())?;
-            used += cost;
-            written += 1;
+    let mut staged = guard.with_page(|page| Ok(page.clone()))?;
+    let rel_id = staged.header()?.rel_id;
+    staged.reinitialize_with_special(
+        PageKind::BtreeLeaf,
+        page_id,
+        rel_id,
+        PageGeneration::ONE,
+        HNSW_SPECIAL_LEN,
+    )?;
+    write_data_page_header(&mut staged, next_data_page)?;
+    let capacity = data_page_body_capacity(staged.as_bytes().len());
+    let mut used = 0_usize;
+    let mut written = 0_usize;
+    for record in records {
+        let cost = node_record_slot_cost(record);
+        if used + cost > capacity {
+            break;
         }
-        Ok::<usize, Error>(written)
-    })?;
-    record_page_image(buffer, page_id, wal, tx_id)?;
+        staged.insert_cell(&record.encode())?;
+        used += cost;
+        written += 1;
+    }
+    publish_staged(guard, staged, wal, tx_id)?;
     Ok(written)
 }
 
@@ -136,30 +129,32 @@ pub(crate) fn flush_meta(
     tx_id: TxId,
 ) -> Result<()> {
     let guard = buffer.pin(page_id)?;
-    guard.with_page_mut(|page| write_meta(page, snap))?;
-    record_page_image(buffer, page_id, wal, tx_id)
+    let mut staged = guard.with_page(|page| Ok(page.clone()))?;
+    write_meta(&mut staged, snap)?;
+    publish_staged(guard, staged, wal, tx_id)
 }
 
-fn record_page_image(
-    buffer: &Arc<BufferPool>,
-    page_id: PageId,
+fn publish_staged(
+    guard: crate::storage::PageGuard,
+    staged: crate::format::Page,
     wal: Option<&Arc<WalCoordinator>>,
     tx_id: TxId,
 ) -> Result<()> {
-    let guard = buffer.pin(page_id)?;
-    if tx_id == TxId::ZERO {
-        return guard.mark_dirty(Lsn(1));
-    }
-    let Some(wal) = wal else {
-        return guard.mark_dirty(Lsn(1));
+    let lsn = match wal {
+        Some(wal) if tx_id != TxId::ZERO => {
+            crate::fail_point!("vector::hnsw::page_image");
+            let mut image = staged.clone();
+            image.set_page_lsn(Lsn::ZERO)?;
+            let page_id = image.header()?.page_id;
+            let payload = WalPayload::PageImage {
+                page_id,
+                page_lsn: Lsn::ZERO,
+                page_bytes: image.as_bytes().to_vec(),
+            };
+            wal.append(WalRecordKind::PageImage, tx_id, payload.encode()?)?
+                .end_lsn
+        }
+        _ => Lsn(1),
     };
-    let mut page = guard.with_page(|page| Ok(page.clone()))?;
-    page.set_page_lsn(Lsn::ZERO)?;
-    let payload = WalPayload::PageImage {
-        page_id,
-        page_lsn: Lsn::ZERO,
-        page_bytes: page.as_bytes().to_vec(),
-    };
-    let append = wal.append(WalRecordKind::PageImage, tx_id, payload.encode()?)?;
-    guard.mark_dirty(append.end_lsn)
+    guard.install_dirty(staged, lsn)
 }
