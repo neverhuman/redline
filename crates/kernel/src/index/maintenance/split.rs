@@ -163,22 +163,22 @@ impl BtreeIndex {
                 let body_capacity = self.page_body_capacity(parent_id)?;
                 let required = Self::encoded_entries_len(&entries) + entries.len() * SLOT_LEN;
                 if required <= body_capacity {
-                    guard.with_page_mut(|page| {
-                        Self::rewrite_internal(
-                            page,
-                            meta.index_id,
-                            header.level,
-                            &entries,
-                            header.left,
-                            header.right,
-                            header.high_key.clone(),
-                        )
-                    })?;
-                    if emit_wal {
-                        self.record_page_image(parent_id, tx_id)?;
+                    let mut staged = guard.with_page(|page| Ok(page.clone()))?;
+                    Self::rewrite_internal(
+                        &mut staged,
+                        meta.index_id,
+                        header.level,
+                        &entries,
+                        header.left,
+                        header.right,
+                        header.high_key.clone(),
+                    )?;
+                    let page_lsn = if emit_wal {
+                        self.record_staged_page_image(&staged, tx_id)?
                     } else {
-                        guard.mark_dirty(lsn)?;
-                    }
+                        lsn
+                    };
+                    guard.install_dirty(staged, page_lsn)?;
                     drop(parent_write);
                     return Ok(());
                 }
@@ -201,42 +201,43 @@ impl BtreeIndex {
                     }
                 };
                 let right_separator = self.min_key_for_page(right_left_child)?;
-                guard.with_page_mut(|page| {
-                    Self::rewrite_internal(
-                        page,
-                        meta.index_id,
-                        parent_level,
-                        &left_entries,
-                        header.left,
-                        Some(right_guard.page_id()),
-                        right_separator.clone(),
+                let mut left_page = guard.with_page(|page| Ok(page.clone()))?;
+                Self::rewrite_internal(
+                    &mut left_page,
+                    meta.index_id,
+                    parent_level,
+                    &left_entries,
+                    header.left,
+                    Some(right_guard.page_id()),
+                    right_separator.clone(),
+                )?;
+                let mut right_page = right_guard.with_page(|page| Ok(page.clone()))?;
+                right_page.reinitialize_with_special(
+                    PageKind::BtreeInternal,
+                    right_guard.page_id(),
+                    self.descriptor().rel_id,
+                    PageGeneration::ONE,
+                    INDEX_SPECIAL_LEN,
+                )?;
+                Self::rewrite_internal(
+                    &mut right_page,
+                    meta.index_id,
+                    parent_level,
+                    &right_entries,
+                    Some(right_left_child),
+                    header.right,
+                    header.high_key.clone(),
+                )?;
+                let (left_lsn, right_lsn) = if emit_wal {
+                    (
+                        self.record_staged_page_image(&left_page, tx_id)?,
+                        self.record_staged_page_image(&right_page, tx_id)?,
                     )
-                })?;
-                right_guard.with_page_mut(|page| {
-                    page.reinitialize_with_special(
-                        PageKind::BtreeInternal,
-                        right_guard.page_id(),
-                        self.descriptor().rel_id,
-                        PageGeneration::ONE,
-                        INDEX_SPECIAL_LEN,
-                    )?;
-                    Self::rewrite_internal(
-                        page,
-                        meta.index_id,
-                        parent_level,
-                        &right_entries,
-                        Some(right_left_child),
-                        header.right,
-                        header.high_key.clone(),
-                    )
-                })?;
-                if emit_wal {
-                    self.record_page_image(parent_id, tx_id)?;
-                    self.record_page_image(right_guard.page_id(), tx_id)?;
                 } else {
-                    guard.mark_dirty(lsn)?;
-                    right_guard.mark_dirty(lsn)?;
-                }
+                    (lsn, lsn)
+                };
+                guard.install_dirty(left_page, left_lsn)?;
+                right_guard.install_dirty(right_page, right_lsn)?;
                 drop(right_write);
                 drop(parent_write);
                 current_left = parent_id;
@@ -253,46 +254,45 @@ impl BtreeIndex {
                 .allocate(PageKind::BtreeInternal, rel_id)?;
             let root_latch = self.inner.latches.get(root_guard.page_id());
             let root_write = root_latch.write();
-            root_guard.with_page_mut(|page| {
-                page.reinitialize_with_special(
-                    PageKind::BtreeInternal,
-                    root_guard.page_id(),
-                    rel_id,
-                    PageGeneration::ONE,
-                    INDEX_SPECIAL_LEN,
-                )?;
-                Self::write_page_header(
-                    page,
-                    &PageHeader {
-                        kind: PAGE_INTERNAL_KIND,
-                        level: left_level,
-                        index_id: meta.index_id,
-                        left: Some(current_left),
-                        right: None,
-                        high_key: Vec::new(),
-                    },
-                )?;
-                let entries = vec![Entry::Internal {
-                    separator: current_separator.clone(),
-                    child: current_right,
-                }];
-                Self::rewrite_internal(
-                    page,
-                    meta.index_id,
-                    left_level,
-                    &entries,
-                    Some(current_left),
-                    None,
-                    Vec::new(),
-                )
-            })?;
-            if emit_wal {
-                self.record_page_image(root_guard.page_id(), tx_id)?;
-                self.set_meta_root(root_guard.page_id(), left_level, tx_id, true, lsn)?;
+            let mut root_page = root_guard.with_page(|page| Ok(page.clone()))?;
+            root_page.reinitialize_with_special(
+                PageKind::BtreeInternal,
+                root_guard.page_id(),
+                rel_id,
+                PageGeneration::ONE,
+                INDEX_SPECIAL_LEN,
+            )?;
+            Self::write_page_header(
+                &mut root_page,
+                &PageHeader {
+                    kind: PAGE_INTERNAL_KIND,
+                    level: left_level,
+                    index_id: meta.index_id,
+                    left: Some(current_left),
+                    right: None,
+                    high_key: Vec::new(),
+                },
+            )?;
+            let entries = vec![Entry::Internal {
+                separator: current_separator.clone(),
+                child: current_right,
+            }];
+            Self::rewrite_internal(
+                &mut root_page,
+                meta.index_id,
+                left_level,
+                &entries,
+                Some(current_left),
+                None,
+                Vec::new(),
+            )?;
+            let root_lsn = if emit_wal {
+                self.record_staged_page_image(&root_page, tx_id)?
             } else {
-                root_guard.mark_dirty(lsn)?;
-                self.set_meta_root(root_guard.page_id(), left_level, tx_id, false, lsn)?;
-            }
+                lsn
+            };
+            root_guard.install_dirty(root_page, root_lsn)?;
+            self.set_meta_root(root_guard.page_id(), left_level, tx_id, emit_wal, lsn)?;
             drop(root_write);
             return Ok(());
         }

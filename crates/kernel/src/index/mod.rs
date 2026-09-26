@@ -554,17 +554,17 @@ impl BtreeIndex {
         lsn: crate::format::Lsn,
     ) -> Result<()> {
         let guard = self.inner.buffer.pin(self.inner.meta_page_id)?;
-        guard.with_page_mut(|page| {
-            let mut meta = Self::read_meta(page)?;
-            meta.root_page_id = root_page_id;
-            meta.root_level = root_level;
-            Self::write_meta(page, &meta)
-        })?;
-        if emit_wal {
-            self.record_page_image(self.inner.meta_page_id, tx_id)
+        let mut page = guard.with_page(|page| Ok(page.clone()))?;
+        let mut meta = Self::read_meta(&page)?;
+        meta.root_page_id = root_page_id;
+        meta.root_level = root_level;
+        Self::write_meta(&mut page, &meta)?;
+        let page_lsn = if emit_wal {
+            self.record_staged_page_image(&page, tx_id)?
         } else {
-            guard.mark_dirty(lsn)
-        }
+            lsn
+        };
+        guard.install_dirty(page, page_lsn)
     }
 
     pub(in crate::index) fn read_entries(&self, page: &Page) -> Result<Vec<Entry>> {
