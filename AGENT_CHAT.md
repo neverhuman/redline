@@ -72,6 +72,9 @@ Claim: canonical checkout `/home/ubuntu/redlineDB`, branch `fix/index-insert-rep
 ## 2026-09-26T01:20Z fix/wal-append-one-lock
 
 Claim: canonical checkout `/home/ubuntu/redlineDB`, branch `fix/wal-append-one-lock` from `origin/main` `e220b9a1b0227334d16b5ad37b396a55a63797ee`. A WAL append with the semantic combiner off takes the coordinator mutex once. The combiner-on fold path is unchanged. No speed ratio. No worktree. Push only after the earlier local branches.
+## 2026-09-26T01:37Z fix/split-wal-before-install
+
+Claim: canonical checkout `/home/ubuntu/redlineDB`, branch `fix/split-wal-before-install` from `origin/main` `e220b9a1b0227334d16b5ad37b396a55a63797ee`. A leaf split records both page images before either page is installed. A crash at `index::split_image` leaves the new key off the tree. No speed ratio. No worktree. Push only after the earlier local branches.
 
 
 ## 2026-09-25T21:01Z fix/wal-pipeline-short-write

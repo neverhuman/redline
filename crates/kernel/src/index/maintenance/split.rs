@@ -72,40 +72,41 @@ impl BtreeIndex {
         let right_guard = self.inner.buffer.allocate(PageKind::BtreeLeaf, rel_id)?;
         let right_latch = self.inner.latches.get(right_guard.page_id());
         let right_write = right_latch.write();
-        guard.with_page_mut(|page| {
-            Self::rewrite_leaf(
-                page,
-                index_id,
-                &left_entries,
-                header.left,
-                Some(right_guard.page_id()),
-                left_high.clone(),
+        let mut left_page = guard.with_page(|page| Ok(page.clone()))?;
+        Self::rewrite_leaf(
+            &mut left_page,
+            index_id,
+            &left_entries,
+            header.left,
+            Some(right_guard.page_id()),
+            left_high.clone(),
+        )?;
+        let mut right_page = right_guard.with_page(|page| Ok(page.clone()))?;
+        right_page.reinitialize_with_special(
+            PageKind::BtreeLeaf,
+            right_guard.page_id(),
+            rel_id,
+            PageGeneration::ONE,
+            INDEX_SPECIAL_LEN,
+        )?;
+        Self::rewrite_leaf(
+            &mut right_page,
+            index_id,
+            &right_entries,
+            Some(leaf_id),
+            header.right,
+            header.high_key.clone(),
+        )?;
+        let (left_lsn, right_lsn) = if emit_wal {
+            (
+                self.record_staged_page_image(&left_page, tx_id)?,
+                self.record_staged_page_image(&right_page, tx_id)?,
             )
-        })?;
-        right_guard.with_page_mut(|right_page| {
-            right_page.reinitialize_with_special(
-                PageKind::BtreeLeaf,
-                right_guard.page_id(),
-                rel_id,
-                PageGeneration::ONE,
-                INDEX_SPECIAL_LEN,
-            )?;
-            Self::rewrite_leaf(
-                right_page,
-                index_id,
-                &right_entries,
-                Some(leaf_id),
-                header.right,
-                header.high_key.clone(),
-            )
-        })?;
-        if emit_wal {
-            self.record_page_image(leaf_id, tx_id)?;
-            self.record_page_image(right_guard.page_id(), tx_id)?;
         } else {
-            guard.mark_dirty(lsn)?;
-            right_guard.mark_dirty(lsn)?;
-        }
+            (lsn, lsn)
+        };
+        guard.install_dirty(left_page, left_lsn)?;
+        right_guard.install_dirty(right_page, right_lsn)?;
 
         self.propagate_split(
             ancestors,

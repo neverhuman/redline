@@ -385,6 +385,33 @@ impl BtreeIndex {
         marked
     }
 
+    /// Append a page image from bytes that are not installed yet.
+    /// `index::split_image` fires before the append so a crash leaves
+    /// the live page unchanged.
+    pub(super) fn record_staged_page_image(
+        &self,
+        page: &Page,
+        tx_id: crate::format::TxId,
+    ) -> Result<crate::format::Lsn> {
+        crate::fail_point!("index::split_image");
+        if tx_id == crate::format::TxId::ZERO {
+            return Ok(crate::format::Lsn(1));
+        }
+        let Some(wal) = &self.inner.wal else {
+            return Ok(crate::format::Lsn(1));
+        };
+        let mut image = page.clone();
+        image.set_page_lsn(crate::format::Lsn::ZERO)?;
+        let page_id = image.header()?.page_id;
+        let payload = WalPayload::PageImage {
+            page_id,
+            page_lsn: crate::format::Lsn::ZERO,
+            page_bytes: image.as_bytes().to_vec(),
+        };
+        let append = wal.append(WalRecordKind::PageImage, tx_id, payload.encode()?)?;
+        Ok(append.end_lsn)
+    }
+
     pub(super) fn append_index_delta(
         &self,
         tx_id: crate::format::TxId,
