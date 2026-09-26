@@ -1058,3 +1058,41 @@ fn older_index_page_image_does_not_replace_a_newer_page() {
     index.redo_page_image(newer).unwrap();
     assert!(index.point_lookup(b"kept").is_err());
 }
+
+#[test]
+fn zero_lsn_index_image_still_restores_the_page() {
+    let temp = TempDir::new().unwrap();
+    let page_file = Arc::new(PageFile::create(temp.path().join("data.redline"), 512).unwrap());
+    let buffer = Arc::new(BufferPool::new(Arc::clone(&page_file), 64).unwrap());
+    let index = BtreeIndex::create(
+        Arc::clone(&buffer),
+        IndexDescriptor::new(IndexId(12), RelId(1), IndexUniqueness::NonUnique),
+    )
+    .unwrap();
+    index
+        .insert(
+            b"kept",
+            IndexRowRef::new(TuplePtr::new_with_generation(
+                PageId(41),
+                1,
+                redlinedb_kernel::format::PageGeneration::ONE,
+            )),
+        )
+        .unwrap();
+    let mut image = buffer
+        .pin(PageId(2))
+        .unwrap()
+        .with_page(|page| Ok(page.clone()))
+        .unwrap();
+    image.set_page_lsn(Lsn::ZERO).unwrap();
+    buffer
+        .pin(PageId(2))
+        .unwrap()
+        .with_page_mut(|page| {
+            page.as_mut_bytes_for_io_test()[128] ^= 0xFF;
+            Ok(())
+        })
+        .unwrap();
+    index.redo_page_image(image).unwrap();
+    assert_eq!(index.point_lookup(b"kept").unwrap().len(), 1);
+}

@@ -350,7 +350,10 @@ impl BtreeIndex {
         if let Ok(guard) = self.inner.buffer.pin(page_id) {
             let current =
                 guard.with_page(|resident| resident.header().map(|header| header.page_lsn))?;
-            if current > lsn {
+            // WAL page images store LSN 0; their order is the record LSN,
+            // which this method does not receive. A real LSN that is older
+            // than the resident page must not clobber it.
+            if lsn != crate::format::Lsn::ZERO && current > lsn {
                 return Ok(());
             }
         }
