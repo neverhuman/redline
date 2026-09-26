@@ -4,7 +4,7 @@ use crate::{Error, Result};
 
 use super::super::cells::Entry;
 use super::super::{
-    BtreeIndex, INDEX_SPECIAL_LEN, IndexRowRef, IndexUniqueness, KeyBuf, PAGE_LEAF_KIND,
+    BtreeIndex, INDEX_SPECIAL_LEN, IndexRowRef, KeyBuf, PAGE_LEAF_KIND,
 };
 
 impl BtreeIndex {
@@ -80,11 +80,11 @@ impl BtreeIndex {
                 delete_tx: TxId::ZERO,
             };
             let slot = match entries.binary_search_by(|entry| entry.compare(&candidate)) {
-                Ok(pos) => {
-                    if self.meta()?.uniqueness == IndexUniqueness::Unique {
-                        return Err(Error::WriteConflict);
-                    }
-                    pos
+                Ok(_pos) => {
+                    // Same logical key and row reference are already stored.
+                    drop(page);
+                    drop(leaf_write);
+                    return Ok(());
                 }
                 Err(pos) => pos,
             };

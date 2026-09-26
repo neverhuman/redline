@@ -66,6 +66,9 @@ Claim: canonical checkout `/home/ubuntu/redlineDB`, branch `fix/hnsw-wal-before-
 ## 2026-09-26T02:07Z fix/delete-wal-before-install
 
 Claim: canonical checkout `/home/ubuntu/redlineDB`, branch `fix/delete-wal-before-install` from `origin/main` `e220b9a1b0227334d16b5ad37b396a55a63797ee`. An index delete mark is staged privately and installed only after its WAL record. A crash at `index::delete` leaves the key visible. No speed ratio. No worktree. Push only after the earlier local branches.
+## 2026-09-26T04:32Z fix/index-insert-replay-once
+
+Claim: canonical checkout `/home/ubuntu/redlineDB`, branch `fix/index-insert-replay-once` from `origin/main` `e220b9a1b0227334d16b5ad37b396a55a63797ee`. Inserting an index entry that is already on the leaf does not add a second copy. A different row for the same logical key still inserts. No speed ratio. No worktree. Push only after the earlier local branches.
 
 
 ## 2026-09-25T21:01Z fix/wal-pipeline-short-write
