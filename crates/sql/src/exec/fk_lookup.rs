@@ -114,11 +114,9 @@ pub(super) fn parent_row_exists(
     parent_ords: &[u16],
     key: &[SqlValue],
 ) -> Result<bool> {
-    let rowids = collect_table_rowids(engine, tx, parent)?;
-    for rowid in rowids {
-        if let Some(row) = load_table_row_by_rowid(engine, tx, parent, rowid)?
-            && rows_match(key, &row.values, parent_ords)
-        {
+    let rows = collect_table_rows(engine, tx, parent)?;
+    for row in rows {
+        if rows_match(key, &row.values, parent_ords) {
             return Ok(true);
         }
     }
@@ -155,28 +153,26 @@ pub(super) fn find_child_rows_matching(
     parent_key: &[SqlValue],
 ) -> Result<Vec<(redlinedb_kernel::format::RowId, Vec<SqlValue>)>> {
     let mut hits = Vec::new();
-    let rowids = collect_table_rowids(engine, tx, child)?;
-    for rowid in rowids {
-        if let Some(row) = load_table_row_by_rowid(engine, tx, child, rowid)? {
-            let mut matched = true;
-            for (cord, pv) in child_cols.iter().zip(parent_key.iter()) {
-                let cv = row
-                    .values
-                    .get(*cord as usize)
-                    .cloned()
-                    .unwrap_or(SqlValue::Null);
-                if matches!(cv, SqlValue::Null) || matches!(pv, SqlValue::Null) {
-                    matched = false;
-                    break;
-                }
-                if compare_values(&cv, pv) != std::cmp::Ordering::Equal {
-                    matched = false;
-                    break;
-                }
+    let rows = collect_table_rows(engine, tx, child)?;
+    for row in rows {
+        let mut matched = true;
+        for (cord, pv) in child_cols.iter().zip(parent_key.iter()) {
+            let cv = row
+                .values
+                .get(*cord as usize)
+                .cloned()
+                .unwrap_or(SqlValue::Null);
+            if matches!(cv, SqlValue::Null) || matches!(pv, SqlValue::Null) {
+                matched = false;
+                break;
             }
-            if matched {
-                hits.push((row.rowid, row.values));
+            if compare_values(&cv, pv) != std::cmp::Ordering::Equal {
+                matched = false;
+                break;
             }
+        }
+        if matched {
+            hits.push((row.rowid, row.values));
         }
     }
     Ok(hits)

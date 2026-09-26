@@ -27,16 +27,14 @@ pub(super) fn rewrite_drop_column_rows(
         return Ok(());
     };
 
-    let rowids = collect_table_rowids(conn.engine(), tx, &table)?;
-    if rowids.is_empty() {
+    let rows = collect_table_rows(conn.engine(), tx, &table)?;
+    if rows.is_empty() {
         return Ok(());
     }
 
-    let mut rewrites = Vec::with_capacity(rowids.len());
-    for rowid in rowids {
-        let Some(row) = load_table_row_by_rowid(conn.engine(), tx, &table, rowid)? else {
-            continue;
-        };
+    let mut rewrites = Vec::with_capacity(rows.len());
+    for row in rows {
+        let rowid = row.rowid;
         let mut values = row.values;
         if drop_ordinal as usize >= values.len() {
             return Err(Error::UnsupportedSql(
@@ -54,4 +52,50 @@ pub(super) fn rewrite_drop_column_rows(
     }
 
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use std::time::Duration;
+
+    use tempfile::tempdir;
+
+    use crate::connection::{Database, DbOptions};
+    use crate::exec::tail::take_table_row_loads;
+    use crate::statement::Step;
+
+    #[test]
+    fn drop_column_loads_each_live_row_once() {
+        let dir = tempdir().unwrap();
+        let db = Database::create(
+            dir.path().join("drop-col.db"),
+            DbOptions {
+                busy_timeout: Duration::from_secs(5),
+                ..DbOptions::default()
+            },
+        )
+        .unwrap();
+        let conn = db.connect();
+        conn.execute("CREATE TABLE t(id INTEGER PRIMARY KEY, extra INTEGER, v INTEGER)")
+            .unwrap();
+        let mut insert = conn
+            .prepare("INSERT INTO t(id, extra, v) VALUES (?1, ?2, ?3)")
+            .unwrap();
+        for i in 0..20 {
+            insert.bind_i64(1, i).unwrap();
+            insert.bind_i64(2, i).unwrap();
+            insert.bind_i64(3, i + 10).unwrap();
+            assert_eq!(insert.step().unwrap(), Step::Done);
+            insert.reset().unwrap();
+        }
+        let _ = take_table_row_loads();
+        conn.execute("ALTER TABLE t DROP COLUMN extra").unwrap();
+        assert_eq!(take_table_row_loads(), 20);
+        let mut stmt = conn.prepare("SELECT v FROM t WHERE id = 4").unwrap();
+        assert_eq!(stmt.step().unwrap(), Step::Row);
+        assert_eq!(
+            stmt.column_value(0).unwrap().clone(),
+            crate::value::SqlValue::Integer(14)
+        );
+    }
 }

@@ -92,6 +92,9 @@ Claim: canonical checkout `/home/ubuntu/redlineDB`, branch `fix/evict-durable-pa
 ## 2026-09-26T07:41Z fix/evict-durable-pages
 
 Claim: canonical checkout `/home/ubuntu/redlineDB`, branch `fix/evict-durable-pages` from `origin/main` `e220b9a1b0227334d16b5ad37b396a55a63797ee`. A full buffer can evict a dirty page whose LSN is already durable. Pages ahead of the durable LSN stay. No speed ratio. No worktree. Push only after `fix/unique-point-before-route`.
+## 2026-09-26T12:10Z fix/one-pass-rewrite-loads
+
+Claim: canonical checkout `/home/ubuntu/redlineDB`, branch `fix/one-pass-rewrite-loads` rebased onto `fix/unique-key-columns`. ALTER DROP COLUMN and foreign-key scans keep the row loaded for visibility instead of loading it again. The rowid decode counter and the load counter both stay. No speed ratio. No worktree. Push only after `fix/unique-key-columns`.
 
 ## 2026-09-26T00:50Z fix/unique-key-columns
 
@@ -106,7 +109,6 @@ Claim: canonical checkout `/home/ubuntu/redlineDB`, branch `fix/pk-conflict-with
 ## 2026-09-26T00:19Z fix/rowid-scan-skips-decode
 
 Claim: canonical checkout `/home/ubuntu/redlineDB`, branch `fix/rowid-scan-skips-decode` from `origin/main` `e220b9a1b0227334d16b5ad37b396a55a63797ee`. A rowid-only visibility scan reads the table id and does not decode the whole row. No speed ratio. No worktree. Push only after the earlier local branches.
-
 
 ## 2026-09-25T21:01Z fix/wal-pipeline-short-write
 

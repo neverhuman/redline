@@ -254,12 +254,19 @@ pub(crate) fn collect_table_rowids(
 #[cfg(test)]
 thread_local! {
     static TABLE_ROW_DECODES: std::cell::Cell<u64> = const { std::cell::Cell::new(0) };
+    static TABLE_ROW_LOADS: std::cell::Cell<u64> = const { std::cell::Cell::new(0) };
 }
 
 /// Full row decodes on this thread since the last call.
 #[cfg(test)]
 pub(crate) fn take_table_row_decodes() -> u64 {
     TABLE_ROW_DECODES.with(|count| count.replace(0))
+}
+
+/// Loads started on this thread since the last call. Other tests do not share it.
+#[cfg(test)]
+pub(crate) fn take_table_row_loads() -> u64 {
+    TABLE_ROW_LOADS.with(|count| count.replace(0))
 }
 
 pub(crate) fn load_table_row_by_rowid(
@@ -288,6 +295,8 @@ pub(crate) fn load_table_row_by_rowid(
     let Some(payload) = engine.get_for_relation(tx, table.relation_id, rowid)? else {
         return Ok(None);
     };
+    #[cfg(test)]
+    TABLE_ROW_LOADS.with(|count| count.set(count.get() + 1));
     redlinedb_kernel::observe::add_sql_row_decode();
     #[cfg(test)]
     TABLE_ROW_DECODES.with(|count| count.set(count.get() + 1));

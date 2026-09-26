@@ -30,7 +30,7 @@ use crate::error::Result;
 use crate::session::SessionState;
 use crate::value::SqlValue;
 
-use super::{collect_table_rowids, load_table_row_by_rowid};
+use super::collect_table_rows;
 
 #[path = "fk_actions.rs"]
 mod actions;
@@ -108,11 +108,9 @@ pub(crate) fn foreign_key_check_rows(
         if child.foreign_keys.is_empty() {
             continue;
         }
-        let rowids = collect_table_rowids(conn.engine(), &mut tx, child)?;
-        for rowid in rowids {
-            let Some(row) = load_table_row_by_rowid(conn.engine(), &mut tx, child, rowid)? else {
-                continue;
-            };
+        let live = collect_table_rows(conn.engine(), &mut tx, child)?;
+        for row in live {
+            let rowid = row.rowid;
             for (fk_idx, fk) in child.foreign_keys.iter().enumerate() {
                 if seen.contains(&(child.table_id.0, rowid.0, fk_idx)) {
                     continue;
