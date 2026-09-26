@@ -107,6 +107,14 @@ impl PageBackedHeap {
     }
 
     fn page_has_no_heads(&self, page_id: PageId) -> Result<bool> {
+        for shard in &self.row_dir {
+            let shard = shard
+                .read()
+                .map_err(|_| Error::CorruptPage("row dir shard poisoned"))?;
+            if shard.values().any(|ptr| ptr.page_id == page_id) {
+                return Ok(false);
+            }
+        }
         for shard in &self.relation_row_dir {
             let shard = shard
                 .read()
@@ -180,5 +188,28 @@ impl PageBackedHeap {
             }
         }
         Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::sync::Arc;
+
+    use super::super::super::PageBackedHeap;
+    use crate::format::{Lsn, RelId, TxId};
+    use crate::storage::{BufferPool, PageFile};
+
+    #[test]
+    fn row_dir_head_keeps_the_page_unreusable() {
+        let dir = tempfile::tempdir().unwrap();
+        let page_file = Arc::new(PageFile::create(dir.path().join("data.redline"), 4096).unwrap());
+        let buffer = Arc::new(BufferPool::new(page_file, 8).unwrap());
+        let heap = PageBackedHeap::new(RelId(1), 2, buffer).unwrap();
+        let row = heap.reserve_row_id();
+        heap.insert_with_row_id(TxId(1), row, b"row".to_vec(), Lsn(4))
+            .unwrap();
+        let ptr = heap.head(row).unwrap().unwrap();
+        assert!(heap.remove_relation_head_if(RelId(1), row, ptr).unwrap());
+        assert!(!heap.page_has_no_heads(ptr.page_id).unwrap());
     }
 }

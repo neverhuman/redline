@@ -29,6 +29,9 @@ Claim: canonical checkout `/home/ubuntu/redlineDB`, branch `fix/vacuum-keeps-pag
 ## 2026-09-26T07:03Z fix/index-compact-keeps-lsn
 
 Claim: canonical checkout `/home/ubuntu/redlineDB`, branch `fix/index-compact-keeps-lsn` from `origin/main` `e220b9a1b0227334d16b5ad37b396a55a63797ee`. Leaf compaction and committed-delete pruning keep the page LSN instead of rewriting it to 1. No speed ratio. No worktree. Push only after `fix/unique-point-before-route`.
+## 2026-09-26T18:59Z fix/reusable-page-checks-row-dir
+
+Claim: canonical checkout `/home/ubuntu/redlineDB`, branch `fix/reusable-page-checks-row-dir` from `origin/main` `e220b9a1b0227334d16b5ad37b396a55a63797ee`. A heap page is not reusable while `row_dir` still names it. No speed ratio. No worktree. Push only after `fix/unique-point-before-route`.
 
 ## 2026-09-25T21:01Z fix/wal-pipeline-short-write
 
