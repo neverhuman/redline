@@ -19,6 +19,9 @@ Claim: canonical checkout `/home/ubuntu/redlineDB`, branch `fix/stats-dir-sync` 
 ## 2026-09-26T03:13Z fix/heap-insert-replay-once
 
 Claim: canonical checkout `/home/ubuntu/redlineDB`, branch `fix/heap-insert-replay-once` from `origin/main` `e220b9a1b0227334d16b5ad37b396a55a63797ee`. Replaying a heap insert that is already the row head does not append a second cell. No speed ratio. No worktree. Push only after the earlier local branches.
+## 2026-09-26T03:28Z fix/heap-update-replay-once
+
+Claim: canonical checkout `/home/ubuntu/redlineDB`, branch `fix/heap-update-replay-once` from `origin/main` `e220b9a1b0227334d16b5ad37b396a55a63797ee`. Replaying a heap update or delete that is already the row head does not append another version. No speed ratio. No worktree. Push only after the earlier local branches.
 
 
 ## 2026-09-25T21:01Z fix/wal-pipeline-short-write
