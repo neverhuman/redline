@@ -53,6 +53,41 @@ pub(crate) fn sql_row_table_id(bytes: &[u8]) -> Result<Option<u64>> {
     }
 }
 
+/// Materialise only `ordinals` (table columns, not counting the stored
+/// table id). Missing ordinals stay null. Callers that need every column
+/// use [`decode_sql_row`].
+pub(crate) fn decode_sql_key_columns(
+    bytes: &[u8],
+    ordinals: &[usize],
+    width: usize,
+) -> Result<Option<(u64, Vec<SqlValue>)>> {
+    let record = RecordRef::new(bytes).map_err(|_| Error::DatatypeMismatch)?;
+    let mut scratch = RecordScratch::default();
+    record
+        .decode_into(&mut scratch)
+        .map_err(|_| Error::DatatypeMismatch)?;
+    let table_id = match record
+        .value_at(&scratch, 0)
+        .map_err(|_| Error::DatatypeMismatch)?
+    {
+        ValueRef::Integer(v) => v as u64,
+        _ => return Err(Error::DatatypeMismatch),
+    };
+    let mut values = vec![SqlValue::Null; width];
+    let columns = record.column_count().map_err(|_| Error::DatatypeMismatch)?;
+    for ordinal in ordinals {
+        let slot = ordinal.saturating_add(1);
+        if slot >= columns || *ordinal >= width {
+            continue;
+        }
+        values[*ordinal] = record
+            .value_at(&scratch, slot)
+            .map_err(|_| Error::DatatypeMismatch)?
+            .to_owned();
+    }
+    Ok(Some((table_id, values)))
+}
+
 pub(crate) fn decode_sql_row(bytes: &[u8]) -> Result<Option<(u64, Vec<SqlValue>)>> {
     let record = RecordRef::new(bytes).map_err(|_| Error::DatatypeMismatch)?;
     let mut scratch = RecordScratch::default();

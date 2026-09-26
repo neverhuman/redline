@@ -130,6 +130,19 @@ fn collect_unique_conflicts(
             conflicts,
         );
     }
+    if let Some(ordinals) = plain_key_ordinals(&pending_indexes) {
+        return column_key_conflicts(
+            conn,
+            session,
+            tx,
+            table,
+            values,
+            &pending_indexes,
+            &ordinals,
+            skip_rowid,
+            conflicts,
+        );
+    }
     let rows = collect_table_rows(conn.engine(), tx, table)?;
     for index in pending_indexes {
         let built = crate::exec::index_dml::build_index_key_with_values(table, index, values)?;
@@ -162,6 +175,93 @@ fn collect_unique_conflicts(
                 };
                 conflicts.push(UniqueConflict {
                     rowid: row.rowid,
+                    constraint_name,
+                    key_ordinals: index.keys.iter().map(|key| key.ordinal as usize).collect(),
+                });
+                break;
+            }
+        }
+    }
+    Ok(conflicts)
+}
+
+fn plain_key_ordinals(indexes: &[&redlinedb_kernel::catalog::IndexDef]) -> Option<Vec<usize>> {
+    let mut ordinals = Vec::new();
+    for index in indexes {
+        if index.predicate_sql.is_some() {
+            return None;
+        }
+        for key in &index.keys {
+            match &key.source {
+                redlinedb_kernel::catalog::IndexKeySource::Column { attnum } => {
+                    ordinals.push(*attnum as usize);
+                }
+                _ => return None,
+            }
+        }
+    }
+    ordinals.sort_unstable();
+    ordinals.dedup();
+    Some(ordinals)
+}
+
+fn column_key_conflicts(
+    conn: &Connection,
+    session: &mut SessionState,
+    tx: &mut Txn,
+    table: &Arc<TableDef>,
+    values: &[SqlValue],
+    indexes: &[&redlinedb_kernel::catalog::IndexDef],
+    ordinals: &[usize],
+    skip_rowid: Option<RowId>,
+    mut conflicts: Vec<UniqueConflict>,
+) -> Result<Vec<UniqueConflict>> {
+    let mut scan = conn.engine().relation_rowids(table.relation_id)?;
+    scan.sort();
+    let mut projected = Vec::with_capacity(scan.len());
+    for rowid in scan {
+        let Some(payload) = conn
+            .engine()
+            .get_for_relation(tx, table.relation_id, rowid)?
+        else {
+            continue;
+        };
+        let Some((table_id, row_values)) =
+            decode_sql_key_columns(&payload, ordinals, table.columns.len())?
+        else {
+            continue;
+        };
+        if table_id != table.table_id.0 {
+            continue;
+        }
+        projected.push((rowid, row_values));
+    }
+    for index in indexes {
+        let built = crate::exec::index_dml::build_index_key_with_values(table, index, values)?;
+        if built.key.contains_null {
+            continue;
+        }
+        let lock_key = unique_key_bytes(table.table_id.0, index.index_id.0, &built.values)?;
+        let guard = conn.unique_locks().lock(lock_key, tx.id().0)?;
+        session.unique_guards.push(guard);
+        for (rowid, row_values) in &projected {
+            if skip_rowid == Some(*rowid) {
+                continue;
+            }
+            let other =
+                crate::exec::index_dml::build_index_key_with_values(table, index, row_values)?;
+            if key_values_equal(&built.values, &other.values) {
+                let constraint_name = match table
+                    .constraints
+                    .iter()
+                    .find(|c| c.index_id == Some(index.index_id))
+                    .and_then(|c| c.name.as_deref().map(Arc::<str>::from))
+                {
+                    Some(name) => Some(name),
+                    None => Some(Arc::from(index.name.as_ref())),
+                };
+                conflicts.push(UniqueConflict {
+                    rowid: *rowid,
                     constraint_name,
                     key_ordinals: index.keys.iter().map(|key| key.ordinal as usize).collect(),
                 });
@@ -712,6 +812,45 @@ mod tests {
         assert_eq!(take_table_row_decodes(), 0);
         let err = conn
             .execute("INSERT INTO t(id, v) VALUES (7, 70)")
+            .unwrap_err();
+        assert!(
+            matches!(err, Error::ConstraintViolation(ref message) if message.contains("UNIQUE")),
+            "{err:?}"
+        );
+    }
+
+    #[test]
+    fn unique_key_insert_does_not_decode_other_columns() {
+        let dir = tempdir().unwrap();
+        let db = Database::create(
+            dir.path().join("unique-key.db"),
+            DbOptions {
+                busy_timeout: Duration::from_secs(5),
+                ..DbOptions::default()
+            },
+        )
+        .unwrap();
+        let conn = db.connect();
+        conn.execute("CREATE TABLE t(id INTEGER PRIMARY KEY, k INTEGER UNIQUE, blob TEXT)")
+            .unwrap();
+        let mut insert = conn
+            .prepare("INSERT INTO t(id, k, blob) VALUES (?1, ?2, ?3)")
+            .unwrap();
+        for i in 1..=20 {
+            insert.bind_i64(1, i).unwrap();
+            insert.bind_i64(2, i).unwrap();
+            insert
+                .bind_text(3, "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx")
+                .unwrap();
+            assert_eq!(insert.step().unwrap(), Step::Done);
+            insert.reset().unwrap();
+        }
+        let _ = take_table_row_decodes();
+        conn.execute("INSERT INTO t(id, k, blob) VALUES (21, 21, 'y')")
+            .unwrap();
+        assert_eq!(take_table_row_decodes(), 0);
+        let err = conn
+            .execute("INSERT INTO t(id, k, blob) VALUES (22, 7, 'z')")
             .unwrap_err();
         assert!(
             matches!(err, Error::ConstraintViolation(ref message) if message.contains("UNIQUE")),

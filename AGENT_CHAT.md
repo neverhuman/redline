@@ -93,6 +93,11 @@ Claim: canonical checkout `/home/ubuntu/redlineDB`, branch `fix/evict-durable-pa
 
 Claim: canonical checkout `/home/ubuntu/redlineDB`, branch `fix/evict-durable-pages` from `origin/main` `e220b9a1b0227334d16b5ad37b396a55a63797ee`. A full buffer can evict a dirty page whose LSN is already durable. Pages ahead of the durable LSN stay. No speed ratio. No worktree. Push only after `fix/unique-point-before-route`.
 
+## 2026-09-26T00:50Z fix/unique-key-columns
+
+Claim: canonical checkout `/home/ubuntu/redlineDB`, branch `fix/unique-key-columns` from `fix/pk-conflict-without-decode` `d4d52ee89b01909b2cc8b40c16c48fbd7fa13cc4`. A heap unique check without an index handle reads only the key columns. Push this only after `fix/pk-conflict-without-decode`. No speed ratio. No worktree.
+
+
 ## 2026-09-26T00:35Z fix/pk-conflict-without-decode
 
 Claim: canonical checkout `/home/ubuntu/redlineDB`, branch `fix/pk-conflict-without-decode` from `fix/rowid-scan-skips-decode` `1cd2581743faf95fca695682dc34cf5b9fb4bd4d`. A primary-key conflict check against an unallocated index compares rowids and does not decode every column. Push this only after `fix/rowid-scan-skips-decode`. No speed ratio. No worktree.
