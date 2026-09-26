@@ -119,6 +119,9 @@ Claim: canonical checkout `/home/ubuntu/redlineDB`, branch `fix/catalog-sync-fol
 ## 2026-09-26T03:44Z fix/redo-page-if-newer
 
 Claim: canonical checkout `/home/ubuntu/redlineDB`, branch `fix/redo-page-if-newer` from `origin/main` `e220b9a1b0227334d16b5ad37b396a55a63797ee`. Heap page-image redo does not replace a page whose LSN is already at least the record LSN. No speed ratio. No worktree. Push only after the earlier local branches.
+## 2026-09-26T03:59Z fix/index-redo-if-newer
+
+Claim: canonical checkout `/home/ubuntu/redlineDB`, branch `fix/index-redo-if-newer` from `origin/main` `e220b9a1b0227334d16b5ad37b396a55a63797ee`. Index page-image redo does not replace a page whose LSN is already newer than the image. An image with the same LSN still restores bytes. No speed ratio. No worktree. Push only after the earlier local branches.
 
 
 ## 2026-09-25T21:01Z fix/wal-pipeline-short-write

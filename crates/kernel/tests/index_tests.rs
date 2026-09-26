@@ -1018,3 +1018,43 @@ fn range_scan_terminates_early() {
         "range_scan must not walk every leaf; visited {visits} of {total_leaves}",
     );
 }
+
+#[test]
+fn older_index_page_image_does_not_replace_a_newer_page() {
+    let temp = TempDir::new().unwrap();
+    let page_file = Arc::new(PageFile::create(temp.path().join("data.redline"), 512).unwrap());
+    let buffer = Arc::new(BufferPool::new(Arc::clone(&page_file), 64).unwrap());
+    let wal = Arc::new(
+        redlinedb_kernel::wal::WalCoordinator::create(
+            temp.path().join("wal"),
+            WalConfig::default(),
+        )
+        .unwrap(),
+    );
+    let index = BtreeIndex::create_with_wal(
+        Arc::clone(&buffer),
+        IndexDescriptor::new(IndexId(11), RelId(1), IndexUniqueness::NonUnique),
+        Some(wal),
+    )
+    .unwrap();
+    index
+        .insert_tx(
+            TxId(1),
+            b"kept",
+            IndexRowRef::new(TuplePtr::new_with_generation(
+                PageId(40),
+                1,
+                redlinedb_kernel::format::PageGeneration::ONE,
+            )),
+        )
+        .unwrap();
+    let root = PageId(2);
+    let mut stale = Page::new(512, PageKind::BtreeLeaf, root, RelId(1)).unwrap();
+    stale.set_page_lsn(Lsn(1)).unwrap();
+    index.redo_page_image(stale).unwrap();
+    assert_eq!(index.point_lookup(b"kept").unwrap().len(), 1);
+    let mut newer = Page::new(512, PageKind::BtreeLeaf, root, RelId(1)).unwrap();
+    newer.set_page_lsn(Lsn(u64::MAX)).unwrap();
+    index.redo_page_image(newer).unwrap();
+    assert!(index.point_lookup(b"kept").is_err());
+}

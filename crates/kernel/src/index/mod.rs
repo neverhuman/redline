@@ -345,14 +345,22 @@ impl BtreeIndex {
     }
 
     pub fn redo_page_image(&self, page: Page) -> Result<()> {
-        self.inner.buffer.write_page_direct(&page)?;
         let page_id = page.header()?.page_id;
+        let lsn = page.header()?.page_lsn;
         if let Ok(guard) = self.inner.buffer.pin(page_id) {
-            guard.with_page_mut(|resident| {
-                *resident = page.clone();
-                Ok(())
-            })?;
-            guard.mark_dirty(page.header()?.page_lsn)?;
+            let current =
+                guard.with_page(|resident| resident.header().map(|header| header.page_lsn))?;
+            if current > lsn {
+                return Ok(());
+            }
+        }
+        self.inner.buffer.write_page_direct(&page)?;
+        if let Ok(guard) = self.inner.buffer.pin(page_id) {
+            let current =
+                guard.with_page(|resident| resident.header().map(|header| header.page_lsn))?;
+            if current <= lsn {
+                guard.install_dirty(page, lsn)?;
+            }
         }
         Ok(())
     }
