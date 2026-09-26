@@ -541,10 +541,13 @@ impl HnswIndex {
             Err(Error::PageFull) => {
                 let new_pid = allocate_data_page(&self.inner.buffer, self.inner.rel_id)?;
                 // Chain the previous tail to the new page.
-                self.inner
-                    .buffer
-                    .pin(target_page)?
-                    .with_page_mut(|page| storage::write_data_page_header(page, Some(new_pid)))?;
+                storage::set_data_page_next(
+                    &self.inner.buffer,
+                    target_page,
+                    Some(new_pid),
+                    self.inner.wal.as_ref(),
+                    tx_id,
+                )?;
                 state.last_data_page = Some(new_pid);
                 append_node_to_page(
                     &self.inner.buffer,
@@ -645,14 +648,20 @@ impl HnswIndex {
         // chained after `page_id`.
         let spill_pid = allocate_data_page(&self.inner.buffer, self.inner.rel_id)?;
         // Splice spill_pid into the chain between page_id and its prior next.
-        self.inner
-            .buffer
-            .pin(page_id)?
-            .with_page_mut(|page| storage::write_data_page_header(page, Some(spill_pid)))?;
-        self.inner
-            .buffer
-            .pin(spill_pid)?
-            .with_page_mut(|page| storage::write_data_page_header(page, next_data_page))?;
+        storage::set_data_page_next(
+            &self.inner.buffer,
+            page_id,
+            Some(spill_pid),
+            self.inner.wal.as_ref(),
+            tx_id,
+        )?;
+        storage::set_data_page_next(
+            &self.inner.buffer,
+            spill_pid,
+            next_data_page,
+            self.inner.wal.as_ref(),
+            tx_id,
+        )?;
         let mut spilled_slot = 0_u16;
         for &(node_id, _) in &residents[written..] {
             let record = state.encode_record(node_id)?;

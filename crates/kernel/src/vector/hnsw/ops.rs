@@ -158,3 +158,16 @@ fn publish_staged(
     };
     guard.install_dirty(staged, lsn)
 }
+
+pub(crate) fn set_data_page_next(
+    buffer: &Arc<BufferPool>,
+    page_id: PageId,
+    next: Option<PageId>,
+    wal: Option<&Arc<WalCoordinator>>,
+    tx_id: TxId,
+) -> Result<()> {
+    let guard = buffer.pin(page_id)?;
+    let mut staged = guard.with_page(|page| Ok(page.clone()))?;
+    write_data_page_header(&mut staged, next)?;
+    publish_staged(guard, staged, wal, tx_id)
+}
