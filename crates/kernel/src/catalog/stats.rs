@@ -121,8 +121,38 @@ impl StatsStore {
             file.sync_all()?;
         }
         fs::rename(tmp, &self.path)?;
+        sync_parent(&self.path)?;
         Ok(())
     }
+}
+
+fn sync_parent(path: &Path) -> Result<()> {
+    let Some(parent) = path.parent() else {
+        return Ok(());
+    };
+    if parent.as_os_str().is_empty() {
+        return Ok(());
+    }
+    let dir = fs::File::open(parent)?;
+    dir.sync_all()?;
+    #[cfg(test)]
+    note_stats_dir_sync();
+    Ok(())
+}
+
+#[cfg(test)]
+fn note_stats_dir_sync() {
+    STATS_DIR_SYNCS.with(|count| count.set(count.get().saturating_add(1)));
+}
+
+#[cfg(test)]
+thread_local! {
+    static STATS_DIR_SYNCS: std::cell::Cell<u64> = const { std::cell::Cell::new(0) };
+}
+
+#[cfg(test)]
+fn take_stats_dir_syncs() -> u64 {
+    STATS_DIR_SYNCS.with(|count| count.replace(0))
 }
 
 pub fn encode_snapshot(snapshot: &StatsSnapshot) -> Result<Vec<u8>> {
@@ -185,4 +215,21 @@ pub fn decode_snapshot(bytes: &[u8]) -> Result<StatsSnapshot> {
     }
 
     Ok(snapshot)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{StatsEpoch, StatsSnapshot, StatsStore, take_stats_dir_syncs};
+
+    #[test]
+    fn saving_stats_syncs_the_parent_directory() {
+        let dir = tempfile::tempdir().unwrap();
+        let _ = take_stats_dir_syncs();
+        let store = StatsStore::new(dir.path());
+        let snapshot = StatsSnapshot::empty(StatsEpoch(3));
+        store.save(&snapshot).unwrap();
+        assert_eq!(take_stats_dir_syncs(), 1);
+        let loaded = store.load().unwrap().unwrap();
+        assert_eq!(loaded.epoch, StatsEpoch(3));
+    }
 }
