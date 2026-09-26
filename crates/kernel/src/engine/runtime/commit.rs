@@ -83,6 +83,11 @@ impl Engine {
             CommitDurability::Normal => self.wal.write_until(append.end_lsn),
             CommitDurability::UnsafeDev => Ok(append.end_lsn),
         };
+        if let Ok(lsn) = &commit_barrier
+            && live_durability != CommitDurability::UnsafeDev
+        {
+            self.buffer.note_evict_durable_lsn(*lsn);
+        }
         if let Err(err) = commit_barrier {
             self.txs.cancel_reserved_csn(csn);
             self.txs.abort(tx.id());

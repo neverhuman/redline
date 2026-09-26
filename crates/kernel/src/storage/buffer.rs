@@ -62,6 +62,11 @@ struct Inner {
     // Phase 5 WS-B5: avoid false-sharing with adjacent counters.
     resident: CachePadded<AtomicUsize>,
     clock_hand: AtomicUsize,
+    /// Highest WAL LSN known to be written (Normal) or fsynced (Strict).
+    /// Eviction may flush a dirty page only when its page LSN is at or
+    /// below this value. Starts at zero, so a durable page is not evicted
+    /// until commit or checkpoint publishes the LSN.
+    evict_durable_lsn: AtomicU64,
     eviction: Mutex<()>,
     stats: BufferPoolStatsInner,
 }
@@ -159,6 +164,7 @@ impl BufferPool {
             next_page_id: AtomicU64::new(next_page_id),
             resident: CachePadded::new(AtomicUsize::new(0)),
             clock_hand: AtomicUsize::new(0),
+            evict_durable_lsn: AtomicU64::new(0),
             eviction: Mutex::new(()),
             stats: BufferPoolStatsInner::default(),
         });
@@ -206,6 +212,20 @@ impl BufferPool {
 
     pub fn allocate(&self, kind: PageKind, rel_id: RelId) -> Result<PageGuard> {
         self.inner.allocate(kind, rel_id)
+    }
+
+    /// Remember a WAL LSN that commit or checkpoint has made safe to evict.
+    /// The value only moves forward.
+    pub fn note_evict_durable_lsn(&self, lsn: Lsn) {
+        let atomic = &self.inner.evict_durable_lsn;
+        let mut current = atomic.load(Ordering::Relaxed);
+        while lsn.0 > current {
+            match atomic.compare_exchange_weak(current, lsn.0, Ordering::Release, Ordering::Relaxed)
+            {
+                Ok(_) => break,
+                Err(observed) => current = observed,
+            }
+        }
     }
 
     pub(crate) fn page_size(&self) -> usize {
@@ -364,7 +384,7 @@ fn prefetch_worker(
 
 impl Inner {
     fn allocate(&self, kind: PageKind, rel_id: RelId) -> Result<PageGuard> {
-        self.ensure_capacity(Lsn::ZERO)?;
+        self.ensure_capacity()?;
         let page_id = PageId(self.next_page_id.fetch_add(1, Ordering::Relaxed));
         let page = Page::new(self.page_file.page_size(), kind, page_id, rel_id)?;
         let frame = Arc::new(FrameEntry {
@@ -405,7 +425,7 @@ impl Inner {
                 return Ok(PageGuard { page_id, frame });
             }
 
-            self.ensure_capacity(Lsn::ZERO)?;
+            self.ensure_capacity()?;
             let frame = Arc::new(FrameEntry {
                 state: Mutex::new(FrameState {
                     page: None,
@@ -589,10 +609,11 @@ impl Inner {
         Ok(shard.get(&page_id).cloned())
     }
 
-    fn ensure_capacity(&self, durable_lsn: Lsn) -> Result<()> {
+    fn ensure_capacity(&self) -> Result<()> {
         if self.resident.load(Ordering::Relaxed) < self.capacity {
             return Ok(());
         }
+        let durable_lsn = Lsn(self.evict_durable_lsn.load(Ordering::Acquire));
 
         let _eviction = self
             .eviction

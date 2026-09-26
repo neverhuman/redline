@@ -156,6 +156,29 @@ fn buffer_pool_evicts_a_clean_frame_whose_usage_was_saturated() {
 }
 
 #[test]
+fn buffer_pool_evicts_a_dirty_page_once_its_lsn_is_durable() {
+    let temp = TempDir::new().unwrap();
+    let file =
+        Arc::new(PageFile::create(temp.path().join("data.redline"), TEST_PAGE_SIZE).unwrap());
+    let pool = BufferPool::new(file, 1).unwrap();
+    let first = pool.allocate(PageKind::Heap, RelId(1)).unwrap();
+    let first_id = first.page_id();
+    first.mark_dirty(Lsn(10)).unwrap();
+    drop(first);
+
+    let blocked = pool.allocate(PageKind::Heap, RelId(1)).unwrap_err();
+    assert_eq!(
+        blocked,
+        Error::CorruptPage("no unpinned frame available for eviction")
+    );
+
+    pool.note_evict_durable_lsn(Lsn(10));
+    let second = pool.allocate(PageKind::Heap, RelId(1)).unwrap();
+    assert_ne!(second.page_id(), first_id);
+    assert_eq!(pool.resident_pages(), 1);
+}
+
+#[test]
 fn buffer_pool_errors_when_all_pages_are_pinned() {
     let temp = TempDir::new().unwrap();
     let file =
