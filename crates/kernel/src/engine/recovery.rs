@@ -54,6 +54,11 @@ impl Engine {
         let data_path = path.join(&config.data_file_name);
         let wal_dir = path.join("wal");
         let page_file = Arc::new(PageFile::create(&data_path, config.page_size)?);
+        if !volatile {
+            // The page file name has to be durable before later checkpoints
+            // fsync only the file bytes.
+            sync_page_file_directory(&data_path)?;
+        }
         // W7-perf: for volatile databases use the caller-supplied shard hint so
         // we skip the cgroup walk inside BufferPool::new.  For volatile databases
         // EngineConfig::default() uses fixed baseline values (lock_shards=16,
@@ -195,10 +200,11 @@ impl Engine {
                     .map_err(|_| Error::CorruptPage("open recovered page file failed"))?,
             )
         } else {
-            Arc::new(
-                PageFile::create(&page_path, config.page_size)
-                    .map_err(|_| Error::CorruptPage("create recovered page file failed"))?,
-            )
+            let created = PageFile::create(&page_path, config.page_size)
+                .map_err(|_| Error::CorruptPage("create recovered page file failed"))?;
+            sync_page_file_directory(&page_path)
+                .map_err(|_| Error::CorruptPage("sync page file directory failed"))?;
+            Arc::new(created)
         };
         let buffer = Arc::new(
             BufferPool::new(page_file, config.buffer_pool_pages)
@@ -626,4 +632,47 @@ fn commit_visible(record_lsn: Lsn, csn: Csn, target: RecoveryTarget) -> bool {
 
 fn record_end_lsn(record: &WalRecord) -> Lsn {
     Lsn(record.lsn.0 + record.encoded_len() as u64)
+}
+
+fn sync_page_file_directory(path: &Path) -> Result<()> {
+    let Some(parent) = path.parent() else {
+        return Ok(());
+    };
+    if parent.as_os_str().is_empty() {
+        return Ok(());
+    }
+    crate::storage::sync_parent_dir(parent)
+}
+
+#[cfg(test)]
+mod tests {
+    use tempfile::TempDir;
+
+    use super::{Engine, EngineConfig};
+    use crate::storage::take_parent_dir_syncs;
+
+    fn small_config() -> EngineConfig {
+        EngineConfig {
+            buffer_pool_pages: 16,
+            ..EngineConfig::default()
+        }
+    }
+
+    #[test]
+    fn persistent_create_syncs_the_page_file_directory() {
+        let dir = TempDir::new().unwrap();
+        let _ = take_parent_dir_syncs();
+        let engine = Engine::create(dir.path(), small_config()).unwrap();
+        assert_eq!(take_parent_dir_syncs(), 1);
+        drop(engine);
+    }
+
+    #[test]
+    fn volatile_create_does_not_sync_the_page_file_directory() {
+        let dir = TempDir::new().unwrap();
+        let _ = take_parent_dir_syncs();
+        let engine = Engine::create_volatile(dir.path(), small_config()).unwrap();
+        assert_eq!(take_parent_dir_syncs(), 0);
+        drop(engine);
+    }
 }

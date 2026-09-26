@@ -23,5 +23,17 @@ use crate::Result;
 pub(crate) fn sync_parent_dir(path: &Path) -> Result<()> {
     let file = File::open(path)?;
     file.sync_data()?;
+    #[cfg(test)]
+    PARENT_DIR_SYNCS.with(|count| count.set(count.get().saturating_add(1)));
     Ok(())
+}
+
+#[cfg(test)]
+thread_local! {
+    static PARENT_DIR_SYNCS: std::cell::Cell<u64> = const { std::cell::Cell::new(0) };
+}
+
+#[cfg(test)]
+pub(crate) fn take_parent_dir_syncs() -> u64 {
+    PARENT_DIR_SYNCS.with(|count| count.replace(0))
 }
