@@ -7,6 +7,9 @@ Claim: canonical checkout `/home/ubuntu/redlineDB`, branch `fix/unique-point-bef
 ## 2026-09-27T05:00Z fix/wal-prev-lsn-chain
 
 Claim: canonical checkout `/home/ubuntu/redlineDB`, branch `fix/wal-prev-lsn-chain` from `origin/main` `e220b9a1b0227334d16b5ad37b396a55a63797ee`. WAL scan rejects a record whose `prev_lsn` does not name the previous record in the same scan. The first record of a retained log may point at a pruned predecessor. No speed ratio. No worktree. Push only after `fix/unique-point-before-route`.
+## 2026-09-26T04:58Z fix/wal-shutdown-sync
+
+Claim: canonical checkout `/home/ubuntu/redlineDB`, branch `fix/wal-shutdown-sync` from `origin/main` `e220b9a1b0227334d16b5ad37b396a55a63797ee`. Dropping the WAL coordinator fsyncs bytes that were already written when the queue is empty. `flush_on_shutdown = false` still skips that sync. No speed ratio. No worktree. Push only after `fix/unique-point-before-route`.
 
 ## 2026-09-25T21:01Z fix/wal-pipeline-short-write
 

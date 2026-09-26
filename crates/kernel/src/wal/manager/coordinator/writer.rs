@@ -44,6 +44,20 @@ pub(super) fn wal_writer_loop(
             }
 
             if state.shutdown && state.pending.is_empty() {
+                // Written bytes can sit past durable_lsn with nothing left queued.
+                // Sync them on the way out unless shutdown flush is disabled.
+                let needs_sync = flush_on_shutdown && state.written_lsn > state.durable_lsn;
+                drop(state);
+                if needs_sync
+                    && !sync_written_on_shutdown(
+                        &mut wal,
+                        &shared,
+                        &mut group_records,
+                        &mut group_bytes,
+                    )
+                {
+                    return;
+                }
                 return;
             }
 
@@ -154,31 +168,112 @@ pub(super) fn wal_writer_loop(
                     return;
                 }
             }
-        } else if shutdown && flush_on_shutdown && last_written != Lsn::ZERO {
-            match wal.flush() {
-                Ok(durable_lsn) => {
-                    // Lane GC: shutdown drain still counts as a
-                    // group commit if it actually fsynced records.
-                    if let Some(counters) = wal.sync_counters.as_ref()
-                        && group_records > 0
-                    {
-                        counters.record_group_commit(group_records, group_bytes);
-                    }
-                    bump_phase11_wal_batch(&shared, group_records);
-                    group_records = 0;
-                    group_bytes = 0;
-                    if let Ok(mut state) = shared.state.lock() {
-                        state.durable_lsn = durable_lsn;
-                        shared.cvar.notify_all();
-                    } else {
-                        return;
-                    }
-                }
-                Err(_err) => {
-                    publish_wal_failure(&shared);
-                    return;
-                }
+        } else if shutdown
+            && flush_on_shutdown
+            && last_written != Lsn::ZERO
+            && !sync_written_on_shutdown(&mut wal, &shared, &mut group_records, &mut group_bytes)
+        {
+            return;
+        }
+    }
+}
+
+fn sync_written_on_shutdown(
+    wal: &mut WalManager,
+    shared: &Arc<WalCoordinatorShared>,
+    group_records: &mut u64,
+    group_bytes: &mut u64,
+) -> bool {
+    match wal.flush() {
+        Ok(durable_lsn) => {
+            if let Some(counters) = wal.sync_counters.as_ref()
+                && *group_records > 0
+            {
+                counters.record_group_commit(*group_records, *group_bytes);
+            }
+            bump_phase11_wal_batch(shared, *group_records);
+            *group_records = 0;
+            *group_bytes = 0;
+            if let Ok(mut state) = shared.state.lock() {
+                state.durable_lsn = durable_lsn;
+                shared.cvar.notify_all();
+                true
+            } else {
+                false
             }
         }
+        Err(_err) => {
+            publish_wal_failure(shared);
+            false
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::sync::Arc;
+
+    use tempfile::TempDir;
+
+    use crate::format::TxId;
+    use crate::wal::{WalConfig, WalCoordinator, WalRecordKind};
+
+    fn config() -> WalConfig {
+        WalConfig {
+            segment_bytes: 1024 * 1024,
+            group_commit_delay_us: 0,
+            ..WalConfig::default()
+        }
+    }
+
+    fn write_without_flush(flush_on_shutdown: bool) -> (TempDir, WalCoordinator) {
+        let dir = TempDir::new().unwrap();
+        let coord =
+            WalCoordinator::create_with_shutdown_flush(dir.path(), config(), flush_on_shutdown)
+                .unwrap();
+        let append = coord
+            .append(WalRecordKind::Begin, TxId(1), b"begin".to_vec())
+            .unwrap();
+        let written = coord.write_until(append.end_lsn).unwrap();
+        assert!(written >= append.end_lsn);
+        assert!(coord.durable_lsn().unwrap() < append.end_lsn);
+        assert_eq!(coord.sync_counters_snapshot().fdatasyncs_issued, 0);
+        (dir, coord)
+    }
+
+    #[test]
+    fn shutdown_fsyncs_records_already_written() {
+        let (dir, coord) = write_without_flush(true);
+        let counters = Arc::clone(&coord.sync_counters);
+        drop(coord);
+        let snap = counters.snapshot();
+        assert_eq!(snap.fdatasyncs_issued, 1);
+        assert_eq!(snap.group_commits_issued, 1);
+        drop(dir);
+    }
+
+    #[test]
+    fn shutdown_skips_fsync_when_disabled() {
+        let (dir, coord) = write_without_flush(false);
+        let counters = Arc::clone(&coord.sync_counters);
+        drop(coord);
+        assert_eq!(counters.snapshot().fdatasyncs_issued, 0);
+        drop(dir);
+    }
+
+    #[test]
+    fn shutdown_does_not_fsync_again_when_already_durable() {
+        let dir = TempDir::new().unwrap();
+        let coord = WalCoordinator::create(dir.path(), config()).unwrap();
+        let append = coord
+            .append(WalRecordKind::Begin, TxId(1), b"begin".to_vec())
+            .unwrap();
+        coord.flush_until(append.end_lsn).unwrap();
+        let before = coord.sync_counters_snapshot().fdatasyncs_issued;
+        assert_eq!(before, 1);
+        let counters = Arc::clone(&coord.sync_counters);
+        drop(coord);
+        assert_eq!(counters.snapshot().fdatasyncs_issued, before);
+        drop(dir);
     }
 }
