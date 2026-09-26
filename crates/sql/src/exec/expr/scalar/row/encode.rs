@@ -37,6 +37,22 @@ pub(crate) fn encode_sql_row(table_id: u64, values: &[SqlValue]) -> Result<Vec<u
     Ok(out)
 }
 
+/// Table id stored in column 0. Does not allocate the other column values.
+pub(crate) fn sql_row_table_id(bytes: &[u8]) -> Result<Option<u64>> {
+    let record = RecordRef::new(bytes).map_err(|_| Error::DatatypeMismatch)?;
+    let mut scratch = RecordScratch::default();
+    record
+        .decode_into(&mut scratch)
+        .map_err(|_| Error::DatatypeMismatch)?;
+    match record
+        .value_at(&scratch, 0)
+        .map_err(|_| Error::DatatypeMismatch)?
+    {
+        ValueRef::Integer(v) => Ok(Some(v as u64)),
+        _ => Err(Error::DatatypeMismatch),
+    }
+}
+
 pub(crate) fn decode_sql_row(bytes: &[u8]) -> Result<Option<(u64, Vec<SqlValue>)>> {
     let record = RecordRef::new(bytes).map_err(|_| Error::DatatypeMismatch)?;
     let mut scratch = RecordScratch::default();

@@ -93,6 +93,11 @@ Claim: canonical checkout `/home/ubuntu/redlineDB`, branch `fix/evict-durable-pa
 
 Claim: canonical checkout `/home/ubuntu/redlineDB`, branch `fix/evict-durable-pages` from `origin/main` `e220b9a1b0227334d16b5ad37b396a55a63797ee`. A full buffer can evict a dirty page whose LSN is already durable. Pages ahead of the durable LSN stay. No speed ratio. No worktree. Push only after `fix/unique-point-before-route`.
 
+## 2026-09-26T00:19Z fix/rowid-scan-skips-decode
+
+Claim: canonical checkout `/home/ubuntu/redlineDB`, branch `fix/rowid-scan-skips-decode` from `origin/main` `e220b9a1b0227334d16b5ad37b396a55a63797ee`. A rowid-only visibility scan reads the table id and does not decode the whole row. No speed ratio. No worktree. Push only after the earlier local branches.
+
+
 ## 2026-09-25T21:01Z fix/wal-pipeline-short-write
 
 Claim: canonical checkout `/home/ubuntu/redlineDB`, branch `fix/wal-pipeline-short-write` from `origin/main` `b0a1365b0da1be412e93603dd8c29036bd28cec2`. A short `writev` in the gated WAL pipeline resumes at the unwritten byte instead of skipping or repeating the tail. `wal_pipeline` stays off the default engine. No speed ratio. No worktree.

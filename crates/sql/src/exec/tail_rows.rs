@@ -241,11 +241,25 @@ pub(crate) fn collect_table_rowids(
     let mut scan = engine.relation_rowids(table.relation_id)?;
     scan.sort();
     for rowid in scan {
-        if load_table_row_by_rowid(engine, tx, table, rowid)?.is_some() {
+        let Some(payload) = engine.get_for_relation(tx, table.relation_id, rowid)? else {
+            continue;
+        };
+        if sql_row_table_id(&payload)? == Some(table.table_id.0) {
             rowids.push(rowid);
         }
     }
     Ok(rowids)
+}
+
+#[cfg(test)]
+thread_local! {
+    static TABLE_ROW_DECODES: std::cell::Cell<u64> = const { std::cell::Cell::new(0) };
+}
+
+/// Full row decodes on this thread since the last call.
+#[cfg(test)]
+pub(crate) fn take_table_row_decodes() -> u64 {
+    TABLE_ROW_DECODES.with(|count| count.replace(0))
 }
 
 pub(crate) fn load_table_row_by_rowid(
@@ -275,6 +289,8 @@ pub(crate) fn load_table_row_by_rowid(
         return Ok(None);
     };
     redlinedb_kernel::observe::add_sql_row_decode();
+    #[cfg(test)]
+    TABLE_ROW_DECODES.with(|count| count.set(count.get() + 1));
     let Some((table_id, values)) = decode_sql_row(&payload)? else {
         return Ok(None);
     };
@@ -349,4 +365,57 @@ pub(crate) fn selection_rowid_eq(
         bindings,
         |expr, bindings| eval_scalar(expr, &RowContext::Empty, bindings),
     )
+}
+
+#[cfg(test)]
+mod tests {
+    use std::time::Duration;
+
+    use tempfile::tempdir;
+
+    use redlinedb_kernel::txn::Isolation;
+
+    use crate::connection::{Database, DbOptions};
+    use crate::statement::Step;
+
+    use super::{collect_table_rowids, take_table_row_decodes};
+
+    #[test]
+    fn rowid_scan_does_not_decode_column_values() {
+        let dir = tempdir().unwrap();
+        let db = Database::create(
+            dir.path().join("rowid-scan.db"),
+            DbOptions {
+                busy_timeout: Duration::from_secs(5),
+                ..DbOptions::default()
+            },
+        )
+        .unwrap();
+        let conn = db.connect();
+        conn.execute("CREATE TABLE t(id INTEGER PRIMARY KEY, v INTEGER)")
+            .unwrap();
+        let mut insert = conn
+            .prepare("INSERT INTO t(id, v) VALUES (?1, ?2)")
+            .unwrap();
+        for i in 0..20 {
+            insert.bind_i64(1, i).unwrap();
+            insert.bind_i64(2, i + 7).unwrap();
+            assert_eq!(insert.step().unwrap(), Step::Done);
+            insert.reset().unwrap();
+        }
+        let mut tx = conn.engine().begin(Isolation::Snapshot).unwrap();
+        let table = conn
+            .engine()
+            .schema_snapshot_for_tx(&tx)
+            .tables
+            .iter()
+            .find(|table| table.name.as_ref() == "t")
+            .cloned()
+            .unwrap();
+        let _ = take_table_row_decodes();
+        let ids = collect_table_rowids(conn.engine(), &mut tx, &table).unwrap();
+        assert_eq!(ids.len(), 20);
+        assert_eq!(take_table_row_decodes(), 0);
+        conn.engine().rollback(tx).unwrap();
+    }
 }
