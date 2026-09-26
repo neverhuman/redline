@@ -83,10 +83,10 @@ impl Engine {
             CommitDurability::Normal => self.wal.write_until(append.end_lsn),
             CommitDurability::UnsafeDev => Ok(append.end_lsn),
         };
-        if let Ok(lsn) = &commit_barrier
-            && live_durability != CommitDurability::UnsafeDev
-        {
-            self.buffer.note_evict_durable_lsn(*lsn);
+        // `flush_until` / `write_until` return the durable high water, which
+        // can be past this commit. Eviction may cover only this commit's LSN.
+        if commit_barrier.is_ok() && live_durability != CommitDurability::UnsafeDev {
+            self.buffer.note_evict_durable_lsn(append.end_lsn);
         }
         if let Err(err) = commit_barrier {
             self.txs.cancel_reserved_csn(csn);

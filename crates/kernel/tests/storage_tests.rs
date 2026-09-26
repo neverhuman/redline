@@ -172,6 +172,13 @@ fn buffer_pool_evicts_a_dirty_page_once_its_lsn_is_durable() {
         Error::CorruptPage("no unpinned frame available for eviction")
     );
 
+    pool.note_evict_durable_lsn(Lsn(9));
+    let still_blocked = pool.allocate(PageKind::Heap, RelId(1)).unwrap_err();
+    assert_eq!(
+        still_blocked,
+        Error::CorruptPage("no unpinned frame available for eviction")
+    );
+
     pool.note_evict_durable_lsn(Lsn(10));
     let second = pool.allocate(PageKind::Heap, RelId(1)).unwrap();
     assert_ne!(second.page_id(), first_id);

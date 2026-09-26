@@ -212,7 +212,6 @@ impl Engine {
         // Do not record a checkpoint past a WAL record whose page image is
         // still unpublished. Recovery would skip that record.
         let checkpoint_lsn = self.wal.checkpoint_horizon(durable_lsn)?;
-        self.buffer.note_evict_durable_lsn(durable_lsn);
         let flush = self
             .heap
             .flush_dirty_batches(checkpoint_lsn, DEFAULT_CHECKPOINT_BATCH_PAGES)?;

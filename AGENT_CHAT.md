@@ -80,6 +80,9 @@ Claim: canonical checkout `/home/ubuntu/redlineDB`, branch `fix/parent-split-wal
 ## 2026-09-26T01:37Z fix/split-wal-before-install
 
 Claim: canonical checkout `/home/ubuntu/redlineDB`, branch `fix/split-wal-before-install` from `origin/main` `e220b9a1b0227334d16b5ad37b396a55a63797ee`. A leaf split records both page images before either page is installed. A crash at `index::split_image` leaves the new key off the tree. No speed ratio. No worktree. Push only after the earlier local branches.
+## 2026-09-26T08:40Z fix/evict-durable-pages
+
+Claim: canonical checkout `/home/ubuntu/redlineDB`, branch `fix/evict-durable-pages`. Commit notes `append.end_lsn` after the durability barrier. `flush_until` / `write_until` return the WAL high water, which can be past this commit, so that value is not the eviction watermark. Checkpoint does not publish `flush_all`'s high water either. A dirty page whose LSN is still ahead of the watermark stays resident. No speed ratio. No worktree. Push only after `fix/unique-point-before-route`.
 
 ## 2026-09-26T07:41Z fix/evict-durable-pages
 
