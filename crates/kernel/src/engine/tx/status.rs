@@ -7,6 +7,17 @@ use crate::txn::{Isolation, Snapshot, TxState};
 
 use super::{Txn, TxnLifecycle};
 
+#[cfg(test)]
+thread_local! {
+    static ACTIVE_UNREGISTERS: std::cell::Cell<u64> = const { std::cell::Cell::new(0) };
+}
+
+/// Active-snapshot removals on this thread since the last call.
+#[cfg(test)]
+pub(super) fn take_active_unregisters() -> u64 {
+    ACTIVE_UNREGISTERS.with(|count| count.replace(0))
+}
+
 #[derive(Clone, Debug)]
 pub struct ConcurrentTxStatus {
     inner: Arc<TxStatusInner>,
@@ -253,6 +264,8 @@ impl TxStatusInner {
     }
 
     pub(super) fn unregister_active(&self, tx: TxId) {
+        #[cfg(test)]
+        ACTIVE_UNREGISTERS.with(|count| count.set(count.get() + 1));
         let mut active = self
             .active_snapshots
             .lock()

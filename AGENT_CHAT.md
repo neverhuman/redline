@@ -32,6 +32,10 @@ Claim: canonical checkout `/home/ubuntu/redlineDB`, branch `fix/index-compact-ke
 ## 2026-09-26T18:59Z fix/reusable-page-checks-row-dir
 
 Claim: canonical checkout `/home/ubuntu/redlineDB`, branch `fix/reusable-page-checks-row-dir` from `origin/main` `e220b9a1b0227334d16b5ad37b396a55a63797ee`. A heap page is not reusable while `row_dir` still names it. No speed ratio. No worktree. Push only after `fix/unique-point-before-route`.
+## 2026-09-26T01:05Z fix/unregister-snapshot-once
+
+Claim: canonical checkout `/home/ubuntu/redlineDB`, branch `fix/unregister-snapshot-once` from `origin/main` `e220b9a1b0227334d16b5ad37b396a55a63797ee`. Commit, rollback, and drop each remove the active snapshot once. No speed ratio. No worktree. Push only after the earlier local branches.
+
 
 ## 2026-09-25T21:01Z fix/wal-pipeline-short-write
 

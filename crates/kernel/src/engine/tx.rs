@@ -190,11 +190,8 @@ impl TxnLifecycle {
     }
 
     fn close(&self) {
-        if !self.closed.swap(true, Ordering::SeqCst)
-            && let Some(inner) = self.inner.upgrade()
-        {
-            inner.unregister_active(self.tx_id);
-        }
+        // Publish and abort already dropped the active snapshot.
+        self.closed.store(true, Ordering::SeqCst);
     }
 
     fn abort_if_open(&self) {
@@ -202,7 +199,6 @@ impl TxnLifecycle {
             && let Some(inner) = self.inner.upgrade()
         {
             inner.abort(self.tx_id);
-            inner.unregister_active(self.tx_id);
         }
     }
 }
@@ -260,5 +256,40 @@ mod tests {
         }));
         let locked: Vec<_> = tx.drain_row_locks().collect();
         assert_eq!(locked, keys);
+    }
+
+    #[test]
+    fn commit_rollback_and_drop_unregister_once() {
+        use std::time::Duration;
+
+        use tempfile::TempDir;
+
+        use crate::engine::{CommitDurability, Engine, EngineConfig};
+        use crate::format::RelId;
+        use crate::txn::Isolation;
+
+        use super::status::take_active_unregisters;
+
+        let dir = TempDir::new().unwrap();
+        let engine = Engine::create(
+            dir.path(),
+            EngineConfig {
+                rel_id: RelId(1),
+                commit_durability: CommitDurability::UnsafeDev,
+                busy_timeout: Duration::from_millis(50),
+                ..EngineConfig::default()
+            },
+        )
+        .unwrap();
+        let _ = take_active_unregisters();
+        let tx = engine.begin(Isolation::Snapshot).unwrap();
+        engine.commit(tx).unwrap();
+        assert_eq!(take_active_unregisters(), 1);
+        let tx = engine.begin(Isolation::Snapshot).unwrap();
+        engine.rollback(tx).unwrap();
+        assert_eq!(take_active_unregisters(), 1);
+        let tx = engine.begin(Isolation::Snapshot).unwrap();
+        drop(tx);
+        assert_eq!(take_active_unregisters(), 1);
     }
 }
