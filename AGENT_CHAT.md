@@ -26,6 +26,9 @@ Claim: canonical checkout `/home/ubuntu/redlineDB`, branch `fix/heap-update-repl
 ## 2026-09-26T07:22Z fix/vacuum-keeps-page-lsn
 
 Claim: canonical checkout `/home/ubuntu/redlineDB`, branch `fix/vacuum-keeps-page-lsn` from `origin/main` `e220b9a1b0227334d16b5ad37b396a55a63797ee`. In-place tuple overwrite keeps the page LSN instead of stamping 0. No speed ratio. No worktree. Push only after `fix/unique-point-before-route`.
+## 2026-09-26T07:03Z fix/index-compact-keeps-lsn
+
+Claim: canonical checkout `/home/ubuntu/redlineDB`, branch `fix/index-compact-keeps-lsn` from `origin/main` `e220b9a1b0227334d16b5ad37b396a55a63797ee`. Leaf compaction and committed-delete pruning keep the page LSN instead of rewriting it to 1. No speed ratio. No worktree. Push only after `fix/unique-point-before-route`.
 
 ## 2026-09-25T21:01Z fix/wal-pipeline-short-write
 
