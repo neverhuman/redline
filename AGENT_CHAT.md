@@ -42,6 +42,10 @@ Claim: canonical checkout `/home/ubuntu/redlineDB`, branch `fix/prefetch-full-ca
 ## 2026-09-26T05:15Z fix/wal-dir-sync
 
 Claim: canonical checkout `/home/ubuntu/redlineDB`, branch `fix/wal-dir-sync` from `origin/main` `e220b9a1b0227334d16b5ad37b396a55a63797ee`. Creating the first WAL segment and rotating to the next one fsyncs the WAL directory so the new file name is durable. No speed ratio. No worktree. Push only after `fix/unique-point-before-route`.
+## 2026-09-26T06:08Z fix/checkpoint-install-horizon
+
+Claim: canonical checkout `/home/ubuntu/redlineDB`, branch `fix/checkpoint-install-horizon` rebased onto `fix/hnsw-chain-wal`. A checkpoint does not move past an index WAL record until that record's leaf image is installed. No speed ratio. No worktree. Push only after `fix/unique-point-before-route` and after `fix/hnsw-chain-wal`.
+
 ## 2026-09-26T02:39Z fix/hnsw-chain-wal
 
 Claim: canonical checkout `/home/ubuntu/redlineDB`, branch `fix/hnsw-chain-wal` from `fix/hnsw-wal-before-install` `9e6d112ee890b75e697e1943cac30ac5ee42ccad`. HNSW data-page chain updates are staged and installed only after the page image. Push this only after `fix/hnsw-wal-before-install`. No speed ratio. No worktree.

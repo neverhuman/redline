@@ -130,6 +130,12 @@ impl BtreeIndex {
                 )?;
             }
             drop(page);
+            // The WAL record can become durable before install_dirty publishes
+            // the leaf. Hold the checkpoint horizon across that gap.
+            let install_fence = match &self.inner.wal {
+                Some(wal) if emit_wal => Some(wal.begin_page_install()?),
+                _ => None,
+            };
             let publish_lsn = if emit_wal {
                 // Armed before the staged leaf is installed. A crash here
                 // leaves the on-buffer leaf unchanged, so the key is absent.
@@ -146,7 +152,12 @@ impl BtreeIndex {
             } else {
                 lsn
             };
+            #[cfg(test)]
+            if emit_wal {
+                crate::wal::run_before_page_install_hook();
+            }
             guard.install_dirty(staged, publish_lsn)?;
+            drop(install_fence);
             drop(leaf_write);
             return Ok(());
         }

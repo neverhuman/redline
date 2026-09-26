@@ -10,6 +10,26 @@ pub(crate) mod policy;
 pub mod record;
 pub mod segment;
 
+#[cfg(test)]
+thread_local! {
+    static BEFORE_PAGE_INSTALL: std::cell::RefCell<Option<Box<dyn FnMut()>>> =
+        std::cell::RefCell::new(None);
+}
+
+/// Test hook that runs after an index WAL append and before the leaf install.
+#[cfg(test)]
+pub(crate) fn set_before_page_install_hook(hook: Option<Box<dyn FnMut()>>) {
+    BEFORE_PAGE_INSTALL.with(|slot| *slot.borrow_mut() = hook);
+}
+
+#[cfg(test)]
+pub(crate) fn run_before_page_install_hook() {
+    let hook = BEFORE_PAGE_INSTALL.with(|slot| slot.borrow_mut().take());
+    if let Some(mut hook) = hook {
+        hook();
+    }
+}
+
 pub use lanes::{LaneRoundRobin, WalLaneCoordinator, WalLaneRecoveryReport};
 pub use manager::*;
 pub use payload::*;

@@ -1,4 +1,4 @@
-use std::collections::VecDeque;
+use std::collections::{BTreeMap, VecDeque};
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::sync::{Condvar, Mutex};
@@ -30,6 +30,7 @@ impl WalCoordinator {
             }),
             cvar: Condvar::new(),
             phase11: std::sync::RwLock::new(None),
+            install_fence: Mutex::new(BTreeMap::new()),
         });
         Self {
             shared,
@@ -104,6 +105,7 @@ impl WalCoordinator {
             }),
             cvar: Condvar::new(),
             phase11: std::sync::RwLock::new(None),
+            install_fence: Mutex::new(BTreeMap::new()),
         });
         // Lane BH P1 #7: hand the manager an `Arc<WalSyncCounters>`
         // before it moves into the writer thread; the coordinator

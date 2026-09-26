@@ -209,9 +209,12 @@ impl Engine {
             });
         }
         let durable_lsn = self.wal.flush_all()?;
+        // Do not record a checkpoint past a WAL record whose page image is
+        // still unpublished. Recovery would skip that record.
+        let checkpoint_lsn = self.wal.checkpoint_horizon(durable_lsn)?;
         let flush = self
             .heap
-            .flush_dirty_batches(durable_lsn, DEFAULT_CHECKPOINT_BATCH_PAGES)?;
+            .flush_dirty_batches(checkpoint_lsn, DEFAULT_CHECKPOINT_BATCH_PAGES)?;
         let page_count = self.heap.page_count()?;
         let mut checkpoint = self
             .checkpoint
@@ -235,7 +238,7 @@ impl Engine {
         crate::fail_point!("engine::checkpoint");
         let next = self
             .control
-            .write_next(*checkpoint, durable_lsn, page_count)?;
+            .write_next(*checkpoint, checkpoint_lsn, page_count)?;
         self.wal
             .prune_segments_below_checkpoint_lsn(next.checkpoint_lsn)?;
         *checkpoint = Some(next);
@@ -314,5 +317,86 @@ impl Engine {
             .lock()
             .map_err(|_| Error::CorruptPage("engine index handles mutex poisoned"))?;
         Ok(handles.clone())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::sync::{Arc, Mutex};
+
+    use tempfile::TempDir;
+
+    use super::super::{Engine, EngineConfig};
+    use crate::format::{PageGeneration, PageId, RelId, TuplePtr, TxId};
+    use crate::index::{BtreeIndex, IndexDescriptor, IndexId, IndexRowRef, IndexUniqueness};
+    use crate::wal::{WalPayload, WalReader, WalRecordKind, set_before_page_install_hook};
+
+    #[test]
+    fn checkpoint_does_not_pass_an_uninstalled_index_record() {
+        let dir = TempDir::new().unwrap();
+        let engine = Engine::create(
+            dir.path(),
+            EngineConfig {
+                buffer_pool_pages: 32,
+                wal: crate::wal::WalConfig {
+                    group_commit_delay_us: 0,
+                    ..crate::wal::WalConfig::default()
+                },
+                ..EngineConfig::default()
+            },
+        )
+        .unwrap();
+        let index = BtreeIndex::create_with_wal(
+            Arc::clone(&engine.buffer),
+            IndexDescriptor::new(IndexId(7), RelId(1), IndexUniqueness::NonUnique),
+            engine.page_wal(),
+        )
+        .unwrap();
+        let seen = Arc::new(Mutex::new(None));
+        let seen_hook = Arc::clone(&seen);
+        let hook_engine = Arc::clone(&engine);
+        set_before_page_install_hook(Some(Box::new(move || {
+            let checkpoint = hook_engine
+                .checkpoint()
+                .expect("checkpoint while the leaf is unpublished");
+            *seen_hook.lock().expect("checkpoint lsn") = Some(checkpoint.checkpoint_lsn);
+        })));
+        index
+            .insert_tx(
+                TxId(1),
+                b"k",
+                IndexRowRef::new(TuplePtr::new_with_generation(
+                    PageId(3),
+                    1,
+                    PageGeneration::ONE,
+                )),
+            )
+            .unwrap();
+        set_before_page_install_hook(None);
+
+        let during = seen
+            .lock()
+            .expect("seen lsn")
+            .expect("index insert did not checkpoint before install");
+        let records = WalReader::new(&engine.wal_dir, engine.config.wal.clone())
+            .scan()
+            .unwrap();
+        let insert_lsn = records
+            .iter()
+            .find(|record| {
+                record.kind == WalRecordKind::PageDelta
+                    && matches!(
+                        WalPayload::decode(&record.payload).unwrap(),
+                        WalPayload::IndexInsert { .. }
+                    )
+            })
+            .expect("index insert wal record")
+            .lsn;
+        assert!(
+            during <= insert_lsn,
+            "checkpoint {during:?} passed unpublished index record {insert_lsn:?}"
+        );
+        let after = engine.checkpoint().unwrap();
+        assert!(after.checkpoint_lsn > insert_lsn);
     }
 }

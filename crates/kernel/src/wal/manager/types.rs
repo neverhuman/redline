@@ -1,4 +1,4 @@
-use std::collections::VecDeque;
+use std::collections::{BTreeMap, VecDeque};
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Condvar, Mutex};
 use std::thread::JoinHandle;
@@ -58,6 +58,10 @@ pub(crate) struct WalCoordinatorShared {
     /// The writer thread reads this directly (no state-mutex hop) so
     /// it can bump `wal_batch_size_buckets` per fdatasync.
     pub(crate) phase11: std::sync::RwLock<Option<Arc<Phase11Counters>>>,
+    /// Lowest reserved LSNs of index updates whose WAL record is appended
+    /// and whose page image is not installed yet. Checkpoint must not
+    /// move past the minimum.
+    pub(crate) install_fence: Mutex<BTreeMap<u64, u32>>,
 }
 
 #[derive(Debug)]

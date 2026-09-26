@@ -74,6 +74,77 @@ impl WalCoordinator {
     }
 }
 
+pub(crate) struct PageInstallFence {
+    shared: Option<Arc<WalCoordinatorShared>>,
+    lsn: Lsn,
+}
+
+impl WalCoordinator {
+    /// Remember `reserved_lsn` until the matching page image is installed.
+    /// A checkpoint must not move past that LSN: the WAL record can already
+    /// be durable while the buffer still holds the previous page.
+    pub(crate) fn begin_page_install(&self) -> Result<PageInstallFence> {
+        if self.volatile {
+            return Ok(PageInstallFence {
+                shared: None,
+                lsn: Lsn::ZERO,
+            });
+        }
+        let lsn = self
+            .shared
+            .state
+            .lock()
+            .map(|state| state.reserved_lsn)
+            .map_err(|_| Error::CorruptWal("wal coordinator mutex poisoned"))?;
+        {
+            let mut fence = self
+                .shared
+                .install_fence
+                .lock()
+                .map_err(|_| Error::CorruptWal("wal install fence poisoned"))?;
+            let count = fence.entry(lsn.0).or_insert(0);
+            *count = count.saturating_add(1);
+        }
+        Ok(PageInstallFence {
+            shared: Some(Arc::clone(&self.shared)),
+            lsn,
+        })
+    }
+
+    pub(crate) fn checkpoint_horizon(&self, durable: Lsn) -> Result<Lsn> {
+        if self.volatile {
+            return Ok(durable);
+        }
+        let fence = self
+            .shared
+            .install_fence
+            .lock()
+            .map_err(|_| Error::CorruptWal("wal install fence poisoned"))?;
+        Ok(match fence.keys().next() {
+            Some(&lsn) if lsn < durable.0 => Lsn(lsn),
+            _ => durable,
+        })
+    }
+}
+
+impl Drop for PageInstallFence {
+    fn drop(&mut self) {
+        let Some(shared) = self.shared.take() else {
+            return;
+        };
+        let Ok(mut fence) = shared.install_fence.lock() else {
+            return;
+        };
+        let Some(count) = fence.get_mut(&self.lsn.0) else {
+            return;
+        };
+        *count = count.saturating_sub(1);
+        if *count == 0 {
+            fence.remove(&self.lsn.0);
+        }
+    }
+}
+
 impl Drop for WalCoordinator {
     fn drop(&mut self) {
         if let Ok(mut state) = self.shared.state.lock() {
