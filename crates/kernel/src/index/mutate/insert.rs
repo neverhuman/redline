@@ -3,9 +3,7 @@ use crate::wal::WalPayload;
 use crate::{Error, Result};
 
 use super::super::cells::Entry;
-use super::super::{
-    BtreeIndex, INDEX_SPECIAL_LEN, IndexRowRef, KeyBuf, PAGE_LEAF_KIND,
-};
+use super::super::{BtreeIndex, INDEX_SPECIAL_LEN, IndexRowRef, KeyBuf, PAGE_LEAF_KIND};
 
 impl BtreeIndex {
     pub fn insert(&self, logical_key: &[u8], row: IndexRowRef) -> Result<()> {
