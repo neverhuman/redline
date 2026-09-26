@@ -62,6 +62,9 @@ impl<Fs: FileSystem> WalManager<Fs> {
         let active_segment = 1;
         let active_offset = 0;
         let active_file = fs.open_rw_create(&segment_path(&dir, active_segment))?;
+        // The first segment name has to survive power loss before any record
+        // is treated as durable. Data fsync does not cover the directory entry.
+        crate::io::sync_dir(&dir)?;
         Ok(Self {
             dir,
             fs,
@@ -301,6 +304,7 @@ impl<Fs: FileSystem> WalManager<Fs> {
         self.active_file = self
             .fs
             .open_rw_create(&segment_path(&self.dir, self.active_segment))?;
+        crate::io::sync_dir(&self.dir)?;
         Ok(())
     }
 
@@ -334,5 +338,44 @@ impl<Fs: FileSystem> WalManager<Fs> {
         }
         segments.sort_unstable();
         Ok(segments)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use tempfile::TempDir;
+
+    use crate::format::TxId;
+    use crate::io::take_dir_syncs;
+    use crate::wal::{WalConfig, WalManager, WalRecordKind};
+
+    #[test]
+    fn creating_and_rotating_a_segment_syncs_the_directory() {
+        let dir = TempDir::new().unwrap();
+        let _ = take_dir_syncs();
+        let mut manager = WalManager::create(
+            dir.path(),
+            WalConfig {
+                segment_bytes: 128,
+                ..WalConfig::default()
+            },
+        )
+        .unwrap();
+        assert_eq!(take_dir_syncs(), 1);
+
+        // Header is 48 bytes. Payload 16 makes each record 64 bytes.
+        // Two records fill the segment; the third rotates.
+        let payload = vec![b'x'; 16];
+        manager
+            .append(WalRecordKind::PageDelta, TxId(1), payload.clone())
+            .unwrap();
+        manager
+            .append(WalRecordKind::PageDelta, TxId(1), payload.clone())
+            .unwrap();
+        assert_eq!(take_dir_syncs(), 0);
+        manager
+            .append(WalRecordKind::PageDelta, TxId(1), payload)
+            .unwrap();
+        assert_eq!(take_dir_syncs(), 1);
     }
 }

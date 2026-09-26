@@ -2,6 +2,9 @@ use std::fs::{self, File, OpenOptions};
 use std::io::{self, ErrorKind};
 use std::path::Path;
 
+#[cfg(test)]
+use std::cell::Cell;
+
 #[cfg(unix)]
 use std::os::unix::fs::FileExt;
 
@@ -94,6 +97,25 @@ impl FileHandle for StdFileHandle {
         self.0.set_len(len)?;
         Ok(())
     }
+}
+
+/// Make a directory entry durable. File data `fsync` does not.
+pub(crate) fn sync_dir(path: &Path) -> Result<()> {
+    let dir = File::open(path)?;
+    dir.sync_all()?;
+    #[cfg(test)]
+    DIR_SYNCS.with(|count| count.set(count.get().saturating_add(1)));
+    Ok(())
+}
+
+#[cfg(test)]
+thread_local! {
+    static DIR_SYNCS: Cell<u64> = const { Cell::new(0) };
+}
+
+#[cfg(test)]
+pub(crate) fn take_dir_syncs() -> u64 {
+    DIR_SYNCS.with(|count| count.replace(0))
 }
 
 #[cfg(unix)]
