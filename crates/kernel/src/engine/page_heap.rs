@@ -126,8 +126,24 @@ impl PageBackedHeap {
     }
 
     pub fn redo_page_image(&self, mut page: crate::format::Page, lsn: Lsn) -> Result<()> {
+        let page_id = page.header()?.page_id;
+        if let Ok(guard) = self.buffer.pin(page_id) {
+            let current =
+                guard.with_page(|resident| resident.header().map(|header| header.page_lsn))?;
+            if current >= lsn {
+                return Ok(());
+            }
+        }
         page.set_page_lsn(lsn)?;
-        self.buffer.write_page_direct(&page)
+        self.buffer.write_page_direct(&page)?;
+        if let Ok(guard) = self.buffer.pin(page_id) {
+            let current =
+                guard.with_page(|resident| resident.header().map(|header| header.page_lsn))?;
+            if current < lsn {
+                guard.install_dirty(page, lsn)?;
+            }
+        }
+        Ok(())
     }
 
     pub fn page_count(&self) -> Result<u64> {
@@ -189,5 +205,53 @@ impl ConcurrentVisibility for TupleVersion {
         } else {
             TupleVisibility::Visible
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::sync::Arc;
+
+    use super::PageBackedHeap;
+    use crate::format::{Lsn, PageId, PageKind, RelId, RowId, TxId};
+    use crate::storage::{BufferPool, PageFile};
+    use crate::wal::{WalConfig, WalCoordinator};
+
+    #[test]
+    fn older_page_image_does_not_replace_a_newer_heap_page() {
+        let dir = tempfile::tempdir().unwrap();
+        let page_file = Arc::new(PageFile::create(dir.path().join("data.redline"), 4096).unwrap());
+        let buffer = Arc::new(BufferPool::new(Arc::clone(&page_file), 32).unwrap());
+        let wal =
+            Arc::new(WalCoordinator::create(dir.path().join("wal"), WalConfig::default()).unwrap());
+        let heap = PageBackedHeap::new_with_wal(RelId(1), 1, buffer, Some(wal)).unwrap();
+        let row = RowId(3);
+        heap.insert_for_relation(TxId(1), RelId(1), row, b"kept".to_vec(), Lsn(1))
+            .unwrap();
+        let before = heap
+            .buffer
+            .pin(PageId(1))
+            .unwrap()
+            .with_page(|page| page.slot_count())
+            .unwrap();
+        let stale = crate::format::Page::new(4096, PageKind::Heap, PageId(1), RelId(1)).unwrap();
+        heap.redo_page_image(stale, Lsn(1)).unwrap();
+        let after = heap
+            .buffer
+            .pin(PageId(1))
+            .unwrap()
+            .with_page(|page| page.slot_count())
+            .unwrap();
+        assert_eq!(after, before);
+        assert_eq!(before, 1);
+        let newer = crate::format::Page::new(4096, PageKind::Heap, PageId(1), RelId(1)).unwrap();
+        heap.redo_page_image(newer, Lsn(u64::MAX)).unwrap();
+        let replaced = heap
+            .buffer
+            .pin(PageId(1))
+            .unwrap()
+            .with_page(|page| page.slot_count())
+            .unwrap();
+        assert_eq!(replaced, 0);
     }
 }
