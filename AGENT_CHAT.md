@@ -69,6 +69,9 @@ Claim: canonical checkout `/home/ubuntu/redlineDB`, branch `fix/delete-wal-befor
 ## 2026-09-26T04:32Z fix/index-insert-replay-once
 
 Claim: canonical checkout `/home/ubuntu/redlineDB`, branch `fix/index-insert-replay-once` from `origin/main` `e220b9a1b0227334d16b5ad37b396a55a63797ee`. Inserting an index entry that is already on the leaf does not add a second copy. A different row for the same logical key still inserts. No speed ratio. No worktree. Push only after the earlier local branches.
+## 2026-09-26T01:20Z fix/wal-append-one-lock
+
+Claim: canonical checkout `/home/ubuntu/redlineDB`, branch `fix/wal-append-one-lock` from `origin/main` `e220b9a1b0227334d16b5ad37b396a55a63797ee`. A WAL append with the semantic combiner off takes the coordinator mutex once. The combiner-on fold path is unchanged. No speed ratio. No worktree. Push only after the earlier local branches.
 
 
 ## 2026-09-25T21:01Z fix/wal-pipeline-short-write

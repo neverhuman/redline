@@ -289,26 +289,27 @@ impl WalCoordinator {
             return Err(Error::CorruptWal("record larger than wal buffer"));
         }
 
+        // The combiner is off by default. `wait_for_wal_buffer` already
+        // checks a failed WAL, so that path takes the coordinator mutex
+        // once. The extra lock is only needed to fold an adjacent record.
         let combined_semantic_delta = if self.config.semantic_combiner {
-            decode_combined_semantic_delta(kind, tx_id, &payload)
-        } else {
-            None
-        };
-
-        {
+            let candidate = decode_combined_semantic_delta(kind, tx_id, &payload);
             let mut state = self
                 .shared
                 .state
                 .lock()
                 .map_err(|_| Error::CorruptWal("wal coordinator mutex poisoned"))?;
             check_wal_failure(&state)?;
-            if let Some(candidate) = combined_semantic_delta.as_ref()
+            if let Some(candidate) = candidate.as_ref()
                 && let Some(append) =
                     self.try_fold_pending_combined_semantic_delta(&mut state, kind, candidate)?
             {
                 return Ok(append);
             }
-        }
+            candidate
+        } else {
+            None
+        };
 
         let mut state = self.wait_for_wal_buffer(encoded_len)?;
         let append = enqueue_reserved_record(
