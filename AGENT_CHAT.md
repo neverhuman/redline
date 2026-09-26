@@ -63,6 +63,9 @@ Claim: canonical checkout `/home/ubuntu/redlineDB`, branch `fix/hnsw-chain-wal` 
 ## 2026-09-26T02:23Z fix/hnsw-wal-before-install
 
 Claim: canonical checkout `/home/ubuntu/redlineDB`, branch `fix/hnsw-wal-before-install` from `origin/main` `e220b9a1b0227334d16b5ad37b396a55a63797ee`. HNSW page updates are staged privately and installed only after the page image is appended. A crash at `vector::hnsw::page_image` leaves the previous graph in place. No speed ratio. No worktree. Push only after the earlier local branches.
+## 2026-09-26T02:07Z fix/delete-wal-before-install
+
+Claim: canonical checkout `/home/ubuntu/redlineDB`, branch `fix/delete-wal-before-install` from `origin/main` `e220b9a1b0227334d16b5ad37b396a55a63797ee`. An index delete mark is staged privately and installed only after its WAL record. A crash at `index::delete` leaves the key visible. No speed ratio. No worktree. Push only after the earlier local branches.
 
 
 ## 2026-09-25T21:01Z fix/wal-pipeline-short-write
