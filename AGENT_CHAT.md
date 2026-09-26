@@ -16,6 +16,10 @@ Claim: canonical checkout `/home/ubuntu/redlineDB`, branch `fix/page-file-dir-sy
 ## 2026-09-26T05:30Z fix/stats-dir-sync
 
 Claim: canonical checkout `/home/ubuntu/redlineDB`, branch `fix/stats-dir-sync` from `origin/main` `e220b9a1b0227334d16b5ad37b396a55a63797ee`. Saving table statistics fsyncs the parent directory after the atomic rename, so the new stats file name is durable. No speed ratio. No worktree. Push only after `fix/unique-point-before-route`.
+## 2026-09-26T03:13Z fix/heap-insert-replay-once
+
+Claim: canonical checkout `/home/ubuntu/redlineDB`, branch `fix/heap-insert-replay-once` from `origin/main` `e220b9a1b0227334d16b5ad37b396a55a63797ee`. Replaying a heap insert that is already the row head does not append a second cell. No speed ratio. No worktree. Push only after the earlier local branches.
+
 
 ## 2026-09-25T21:01Z fix/wal-pipeline-short-write
 
