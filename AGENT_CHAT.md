@@ -93,6 +93,11 @@ Claim: canonical checkout `/home/ubuntu/redlineDB`, branch `fix/evict-durable-pa
 
 Claim: canonical checkout `/home/ubuntu/redlineDB`, branch `fix/evict-durable-pages` from `origin/main` `e220b9a1b0227334d16b5ad37b396a55a63797ee`. A full buffer can evict a dirty page whose LSN is already durable. Pages ahead of the durable LSN stay. No speed ratio. No worktree. Push only after `fix/unique-point-before-route`.
 
+## 2026-09-26T00:35Z fix/pk-conflict-without-decode
+
+Claim: canonical checkout `/home/ubuntu/redlineDB`, branch `fix/pk-conflict-without-decode` from `fix/rowid-scan-skips-decode` `1cd2581743faf95fca695682dc34cf5b9fb4bd4d`. A primary-key conflict check against an unallocated index compares rowids and does not decode every column. Push this only after `fix/rowid-scan-skips-decode`. No speed ratio. No worktree.
+
+
 ## 2026-09-26T00:19Z fix/rowid-scan-skips-decode
 
 Claim: canonical checkout `/home/ubuntu/redlineDB`, branch `fix/rowid-scan-skips-decode` from `origin/main` `e220b9a1b0227334d16b5ad37b396a55a63797ee`. A rowid-only visibility scan reads the table id and does not decode the whole row. No speed ratio. No worktree. Push only after the earlier local branches.

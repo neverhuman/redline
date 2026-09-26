@@ -115,6 +115,21 @@ fn collect_unique_conflicts(
     if pending_indexes.is_empty() {
         return Ok(conflicts);
     }
+    if pending_indexes
+        .iter()
+        .all(|index| is_rowid_primary_key(table, index))
+    {
+        return rowid_primary_conflicts(
+            conn,
+            session,
+            tx,
+            table,
+            values,
+            &pending_indexes,
+            skip_rowid,
+            conflicts,
+        );
+    }
     let rows = collect_table_rows(conn.engine(), tx, table)?;
     for index in pending_indexes {
         let built = crate::exec::index_dml::build_index_key_with_values(table, index, values)?;
@@ -152,6 +167,72 @@ fn collect_unique_conflicts(
                 });
                 break;
             }
+        }
+    }
+    Ok(conflicts)
+}
+
+fn is_rowid_primary_key(table: &TableDef, index: &redlinedb_kernel::catalog::IndexDef) -> bool {
+    let Some(alias) = table.rowid_alias_column else {
+        return false;
+    };
+    if !index.primary || index.predicate_sql.is_some() || index.keys.len() != 1 {
+        return false;
+    }
+    match &index.keys[0].source {
+        redlinedb_kernel::catalog::IndexKeySource::Column { attnum } => {
+            *attnum == alias || index.keys[0].ordinal == alias
+        }
+        _ => false,
+    }
+}
+
+/// The integer primary key is the rowid. Compare those ids instead of
+/// decoding every column of every row.
+fn rowid_primary_conflicts(
+    conn: &Connection,
+    session: &mut SessionState,
+    tx: &mut Txn,
+    table: &Arc<TableDef>,
+    values: &[SqlValue],
+    indexes: &[&redlinedb_kernel::catalog::IndexDef],
+    skip_rowid: Option<RowId>,
+    mut conflicts: Vec<UniqueConflict>,
+) -> Result<Vec<UniqueConflict>> {
+    let live = collect_table_rowids(conn.engine(), tx, table)?;
+    for index in indexes {
+        let built = crate::exec::index_dml::build_index_key_with_values(table, index, values)?;
+        if built.key.contains_null {
+            continue;
+        }
+        let lock_key = unique_key_bytes(table.table_id.0, index.index_id.0, &built.values)?;
+        let guard = conn.unique_locks().lock(lock_key, tx.id().0)?;
+        session.unique_guards.push(guard);
+        let Some(SqlValue::Integer(v)) = built.values.first() else {
+            continue;
+        };
+        if *v < 0 {
+            continue;
+        }
+        let candidate = RowId(*v as u64);
+        if live
+            .iter()
+            .any(|id| *id == candidate && skip_rowid != Some(*id))
+        {
+            let constraint_name = match table
+                .constraints
+                .iter()
+                .find(|c| c.index_id == Some(index.index_id))
+                .and_then(|c| c.name.as_deref().map(Arc::<str>::from))
+            {
+                Some(name) => Some(name),
+                None => Some(Arc::from(index.name.as_ref())),
+            };
+            conflicts.push(UniqueConflict {
+                rowid: candidate,
+                constraint_name,
+                key_ordinals: index.keys.iter().map(|key| key.ordinal as usize).collect(),
+            });
         }
     }
     Ok(conflicts)
@@ -587,5 +668,54 @@ pub(crate) fn ensure_unique_constraints(
             "UNIQUE constraint failed: {}",
             table.name
         )))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::time::Duration;
+
+    use tempfile::tempdir;
+
+    use crate::connection::{Database, DbOptions};
+    use crate::error::Error;
+    use crate::statement::Step;
+
+    use super::take_table_row_decodes;
+
+    #[test]
+    fn primary_key_insert_does_not_decode_existing_rows() {
+        let dir = tempdir().unwrap();
+        let db = Database::create(
+            dir.path().join("pk-conflict.db"),
+            DbOptions {
+                busy_timeout: Duration::from_secs(5),
+                ..DbOptions::default()
+            },
+        )
+        .unwrap();
+        let conn = db.connect();
+        conn.execute("CREATE TABLE t(id INTEGER PRIMARY KEY, v INTEGER)")
+            .unwrap();
+        let mut insert = conn
+            .prepare("INSERT INTO t(id, v) VALUES (?1, ?2)")
+            .unwrap();
+        for i in 1..=20 {
+            insert.bind_i64(1, i).unwrap();
+            insert.bind_i64(2, i).unwrap();
+            assert_eq!(insert.step().unwrap(), Step::Done);
+            insert.reset().unwrap();
+        }
+        let _ = take_table_row_decodes();
+        conn.execute("INSERT INTO t(id, v) VALUES (21, 21)")
+            .unwrap();
+        assert_eq!(take_table_row_decodes(), 0);
+        let err = conn
+            .execute("INSERT INTO t(id, v) VALUES (7, 70)")
+            .unwrap_err();
+        assert!(
+            matches!(err, Error::ConstraintViolation(ref message) if message.contains("UNIQUE")),
+            "{err:?}"
+        );
     }
 }
