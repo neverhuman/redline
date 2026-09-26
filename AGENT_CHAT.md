@@ -23,6 +23,9 @@ Claim: canonical checkout `/home/ubuntu/redlineDB`, branch `fix/heap-insert-repl
 
 Claim: canonical checkout `/home/ubuntu/redlineDB`, branch `fix/heap-update-replay-once` from `origin/main` `e220b9a1b0227334d16b5ad37b396a55a63797ee`. Replaying a heap update or delete that is already the row head does not append another version. No speed ratio. No worktree. Push only after the earlier local branches.
 
+## 2026-09-26T07:22Z fix/vacuum-keeps-page-lsn
+
+Claim: canonical checkout `/home/ubuntu/redlineDB`, branch `fix/vacuum-keeps-page-lsn` from `origin/main` `e220b9a1b0227334d16b5ad37b396a55a63797ee`. In-place tuple overwrite keeps the page LSN instead of stamping 0. No speed ratio. No worktree. Push only after `fix/unique-point-before-route`.
 
 ## 2026-09-25T21:01Z fix/wal-pipeline-short-write
 

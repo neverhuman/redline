@@ -2,7 +2,7 @@ use super::{PageBackedHeap, RelationWriteTarget};
 use crate::engine::page_heap::policy::{ActiveUndoReadPolicy, UndoReadContext, UndoReadPolicy};
 use crate::engine::page_heap::{ConcurrentVisibility, decode_undo_ptr};
 use crate::engine::tx::ConcurrentTxStatus;
-use crate::format::{Lsn, PageId, PageKind, RelId, RowId, TuplePtr, TupleVersion, TxId, UndoPtr};
+use crate::format::{PageId, PageKind, RelId, RowId, TuplePtr, TupleVersion, TxId, UndoPtr};
 use crate::txn::{Snapshot, TupleVisibility, TxState, UndoRecord};
 use crate::{Error, Result};
 
@@ -244,8 +244,11 @@ impl PageBackedHeap {
         }
         let encoded = tuple.encode()?;
         let guard = self.buffer.pin(ptr.page_id)?;
+        // Vacuum drops an undo link in place. The page still holds the live
+        // tuple, whose WAL record is the page LSN already written there.
+        let kept_lsn = guard.with_page(|page| Ok(page.header()?.page_lsn))?;
         guard.with_page_mut(|page| page.overwrite_cell(ptr.slot, &encoded))?;
-        guard.mark_dirty(Lsn::ZERO)
+        guard.mark_dirty(kept_lsn)
     }
 
     pub(crate) fn read_undo(&self, ptr: UndoPtr) -> Result<UndoRecord> {
@@ -255,5 +258,33 @@ impl PageBackedHeap {
         let (page_id, slot) = decode_undo_ptr(ptr);
         let guard = self.buffer.pin(page_id)?;
         guard.with_page(|page| UndoRecord::decode(page.cell(slot)?))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::sync::Arc;
+
+    use super::PageBackedHeap;
+    use crate::format::{Lsn, RelId};
+    use crate::storage::{BufferPool, PageFile};
+
+    #[test]
+    fn overwrite_keeps_the_page_lsn() {
+        let dir = tempfile::tempdir().unwrap();
+        let page_file = Arc::new(PageFile::create(dir.path().join("data.redline"), 4096).unwrap());
+        let buffer = Arc::new(BufferPool::new(page_file, 8).unwrap());
+        let heap = PageBackedHeap::new(RelId(1), 2, Arc::clone(&buffer)).unwrap();
+        let row = heap.reserve_row_id();
+        heap.insert_with_row_id(crate::format::TxId(1), row, b"row".to_vec(), Lsn(40))
+            .unwrap();
+        let ptr = heap.head(row).unwrap().unwrap();
+        let tuple = heap.read_tuple(ptr).unwrap();
+        heap.overwrite_tuple(ptr, &tuple).unwrap();
+        let guard = buffer.pin(ptr.page_id).unwrap();
+        let lsn = guard
+            .with_page(|page| Ok(page.header().unwrap().page_lsn))
+            .unwrap();
+        assert_eq!(lsn, Lsn(40));
     }
 }
