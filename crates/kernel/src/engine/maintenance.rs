@@ -329,7 +329,11 @@ mod tests {
     use super::super::{Engine, EngineConfig};
     use crate::format::{PageGeneration, PageId, RelId, TuplePtr, TxId};
     use crate::index::{BtreeIndex, IndexDescriptor, IndexId, IndexRowRef, IndexUniqueness};
-    use crate::wal::{WalPayload, WalReader, WalRecordKind, set_before_page_install_hook};
+    use crate::txn::Isolation;
+    use crate::wal::{
+        WalPayload, WalReader, WalRecordKind, set_before_commit_publish_hook,
+        set_before_page_install_hook,
+    };
 
     #[test]
     fn checkpoint_does_not_pass_an_uninstalled_index_record() {
@@ -511,5 +515,59 @@ mod tests {
         );
         let after = engine.checkpoint().unwrap();
         assert!(after.checkpoint_lsn > delete_lsn);
+    }
+
+    #[test]
+    fn checkpoint_during_commit_keeps_the_row_after_reopen() {
+        let dir = TempDir::new().unwrap();
+        let config = EngineConfig {
+            buffer_pool_pages: 32,
+            wal: crate::wal::WalConfig {
+                group_commit_delay_us: 0,
+                ..crate::wal::WalConfig::default()
+            },
+            ..EngineConfig::default()
+        };
+        let engine = Engine::create(dir.path(), config.clone()).unwrap();
+        let mut tx = engine.begin(Isolation::Snapshot).unwrap();
+        let row = engine.insert(&mut tx, b"alpha".to_vec()).unwrap();
+        let hook_engine = Arc::clone(&engine);
+        let seen = Arc::new(Mutex::new(None));
+        let seen_hook = Arc::clone(&seen);
+        set_before_commit_publish_hook(Some(Box::new(move || {
+            let checkpoint = hook_engine
+                .checkpoint()
+                .expect("checkpoint before commit publish");
+            *seen_hook.lock().expect("checkpoint lsn") = Some(checkpoint.checkpoint_lsn);
+        })));
+        engine.commit(tx).unwrap();
+        set_before_commit_publish_hook(None);
+        let during = seen
+            .lock()
+            .expect("seen lsn")
+            .expect("commit did not checkpoint before publish");
+        drop(engine);
+
+        let reopened = Engine::open(dir.path(), config).unwrap();
+        let records = WalReader::new(dir.path().join("wal"), reopened.config.wal.clone())
+            .scan()
+            .unwrap();
+        let commit_lsn = records
+            .iter()
+            .find(|record| {
+                record.kind == WalRecordKind::Commit
+                    && matches!(
+                        WalPayload::decode(&record.payload).unwrap(),
+                        WalPayload::Commit { .. }
+                    )
+            })
+            .expect("commit wal record")
+            .lsn;
+        assert!(
+            during <= commit_lsn,
+            "checkpoint {during:?} passed unpublished commit {commit_lsn:?}"
+        );
+        let mut tx = reopened.begin(Isolation::Snapshot).unwrap();
+        assert_eq!(reopened.get(&mut tx, row).unwrap(), Some(b"alpha".to_vec()));
     }
 }

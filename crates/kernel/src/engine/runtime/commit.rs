@@ -44,6 +44,9 @@ impl Engine {
                 CommitOutcome::Committed(csn),
             ));
         }
+        // The commit record can be durable before publish_commit. Hold the
+        // checkpoint horizon across that gap so recovery still replays it.
+        let _commit_fence = self.wal.begin_page_install()?;
         if let Some(snapshot) = pending_schema.as_deref() {
             let snapshot_bytes = crate::catalog::encode_snapshot(snapshot)?;
             self.wal.append(
@@ -87,6 +90,9 @@ impl Engine {
             tx.close();
             return Err(err);
         }
+
+        #[cfg(test)]
+        crate::wal::run_before_commit_publish_hook();
 
         // Lane E failpoint: WAL fsync has acked but the CSN is not yet
         // visible to in-memory observers. The injected path returns
