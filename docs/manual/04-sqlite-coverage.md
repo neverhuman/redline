@@ -31,7 +31,7 @@ The README badge and the block under `sqlite-parity-report:begin` are generated 
 
 An unknown module still fails with `CREATE VIRTUAL TABLE is not supported without module migration support`. `pragma_module_list` also prints `fts3`, `fts4`, `fts5vocab`, `dbpage`, and the pragma helpers. Those extra names do not create a table. This is not the SQLite C virtual-table API.
 
-The report lists cases 00093-00096 as declared deviations, with 10405 (`pragma_module_list`) and 12023 (`PRAGMA compile_options`, a fixed copy of the reference build's options). Each passes on output produced without the SQLite feature behind it. The list is `subrepos/redline-testing/metadata/sqlite_parity/declared-deviations.json`.
+The report lists cases 00093-00096 as declared deviations, with 10405 (`pragma_module_list`) and 12023 (`PRAGMA compile_options`, a fixed copy of the reference build's options). Each passes on output produced without the SQLite feature behind it. The same list declares the cases the pinned sqlite3 3.53.1 build cannot express, and the report lists them apart: the `soundex()` cases 11437-11439 and the `UPDATE`/`DELETE ... ORDER BY ... LIMIT` cases 00219 and 00220 are shared rejections, since the pinned build rejects them too, and 10546 now checks `median()` because the pinned build enables it. The list is `subrepos/redline-testing/metadata/sqlite_parity/declared-deviations.json`.
 
 ## What the passing surface feels like
 

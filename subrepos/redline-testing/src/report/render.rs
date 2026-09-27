@@ -9,8 +9,8 @@ use super::provenance::{ReportIdentity, ReportMode};
 use super::qualification::counts_text;
 use super::ratio::{format_ratio, summarize};
 use super::types::{
-    EvidenceVersions, Qualification, RankedCase, RawRecord, ReportOptions, SqliteQualification,
-    SummaryJson,
+    DeviationKind, EvidenceVersions, Qualification, RankedCase, RawRecord, ReportOptions,
+    SqliteQualification, SummaryJson,
 };
 use super::utils::{csv, is_measured, median};
 use crate::latency::{
@@ -293,12 +293,23 @@ fn render_sqlite_scope(
     out.push_str("\n\n");
     if q.declared_deviations.is_empty() {
         out.push_str("**Declared deviations:** none among the cases in this run.\n\n");
-    } else {
+    }
+    for (kind, heading) in DEVIATION_HEADINGS {
+        let declared = q
+            .declared_deviations
+            .iter()
+            .filter(|deviation| deviation.kind == kind)
+            .collect::<Vec<_>>();
+        if declared.is_empty() {
+            continue;
+        }
         out.push_str(&format!(
-            "**Declared deviations ({}):** these cases pass, but RedlineDB produces the compared output without the SQLite feature behind it.\n\n",
-            q.deviation_count
+            "**{} ({}):** {}\n\n",
+            heading.0,
+            declared.len(),
+            heading.1
         ));
-        for deviation in &q.declared_deviations {
+        for deviation in declared {
             out.push_str(&format!(
                 "- `{}` {}: {}\n",
                 deviation.case_id, deviation.name, deviation.reason
@@ -308,6 +319,31 @@ fn render_sqlite_scope(
     }
     out
 }
+
+/// The report groups declared cases by kind, in this order.
+const DEVIATION_HEADINGS: [(DeviationKind, (&str, &str)); 3] = [
+    (
+        DeviationKind::StandIn,
+        (
+            "Declared deviations",
+            "these cases pass, but RedlineDB produces the compared output without the SQLite feature behind it.",
+        ),
+    ),
+    (
+        DeviationKind::SharedRejection,
+        (
+            "Declared shared rejections",
+            "the pinned sqlite3 build lacks the feature, so these cases declare its error; a pass means RedlineDB rejected the statement too, not that the feature works.",
+        ),
+    ),
+    (
+        DeviationKind::OracleBuild,
+        (
+            "Declared oracle-build deviations",
+            "these cases were written for a different SQLite build; against the pinned sqlite3 they check what the reason states.",
+        ),
+    ),
+];
 
 /// Where the measured source identity comes from, after the Evidence line.
 fn run_provenance_sentence(identity: &ReportIdentity) -> String {

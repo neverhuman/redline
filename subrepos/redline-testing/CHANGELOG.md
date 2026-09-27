@@ -45,6 +45,13 @@ for the publish + attestation flow.
   record the pinned build's `no such function: soundex` rejection, and
   `generate` refuses a declared fragment the capture does not contain.
   `ship-gate` checks the pinned manifest as well as the shards by default.
+- `metadata/sqlite_parity/declared-deviations.json` is schema v2: each entry
+  has a `kind`. `stand_in` covers the existing entries. `shared_rejection`
+  covers 11437-11439 (`soundex()`) and 00219/00220 (`UPDATE`/`DELETE ...
+  LIMIT`), which the pinned build rejects. `oracle_build` covers 10546, which
+  was written for a build without `median()`. The report lists each kind
+  under its own heading, and a unit test requires every shared rejection
+  to declare a non-zero exit and a stderr fragment.
 
 ### Removed
 

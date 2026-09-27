@@ -361,3 +361,27 @@ fn report_cli_rejects_placeholder_card_flags() {
         );
     }
 }
+
+#[test]
+fn report_block_lists_shared_rejections_and_oracle_build_deviations_apart() {
+    let raw = [
+        passed("00093", "CREATE_VIRTUAL_TABLE_FTS5_OPTIONAL"),
+        passed("10546", "MEDIAN_REQUIRES_CAPABILITY"),
+        passed("11437", "STRING_SOUNDEX_ROBERT"),
+    ]
+    .concat();
+    let readme = render(&raw, Some(evidence(&raw, "passed", [3, 3, 0, 0])), README);
+    let block = report_block(&readme);
+    for expected in [
+        "**Declared deviations (1):** these cases pass, but RedlineDB produces the compared output without the SQLite feature behind it.\n\n- `00093` CREATE_VIRTUAL_TABLE_FTS5_OPTIONAL: ",
+        "**Declared shared rejections (1):** the pinned sqlite3 build lacks the feature, so these cases declare its error; a pass means RedlineDB rejected the statement too, not that the feature works.\n\n- `11437` STRING_SOUNDEX_ROBERT: ",
+        "**Declared oracle-build deviations (1):** these cases were written for a different SQLite build; against the pinned sqlite3 they check what the reason states.\n\n- `10546` MEDIAN_REQUIRES_CAPABILITY: ",
+    ] {
+        assert!(
+            block.contains(expected),
+            "missing {expected:?} in:\n{block}"
+        );
+    }
+    let badge = badge(&readme);
+    assert!(badge.contains("; 3 declared deviations;"), "{badge}");
+}

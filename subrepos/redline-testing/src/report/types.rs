@@ -162,13 +162,28 @@ pub(crate) enum Qualification {
     Unqualified(String),
 }
 
-/// A case that passes on output RedlineDB produces without the SQLite feature
-/// behind it (metadata/sqlite_parity/declared-deviations.json).
+/// A case whose pass does not mean RedlineDB matches the SQLite feature it
+/// names (metadata/sqlite_parity/declared-deviations.json).
 #[derive(Debug, Clone, Deserialize)]
 pub(crate) struct DeclaredDeviation {
     pub(crate) case_id: String,
     pub(crate) name: String,
+    pub(crate) kind: DeviationKind,
     pub(crate) reason: String,
+}
+
+/// Why a declared case's pass says less than its name.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub(crate) enum DeviationKind {
+    /// RedlineDB produces the compared output without the feature behind it.
+    StandIn,
+    /// The pinned sqlite3 build lacks the feature; the case declares its
+    /// error and passes when RedlineDB rejects the statement too.
+    SharedRejection,
+    /// The case was written for another SQLite build; against the pinned
+    /// build it checks what the reason states.
+    OracleBuild,
 }
 
 #[derive(Debug)]

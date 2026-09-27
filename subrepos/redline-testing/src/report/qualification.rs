@@ -16,7 +16,7 @@ use super::utils::sha256_hex;
 
 pub(crate) const SURFACE: &str = "sqlite_sql_cli";
 const SUITE: &str = "sqlite_parity";
-const DEVIATIONS_SCHEMA: &str = "redline-testing-sqlite-declared-deviations-v1";
+const DEVIATIONS_SCHEMA: &str = "redline-testing-sqlite-declared-deviations-v2";
 const DECLARED_DEVIATIONS: &str =
     include_str!("../../metadata/sqlite_parity/declared-deviations.json");
 
@@ -177,6 +177,7 @@ mod tests {
     use std::collections::BTreeSet;
 
     use super::{declared_deviations, release_of};
+    use crate::report::types::DeviationKind;
 
     #[test]
     fn declared_deviations_name_real_corpus_cases() {
@@ -205,6 +206,47 @@ mod tests {
         // The fts5, highlight, rtree and dbstat stand-ins are declared.
         for id in ["00093", "00094", "00095", "00096"] {
             assert!(ids.contains(id), "{id} must be declared");
+        }
+        // So are the cases the pinned oracle build cannot express: the
+        // shared soundex() and UPDATE/DELETE ... LIMIT rejections, and the
+        // median()-is-absent case the pinned build contradicts.
+        for id in ["00219", "00220", "10546", "11437", "11438", "11439"] {
+            assert!(ids.contains(id), "{id} must be declared");
+        }
+        let kind_of = |id: &str| {
+            deviations
+                .iter()
+                .find(|deviation| deviation.case_id == id)
+                .map(|deviation| deviation.kind)
+        };
+        for id in ["00219", "00220", "11437", "11438", "11439"] {
+            assert_eq!(kind_of(id), Some(DeviationKind::SharedRejection), "{id}");
+        }
+        assert_eq!(kind_of("10546"), Some(DeviationKind::OracleBuild));
+        assert_eq!(kind_of("00093"), Some(DeviationKind::StandIn));
+    }
+
+    #[test]
+    fn declared_shared_rejections_expect_the_rejection() {
+        // A shared rejection passes only on the error it declares, so the
+        // case must expect a failure and name text from it.
+        let corpus = crate::sqlite_parity::all_cases().expect("sqlite_parity corpus");
+        for deviation in declared_deviations().expect("declared deviations") {
+            if deviation.kind != DeviationKind::SharedRejection {
+                continue;
+            }
+            let case = corpus
+                .iter()
+                .find(|case| case.display_id() == deviation.case_id)
+                .expect("declared case is in the corpus");
+            assert_ne!(case.expected_exit, 0, "{}", deviation.case_id);
+            assert!(
+                case.expected_stderr_contains
+                    .iter()
+                    .any(|needle| !needle.is_empty()),
+                "{} declares no stderr fragment",
+                deviation.case_id
+            );
         }
     }
 

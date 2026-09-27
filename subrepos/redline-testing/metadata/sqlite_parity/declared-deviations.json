@@ -1,35 +1,77 @@
 {
-  "schema_version": "redline-testing-sqlite-declared-deviations-v1",
-  "description": "sqlite_parity cases that pass on output RedlineDB produces without the SQLite feature behind it. The report lists every one that is in the run beside the pass count. A case leaves this list only in the commit that implements the feature.",
+  "schema_version": "redline-testing-sqlite-declared-deviations-v2",
+  "description": "sqlite_parity cases whose pass does not mean RedlineDB matches the SQLite feature the case names. The report lists every one that is in the run beside the pass count, grouped by kind. stand_in: RedlineDB produces the compared output without the SQLite feature behind it; the case leaves this list only in the commit that implements the feature. shared_rejection: the pinned sqlite3 build lacks the feature, so the case declares the error it prints and passes when RedlineDB rejects the statement too; the case leaves this list when the reference build gains the feature and the case is re-blessed. oracle_build: the case was written for a different SQLite build, and against the pinned sqlite3 it checks what the reason states.",
   "deviations": [
     {
       "case_id": "00093",
       "name": "CREATE_VIRTUAL_TABLE_FTS5_OPTIONAL",
+      "kind": "stand_in",
       "reason": "`USING fts5` creates an ordinary table, and `MATCH` is a case-insensitive substring or prefix test with no FTS5 query syntax or ranking."
     },
     {
       "case_id": "00094",
       "name": "FTS5_HIGHLIGHT_OPTIONAL",
+      "kind": "stand_in",
       "reason": "`highlight()` wraps the literal term the last `MATCH` used; there is no FTS5 tokenizer."
     },
     {
       "case_id": "00095",
       "name": "CREATE_VIRTUAL_TABLE_RTREE_OPTIONAL",
+      "kind": "stand_in",
       "reason": "`USING rtree` creates an ordinary table of the coordinate columns, with no R*Tree index."
     },
     {
       "case_id": "00096",
       "name": "DBSTAT_OPTIONAL",
+      "kind": "stand_in",
       "reason": "`USING dbstat` creates a one-row table so `count(*) > 0` is 1; it reports no page statistics."
+    },
+    {
+      "case_id": "00219",
+      "name": "UPDATE_LIMIT_OPTIONAL",
+      "kind": "shared_rejection",
+      "reason": "The 3.53.1 amalgamation parser is generated without SQLITE_UDL_CAPABLE_PARSER, so `UPDATE ... ORDER BY ... LIMIT` is `near \"ORDER\": syntax error` even though the reference build passes `-DSQLITE_ENABLE_UPDATE_DELETE_LIMIT`."
+    },
+    {
+      "case_id": "00220",
+      "name": "DELETE_LIMIT_OPTIONAL",
+      "kind": "shared_rejection",
+      "reason": "As 00219, for `DELETE ... ORDER BY ... LIMIT`."
     },
     {
       "case_id": "10405",
       "name": "PRAGMA_MODULE_LIST_FILTER",
+      "kind": "stand_in",
       "reason": "`pragma_module_list` prints SQLite's module names, including `fts3`, `fts4`, `fts3tokenize`, `fts4aux` and `fts5vocab`, which create no table."
+    },
+    {
+      "case_id": "10546",
+      "name": "MEDIAN_REQUIRES_CAPABILITY",
+      "kind": "oracle_build",
+      "reason": "Written to show that a default build has no `median()`. The pinned sqlite3 is built with `SQLITE_ENABLE_PERCENTILE`, so the case checks that `median()` of 1..5 is 3.0; the missing-function error is not tested."
+    },
+    {
+      "case_id": "11437",
+      "name": "STRING_SOUNDEX_ROBERT",
+      "kind": "shared_rejection",
+      "reason": "The pinned sqlite3 is built without `SQLITE_SOUNDEX`, so `soundex()` is `no such function` and `soundex()` itself is not tested."
+    },
+    {
+      "case_id": "11438",
+      "name": "STRING_SOUNDEX_RUPERT",
+      "kind": "shared_rejection",
+      "reason": "As 11437."
+    },
+    {
+      "case_id": "11439",
+      "name": "STRING_SOUNDEX_X",
+      "kind": "shared_rejection",
+      "reason": "As 11437."
     },
     {
       "case_id": "12023",
       "name": "PRAGMA_COMPILE_OPTIONS",
+      "kind": "stand_in",
       "reason": "`PRAGMA compile_options` prints a fixed copy of the reference build's option list, not how RedlineDB was built."
     }
   ]
