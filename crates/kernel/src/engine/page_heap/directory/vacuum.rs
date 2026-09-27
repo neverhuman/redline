@@ -129,7 +129,7 @@ impl PageBackedHeap {
         Ok(true)
     }
 
-    pub(super) fn push_reusable_page(&self, kind: PageKind, page_id: PageId) -> Result<()> {
+    pub(crate) fn push_reusable_page(&self, kind: PageKind, page_id: PageId) -> Result<()> {
         let reusable = match kind {
             PageKind::Heap => &self.reusable_heap_pages,
             PageKind::Undo => &self.reusable_undo_pages,

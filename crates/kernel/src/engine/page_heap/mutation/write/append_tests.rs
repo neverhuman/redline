@@ -5,9 +5,11 @@ use std::time::Duration;
 
 use super::PageBackedHeap;
 use super::install_hook::set_before_heap_install_hook;
+use crate::Error;
 use crate::engine::{Engine, EngineConfig};
 use crate::format::{
-    Lsn, Page, PageGeneration, PageId, RelId, RowId, TuplePtr, TupleVersion, TxId, UndoPtr,
+    Lsn, Page, PageGeneration, PageId, PageKind, RelId, RowId, TuplePtr, TupleVersion, TxId,
+    UndoPtr,
 };
 use crate::storage::{BufferPool, PageFile};
 use crate::txn::Isolation;
@@ -189,4 +191,52 @@ fn checkpoint_during_a_heap_append_keeps_the_row_after_reopen() {
         !finished_inside,
         "a checkpoint finished between a heap WAL append and its page install"
     );
+}
+
+#[test]
+fn failed_append_leaves_a_reused_page_for_the_next_reinitialisation() {
+    let (_dir, heap) = heap_with_wal(WalConfig {
+        wal_buffer_bytes: 1024,
+        ..WalConfig::default()
+    });
+    let first = RowId(1);
+    let old = append(
+        &heap,
+        first,
+        TupleVersion::new(first, RelId(1), TxId(1), b"old".to_vec()),
+    );
+    // Vacuum found no head on the page and queued it for reuse.
+    heap.append_lanes[0].lock().unwrap().heap_page = None;
+    heap.push_reusable_page(PageKind::Heap, old.page_id)
+        .unwrap();
+
+    // A WAL record larger than the WAL buffer fails after the page is taken.
+    let second = RowId(2);
+    let oversized = WalPayload::HeapInsert {
+        tx_id: TxId(2),
+        rel_id: RelId(1),
+        row_id: second,
+        payload: vec![0; 2048],
+    };
+    let tuple = TupleVersion::new(second, RelId(1), TxId(2), b"lost".to_vec());
+    let err = heap
+        .append_tuple(TxId(2), second, tuple, Lsn(1), Some(oversized))
+        .unwrap_err();
+    assert!(matches!(err, Error::CorruptWal(_)), "{err:?}");
+    assert_eq!(resident(&heap, old.page_id), (old.generation, 1));
+
+    let third = RowId(3);
+    let ptr = append(
+        &heap,
+        third,
+        TupleVersion::new(third, RelId(1), TxId(3), b"new".to_vec()),
+    );
+    assert_eq!(ptr.page_id, old.page_id);
+    assert_eq!(
+        ptr.generation,
+        old.generation.next(),
+        "the lane appended to a reused page it never reinitialised"
+    );
+    assert_eq!(resident(&heap, old.page_id), (old.generation.next(), 1));
+    assert!(heap.read_tuple(old).is_err());
 }

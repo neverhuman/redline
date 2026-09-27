@@ -4,6 +4,7 @@ use crate::format::{
     Lsn, PAGE_HEADER_LEN, PageGeneration, PageId, PageKind, RelId, RowId, SLOT_LEN, TuplePtr,
     TupleVersion, TxId, UndoPtr,
 };
+use crate::storage::PageGuard;
 use crate::txn::{UndoKind, UndoRecord};
 use crate::wal::{WalPayload, WalRecordKind};
 use crate::{Error, Result};
@@ -165,63 +166,73 @@ impl PageBackedHeap {
         // dirtied one new page per iteration forever; reject the record before allocating any
         // page instead.
         self.ensure_cell_size(encoded.len())?;
-        let mut needs_reinit = false;
-        loop {
-            let guard = match current_page {
-                Some(page_id) => self.buffer.pin(*page_id)?,
-                None => {
-                    if let Some(page_id) = self.take_reusable_page(kind)? {
-                        *current_page = Some(page_id);
-                        needs_reinit = true;
-                        self.buffer.pin(page_id)?
-                    } else {
-                        let guard = self.buffer.allocate(kind, self.rel_id)?;
-                        *current_page = Some(guard.page_id());
-                        needs_reinit = true;
-                        guard
-                    }
-                }
-            };
 
-            // Hold the frame latch from the page copy through the WAL append to the install.
-            // Installing replaces the whole page, so an in-place writer such as vacuum's
-            // `overwrite_tuple` must not change the page between the copy and the install. A
-            // checkpoint must not flush the previous image once this record is appended either:
-            // heap appends take no checkpoint install fence and rely on this latch.
+        // Hold the frame latch from the page copy through the WAL append to the install.
+        // Installing replaces the whole page, so an in-place writer such as vacuum's
+        // `overwrite_tuple` must not change the page between the copy and the install. A
+        // checkpoint must not flush the previous image once this record is appended either: heap
+        // appends take no checkpoint install fence and rely on this latch. A fresh or reused page
+        // is reinitialised only on the private copy, so the resident page changes only after its
+        // WAL record is appended.
+        let install = |guard: &PageGuard, reinit: bool| -> Result<Option<(u16, PageGeneration)>> {
             let mut frame = guard.mutable_frame()?;
             let resident = frame
                 .page
                 .as_mut()
                 .ok_or(Error::CorruptPage("resident frame missing page"))?;
-            // A fresh or reused page is reinitialised only on the private copy, so the resident
-            // page changes only after its WAL record is appended.
             let mut staged_page = resident.clone();
-            if needs_reinit {
+            if reinit {
                 let next_generation = staged_page.header()?.generation.next();
                 staged_page.reinitialize(kind, guard.page_id(), self.rel_id, next_generation)?;
             }
             let generation = staged_page.header()?.generation;
-            match staged_page.insert_cell(encoded) {
-                Ok(slot) => {
-                    let page_lsn = self.log_cell(tx_id, lsn, wal_payload.as_ref())?;
-                    staged_page.set_page_lsn(page_lsn)?;
-                    #[cfg(test)]
-                    super::install_hook::run_before_heap_install_hook(resident);
-                    *resident = staged_page;
-                    frame.dirty = true;
+            let slot = match staged_page.insert_cell(encoded) {
+                Ok(slot) => slot,
+                Err(Error::PageFull) => return Ok(None),
+                Err(err) => return Err(err),
+            };
+            let page_lsn = self.log_cell(tx_id, lsn, wal_payload.as_ref())?;
+            staged_page.set_page_lsn(page_lsn)?;
+            #[cfg(test)]
+            super::install_hook::run_before_heap_install_hook(resident);
+            *resident = staged_page;
+            frame.dirty = true;
+            Ok(Some((slot, generation)))
+        };
+
+        // The lane adopts a fresh or reused page only once a cell is installed on it. A page
+        // whose append failed was never reinitialised. If the lane kept it, the next append would
+        // add to it without the reinitialisation, next to the old tuples and under the old
+        // generation.
+        let mut target = *current_page;
+        loop {
+            let reinit = target.is_none();
+            let guard = match target {
+                Some(page_id) => self.buffer.pin(page_id)?,
+                None => match self.take_reusable_page(kind)? {
+                    Some(page_id) => match self.buffer.pin(page_id) {
+                        Ok(guard) => guard,
+                        Err(err) => {
+                            self.push_reusable_page(kind, page_id)?;
+                            return Err(err);
+                        }
+                    },
+                    None => self.buffer.allocate(kind, self.rel_id)?,
+                },
+            };
+            match install(&guard, reinit) {
+                Ok(Some((slot, generation))) => {
+                    *current_page = Some(guard.page_id());
                     return Ok((guard.page_id(), slot, generation));
                 }
-                Err(Error::PageFull) => drop(frame),
-                Err(err) => return Err(err),
-            }
-
-            if let Some(page_id) = self.take_reusable_page(kind)? {
-                *current_page = Some(page_id);
-                needs_reinit = true;
-            } else {
-                let guard = self.buffer.allocate(kind, self.rel_id)?;
-                *current_page = Some(guard.page_id());
-                needs_reinit = true;
+                Ok(None) => target = None,
+                Err(err) => {
+                    if reinit {
+                        // The page is untouched. Queue it again so its next taker reinitialises it.
+                        self.push_reusable_page(kind, guard.page_id())?;
+                    }
+                    return Err(err);
+                }
             }
         }
     }
