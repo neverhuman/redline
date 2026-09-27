@@ -13,9 +13,24 @@ pub(crate) fn unique_key_bytes(
     let mut out = Vec::with_capacity(16 + values.len() * 32);
     out.extend_from_slice(&table_id.to_le_bytes());
     out.extend_from_slice(&constraint_id.to_le_bytes());
-    let refs = values.iter().map(|v| v.as_ref()).collect::<Vec<_>>();
+    let canonical = values.iter().map(lock_key_value).collect::<Vec<_>>();
+    let refs = canonical.iter().map(|v| v.as_ref()).collect::<Vec<_>>();
     encode_record(&refs, &mut out).map_err(|_| Error::DatatypeMismatch)?;
     Ok(out)
+}
+
+/// The value a unique-key lock encodes for `value`. The conflict check
+/// compares keys with `compare_values`, which compares an INTEGER with a
+/// REAL as doubles, so 1 and 1.0, or i64::MAX and REAL 2^63, are one key and
+/// must take one lock. Every number becomes that double, with -0.0 as 0.0.
+/// Integers that share a double also share a lock, which only makes those
+/// writers wait for each other.
+fn lock_key_value(value: &SqlValue) -> SqlValue {
+    match value {
+        SqlValue::Integer(v) => SqlValue::Real(*v as f64),
+        SqlValue::Real(v) => SqlValue::Real(*v + 0.0),
+        other => other.clone(),
+    }
 }
 
 pub(crate) fn key_values_equal(left: &[SqlValue], right: &[SqlValue]) -> bool {

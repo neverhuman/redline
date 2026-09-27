@@ -333,3 +333,54 @@ fn short_row_keeps_a_stored_null_in_a_column_with_a_default() {
         rows(&[&[int(1), Val::Null, int(5)], &[int(2), int(1), int(5)]]),
     );
 }
+
+// -- concurrent writers of numerically equal unique keys ----------------------
+
+/// Two writers inserting unique keys that compare equal, 1 and 1.0 in an
+/// untyped column or i64::MAX and REAL 2^63 in an INTEGER one, must take the
+/// same unique-key lock. The unindexed conflict check scans the heap, where
+/// neither sees the other's uncommitted row, so without a shared lock both
+/// would commit and the column would hold a duplicate.
+#[test]
+fn concurrent_inserts_of_equal_numeric_unique_keys_serialize() {
+    for (column, first, second) in [
+        ("k UNIQUE", "1", "1.0"),
+        ("k UNIQUE", "1.0", "1"),
+        (
+            "k INTEGER UNIQUE",
+            "9223372036854775807",
+            "9223372036854775808.0",
+        ),
+    ] {
+        let dir = tempfile::tempdir().unwrap();
+        let mut opts = DbOptions::default();
+        opts.engine.busy_timeout = std::time::Duration::from_millis(200);
+        let db = Database::create(dir.path().join("db"), opts).unwrap();
+        let first_conn = db.connect();
+        let second_conn = db.connect();
+        first_conn
+            .execute(&format!("CREATE TABLE u(id INTEGER PRIMARY KEY, {column})"))
+            .unwrap();
+
+        first_conn.execute("BEGIN").unwrap();
+        first_conn
+            .execute(&format!("INSERT INTO u(k) VALUES ({first})"))
+            .unwrap();
+        second_conn.execute("BEGIN").unwrap();
+        // A different key is not held up, so writers do not simply queue.
+        second_conn.execute("INSERT INTO u(k) VALUES (2)").unwrap();
+        let equal = second_conn.execute(&format!("INSERT INTO u(k) VALUES ({second})"));
+        first_conn.execute("COMMIT").unwrap();
+        second_conn.execute("ROLLBACK").unwrap();
+
+        assert!(
+            equal.is_err(),
+            "{column}: a second writer inserted {second} while {first} was uncommitted"
+        );
+        assert_eq!(
+            redline_rows(&first_conn, "SELECT count(*) FROM u").unwrap(),
+            ["Integer(1)"],
+            "{column}"
+        );
+    }
+}
