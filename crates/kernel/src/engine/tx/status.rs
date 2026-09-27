@@ -124,6 +124,12 @@ impl ConcurrentTxStatus {
         self.inner.complete_csn(csn);
     }
 
+    /// Keep `tx` from being handed out again. Recovery calls this for every
+    /// transaction the WAL names, committed or not.
+    pub(crate) fn reserve_recovered_tx_id(&self, tx: TxId) {
+        advance_atomic_past(&self.inner.next_tx, tx.0);
+    }
+
     pub fn restore_frontier(&self, next_tx: TxId, next_csn: Csn, published_csn: Csn) {
         advance_atomic_to_at_least(&self.inner.next_tx, next_tx.0.max(1));
         advance_atomic_to_at_least(&self.inner.next_csn, next_csn.0.max(1));

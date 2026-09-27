@@ -279,6 +279,7 @@ impl Engine {
             // replays the entire WAL starting from the very beginning.
             Lsn::ZERO
         };
+        reserve_ids_named_in_wal(&scan_report.records, &txs, &heap)?;
         recover_index_page_images(&scan_report.records, replay_from_lsn, target, &buffer)?;
         let metrics = recover_heap(&scan_report.records, replay_from_lsn, target, &txs, &heap)?;
         let recovered_catalog = recover_catalog_snapshot(&scan_report.records, target)?;
@@ -355,6 +356,33 @@ fn commit_durability_initial_u8(durability: CommitDurability) -> u8 {
         CommitDurability::Normal => 1,
         CommitDurability::UnsafeDev => 2,
     }
+}
+
+/// Eviction can write a page holding tuples of a transaction that never
+/// committed, and a checkpoint need not have recorded that transaction's id.
+/// Replay skips uncommitted work, so without this a new transaction could
+/// take the same id, and its commit would make those tuples visible. A new
+/// row could likewise take a row id the orphaned tuples still carry. A page
+/// reaches the file only after the WAL records behind it are durable, so the
+/// scanned WAL names every such id.
+fn reserve_ids_named_in_wal(
+    records: &[WalRecord],
+    txs: &ConcurrentTxStatus,
+    heap: &PageBackedHeap,
+) -> Result<()> {
+    for record in records {
+        txs.reserve_recovered_tx_id(record.tx_id);
+        if record.kind != WalRecordKind::PageDelta {
+            continue;
+        }
+        match WalPayload::decode(&record.payload)? {
+            WalPayload::HeapInsert { row_id, .. }
+            | WalPayload::HeapUpdate { row_id, .. }
+            | WalPayload::HeapDelete { row_id, .. } => heap.reserve_recovered_row_id(row_id),
+            _ => {}
+        }
+    }
+    Ok(())
 }
 
 fn recover_heap(

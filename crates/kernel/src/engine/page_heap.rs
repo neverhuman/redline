@@ -89,6 +89,11 @@ impl PageBackedHeap {
         RowId(self.next_row.fetch_add(1, Ordering::Relaxed))
     }
 
+    /// Keep `row_id` from being handed out again.
+    pub(crate) fn reserve_recovered_row_id(&self, row_id: RowId) {
+        advance_atomic_past(&self.next_row, row_id.0);
+    }
+
     pub fn lower_next_row(&self, next_row: u64) {
         let mut current = self.next_row.load(Ordering::SeqCst);
         while current > next_row {

@@ -249,6 +249,63 @@ fn buffer_eviction_write_is_synced_by_the_next_checkpoint() {
 }
 
 #[test]
+fn buffer_eviction_of_an_open_transaction_keeps_its_ids_from_new_ones() {
+    // Eviction can write pages holding tuples of a transaction that never
+    // commits, with no checkpoint to record its id. Recovery must not hand
+    // that transaction id, or its row ids, to new work: a reused transaction
+    // id would make the orphaned tuples visible once the new one commits.
+    let temp = TempDir::new().unwrap();
+    let engine = Engine::create(temp.path(), config(CommitDurability::Normal, SMALL_POOL)).unwrap();
+    insert_rows(&engine, 0..3).unwrap();
+    let mut open = engine.begin(Isolation::Snapshot).unwrap();
+    let open_id = open.id();
+    let mut open_rows = Vec::new();
+    for i in 3..ROWS {
+        open_rows.push(engine.insert(&mut open, payload(i)).unwrap());
+    }
+    assert!(
+        engine.buffer.stats().writes > 0,
+        "eviction never wrote the open transaction's pages"
+    );
+    drop(open);
+    drop(engine);
+
+    let reopened = Engine::open(temp.path(), config(CommitDurability::Normal, SMALL_POOL)).unwrap();
+    let mut tx = reopened.begin(Isolation::Snapshot).unwrap();
+    let new_id = tx.id();
+    let new_row = reopened.insert(&mut tx, b"new".to_vec()).unwrap();
+    reopened.commit(tx).unwrap();
+    assert!(
+        new_id > open_id,
+        "{new_id:?} reuses the uncommitted {open_id:?}"
+    );
+    assert!(
+        open_rows.iter().all(|row| new_row > *row),
+        "{new_row:?} reuses a row id of the uncommitted transaction"
+    );
+
+    let tx = reopened.begin(Isolation::Snapshot).unwrap();
+    let pages = reopened.heap_page_count().unwrap();
+    let scanned = reopened
+        .parallel_scan_page_range(
+            tx.snapshot(),
+            Some(tx.id()),
+            PageId(1)..PageId(pages + 1),
+            Some(RelId(1)),
+            1,
+            None,
+        )
+        .unwrap();
+    let open_payloads: Vec<Vec<u8>> = (3..ROWS).map(payload).collect();
+    assert!(
+        scanned
+            .iter()
+            .all(|row| !open_payloads.contains(&row.payload)),
+        "a scan shows rows of the transaction that never committed"
+    );
+}
+
+#[test]
 fn buffer_eviction_without_a_wal_keeps_a_page_ahead_of_durability() {
     // A pool that no engine attached a WAL to cannot prove a page's WAL is
     // durable, so the dirty page stays and allocation fails closed.
