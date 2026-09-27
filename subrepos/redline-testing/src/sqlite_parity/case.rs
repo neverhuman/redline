@@ -77,6 +77,26 @@ impl FromStr for Profile {
     }
 }
 
+/// How the differential compares what the two shells printed (SQ-06).
+/// Declared diagnostics (the `expected_*_contains` fragments and
+/// `expected_stdout`) are matched on normalized text whatever the mode.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum ComparisonMode {
+    /// Byte for byte: nothing decoded, trimmed or folded.
+    #[default]
+    CliBytesExact,
+    /// CRLF read as LF and nothing else, for a case about platform line
+    /// framing whose subject is not the framing bytes themselves.
+    CliTextLf,
+}
+
+impl ComparisonMode {
+    pub fn is_default(&self) -> bool {
+        *self == Self::default()
+    }
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Case {
     pub id: usize,
@@ -107,6 +127,18 @@ pub struct Case {
     /// as an empty vec.
     #[serde(default)]
     pub required_capabilities: Vec<String>,
+    /// How stdout and stderr are compared; `cli_bytes_exact` when absent.
+    #[serde(default, skip_serializing_if = "ComparisonMode::is_default")]
+    pub comparison_mode: ComparisonMode,
+    /// Lines (on either stream, either shell) that start with one of these
+    /// are left out of the comparison: output the case cannot pin down,
+    /// such as a random seed in a trace. Every other byte is compared.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub ignore_line_prefixes: Vec<String>,
+    /// Why `compare_stdout` is false: what in stdout is inherently
+    /// engine-specific. Required for every such case.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub stdout_uncompared_reason: Option<String>,
 }
 
 impl Case {

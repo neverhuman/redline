@@ -63,8 +63,30 @@ for the publish + attestation flow.
   `reference_contract_failure`, `differential_mismatch`) and `stage`
   (`selection`, `reference_contract`, `differential`). `rql_phase1` uses the
   same verdict. A catalog test requires every case with a non-zero
-  `expected_exit` to declare a stderr or combined fragment. Target-side
-  expectations are not enforced yet.
+  `expected_exit` to declare a stderr or combined fragment.
+- The target is held to the same declared contract before the shells are
+  compared: a wrong exit code, a missing declared fragment or a signal is
+  `target_semantic_failure` (stage `target_contract`), whether or not the case
+  compares stdout. Case 10547 with a target that prints `no such table: t`
+  fails.
+- The differential compares raw bytes. `EngineOutput` stdout and stderr are
+  `Vec<u8>`; they are hashed and written to failure artifacts as captured, and
+  nothing is decoded, trimmed or folded. Cases gain `comparison_mode`
+  (`cli_bytes_exact`, the default, or `cli_text_lf`, which reads CRLF as LF),
+  `ignore_line_prefixes` (replacing the hardcoded case-208 filter) and
+  `stdout_uncompared_reason`, required exactly when `compare_stdout` is false.
+  Raw records carry `normalization_policy` (`sqlite-parity-compare-v2`) and
+  `comparison_mode`. Declared fragments and `expected_stdout` are still matched
+  on normalized text.
+- The runner no longer aborts on a failed case. `run --sqlite-known-failures
+  <path>` gates `sqlite_parity` and `memory` on a baseline
+  (`redline-testing-sqlite-known-failures-v1`): after every suite ran and the
+  official evidence is written, a failure the baseline does not list, a listed
+  case that passed or was skipped, and a listed case that failed with another
+  verdict all fail the run. `rql_phase1` has no baseline, so any failure there
+  is fatal. Summaries, `summary.json` and `official-evidence.json` list failed
+  (and skipped) case ids, and the official evidence records the baseline's
+  sha256.
 
 ### Removed
 

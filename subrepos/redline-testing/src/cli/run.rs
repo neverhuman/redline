@@ -6,7 +6,7 @@ use anyhow::{Context, Result, bail};
 
 use crate::beyond_sqlite;
 use crate::evidence::{self, EvidenceConfig, OfficialEvidenceConfig, OfficialSuiteEvidence};
-use crate::sqlite_parity;
+use crate::sqlite_parity::{self, KnownFailures};
 
 use super::args::{ProgressMode, RunArgs, Suite};
 
@@ -17,9 +17,10 @@ pub(crate) fn run_suite(args: RunArgs) -> Result<()> {
     fs::create_dir_all(&tmp_root)
         .with_context(|| format!("create tmp root {}", tmp_root.display()))?;
     let sqlite_bin = resolve_sqlite_bin(&args.sqlite_bin);
+    let known_failures = load_known_failures(args.sqlite_known_failures.as_deref())?;
 
     match args.suite {
-        Suite::All => run_all_suites(&args, workers, tmp_root, sqlite_bin),
+        Suite::All => run_all_suites(&args, workers, tmp_root, sqlite_bin, &known_failures),
         Suite::SqliteParity | Suite::Memory | Suite::RqlPhase1 => {
             prepare_output(&args.output)?;
             let started = Instant::now();
@@ -42,7 +43,9 @@ pub(crate) fn run_suite(args: RunArgs) -> Result<()> {
                     started.elapsed().as_nanos()
                 );
             }
-            Ok(())
+            // The raw records and the suite's evidence are written; now
+            // the failures must be exactly the known ones.
+            known_failures.gate(args.suite.as_str(), &summary)
         }
         Suite::BeyondSqlite => {
             prepare_output(&args.output)?;
@@ -62,11 +65,25 @@ pub(crate) fn run_suite(args: RunArgs) -> Result<()> {
     }
 }
 
+/// The known-failures baseline, checked against the compiled-in corpus, or
+/// none when the run names no baseline.
+fn load_known_failures(path: Option<&Path>) -> Result<KnownFailures> {
+    let Some(path) = path else {
+        return Ok(KnownFailures::none());
+    };
+    let known_failures = KnownFailures::load(path)?;
+    known_failures
+        .check_corpus(&sqlite_parity::all_cases()?)
+        .with_context(|| format!("known-failures baseline {}", path.display()))?;
+    Ok(known_failures)
+}
+
 fn run_all_suites(
     args: &RunArgs,
     workers: usize,
     tmp_root: PathBuf,
     sqlite_bin: PathBuf,
+    known_failures: &KnownFailures,
 ) -> Result<()> {
     let generated_at_unix_ms = evidence::now_unix_ms();
     let output_dir = args
@@ -141,6 +158,15 @@ fn run_all_suites(
         args.postgres_regression_baseline.as_deref(),
         args.postgres_readme.as_deref(),
     );
+    // Every suite's failures are judged against the baseline, but only
+    // after every suite ran and the official evidence is written, so a
+    // failing run still leaves complete evidence behind.
+    let sqlite_gates = [
+        ("sqlite_parity", &sqlite_summary),
+        ("memory", &memory_summary),
+        ("rql_phase1", &rql_summary),
+    ]
+    .map(|(suite, summary)| known_failures.gate(suite, summary));
     evidence::write_official_evidence(OfficialEvidenceConfig {
         output_dir: output_dir.to_path_buf(),
         all_output: args.output.clone(),
@@ -163,7 +189,8 @@ fn run_all_suites(
                 evidence::suite_artifact_path(output_dir, "sqlite_parity", "manifest.json"),
                 evidence::suite_artifact_path(output_dir, "sqlite_parity", "provenance.json"),
                 &sqlite_summary,
-            ),
+            )
+            .with_known_failures(known_failures.listed("sqlite_parity")),
             OfficialSuiteEvidence::new(
                 "memory",
                 memory_output,
@@ -172,7 +199,8 @@ fn run_all_suites(
                 evidence::suite_artifact_path(output_dir, "memory", "manifest.json"),
                 evidence::suite_artifact_path(output_dir, "memory", "provenance.json"),
                 &memory_summary,
-            ),
+            )
+            .with_known_failures(known_failures.listed("memory")),
             OfficialSuiteEvidence::new(
                 "rql_phase1",
                 rql_output,
@@ -181,7 +209,8 @@ fn run_all_suites(
                 evidence::suite_artifact_path(output_dir, "rql_phase1", "manifest.json"),
                 evidence::suite_artifact_path(output_dir, "rql_phase1", "provenance.json"),
                 &rql_summary,
-            ),
+            )
+            .with_known_failures(known_failures.listed("rql_phase1")),
             OfficialSuiteEvidence::new(
                 "beyond_sqlite",
                 beyond_output.clone(),
@@ -190,10 +219,22 @@ fn run_all_suites(
                 evidence::suite_artifact_path(output_dir, "beyond_sqlite", "manifest.json"),
                 evidence::suite_artifact_path(output_dir, "beyond_sqlite", "provenance.json"),
                 &beyond_summary,
-            ),
+            )
+            .without_case_ids(),
         ],
+        known_failures: known_failures.source().cloned(),
     })?;
-    postgres_gate
+    let problems = sqlite_gates
+        .into_iter()
+        .chain([postgres_gate])
+        .filter_map(Result::err)
+        .map(|error| format!("{error:#}"))
+        .collect::<Vec<_>>();
+    if problems.is_empty() {
+        Ok(())
+    } else {
+        bail!("{}", problems.join("\n"))
+    }
 }
 
 fn run_sqlite_like_suite(

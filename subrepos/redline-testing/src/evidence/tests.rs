@@ -6,7 +6,8 @@ use std::path::{Path, PathBuf};
 use std::time::Duration;
 
 use super::{EvidenceConfig, write_sqlite_parity_evidence};
-use crate::sqlite_parity::RunSummary;
+use crate::sqlite_parity::case::{Case, Priority, Profile};
+use crate::sqlite_parity::{CaseFailure, RunSummary, VerdictReason};
 
 #[cfg(unix)]
 fn fake_bin(dir: &Path, name: &str, version: &str) -> PathBuf {
@@ -43,6 +44,23 @@ fn raw_case(case_id: &str, reference_ns: u128, target_ns: u128) -> String {
 
 #[cfg(unix)]
 fn write_evidence(raw_text: &str) -> (tempfile::TempDir, String, String) {
+    write_evidence_with(
+        raw_text,
+        RunSummary {
+            total: 2,
+            passed: 2,
+            failed: 0,
+            skipped: 0,
+            elapsed: Duration::from_millis(5),
+            slowest: Vec::new(),
+            failures: Vec::new(),
+            skipped_case_ids: Vec::new(),
+        },
+    )
+}
+
+#[cfg(unix)]
+fn write_evidence_with(raw_text: &str, summary: RunSummary) -> (tempfile::TempDir, String, String) {
     let root = tempfile::Builder::new()
         .prefix("redline-testing-runner-evidence-")
         .tempdir()
@@ -64,14 +82,7 @@ fn write_evidence(raw_text: &str) -> (tempfile::TempDir, String, String) {
         command_line: vec!["redline-testing".to_owned(), "run".to_owned()],
         started_unix_ms: 1,
         ended_unix_ms: 2,
-        summary: RunSummary {
-            total: 2,
-            passed: 2,
-            failed: 0,
-            skipped: 0,
-            elapsed: Duration::from_millis(5),
-            slowest: Vec::new(),
-        },
+        summary,
     })
     .expect("write runner evidence");
     let ranked = fs::read_to_string(root.path().join("ranked.csv")).expect("ranked.csv");
@@ -150,4 +161,56 @@ fn run_provenance_records_the_measured_identity() {
     assert!(provenance["source_dirty_paths"].is_array(), "{text}");
     assert!(provenance.get("oracle_build_stamp").is_some(), "{text}");
     assert!(provenance.get("redlinedb_git_dirty").is_none(), "{text}");
+}
+
+#[cfg(unix)]
+#[test]
+fn suite_summary_lists_failed_and_skipped_cases() {
+    // Failures are published by id, beside the counts, so the evidence
+    // processor can hold them to the known-failures baseline.
+    let case = |id: usize| {
+        serde_json::from_value::<Case>(serde_json::json!({
+            "id": id, "folder": "F", "name": format!("CASE_{id:05}"), "category": "C",
+            "priority": Priority::P0, "profile": Profile::Memory, "kind": "sql",
+            "description": "", "status": "active", "db": ":memory:", "args": [],
+            "stdin": "", "expected_exit": 0, "compare_stdout": true,
+            "expected_stdout": null, "expected_stdout_contains": [],
+            "expected_stderr_contains": [], "expected_combined_contains": [],
+            "files": [], "script": null, "notes": ""
+        }))
+        .expect("case")
+    };
+    let mut summary = RunSummary::default();
+    summary.record_run(None);
+    summary.record_run(Some(CaseFailure {
+        case_id: case(11).display_id(),
+        name: case(11).name,
+        verdict_reasons: [VerdictReason::TargetSemanticFailure].into(),
+    }));
+    summary.record_skip(&case(21));
+    let (_root, _ranked, summary) = write_evidence_with(
+        &format!(
+            "{}{}",
+            raw_case("00001", 1_000_000, 2_000_000),
+            raw_case("00011", 1_000_000, 2_000_000)
+        ),
+        summary,
+    );
+    let summary: serde_json::Value = serde_json::from_str(&summary).expect("summary json");
+    assert_eq!(
+        (
+            &summary["total_cases"],
+            &summary["passed_cases"],
+            &summary["failed_cases"],
+            &summary["skipped_cases"]
+        ),
+        (
+            &serde_json::json!(3),
+            &serde_json::json!(1),
+            &serde_json::json!(1),
+            &serde_json::json!(1)
+        )
+    );
+    assert_eq!(summary["failed_case_ids"], serde_json::json!(["00011"]));
+    assert_eq!(summary["skipped_case_ids"], serde_json::json!(["00021"]));
 }

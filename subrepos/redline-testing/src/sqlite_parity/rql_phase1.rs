@@ -164,7 +164,7 @@ pub fn run(config: RunConfig) -> Result<RunSummary> {
                 rql_case.reference.display_id()
             );
         }
-        let mut failed = false;
+        let mut failure_reasons = std::collections::BTreeSet::new();
         for sample_index in 0..total_samples {
             let measured_index = sample_index.checked_sub(config.warmup);
             let sample_role = if let Some(index) = measured_index {
@@ -215,15 +215,12 @@ pub fn run(config: RunConfig) -> Result<RunSummary> {
                 ));
             }
             if !verdict.is_pass() {
-                failed = true;
+                failure_reasons.insert(verdict.reason);
             }
         }
-        summary.total += 1;
-        if failed {
-            summary.failed += 1;
-        } else {
-            summary.passed += 1;
-        }
+        let failure = runner::case_failure(&rql_case.reference, failure_reasons);
+        let failed = failure.is_some();
+        summary.record_run(failure);
         if config.progress {
             let status = if failed { "failed" } else { "passed" };
             eprintln!(
@@ -234,7 +231,11 @@ pub fn run(config: RunConfig) -> Result<RunSummary> {
     }
 
     summary.elapsed = started.elapsed();
-    finish_summary(summary, config.progress)
+    Ok(runner::finish_summary(
+        summary,
+        "rql_phase1",
+        config.progress,
+    ))
 }
 
 fn append_skip(
@@ -246,8 +247,7 @@ fn append_skip(
     sqlite_version: Option<String>,
     output: &Path,
 ) -> Result<()> {
-    summary.total += 1;
-    summary.skipped += 1;
+    summary.record_skip(case);
     let artifact = report::write_skip_artifact(case, reason)?;
     report::append_jsonl(
         Some(output),
@@ -260,30 +260,6 @@ fn append_skip(
             Some(reason.to_owned()),
         ),
     )
-}
-
-fn finish_summary(mut summary: RunSummary, progress: bool) -> Result<RunSummary> {
-    summary.slowest.sort_by(|left, right| right.1.cmp(&left.1));
-    summary.slowest.truncate(10);
-    if progress {
-        eprintln!(
-            "rql_phase1 total={} passed={} failed={} skipped={} elapsed_ns={}",
-            summary.total,
-            summary.passed,
-            summary.failed,
-            summary.skipped,
-            summary.elapsed.as_nanos()
-        );
-        eprintln!("rql_phase1 slowest={:?}", summary.slowest);
-    }
-    if summary.failed > 0 {
-        bail!(
-            "rql_phase1 failed {} of {} cases",
-            summary.failed,
-            summary.total
-        );
-    }
-    Ok(summary)
 }
 
 fn is_rql_phase1_source(case: &Case) -> bool {

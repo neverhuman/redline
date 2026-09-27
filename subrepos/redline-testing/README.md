@@ -300,9 +300,17 @@ exit normally with `expected_exit`, print every declared stdout, stderr and
 combined fragment, and, when the case compares stdout and declares it, print
 exactly `expected_stdout` after normalization. A violation is a
 `reference_contract_failure`, even when the target agrees with the reference.
-Only then is the target compared with the reference
-(`differential_mismatch`). A child killed by a signal never passes. Each raw
-record carries `verdict_reason` and `stage`.
+The target is then held to the same declared exit code and fragments
+(`target_semantic_failure`), and only then compared with the reference, byte for
+byte (`differential_mismatch`; a case may declare `comparison_mode: cli_text_lf`
+or `ignore_line_prefixes`). A child killed by a signal never passes. Each raw
+record carries `verdict_reason`, `stage` and `normalization_policy`.
+
+**Known failures:** `run --sqlite-known-failures <path>` publishes the
+`sqlite_parity` and `memory` failures a baseline lists as failures and fails the
+run, after its evidence is written, when the failed cases are not exactly the
+listed ones. The official lane passes RedlineDB's
+`metadata/sqlite_parity/known-failures.json`.
 
 ---
 

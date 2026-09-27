@@ -104,6 +104,34 @@ or combined fragment. That is why 00142 changed.
 | 00222 | `OPT_ESCAPE_SYMBOL` | fragment `\n` (RedlineDB's output) | the newline stays unescaped |
 | 00226 | `OPT_NOFOLLOW_CATALOG` | exit 0 | exit 1, `-nofollow` refuses the missing file |
 
+The target is held to the same declared contract: a RedlineDB run that exits
+with a different code, or lacks a declared fragment, fails as
+`target_semantic_failure` before the shells are compared (case 10547 declares
+`UNIQUE constraint failed: t.x`, and a `no such table: t` no longer passes). The
+comparison itself is byte for byte: stdout and stderr are captured as raw bytes
+and nothing is trimmed, folded or decoded, so a trailing space, a missing empty
+row, a CR inside a field and a U+FFFD printed for a raw byte are all
+`differential_mismatch`. A case can opt into `comparison_mode: cli_text_lf`
+(CRLF read as LF, for a case about platform line framing) or drop whole lines
+with `ignore_line_prefixes` (case 00208 drops its `trace.xRandomness(` seed
+lines); declared fragments and `expected_stdout` are still matched on
+normalized text. Every case with `compare_stdout: false` states why in
+`stdout_uncompared_reason`; the 2026-09-27 audit turned stdout comparison on for
+00115, 00117, 00118, 00121, 00124, 00128, 00129, 00133, 00140, 00141, 00152,
+00158, 00159, 00222 and 10182, whose output is the same bytes on every run.
+
+Failures are published, not hidden. `metadata/sqlite_parity/known-failures.json`
+lists every `sqlite_parity` and `memory` case the current target fails, with
+the verdict it fails with, why, and the phase that owns the fix. The official
+run (`--sqlite-known-failures`) and `evidence_processor` both require each
+suite's failed cases to be exactly that list: an unlisted failure fails the
+run, and so does a listed case that passes, which leaves the file in the commit
+whose raw result shows the pass. The ledger rows below predate target-side
+enforcement: a row can read pass while that list holds an error-message case
+for the same feature (10560 for savepoints, 10253 and 10568 for
+`PRAGMA query_only`, 10584 for foreign keys). SQ-07 regenerates the ledger from
+typed proof.
+
 Cases the pinned build cannot express are declared in
 `subrepos/redline-testing/metadata/sqlite_parity/declared-deviations.json`
 and listed in the report: the `soundex()` cases 11437-11439 and 00219/00220
@@ -117,12 +145,12 @@ lacks `median()`, now checks `median()` because the pinned build enables
 |---|---|---|---|---|
 | Basic `SELECT` projection/filter/order | pass | `crates/sql/tests/smoke_select.rs`, `crates/sql/tests/differential_lab.rs` | sql-parser-planner-executor | Covered for scalar values and simple predicates. |
 | `INSERT`, `UPDATE`, `DELETE` basics | pass | `crates/sql/tests/smoke_dml.rs`, `crates/bench/compat/**` | sql-parser-planner-executor | Cross-engine SQLLogicTest corpus covers representative DML. |
-| `CREATE TABLE`, `DROP TABLE` basics | partial | `crates/bench/compat/**`, `crates/sql/tests/parity_coverage.rs` | sql-parser-planner-executor | Official sqlite_parity is 2445/2445 and covers basic create/drop. This row stays partial because SQLite metadata compatibility is not complete. |
+| `CREATE TABLE`, `DROP TABLE` basics | partial | `crates/bench/compat/**`, `crates/sql/tests/parity_coverage.rs` | sql-parser-planner-executor | The official sqlite_parity corpus covers basic create/drop. This row stays partial because SQLite metadata compatibility is not complete. |
 | `CREATE TABLE AS SELECT` | pass | `crates/sql/tests/parity_coverage.rs` | sql-parser-planner-executor | CTAS names, declared types, row order, `IF NOT EXISTS` short-circuiting, and rollback on source-query failure are covered against `rusqlite`. |
 | `CREATE INDEX`, `DROP INDEX` basics | pass | `crates/sql/tests/parity_coverage.rs` | sql-parser-planner-executor | Basic B-tree-backed indexes only. |
-| `ALTER TABLE RENAME TABLE/COLUMN` | partial | `crates/sql/tests/parity_coverage.rs` | sql-parser-planner-executor | Official sqlite_parity is 2445/2445 and covers rename of tables and columns. This row stays partial because add/drop-column variants are outside that covered subset. |
+| `ALTER TABLE RENAME TABLE/COLUMN` | partial | `crates/sql/tests/parity_coverage.rs` | sql-parser-planner-executor | The official sqlite_parity corpus covers rename of tables and columns. This row stays partial because add/drop-column variants are outside that covered subset. |
 | `RETURNING` expressions | pass | `crates/sql/tests/parity_coverage.rs` | sql-parser-planner-executor | Insert/update expressions covered. |
-| UPSERT `ON CONFLICT DO UPDATE` representative path | partial | `crates/bench/compat/orm/migration.sqlt`, `crates/sql/tests/phase10_sqlc_conflict_matrix.rs` | sql-parser-planner-executor | Official sqlite_parity is 2445/2445 and covers the representative `ON CONFLICT DO UPDATE` path. This row stays partial because the full SQLite conflict matrix is outside that covered subset. |
+| UPSERT `ON CONFLICT DO UPDATE` representative path | partial | `crates/bench/compat/orm/migration.sqlt`, `crates/sql/tests/phase10_sqlc_conflict_matrix.rs` | sql-parser-planner-executor | The official sqlite_parity corpus covers the representative `ON CONFLICT DO UPDATE` path. This row stays partial because the full SQLite conflict matrix is outside that covered subset. |
 | Savepoints | pass | `crates/sql/tests/parity_coverage.rs`, `crates/sql/tests/phase10_sqlb.rs` | sql-parser-planner-executor | Nested savepoint behavior has focused coverage. |
 | Joins and left joins | pass | `crates/sql/tests/parity_coverage.rs`, `crates/sql/tests/smoke_select.rs`, `crates/sql/tests/differential_lab.rs`, `crates/bench/compat/orm/queries.sqlt` | sql-parser-planner-executor | Explicit join forms are covered. NATURAL JOIN and USING merged-column output semantics are implemented (W9-T9, `72b4107`); corpus cases 10445/10451/10466 pass. Cross joins, self-joins, and multi-way joins have coverage via `differential_lab`. |
 | Row-value `IN` subqueries | pass | `crates/sql/tests/parity_coverage.rs`, `crates/sql/tests/differential_lab.rs` | sql-parser-planner-executor | Representative row-value `IN`/`NOT IN` covered. |
@@ -130,13 +158,13 @@ lacks `median()`, now checks `median()` because the pinned build enables
 | CTEs (`WITH`, recursive and non-recursive) | pass | `crates/sql/tests/parity_cte.rs` | sql-parser-planner-executor | A3: non-recursive + recursive (UNION / UNION ALL) materialized into thread-local row store; accepts `AS MATERIALIZED` / `AS NOT MATERIALIZED` as no-op hints and supports JOIN against CTE via synthetic TableDef. Iteration cap 10_000. |
 | Compound `SELECT` (`UNION`, `INTERSECT`, `EXCEPT`) | pass | `crates/sql/tests/parity_compound_select.rs`, `crates/sql/tests/parity_order_by_ordinal.rs` | sql-parser-planner-executor | A2: UNION / UNION ALL / INTERSECT / EXCEPT all wired through the parser and exec layers; column-arity and type-class mismatches return diagnostic errors that match SQLite's error class. Parameterized compound branches and trailing wrapper `ORDER BY` / `LIMIT` share stable parameter slots, and top-level integer literals in trailing `ORDER BY` resolve as 1-based output-column references (single-branch and compound), matching SQLite. |
 | Window functions and frames | pass | `crates/sql/tests/parity_window.rs` | sql-parser-planner-executor | A4: ROW_NUMBER / RANK / DENSE_RANK / NTILE / LAG / LEAD / FIRST_VALUE / LAST_VALUE / NTH_VALUE / PERCENT_RANK / CUME_DIST + aggregate-OVER (SUM/COUNT/AVG/MIN/MAX/TOTAL) with ROWS / RANGE / GROUPS frames. |
-| Views | partial | `crates/sql/tests/parity_view.rs` | sql-parser-planner-executor | Official sqlite_parity is 2445/2445 and covers `CREATE [TEMP] VIEW [IF NOT EXISTS]` and `DROP VIEW [IF EXISTS]`. Views persist in the catalog (format_version 4) and expand at FROM-binding time. DML on a view returns a SQLite-style "cannot modify view" error. This row stays partial because cached prepared statements still do not observe fresh rows after data changes (bind-time expansion, not runtime materialization). |
-| Triggers | partial | `crates/sql/tests/parity_trigger.rs` | sql-parser-planner-executor | Official sqlite_parity is 2445/2445 and covers `CREATE TRIGGER {BEFORE\|AFTER} {INSERT\|UPDATE [OF col,...]\|DELETE}` plus `DROP TRIGGER`, including `OLD`/`NEW` and `UPDATE OF`. This row stays partial because `INSTEAD OF` on views is outside that covered subset, and `Txn::trigger_depth` caps recursion at 32 in debug rather than SQLite's 1000. |
+| Views | partial | `crates/sql/tests/parity_view.rs` | sql-parser-planner-executor | The official sqlite_parity corpus covers `CREATE [TEMP] VIEW [IF NOT EXISTS]` and `DROP VIEW [IF EXISTS]`. Views persist in the catalog (format_version 4) and expand at FROM-binding time. DML on a view returns a SQLite-style "cannot modify view" error. This row stays partial because cached prepared statements still do not observe fresh rows after data changes (bind-time expansion, not runtime materialization). |
+| Triggers | partial | `crates/sql/tests/parity_trigger.rs` | sql-parser-planner-executor | The official sqlite_parity corpus covers `CREATE TRIGGER {BEFORE\|AFTER} {INSERT\|UPDATE [OF col,...]\|DELETE}` plus `DROP TRIGGER`, including `OLD`/`NEW` and `UPDATE OF`. This row stays partial because `INSTEAD OF` on views is outside that covered subset, and `Txn::trigger_depth` caps recursion at 32 in debug rather than SQLite's 1000. |
 | Generated columns | pass | `crates/sql/tests/parity_generated_col.rs` | sql-parser-planner-executor | A6 SQL-D: `STORED` and `VIRTUAL` generated columns parse, persist (catalog format_version 7), recompute on INSERT/UPDATE (STORED), and evaluate on read (VIRTUAL). Writes targeting generated columns are rejected with a SQLite-class error. |
 | Partial indexes | pass | `crates/sql/tests/parity_partial_index.rs` | sql-parser-planner-executor | A6 SQL-D: `CREATE INDEX ... WHERE <predicate>` persists the predicate as verbatim SQL on `IndexDef.predicate_sql`; DML re-parses and evaluates the predicate per row (`crates/sql/src/exec/index_predicate.rs`) so partial indexes track in/out membership precisely, and reads only use the index when the query predicate implies the index predicate (`crates/sql/src/exec/index_partial.rs`). |
 | Expression indexes | pass | `crates/sql/tests/parity_expr_index.rs` | sql-parser-planner-executor | A6 SQL-D: `CREATE INDEX ... ON t(expr(col))` stashes the expression SQL on `IndexKeySource::Expression`; DML re-evaluates the expression to compute the index key, and UPDATE re-emits when any referenced column changes. |
 | Foreign keys | pass | `crates/sql/tests/parity_fk_enforce.rs`, `crates/sql/tests/phase10_sqld_fk.rs` | sql-parser-planner-executor | A6-fk: PRAGMA-gated enforcement on INSERT/UPDATE/DELETE; ON DELETE/UPDATE {NO ACTION, RESTRICT, CASCADE, SET NULL, SET DEFAULT}; DEFERRABLE INITIALLY DEFERRED checked at COMMIT. Cascade depth bounded. |
-| ATTACH / DETACH | partial | `crates/sql/tests/parity_attach.rs` | sql-parser-planner-executor | Official sqlite_parity is 2445/2445. Corpus cases 10001–10021 pass for cross-database `SELECT`, JOIN, `INSERT ... SELECT`, `UPDATE`, `DELETE`, and `PRAGMA` routing. This row stays partial because cross-database `INSERT`/`UPDATE`/`DELETE` without a `SELECT` subquery, and cross-database transaction semantics, are outside that covered subset. |
+| ATTACH / DETACH | partial | `crates/sql/tests/parity_attach.rs` | sql-parser-planner-executor | Corpus cases 10001–10021 pass for cross-database `SELECT`, JOIN, `INSERT ... SELECT`, `UPDATE`, `DELETE`, and `PRAGMA` routing. This row stays partial because cross-database `INSERT`/`UPDATE`/`DELETE` without a `SELECT` subquery, and cross-database transaction semantics, are outside that covered subset. |
 
 ## Expressions And Functions
 
@@ -150,7 +178,7 @@ lacks `median()`, now checks `median()` because the pinned build enables
 | JSON aggregate functions | pass | `crates/sql/tests/parity_agg_funcs.rs` | phase10-json1-surface | JSON aggregate rows covered. |
 | JSON scalar functions | pass | `crates/sql/tests/phase10_j1_compat.rs`, `crates/sql/tests/parity_json1.rs`, `crates/sql/src/json/scalar.rs` | phase10-json1-surface | `parity_json1.rs` runs a rusqlite-oracle differential pass over `json()` / `json_array[_length]` / `json_object` / `json_extract` / `json_type` / `json_valid` / `json_quote` / `json_set` / `json_insert` / `json_replace` / `json_remove` / `json_patch` and the `->` / `->>` arrow operators. |
 | Date/time functions | pass | `crates/sql/tests/phase10_sqld_datetime.rs`, `crates/sql/src/datetime.rs` | phase10-datetime | A8: `date()` / `time()` / `datetime()` / `julianday()` / `unixepoch()` / `strftime()` accept the SQLite time-string formats and modifiers (`'now'`, `'+/-N {days,hours,...}'`, `'start of {day,month,year}'`, `'weekday N'`, `'utc'`, `'localtime'`) through the shared modifier pipeline in `crates/sql/src/datetime/modifiers.rs`; differential parity against the rusqlite oracle is wired and green. |
-| Collations | partial | `crates/sql/tests/phase10_sqld_collation.rs`, `crates/sql/tests/phase10_sqld_collation_unique_index.rs`, `crates/sql/tests/parity_order_by_ordinal.rs` | phase10-collations | Official sqlite_parity is 2445/2445. Explicit `ORDER BY ... COLLATE NOCASE/RTRIM/BINARY` and corpus case 10340 (`CREATE UNIQUE INDEX ... COLLATE NOCASE`) pass. This row stays partial because implicit column-affinity collation and LIKE-with-NOCASE index optimization are outside that covered subset. |
+| Collations | partial | `crates/sql/tests/phase10_sqld_collation.rs`, `crates/sql/tests/phase10_sqld_collation_unique_index.rs`, `crates/sql/tests/parity_order_by_ordinal.rs` | phase10-collations | Explicit `ORDER BY ... COLLATE NOCASE/RTRIM/BINARY` and corpus case 10340 (`CREATE UNIQUE INDEX ... COLLATE NOCASE`) pass. This row stays partial because implicit column-affinity collation and LIKE-with-NOCASE index optimization are outside that covered subset. |
 | User-defined SQL functions/collations | pass | `crates/ffi/tests/udf_register.rs`, `crates/ffi/tests/collation_register.rs` | c-abi | B2: `sqlite3_create_function{,_v2,16}` registers scalar UDFs; `sqlite3_create_collation*` + `sqlite3_collation_needed` register collation callbacks. B4 dispatch path routes the registered C callbacks through the SQL evaluator so user-defined functions and collations are invoked end-to-end from prepared statements. |
 
 ## PRAGMAs
@@ -168,7 +196,7 @@ lacks `median()`, now checks `median()` because the pinned build enables
 | Unknown PRAGMA names | rejects-by-design | `crates/sql/tests/parity_pragma_tv.rs` | sql-parser-planner-executor | All unsupported PRAGMAs now return `UnsupportedSql` naming the PRAGMA. |
 | `PRAGMA foreign_keys` | pass | `crates/sql/tests/parity_fk_enforce.rs`, `crates/sql/tests/phase10_sqld_fk.rs` | sql-parser-planner-executor | A6: per-connection toggle now gates the FK enforcement layer end-to-end; OFF skips every check (matches SQLite's bundled default). |
 | Table-valued PRAGMAs | pass | `crates/sql/tests/parity_pragma_tv.rs` | sql-parser-planner-executor | C2: `PRAGMA table_info(...)`, `PRAGMA index_list(...)`, `PRAGMA index_info(...)`, `PRAGMA foreign_key_list(...)` and the rest of the table-valued PRAGMA family produce row sets with column names and ordering that match the rusqlite oracle. |
-| Full reference-build PRAGMA set | partial | `crates/sql/tests/sqlite_full_parity.rs` | sql-parser-planner-executor | Official sqlite_parity is 2445/2445 and compares `PRAGMA compile_options` and `PRAGMA pragma_list` for the supported subset. This row stays partial because intentional rejects (`auto_vacuum`, `wal_checkpoint(MODE)`, unknown names) remain explicit sentinels outside that subset. |
+| Full reference-build PRAGMA set | partial | `crates/sql/tests/sqlite_full_parity.rs` | sql-parser-planner-executor | The official sqlite_parity corpus compares `PRAGMA compile_options` and `PRAGMA pragma_list` for the supported subset. This row stays partial because intentional rejects (`auto_vacuum`, `wal_checkpoint(MODE)`, unknown names) remain explicit sentinels outside that subset. |
 
 ## File Format, Durability, C API, And CLI
 
@@ -181,8 +209,8 @@ lacks `median()`, now checks `median()` because the pinned build enables
 | Cross-open SQLite-created files with RedlineDB | not-started | none | storage-and-catalog | Requires SQLite pager/btree/record reader. |
 | Covered `sqlite3_*` open/prepare/step/finalize aliases | pass | `crates/ffi/tests/**`, `contracts/c-abi/redlinedb.h` | c-abi | Covered ABI subset only. Header edits require an exception receipt. |
 | Broad `sqlite3_*` API surface | pass | `crates/ffi/src/sqlite3_api/**`, `crates/ffi/tests/**` | c-abi | B1-B5: 36 additional `sqlite3_*` symbols implemented across `sqlite3_api/{result,value,context,udf,collation,blob,hooks,hooks_fire,bind,column,core,exec,meta,stmt}.rs`. Covers UDF context + result family, value extraction, blob I/O, collation registration, per-connection hooks (`commit`, `rollback`, `update`, `trace`, `profile`, `busy_handler`, `set_authorizer`), and the remaining stmt/meta/exec aliases. Symbol-allowlist tests (`crates/ffi/tests/symbol_diff.rs`) enforce the surface. |
-| CLI one-shot query/stats/backup commands | partial | `crates/cli` smoke lanes via `.jankurai/test-map.json` | cli-shell | Official sqlite_parity is 2445/2445 and the shell dot-command row below is pass. This row stays partial because SQLite shell scripting beyond those one-shot query, stats, and backup paths is outside that covered subset. |
-| SQLite shell dot-command compatibility | pass | `crates/cli/tests/dot_commands.rs` | cli-shell | 25 dot-commands wired through `crates/cli/src/dot/{mod,control,display,io_cmd,schema,parameter}.rs`; adds `.fullschema` (schema + `sqlite_master`), `.once FILE` (one-shot redirect plumbed through `run_query_with_state`), and `.parameter set|unset|init|clear|list` (bindings applied via `bind_named` on the next statement). |
+| CLI one-shot query/stats/backup commands | partial | `crates/cli` smoke lanes via `.jankurai/test-map.json` | cli-shell | This row stays partial because SQLite shell scripting beyond those one-shot query, stats, and backup paths is outside that covered subset. |
+| SQLite shell dot-command compatibility | partial | `crates/cli/tests/dot_commands.rs` | cli-shell | 25 dot-commands wired through `crates/cli/src/dot/{mod,control,display,io_cmd,schema,parameter}.rs`; adds `.fullschema` (schema + `sqlite_master`), `.once FILE` (one-shot redirect plumbed through `run_query_with_state`), and `.parameter set|unset|init|clear|list` (bindings applied via `bind_named` on the next statement). This row is partial because the official corpus, comparing stdout byte for byte, fails these dot-command cases: 00115 `.schema`, 00117 `.dump`, 00118 `.fullschema`, 00121 `.parameter list`, 00124 `.bail off`, 00128 `.dbconfig`, 00129 `.connection`, 00133 `.auth`, 00134 `.crlf`, 00140 `.expert`, 00141 `.sha3sum`, 00152 `.clone`, 00158 `.shell`, 00159 `.system` and 10182 `.show`. Each is listed with its reason in `metadata/sqlite_parity/known-failures.json`. |
 
 ## Evidence Boundary
 

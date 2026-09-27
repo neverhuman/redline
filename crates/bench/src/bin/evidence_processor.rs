@@ -10,6 +10,9 @@ use anyhow::{Context, Result, anyhow, bail};
 use serde_json::{Map, Value};
 use sha2::{Digest, Sha256};
 
+#[path = "evidence_processor/sqlite_known_failures.rs"]
+mod sqlite_known_failures;
+
 const EXPECTED_SCHEMA: &str = "redline-testing-official-evidence-v1";
 const PROCESSED_SCHEMA: &str = "redline-testing-official-evidence-processed-v1";
 const EXPECTED_SQLITE_CASES: u64 = 2_445;
@@ -262,18 +265,21 @@ fn validated_suite(
         provenance_path.clone(),
     ]);
 
-    if failed != 0 && name != "beyond_sqlite" {
+    // sqlite_parity and memory publish their failures; which ones is
+    // checked against the known-failures baseline in `run`. Every other
+    // SQLite-shell suite must pass, and beyond_sqlite has its own gate.
+    if failed != 0 && !matches!(name, "sqlite_parity" | "memory" | "beyond_sqlite") {
         bail!("suite {name} failed {failed} test(s)");
     }
     match name {
         "sqlite_parity" | "memory" => {
             let max_skips = 4;
             if total != EXPECTED_SQLITE_CASES
-                || passed + skipped != EXPECTED_SQLITE_CASES
+                || passed + failed + skipped != EXPECTED_SQLITE_CASES
                 || skipped > max_skips
             {
                 bail!(
-                    "suite {name} expected {EXPECTED_SQLITE_CASES} with at most {max_skips} target-capability skips, got total={total} passed={passed} skipped={skipped}"
+                    "suite {name} expected {EXPECTED_SQLITE_CASES} cases with at most {max_skips} target-capability skips, got total={total} passed={passed} failed={failed} skipped={skipped}"
                 );
             }
         }
@@ -446,6 +452,20 @@ fn run(root: PathBuf) -> Result<PathBuf> {
     {
         bail!("PostgreSQL regression proof is missing, inconsistent, or failed");
     }
+    // Published SQLite failures are exactly the committed baseline's.
+    let known_failures = sqlite_known_failures::Baseline::load(&repo_root)?;
+    known_failures.check_recorded(&official)?;
+    for name in sqlite_known_failures::BASELINE_SUITES {
+        let raw_path = validated[name]["raw_path"]
+            .as_str()
+            .ok_or_else(|| anyhow!("suite {name} has no raw_path"))?;
+        let raw_failed = sqlite_known_failures::raw_failed_case_ids(&root.join(raw_path))?;
+        known_failures.check_suite(name, &suites[name], &raw_failed)?;
+        validated.get_mut(name).expect("validated suite").insert(
+            "failed_case_ids".to_owned(),
+            raw_failed.into_iter().collect(),
+        );
+    }
     let has_failures = validated
         .values()
         .any(|suite| suite["failed"].as_u64().unwrap_or(1) > 0);
@@ -490,6 +510,7 @@ fn run(root: PathBuf) -> Result<PathBuf> {
     );
     processed.insert("status".to_owned(), Value::String(status));
     processed.insert("postgres_regression".to_owned(), pg);
+    processed.insert("sqlite_known_failures".to_owned(), known_failures.summary());
     processed.insert(
         "suite_summaries".to_owned(),
         Value::Object(
@@ -572,6 +593,33 @@ mod tests {
         assert!(validated_suite("rql_phase1", &suite(1_385, 1_129, 256), &mut paths).is_ok());
         assert!(validated_suite("sqlite_parity", &suite(1_127, 1_123, 4), &mut paths).is_err());
     }
+    #[test]
+    fn sqlite_suites_publish_failures_within_complete_totals() {
+        let suite = |passed: u64, failed: u64, skipped: u64| {
+            serde_json::json!({
+                "total": 2_445,
+                "passed": passed,
+                "failed": failed,
+                "skipped": skipped,
+                "raw_path": "raw.jsonl",
+                "summary_path": "summary.json",
+                "ranked_path": "ranked.csv",
+                "manifest_path": "manifest.json",
+                "provenance_path": "provenance.json"
+            })
+        };
+        let mut paths = BTreeSet::new();
+        // A failure the known-failures baseline lists is published as a
+        // failure, beside the passes, over the whole corpus.
+        let published = validated_suite("sqlite_parity", &suite(2_440, 5, 0), &mut paths)
+            .expect("listed failures are publishable");
+        assert_eq!(published["failed"], 5);
+        assert!(validated_suite("memory", &suite(2_436, 5, 4), &mut paths).is_ok());
+        // The three counts still have to cover the whole corpus.
+        assert!(validated_suite("sqlite_parity", &suite(2_441, 5, 0), &mut paths).is_err());
+        assert!(validated_suite("memory", &suite(2_440, 0, 0), &mut paths).is_err());
+    }
+
     #[test]
     fn postgres_requires_executions_and_preserves_failure_counts() {
         let mut suite = serde_json::json!({

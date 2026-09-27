@@ -227,9 +227,11 @@ run_redline_testing_official() {
   load_redline_testing_provenance "$redline_testing_bin"
   mkdir -p target/redline-testing
   copy_redline_testing_provenance "$redline_testing_bin" target/redline-testing/redline-testing-provenance.env
-  # `set -e` is active in this shell — `|| rc=$?` is required so we can
-  # post-filter known-optional case failures (see below) instead of
-  # bailing on the first non-zero exit from the parity binary.
+  # `set -e` is active in this shell, so `|| rc=$?` keeps the exit code.
+  # The runner writes every suite's evidence before it judges failures:
+  # sqlite_parity and memory failures must be exactly the ones
+  # metadata/sqlite_parity/known-failures.json lists (both ways), and any
+  # other failure is fatal.
   rc=0
   REDLINEDB_DEFAULT_DURABILITY=normal \
   REDLINEDB_QUIET_DURABILITY=1 \
@@ -238,6 +240,7 @@ run_redline_testing_official() {
     --sqlite-bin "$sqlite_parity_reference_bin" \
     --suite all \
     --postgres-regression-baseline metadata/beyond_sqlite/postgres-regression.json \
+    --sqlite-known-failures metadata/sqlite_parity/known-failures.json \
     --workers auto \
     --tmp-root "$(redline_testing_tmp_root)" \
     --repetitions "$sqlite_parity_repetitions" \

@@ -10,8 +10,9 @@ use sha2::{Digest, Sha256};
 /// RQL phase-1 rewrite gate and the run summary. Hashing the sources means
 /// any change to those rules changes the hash (unrelated edits in the same
 /// files change it too; it can be too strict, never too loose).
-const ASSERTION_POLICY_SOURCES: [(&str, &str); 6] = [
+const ASSERTION_POLICY_SOURCES: [(&str, &str); 7] = [
     ("sqlite_parity/case.rs", include_str!("case.rs")),
+    ("sqlite_parity/compare.rs", include_str!("compare.rs")),
     ("sqlite_parity/engine.rs", include_str!("engine.rs")),
     ("sqlite_parity/normalize.rs", include_str!("normalize.rs")),
     ("sqlite_parity/rql_phase1.rs", include_str!("rql_phase1.rs")),

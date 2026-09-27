@@ -39,8 +39,9 @@ pub struct EngineOutput {
     pub version: String,
     pub status_code: Option<i32>,
     pub elapsed: Duration,
-    pub stdout: String,
-    pub stderr: String,
+    /// Exactly the bytes the child wrote, never decoded (SQ-06).
+    pub stdout: Vec<u8>,
+    pub stderr: Vec<u8>,
     pub memory_status: String,
     pub peak_rss_kb: Option<u64>,
     pub rss_sampled_kb: Option<u64>,
@@ -479,8 +480,8 @@ impl EngineSpec {
 
 struct CapturedOutput {
     status: std::process::ExitStatus,
-    stdout: String,
-    stderr: String,
+    stdout: Vec<u8>,
+    stderr: Vec<u8>,
     memory: ProcessMemory,
 }
 
@@ -514,8 +515,8 @@ fn run_command(
             .context("wait sqlite parity child")?;
         return Ok(CapturedOutput {
             status: output.status,
-            stdout: String::from_utf8_lossy(&output.stdout).into_owned(),
-            stderr: String::from_utf8_lossy(&output.stderr).into_owned(),
+            stdout: output.stdout,
+            stderr: output.stderr,
             memory: ProcessMemory::default(),
         });
     }
@@ -561,15 +562,14 @@ fn run_command(
     }
     Ok(CapturedOutput {
         status,
-        stdout: read_output_lossy(&stdout_path)?,
-        stderr: read_output_lossy(&stderr_path)?,
+        stdout: read_output(&stdout_path)?,
+        stderr: read_output(&stderr_path)?,
         memory,
     })
 }
 
-fn read_output_lossy(path: &Path) -> Result<String> {
-    let bytes = fs::read(path).with_context(|| format!("read {}", path.display()))?;
-    Ok(String::from_utf8_lossy(&bytes).into_owned())
+fn read_output(path: &Path) -> Result<Vec<u8>> {
+    fs::read(path).with_context(|| format!("read {}", path.display()))
 }
 
 pub fn binary_identity(bin: &Path) -> Result<BinaryIdentity> {
@@ -745,18 +745,44 @@ fn make_removable(_path: &Path) -> Result<()> {
 
 #[cfg(test)]
 mod tests {
-    use super::read_output_lossy;
+    use super::{read_output, run_command};
     use std::fs;
+    use std::process::Command;
 
     #[test]
-    fn captured_binary_output_is_decoded_lossily() {
+    fn captured_binary_output_is_preserved_byte_for_byte() {
         let path = std::env::temp_dir().join(format!(
-            "redline-testing-lossy-output-{}",
+            "redline-testing-binary-output-{}",
             std::process::id()
         ));
         fs::write(&path, [b'a', 0xff, b'b']).expect("write binary output fixture");
-        let decoded = read_output_lossy(&path).expect("decode binary output");
+        let captured = read_output(&path).expect("read binary output");
         fs::remove_file(path).expect("remove binary output fixture");
-        assert_eq!(decoded, "a\u{fffd}b");
+        assert_eq!(captured, b"a\xffb");
+    }
+
+    #[test]
+    fn both_capture_paths_keep_invalid_utf8() {
+        // The piped path (sqlite_parity) and the file path (memory suite)
+        // must hand the comparison the same raw bytes.
+        let case_tmp = std::env::temp_dir().join(format!(
+            "redline-testing-capture-paths-{}",
+            std::process::id()
+        ));
+        fs::create_dir_all(&case_tmp).expect("create capture tmp");
+        for memory_samples in [false, true] {
+            let mut command = Command::new("sh");
+            command
+                .arg("-c")
+                .arg("printf 'a\\253\\r\\nb \\n'; printf 'e\\377' >&2");
+            let captured = run_command(&mut command, None, &case_tmp, "probe", memory_samples)
+                .expect("run capture probe");
+            assert_eq!(
+                captured.stdout, b"a\xab\r\nb \n",
+                "memory_samples={memory_samples}"
+            );
+            assert_eq!(captured.stderr, b"e\xff", "memory_samples={memory_samples}");
+        }
+        fs::remove_dir_all(case_tmp).expect("remove capture tmp");
     }
 }

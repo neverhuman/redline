@@ -179,7 +179,8 @@ pub(crate) enum DeviationKind {
     /// RedlineDB produces the compared output without the feature behind it.
     StandIn,
     /// The pinned sqlite3 build lacks the feature; the case declares its
-    /// error and passes when RedlineDB rejects the statement too.
+    /// error and passes only when RedlineDB rejects the statement with that
+    /// declared error.
     SharedRejection,
     /// The case was written for another SQLite build; against the pinned
     /// build it checks what the reason states.

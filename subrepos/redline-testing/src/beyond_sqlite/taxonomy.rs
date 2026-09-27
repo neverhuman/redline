@@ -330,6 +330,10 @@ pub fn run(config: RunConfig) -> Result<RunSummary> {
             + oracle_summary.target_skipped,
         elapsed: Duration::from_nanos(started.elapsed().as_nanos().min(u64::MAX as u128) as u64),
         slowest: Vec::new(),
+        // The PostgreSQL gate reads its failed cases from the raw records
+        // (postgres-qualification.json), not from this summary.
+        failures: Vec::new(),
+        skipped_case_ids: Vec::new(),
     })
 }
 

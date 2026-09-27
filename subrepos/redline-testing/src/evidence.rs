@@ -1,4 +1,4 @@
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::process::Command;
@@ -8,7 +8,7 @@ use anyhow::{Context, Result};
 use serde::Serialize;
 use sha2::{Digest, Sha256};
 
-use crate::sqlite_parity::RunSummary;
+use crate::sqlite_parity::{BaselineSource, KNOWN_FAILURES_SCHEMA, RunSummary};
 use crate::{latency, report};
 
 mod identity;
@@ -46,6 +46,10 @@ pub struct OfficialSuiteEvidence {
     pub passed: usize,
     pub failed: usize,
     pub skipped: usize,
+    /// The failed case ids, for a suite whose summary lists them.
+    pub failed_case_ids: Option<BTreeSet<String>>,
+    /// The case ids the known-failures baseline lists for this suite.
+    pub known_failure_ids: Option<BTreeSet<String>>,
 }
 
 impl OfficialSuiteEvidence {
@@ -69,8 +73,31 @@ impl OfficialSuiteEvidence {
             passed: summary.passed,
             failed: summary.failed,
             skipped: summary.skipped,
+            failed_case_ids: Some(failed_case_ids(summary)),
+            known_failure_ids: None,
         }
     }
+
+    /// Records the baseline's case ids for this suite beside its failures.
+    pub fn with_known_failures(mut self, known_failure_ids: BTreeSet<String>) -> Self {
+        self.known_failure_ids = Some(known_failure_ids);
+        self
+    }
+
+    /// For a suite whose summary counts failures without listing them
+    /// (beyond_sqlite; its gate writes postgres-qualification.json).
+    pub fn without_case_ids(mut self) -> Self {
+        self.failed_case_ids = None;
+        self
+    }
+}
+
+fn failed_case_ids(summary: &RunSummary) -> BTreeSet<String> {
+    summary
+        .failures
+        .iter()
+        .map(|failure| failure.case_id.clone())
+        .collect()
 }
 
 #[derive(Debug)]
@@ -88,6 +115,8 @@ pub struct OfficialEvidenceConfig {
     pub command_line: Vec<String>,
     pub generated_at_unix_ms: u128,
     pub suites: Vec<OfficialSuiteEvidence>,
+    /// The SQLite known-failures baseline the run was gated with.
+    pub known_failures: Option<BaselineSource>,
 }
 
 #[derive(Debug, Serialize)]
@@ -118,6 +147,18 @@ struct OfficialSuiteJson {
     ranked_path: String,
     manifest_path: String,
     provenance_path: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    failed_case_ids: Option<BTreeSet<String>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    known_failure_ids: Option<BTreeSet<String>>,
+}
+
+/// The known-failures baseline a run was gated with.
+#[derive(Debug, Serialize)]
+struct KnownFailuresJson {
+    schema_version: &'static str,
+    path: String,
+    sha256: String,
 }
 
 #[derive(Debug, Serialize)]
@@ -132,6 +173,7 @@ struct OfficialEvidenceJson {
     target: BinaryEvidence,
     sqlite: BinaryEvidence,
     suites: BTreeMap<String, OfficialSuiteJson>,
+    sqlite_known_failures: Option<KnownFailuresJson>,
     status: String,
     command_line: Vec<String>,
     generated_at_unix_ms: u128,
@@ -150,6 +192,9 @@ struct SummaryJson {
     passed_cases: usize,
     failed_cases: usize,
     skipped_cases: usize,
+    /// Every failed case id; failures are published, not hidden.
+    failed_case_ids: BTreeSet<String>,
+    skipped_case_ids: BTreeSet<String>,
     elapsed_ns: u128,
     measured_samples: usize,
     warmup_samples: usize,
@@ -229,6 +274,8 @@ pub fn write_sqlite_parity_evidence(config: EvidenceConfig) -> Result<()> {
         passed_cases: config.summary.passed,
         failed_cases: config.summary.failed,
         skipped_cases: config.summary.skipped,
+        failed_case_ids: failed_case_ids(&config.summary),
+        skipped_case_ids: config.summary.skipped_case_ids.iter().cloned().collect(),
         elapsed_ns: config.summary.elapsed.as_nanos(),
         measured_samples: raw_records
             .iter()
@@ -414,6 +461,8 @@ pub fn write_official_evidence(config: OfficialEvidenceConfig) -> Result<()> {
                 ranked_path: relative_display(&config.output_dir, &suite.ranked_path),
                 manifest_path: relative_display(&config.output_dir, &suite.manifest_path),
                 provenance_path: relative_display(&config.output_dir, &suite.provenance_path),
+                failed_case_ids: suite.failed_case_ids,
+                known_failure_ids: suite.known_failure_ids,
             },
         );
     }
@@ -426,6 +475,11 @@ pub fn write_official_evidence(config: OfficialEvidenceConfig) -> Result<()> {
         target,
         sqlite,
         suites,
+        sqlite_known_failures: config.known_failures.map(|source| KnownFailuresJson {
+            schema_version: KNOWN_FAILURES_SCHEMA,
+            path: display_path(&source.path),
+            sha256: source.sha256,
+        }),
         status: if failed == 0 { "passed" } else { "failed" }.to_owned(),
         command_line: config.command_line,
         generated_at_unix_ms: config.generated_at_unix_ms,

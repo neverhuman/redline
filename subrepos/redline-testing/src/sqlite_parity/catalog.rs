@@ -152,6 +152,27 @@ mod tests {
     }
 
     #[test]
+    fn uncompared_stdout_is_explained() {
+        // A case that does not compare stdout says what in it is inherently
+        // engine-specific (SQ-06 audit); a case that compares it says
+        // nothing of the kind.
+        let mut violations = Vec::new();
+        for case in all_cases().expect("sqlite parity corpus") {
+            let reason = case
+                .stdout_uncompared_reason
+                .as_deref()
+                .filter(|reason| !reason.trim().is_empty());
+            if case.compare_stdout == reason.is_some() {
+                violations.push(case.display_id());
+            }
+        }
+        assert!(
+            violations.is_empty(),
+            "compare_stdout must be false exactly when stdout_uncompared_reason is set: {violations:?}"
+        );
+    }
+
+    #[test]
     fn combined_official_selection_is_ordered() {
         let cases = selected_official_cases().expect("official cases");
         assert!(!cases.is_empty());

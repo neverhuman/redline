@@ -50,6 +50,12 @@ pub(crate) struct RunArgs {
     /// Update the marked README block from validated PostgreSQL results.
     #[arg(long)]
     pub(crate) postgres_readme: Option<PathBuf>,
+    /// The sqlite_parity and memory cases known to fail. Listed failures are
+    /// published as failures; an unlisted failure, or a listed case that now
+    /// passes, fails the run after its evidence is written. Without it, any
+    /// failure fails the run.
+    #[arg(long)]
+    pub(crate) sqlite_known_failures: Option<PathBuf>,
 }
 
 #[derive(Debug, Args)]

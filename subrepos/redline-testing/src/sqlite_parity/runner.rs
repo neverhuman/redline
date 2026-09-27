@@ -1,3 +1,4 @@
+use std::collections::BTreeSet;
 use std::path::{Path, PathBuf};
 use std::sync::{
     Arc, Mutex,
@@ -7,16 +8,16 @@ use std::sync::{
 use std::time::{Duration, Instant};
 
 use anyhow::{Result, bail};
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 
 use super::case::Case;
+use super::compare::{comparable, contract_text, describe, first_difference};
 use super::engine::{EngineOutput, EngineSpec, SkippedCase};
 use super::normalize::normalize_output;
 use super::report;
-use super::text::sanitize_identifier;
 
 /// What decided a sample's `status` (SQ-02).
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum VerdictReason {
     /// The reference kept the case's declared contract and the target
@@ -28,9 +29,25 @@ pub enum VerdictReason {
     /// code, a missing declared fragment, different stdout, or death by a
     /// signal. Agreement with such a reference proves nothing.
     ReferenceContractFailure,
-    /// The target's exit code or output differs from the reference's, or
-    /// the target died by a signal.
+    /// The reference kept the case's contract and the target did not: a
+    /// different exit code, a missing declared fragment (a "no such table"
+    /// where the case declares a UNIQUE failure), or death by a signal.
+    TargetSemanticFailure,
+    /// The target kept the contract, but its exit code or output bytes
+    /// differ from the reference's.
     DifferentialMismatch,
+}
+
+impl VerdictReason {
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::Passed => "passed",
+            Self::Skipped => "skipped",
+            Self::ReferenceContractFailure => "reference_contract_failure",
+            Self::TargetSemanticFailure => "target_semantic_failure",
+            Self::DifferentialMismatch => "differential_mismatch",
+        }
+    }
 }
 
 /// The step of the verdict that decided it.
@@ -42,6 +59,8 @@ pub enum VerdictStage {
     /// The reference output checked against the case's declared
     /// expectations, before any comparison.
     ReferenceContract,
+    /// The target output checked against the same declared expectations.
+    TargetContract,
     /// The target output compared with the reference output.
     Differential,
 }
@@ -81,13 +100,24 @@ impl Verdict {
         match self.reason {
             VerdictReason::Passed => "passed",
             VerdictReason::Skipped => "skipped",
-            VerdictReason::ReferenceContractFailure | VerdictReason::DifferentialMismatch => {
-                "failed"
-            }
+            VerdictReason::ReferenceContractFailure
+            | VerdictReason::TargetSemanticFailure
+            | VerdictReason::DifferentialMismatch => "failed",
         }
     }
 }
 
+/// A case that failed, and every reason its failing samples gave.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct CaseFailure {
+    pub case_id: String,
+    pub name: String,
+    pub verdict_reasons: BTreeSet<VerdictReason>,
+}
+
+/// A run's case counts. Failures are counted and listed here, never raised:
+/// the caller decides whether they are acceptable (`KnownFailures::gate`)
+/// after the evidence is written.
 #[derive(Debug, Clone, Default)]
 pub struct RunSummary {
     pub total: usize,
@@ -96,6 +126,32 @@ pub struct RunSummary {
     pub skipped: usize,
     pub elapsed: Duration,
     pub slowest: Vec<(String, u128)>,
+    /// Every failed case, in run order. `failures.len() == failed` for the
+    /// SQLite-shell suites.
+    pub failures: Vec<CaseFailure>,
+    /// Every case skipped at selection, in run order.
+    pub skipped_case_ids: Vec<String>,
+}
+
+impl RunSummary {
+    /// Counts a case that was skipped at selection.
+    pub fn record_skip(&mut self, case: &Case) {
+        self.total += 1;
+        self.skipped += 1;
+        self.skipped_case_ids.push(case.display_id());
+    }
+
+    /// Counts a case that ran; `failure` is `Some` when a sample failed.
+    pub fn record_run(&mut self, failure: Option<CaseFailure>) {
+        self.total += 1;
+        match failure {
+            Some(failure) => {
+                self.failed += 1;
+                self.failures.push(failure);
+            }
+            None => self.passed += 1,
+        }
+    }
 }
 
 pub fn compare_cases(
@@ -116,8 +172,7 @@ pub fn compare_cases(
     let started = Instant::now();
     let mut summary = RunSummary::default();
     for skipped_case in skipped {
-        summary.total += 1;
-        summary.skipped += 1;
+        summary.record_skip(&skipped_case.case);
         let artifact = report::write_skip_artifact(&skipped_case.case, &skipped_case.reason)?;
         report::append_jsonl(
             Some(out),
@@ -145,24 +200,19 @@ pub fn compare_cases(
         memory_samples,
     )?;
     for case_run in case_runs {
-        summary.total += 1;
         for record in &case_run.records {
             report::append_jsonl(Some(out), record)?;
         }
         summary.slowest.extend(case_run.slowest);
-        if case_run.failed {
-            summary.failed += 1;
-        } else {
-            summary.passed += 1;
-        }
+        summary.record_run(case_run.failure);
     }
     summary.elapsed = started.elapsed();
-    finish_summary(summary, progress)
+    Ok(finish_summary(summary, "sqlite_parity", progress))
 }
 
 struct CaseRun {
     records: Vec<report::CompareRecord>,
-    failed: bool,
+    failure: Option<CaseFailure>,
     slowest: Vec<(String, u128)>,
 }
 
@@ -279,7 +329,7 @@ fn run_one_case(
     if progress {
         eprintln!("sqlite_parity case={} status=running", case.display_id());
     }
-    let mut failed = false;
+    let mut failure_reasons = BTreeSet::new();
     let mut records = Vec::with_capacity(total_samples);
     let mut slowest = Vec::new();
     for sample_index in 0..total_samples {
@@ -321,23 +371,41 @@ fn run_one_case(
             slowest.push((case.display_id(), target_output.elapsed.as_nanos()));
         }
         if !verdict.is_pass() {
-            failed = true;
+            failure_reasons.insert(verdict.reason);
         }
     }
+    let failure = case_failure(case, failure_reasons);
     if progress {
-        let status = if failed { "failed" } else { "passed" };
+        let status = if failure.is_some() {
+            "failed"
+        } else {
+            "passed"
+        };
         eprintln!("sqlite_parity case={} status={status}", case.display_id());
     }
     Ok(CaseRun {
         records,
-        failed,
+        failure,
         slowest,
     })
 }
 
+/// The case's failure, if any sample failed.
+pub(super) fn case_failure(
+    case: &Case,
+    verdict_reasons: BTreeSet<VerdictReason>,
+) -> Option<CaseFailure> {
+    (!verdict_reasons.is_empty()).then(|| CaseFailure {
+        case_id: case.display_id(),
+        name: case.name.clone(),
+        verdict_reasons,
+    })
+}
+
 /// One sample's verdict. The reference must first keep the contract the
-/// case declares; only then does the target's agreement with it mean
-/// anything. Target-side expectations are not enforced here yet.
+/// case declares; only then does anything the target does mean something.
+/// The target must keep the same contract (a UNIQUE failure is not a "no
+/// such table"), and then print what the reference printed, byte for byte.
 pub(super) fn judge_sample(
     case: &Case,
     reference: &EngineOutput,
@@ -348,6 +416,13 @@ pub(super) fn judge_sample(
             VerdictReason::ReferenceContractFailure,
             VerdictStage::ReferenceContract,
             format!("reference contract: {reason:#}"),
+        );
+    }
+    if let Err(reason) = validate_expected(case, target) {
+        return Verdict::failed(
+            VerdictReason::TargetSemanticFailure,
+            VerdictStage::TargetContract,
+            format!("target contract: {reason:#}"),
         );
     }
     match validate_compare(case, reference, target) {
@@ -362,13 +437,18 @@ pub(super) fn judge_sample(
 
 /// The expectations a case declares about one engine's run: it exited
 /// normally with `expected_exit` (a signal is never a pass), and its stdout,
-/// stderr and stdout+stderr contain every declared fragment.
+/// stderr and stdout+stderr contain every declared fragment. Fragments are
+/// diagnostics: they are matched on `contract_text`, whatever the case's
+/// `comparison_mode`, and hold whether or not the case compares stdout.
 pub(super) fn validate_expected(case: &Case, output: &EngineOutput) -> Result<()> {
+    let stdout = contract_text(&output.stdout);
+    let stderr = contract_text(&output.stderr);
     let Some(code) = output.status_code else {
         bail!(
-            "{} was terminated by a signal; case expects exit {}",
+            "{} was terminated by a signal; case expects exit {}; stderr `{}`",
             output.engine,
-            case.expected_exit
+            case.expected_exit,
+            normalize_output(&stderr)
         );
     };
     if code != case.expected_exit {
@@ -376,11 +456,9 @@ pub(super) fn validate_expected(case: &Case, output: &EngineOutput) -> Result<()
             "{} exited {code}; case expects exit {}; stderr `{}`",
             output.engine,
             case.expected_exit,
-            normalize_output(&output.stderr)
+            normalize_output(&stderr)
         );
     }
-    let stdout = contract_text(&output.stdout);
-    let stderr = contract_text(&output.stderr);
     let combined = format!("{stdout}{stderr}");
     for (stream, text, needles) in [
         ("stdout", &stdout, &case.expected_stdout_contains),
@@ -402,14 +480,19 @@ pub(super) fn validate_expected(case: &Case, output: &EngineOutput) -> Result<()
 }
 
 /// The reference's contract: `validate_expected`, and when the case compares
-/// stdout and declares it, exactly that stdout after normalization.
+/// stdout and declares it, exactly that stdout after normalization (the
+/// corpus stores `expected_stdout` as normalized text).
 fn validate_reference_contract(case: &Case, reference: &EngineOutput) -> Result<()> {
     validate_expected(case, reference)?;
     if case.compare_stdout
         && let Some(expected) = &case.expected_stdout
     {
         let expected = normalize_output(expected);
-        let actual = normalize_compare_output(case, reference, &reference.stdout);
+        let actual = normalize_output(&contract_text(&comparable(
+            case,
+            &reference.engine,
+            &reference.stdout,
+        )));
         if actual != expected {
             bail!(
                 "{} stdout differs from expected_stdout: expected `{expected}`, got `{actual}`",
@@ -420,12 +503,10 @@ fn validate_reference_contract(case: &Case, reference: &EngineOutput) -> Result<
     Ok(())
 }
 
-/// Output as the declared fragments see it: line endings normalized, like
-/// `xtask ship-gate`, and nothing else removed.
-fn contract_text(value: &str) -> String {
-    value.replace("\r\n", "\n").replace('\r', "\n")
-}
-
+/// The differential: the same exit, and the same bytes on stdout (when the
+/// case compares it) and on stderr (when the reference succeeded; a failing
+/// run's error text is held to the declared fragments instead, since the
+/// two shells word the same error differently).
 fn validate_compare(case: &Case, reference: &EngineOutput, target: &EngineOutput) -> Result<()> {
     for output in [reference, target] {
         if output.status_code.is_none() {
@@ -442,38 +523,33 @@ fn validate_compare(case: &Case, reference: &EngineOutput, target: &EngineOutput
     if !case.compare_stdout {
         return Ok(());
     }
-    let reference_stdout = normalize_compare_output(case, reference, &reference.stdout);
-    let target_stdout = normalize_compare_output(case, target, &target.stdout);
-    if reference_stdout != target_stdout {
-        bail!("stdout mismatch: reference `{reference_stdout}`, target `{target_stdout}`");
-    }
+    compare_stream(case, "stdout", reference, target, |output| &output.stdout)?;
     if reference.status_code != Some(0) || case.status == "catalog_only" {
         return Ok(());
     }
-    let reference_stderr = normalize_compare_output(case, reference, &reference.stderr);
-    let target_stderr = normalize_compare_output(case, target, &target.stderr);
-    if reference_stderr != target_stderr {
-        bail!("stderr mismatch: reference `{reference_stderr}`, target `{target_stderr}`");
-    }
-    Ok(())
+    compare_stream(case, "stderr", reference, target, |output| &output.stderr)
 }
 
-fn normalize_compare_output(case: &Case, output: &EngineOutput, value: &str) -> String {
-    let mut normalized = normalize_output(value);
-    if case.id == 208 {
-        normalized = normalized
-            .lines()
-            .filter(|line| !line.starts_with("trace.xRandomness("))
-            .collect::<Vec<_>>()
-            .join("\n");
+fn compare_stream(
+    case: &Case,
+    stream: &str,
+    reference: &EngineOutput,
+    target: &EngineOutput,
+    bytes: impl Fn(&EngineOutput) -> &[u8],
+) -> Result<()> {
+    let reference_bytes = comparable(case, &reference.engine, bytes(reference));
+    let target_bytes = comparable(case, &target.engine, bytes(target));
+    if reference_bytes != target_bytes {
+        bail!(
+            "{stream} mismatch at byte {}: reference {} ({} bytes), target {} ({} bytes)",
+            first_difference(&reference_bytes, &target_bytes),
+            describe(&reference_bytes),
+            reference_bytes.len(),
+            describe(&target_bytes),
+            target_bytes.len()
+        );
     }
-    let marker = format!(
-        "/{}-{}-{}",
-        case.display_id(),
-        sanitize_identifier(&output.engine),
-        std::process::id()
-    );
-    normalized.replace(&marker, "/{{CASE_TMP}}")
+    Ok(())
 }
 
 pub fn validate_compare_engines(reference: &EngineSpec, target: &EngineSpec) -> Result<()> {
@@ -504,82 +580,32 @@ pub fn validate_compare_engines(reference: &EngineSpec, target: &EngineSpec) -> 
     Ok(())
 }
 
-fn finish_summary(mut summary: RunSummary, progress: bool) -> Result<RunSummary> {
-    summary.slowest.sort_by(|left, right| right.1.cmp(&left.1));
+/// Sorts the slowest cases and prints the counts. Failures are left in the
+/// summary for the caller's known-failures gate; they are never an error
+/// here, so the run's records and evidence are always written.
+pub(super) fn finish_summary(mut summary: RunSummary, suite: &str, progress: bool) -> RunSummary {
+    summary
+        .slowest
+        .sort_by_key(|slowest| std::cmp::Reverse(slowest.1));
     summary.slowest.truncate(10);
     if progress {
         eprintln!(
-            "sqlite_parity total={} passed={} failed={} skipped={} elapsed_ns={}",
+            "{suite} total={} passed={} failed={} skipped={} elapsed_ns={}",
             summary.total,
             summary.passed,
             summary.failed,
             summary.skipped,
             summary.elapsed.as_nanos()
         );
-        eprintln!("sqlite_parity slowest={:?}", summary.slowest);
+        eprintln!("{suite} slowest={:?}", summary.slowest);
     }
-    if summary.failed > 0 {
-        bail!(
-            "sqlite parity failed {} of {} cases",
-            summary.failed,
-            summary.total
-        );
-    }
-    Ok(summary)
+    summary
 }
 
 #[cfg(test)]
 mod tests {
-    use std::time::Duration;
-
     use super::{Verdict, VerdictReason, VerdictStage, judge_sample, validate_compare};
-    use crate::sqlite_parity::case::{Case, Priority, Profile};
-    use crate::sqlite_parity::engine::EngineOutput;
-
-    fn unique_case() -> Case {
-        Case {
-            id: 10547,
-            folder: "SQLITE_PARITY_10547_UNIQUE_CONSTRAINT_FAILED".to_owned(),
-            name: "UNIQUE_CONSTRAINT_FAILED".to_owned(),
-            category: "SQL_ERROR_MESSAGES".to_owned(),
-            priority: Priority::P0,
-            profile: Profile::Memory,
-            kind: "sql".to_owned(),
-            description: String::new(),
-            status: "active".to_owned(),
-            db: ":memory:".to_owned(),
-            args: Vec::new(),
-            stdin:
-                "CREATE TABLE t(x UNIQUE);\nINSERT INTO t VALUES (1);\nINSERT INTO t VALUES (1);\n"
-                    .to_owned(),
-            expected_exit: 1,
-            compare_stdout: true,
-            expected_stdout: None,
-            expected_stdout_contains: Vec::new(),
-            expected_stderr_contains: vec!["UNIQUE constraint failed: t.x".to_owned()],
-            expected_combined_contains: Vec::new(),
-            files: Vec::new(),
-            script: None,
-            notes: String::new(),
-            required_capabilities: Vec::new(),
-        }
-    }
-
-    fn output(engine: &str, status_code: Option<i32>, stdout: &str, stderr: &str) -> EngineOutput {
-        EngineOutput {
-            engine: engine.to_owned(),
-            executable_path: format!("/bin/{engine}"),
-            executable_sha256: String::new(),
-            version: String::new(),
-            status_code,
-            elapsed: Duration::from_millis(1),
-            stdout: stdout.to_owned(),
-            stderr: stderr.to_owned(),
-            memory_status: "disabled".to_owned(),
-            peak_rss_kb: None,
-            rss_sampled_kb: None,
-        }
-    }
+    use crate::sqlite_parity::test_fixtures::{output, unique_case};
 
     #[test]
     fn reference_contract_violation_fails_even_when_engines_agree() {
@@ -649,12 +675,21 @@ mod tests {
         case.expected_exit = 0;
         case.expected_stderr_contains.clear();
         case.expected_stdout = Some("1\n2\n".to_owned());
+        // The reference keeps the declared stdout once normalized ...
+        let verdict = judge_sample(
+            &case,
+            &output("sqlite3", Some(0), "1\r\n2\r\n  \n", ""),
+            &output("redlinedb", Some(0), "1\r\n2\r\n  \n", ""),
+        );
+        assert_eq!(verdict, Verdict::passed());
+        // ... but that normalization is the declared contract's alone: the
+        // differential still compares the bytes each shell printed.
         let verdict = judge_sample(
             &case,
             &output("sqlite3", Some(0), "1\r\n2\r\n  \n", ""),
             &output("redlinedb", Some(0), "1\n2\n", ""),
         );
-        assert_eq!(verdict, Verdict::passed());
+        assert_eq!(verdict.reason, VerdictReason::DifferentialMismatch);
         // compare_stdout=false leaves stdout to the fragments.
         case.compare_stdout = false;
         let verdict = judge_sample(
@@ -683,13 +718,15 @@ mod tests {
                 .is_some_and(|diagnostic| diagnostic.contains("terminated by a signal")),
             "{verdict:?}"
         );
-        // A healthy reference does not rescue a target killed by a signal.
+        // A healthy reference does not rescue a target killed by a signal:
+        // the target breaks the case's contract before any comparison.
         let verdict = judge_sample(
             &case,
             &output("sqlite3", Some(0), "", ""),
             &output("redlinedb", None, "", ""),
         );
-        assert_eq!(verdict.reason, VerdictReason::DifferentialMismatch);
+        assert_eq!(verdict.reason, VerdictReason::TargetSemanticFailure);
+        assert_eq!(verdict.stage, VerdictStage::TargetContract);
         assert!(
             verdict.diagnostic.as_deref().is_some_and(
                 |diagnostic| diagnostic.contains("redlinedb was terminated by a signal")

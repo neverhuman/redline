@@ -1,12 +1,18 @@
 pub mod case;
 mod catalog;
+mod compare;
 mod engine;
 mod identity;
+mod known_failures;
 mod memory;
 mod normalize;
 mod report;
 mod rql_phase1;
 mod runner;
+#[cfg(test)]
+mod target_contract_tests;
+#[cfg(test)]
+mod test_fixtures;
 mod text;
 
 use std::path::PathBuf;
@@ -16,8 +22,11 @@ use anyhow::Result;
 pub use catalog::all_cases;
 pub use engine::REFERENCE_CLI_BIN;
 pub use identity::{assertion_policy_sha256, corpus_sha256};
+pub use known_failures::{BaselineSource, KNOWN_FAILURES_SCHEMA, KnownFailures};
 pub use rql_phase1::{RunConfig as RqlPhase1RunConfig, rql_phase1_cases};
 pub use runner::RunSummary;
+#[cfg(test)]
+pub(crate) use runner::{CaseFailure, VerdictReason};
 
 pub struct RunConfig {
     pub reference_bin: PathBuf,

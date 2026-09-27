@@ -6,7 +6,8 @@ use anyhow::{Context, Result};
 use serde::Serialize;
 use sha2::{Digest, Sha256};
 
-use super::case::Case;
+use super::case::{Case, ComparisonMode};
+use super::compare::NORMALIZATION_POLICY;
 use super::engine::EngineOutput;
 use super::runner::{Verdict, VerdictReason, VerdictStage};
 
@@ -33,6 +34,9 @@ pub struct CompareRecord {
     pub status: String,
     pub verdict_reason: VerdictReason,
     pub stage: VerdictStage,
+    /// The comparison rules this record was judged by (SQ-06).
+    pub normalization_policy: &'static str,
+    pub comparison_mode: ComparisonMode,
     pub reference_exit_code: Option<i32>,
     pub target_exit_code: Option<i32>,
     pub reference_elapsed_ns: u128,
@@ -106,6 +110,8 @@ pub fn skipped_compare_record(
         status: "skipped".to_owned(),
         verdict_reason: VerdictReason::Skipped,
         stage: VerdictStage::Selection,
+        normalization_policy: NORMALIZATION_POLICY,
+        comparison_mode: case.comparison_mode,
         reference_exit_code: None,
         target_exit_code: None,
         reference_elapsed_ns: 0,
@@ -160,6 +166,8 @@ pub fn compare_record(
         status: verdict.status().to_owned(),
         verdict_reason: verdict.reason,
         stage: verdict.stage,
+        normalization_policy: NORMALIZATION_POLICY,
+        comparison_mode: case.comparison_mode,
         reference_exit_code: reference_output.status_code,
         target_exit_code: target_output.status_code,
         reference_elapsed_ns: reference_output.elapsed.as_nanos(),
@@ -230,7 +238,7 @@ pub fn write_skip_artifact(case: &Case, reason: &str) -> Result<PathBuf> {
     Ok(root)
 }
 
-fn sha256_hex(value: &str) -> String {
-    let digest = Sha256::digest(value.as_bytes());
-    format!("{digest:x}")
+/// SHA-256 of exactly the bytes a shell wrote.
+fn sha256_hex(bytes: &[u8]) -> String {
+    format!("{:x}", Sha256::digest(bytes))
 }
