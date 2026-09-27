@@ -151,6 +151,23 @@ impl PageBackedHeap {
         Ok(())
     }
 
+    /// Queue `page_id` to be taken after every page already queued.
+    pub(crate) fn push_reusable_page_last(&self, kind: PageKind, page_id: PageId) -> Result<()> {
+        let reusable = match kind {
+            PageKind::Heap => &self.reusable_heap_pages,
+            PageKind::Undo => &self.reusable_undo_pages,
+            _ => return Ok(()),
+        };
+        let mut reusable = reusable
+            .lock()
+            .map_err(|_| Error::CorruptPage("reusable page queue poisoned"))?;
+        if !reusable.contains(&page_id) {
+            // `take_reusable_page` pops from the end.
+            reusable.insert(0, page_id);
+        }
+        Ok(())
+    }
+
     pub(crate) fn take_reusable_page(&self, kind: PageKind) -> Result<Option<PageId>> {
         let reusable = match kind {
             PageKind::Heap => &self.reusable_heap_pages,

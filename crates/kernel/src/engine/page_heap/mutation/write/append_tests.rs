@@ -301,6 +301,130 @@ fn overwrite_through_a_pointer_into_a_reused_page_is_rejected() {
 }
 
 #[test]
+fn a_reusable_page_that_does_not_load_leaves_appends_to_fresh_pages() {
+    // A queued page that fails to load must not fail every append that
+    // takes it: each lane that needs a page goes on to a fresh one.
+    let dir = tempfile::tempdir().unwrap();
+    let page_file = Arc::new(PageFile::create(dir.path().join("data.redline"), 4096).unwrap());
+    let buffer = Arc::new(BufferPool::new(page_file, 32).unwrap());
+    let wal =
+        Arc::new(WalCoordinator::create(dir.path().join("wal"), WalConfig::default()).unwrap());
+    let heap = PageBackedHeap::new_with_wal(RelId(1), 2, buffer, Some(wal)).unwrap();
+    // Past the end of the page file, so it cannot be read.
+    let unreadable = PageId(1000);
+    heap.push_reusable_page(PageKind::Heap, unreadable).unwrap();
+
+    let rows: Vec<RowId> = (1..=2).map(RowId).collect();
+    assert_ne!(heap.lane_for_row(rows[0]), heap.lane_for_row(rows[1]));
+    for row in rows {
+        let ptr = append(
+            &heap,
+            row,
+            TupleVersion::new(row, RelId(1), TxId(1), b"row".to_vec()),
+        );
+        assert_ne!(ptr.page_id, unreadable);
+        assert_eq!(heap.read_tuple(ptr).unwrap().payload, b"row");
+    }
+}
+
+#[test]
+fn a_reusable_page_waits_out_a_full_pool() {
+    // A pool with no free frame is a passing condition: the page stays queued
+    // and the next append takes it.
+    let dir = tempfile::tempdir().unwrap();
+    let page_file = Arc::new(PageFile::create(dir.path().join("data.redline"), 4096).unwrap());
+    let buffer = Arc::new(BufferPool::new(page_file, 1).unwrap());
+    let wal =
+        Arc::new(WalCoordinator::create(dir.path().join("wal"), WalConfig::default()).unwrap());
+    let heap = PageBackedHeap::new_with_wal(RelId(1), 1, Arc::clone(&buffer), Some(wal)).unwrap();
+    let first = RowId(1);
+    let old = append(
+        &heap,
+        first,
+        TupleVersion::new(first, RelId(1), TxId(1), b"old".to_vec()),
+    );
+    buffer.flush_page(old.page_id, Lsn(u64::MAX)).unwrap();
+    heap.append_lanes[0].lock().unwrap().heap_page = None;
+    heap.push_reusable_page(PageKind::Heap, old.page_id)
+        .unwrap();
+
+    let pinned = buffer.allocate(PageKind::Heap, RelId(1)).unwrap();
+    let second = RowId(2);
+    let err = heap
+        .append_tuple(
+            TxId(2),
+            second,
+            TupleVersion::new(second, RelId(1), TxId(2), b"new".to_vec()),
+            Lsn(1),
+            Some(payload(second)),
+        )
+        .unwrap_err();
+    assert_eq!(
+        err,
+        Error::CorruptPage("no unpinned frame available for eviction")
+    );
+    drop(pinned);
+
+    let ptr = append(
+        &heap,
+        second,
+        TupleVersion::new(second, RelId(1), TxId(2), b"new".to_vec()),
+    );
+    assert_eq!(ptr.page_id, old.page_id);
+    assert_eq!(ptr.generation, old.generation.next());
+}
+
+#[test]
+fn a_fresh_page_whose_append_failed_is_handed_to_one_lane() {
+    // The page is queued for reuse, untouched, so exactly one later append
+    // takes and reinitialises it.
+    let dir = tempfile::tempdir().unwrap();
+    let page_file = Arc::new(PageFile::create(dir.path().join("data.redline"), 4096).unwrap());
+    let buffer = Arc::new(BufferPool::new(page_file, 32).unwrap());
+    let wal = Arc::new(
+        WalCoordinator::create(
+            dir.path().join("wal"),
+            WalConfig {
+                wal_buffer_bytes: 1024,
+                ..WalConfig::default()
+            },
+        )
+        .unwrap(),
+    );
+    let heap = PageBackedHeap::new_with_wal(RelId(1), 2, buffer, Some(wal)).unwrap();
+    let failed = RowId(1);
+    let oversized = WalPayload::HeapInsert {
+        tx_id: TxId(1),
+        rel_id: RelId(1),
+        row_id: failed,
+        payload: vec![0; 2048],
+    };
+    heap.append_tuple(
+        TxId(1),
+        failed,
+        TupleVersion::new(failed, RelId(1), TxId(1), b"lost".to_vec()),
+        Lsn(1),
+        Some(oversized),
+    )
+    .unwrap_err();
+
+    let rows = [RowId(2), RowId(3)];
+    assert_ne!(heap.lane_for_row(rows[0]), heap.lane_for_row(rows[1]));
+    let pages: Vec<PageId> = rows
+        .iter()
+        .map(|row| {
+            append(
+                &heap,
+                *row,
+                TupleVersion::new(*row, RelId(1), TxId(2), b"row".to_vec()),
+            )
+            .page_id
+        })
+        .collect();
+    assert_ne!(pages[0], pages[1], "two lanes were handed the same page");
+}
+
+#[test]
 fn append_during_an_in_place_write_keeps_its_page_lsn() {
     let (_dir, heap) = heap();
     let heap = Arc::new(heap);

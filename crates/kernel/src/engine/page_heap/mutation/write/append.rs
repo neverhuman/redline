@@ -214,9 +214,13 @@ impl PageBackedHeap {
                 None => match self.take_reusable_page(kind)? {
                     Some(page_id) => match self.buffer.pin(page_id) {
                         Ok(guard) => guard,
-                        Err(err) => {
-                            self.push_reusable_page(kind, page_id)?;
-                            return Err(err);
+                        Err(_) => {
+                            // The page may not load, in which case every lane that took it next
+                            // would fail the same way, or the pool may be full for now. Queue it
+                            // behind every other reusable page and use a fresh page instead. A
+                            // full pool fails that allocation too.
+                            self.push_reusable_page_last(kind, page_id)?;
+                            self.buffer.allocate(kind, self.rel_id)?
                         }
                     },
                     None => self.buffer.allocate(kind, self.rel_id)?,
