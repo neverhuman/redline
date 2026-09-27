@@ -112,6 +112,22 @@ fn materialize(raw: RawCase, id: u64, cfg: &GenConfig, sqlite_bin: &str) -> Resu
             out.stderr
         );
     }
+    // Declared fragments are expectations too: capture must confirm them,
+    // or the shard would ship a contract the oracle does not keep.
+    for (stream, text, needles) in [
+        ("stdout", &out.stdout, &raw.expected_stdout_contains),
+        ("stderr", &out.stderr, &raw.expected_stderr_contains),
+    ] {
+        if let Some(needle) = needles
+            .iter()
+            .find(|needle| !text.contains(needle.as_str()))
+        {
+            bail!(
+                "generator {} declares {stream} fragment {needle:?}, but sqlite3 printed {text:?}",
+                raw.name
+            );
+        }
+    }
     Ok(Case {
         expected_exit: out.exit_code,
         expected_stdout: if raw.compare_stdout {
@@ -453,11 +469,23 @@ fn string_functions(_cfg: &GenConfig) -> Result<Vec<RawCase>> {
     let mut cases = Vec::new();
     for (func, inputs) in univariate_text {
         for input in *inputs {
-            cases.push(RawCase::new(
+            let mut case = RawCase::new(
                 format!("STRING_{}_{}", func.to_ascii_uppercase(), sanitize(input)),
                 format!("{func}({input})"),
                 format!("SELECT {func}({input});\n"),
-            ));
+            );
+            if *func == "soundex" {
+                // The pinned reference is built without SQLITE_SOUNDEX, so
+                // soundex() does not exist there. The row stays (its id is
+                // positional) and records that rejection; it is a declared
+                // shared rejection in metadata/sqlite_parity.
+                case.description = format!(
+                    "{func}({input}) is rejected: the pinned sqlite3 build omits SQLITE_SOUNDEX"
+                );
+                case.expect_failure = true;
+                case.expected_stderr_contains = vec!["no such function: soundex".to_owned()];
+            }
+            cases.push(case);
         }
     }
     // Multi-arg string functions.

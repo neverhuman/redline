@@ -15,8 +15,9 @@
 //!     equality with the on-disk shard. Used in CI to keep rules and shards
 //!     in sync.
 //!
-//!   * `ship-gate` walks `corpus/sqlite_parity/cases/*.json`, runs each case
-//!     through the pinned reference `sqlite3`, and verifies its declared
+//!   * `ship-gate` walks the pinned `corpus/sqlite_parity/generated_manifest.json`
+//!     and `corpus/sqlite_parity/cases/*.json`, runs each case through the
+//!     pinned reference `sqlite3`, and verifies its declared
 //!     expected_stdout, exit code, and substring contains-checks match.
 //!     Failing case IDs are printed so they can be re-blessed or removed from
 //!     the shard. This is the authoritative ship contract for the
@@ -108,8 +109,8 @@ enum Command {
     /// asserting the declared expected behavior. Exits non-zero with the
     /// list of failing case IDs if anything diverges.
     ShipGate {
-        /// Optional path to a single shard JSON; default: every shard under
-        /// corpus/sqlite_parity/cases/.
+        /// Optional path to a single shard JSON; default: the pinned
+        /// manifest and every shard under corpus/sqlite_parity/cases/.
         path: Option<PathBuf>,
         /// SQLite shell to validate against. Default: the pinned reference
         /// build; any shell must be the stamped pinned release.
@@ -159,9 +160,12 @@ fn main() -> Result<()> {
         }
         Command::ShipGate { path, sqlite_bin } => {
             let sqlite = oracle(&repo_root, sqlite_bin.as_deref())?;
-            let target = path
-                .unwrap_or_else(|| repo_root.join("corpus").join("sqlite_parity").join("cases"));
-            ship_gate(&target, &sqlite)
+            let corpus = repo_root.join("corpus").join("sqlite_parity");
+            let targets = match path {
+                Some(path) => vec![path],
+                None => vec![corpus.join("generated_manifest.json"), corpus.join("cases")],
+            };
+            ship_gate(&targets, &sqlite)
         }
     }
 }
@@ -183,28 +187,11 @@ fn oracle(repo_root: &Path, explicit: Option<&Path>) -> Result<String> {
         .with_context(|| format!("non-UTF-8 sqlite3 path {}", pinned.path.display()))
 }
 
-fn ship_gate(target: &Path, sqlite_bin: &str) -> Result<()> {
-    let paths = if target.is_dir() {
-        let mut paths = Vec::new();
-        for entry in fs::read_dir(target).with_context(|| format!("read {}", target.display()))? {
-            let entry = entry?;
-            let path = entry.path();
-            if path.extension().is_some_and(|ext| ext == "json")
-                && !path
-                    .file_name()
-                    .and_then(|name| name.to_str())
-                    .is_some_and(|name| name.starts_with('_'))
-            {
-                paths.push(path);
-            }
-        }
-        paths.sort();
-        paths
-    } else if target.is_file() {
-        vec![target.to_path_buf()]
-    } else {
-        bail!("not a file or directory: {}", target.display());
-    };
+fn ship_gate(targets: &[PathBuf], sqlite_bin: &str) -> Result<()> {
+    let mut paths = Vec::new();
+    for target in targets {
+        paths.extend(shard_paths(target)?);
+    }
 
     let mut total = 0usize;
     let mut failures: Vec<(String, u64, String, String)> = Vec::new();
@@ -238,6 +225,31 @@ fn ship_gate(target: &Path, sqlite_bin: &str) -> Result<()> {
     } else {
         bail!("{} cases failed ship-gate", failures.len())
     }
+}
+
+/// A shard file itself, or every case shard in a directory (metadata shards,
+/// named with a leading underscore, are not case lists).
+fn shard_paths(target: &Path) -> Result<Vec<PathBuf>> {
+    if target.is_file() {
+        return Ok(vec![target.to_path_buf()]);
+    }
+    if !target.is_dir() {
+        bail!("not a file or directory: {}", target.display());
+    }
+    let mut paths = Vec::new();
+    for entry in fs::read_dir(target).with_context(|| format!("read {}", target.display()))? {
+        let path = entry?.path();
+        if path.extension().is_some_and(|ext| ext == "json")
+            && !path
+                .file_name()
+                .and_then(|name| name.to_str())
+                .is_some_and(|name| name.starts_with('_'))
+        {
+            paths.push(path);
+        }
+    }
+    paths.sort();
+    Ok(paths)
 }
 
 fn find_repo_root() -> Result<PathBuf> {

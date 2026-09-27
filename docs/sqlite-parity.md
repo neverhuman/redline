@@ -67,6 +67,46 @@ Status values are deliberately narrow:
 | `not-started` | No production implementation exists yet, or the current implementation intentionally uses RedlineDB-native behavior instead of SQLite behavior. |
 | `rejects-by-design` | SQLite accepts or no-ops the row, but RedlineDB intentionally rejects it with an explicit `UnsupportedSql` boundary instead of counting it as parity. |
 
+## Corpus expectations
+
+Each case's declared expectations (`expected_exit`, `expected_stdout` and the
+`expected_*_contains` fragments) describe the pinned shell. `xtask generate`
+and `xtask ship-gate` in `subrepos/redline-testing` default to it and refuse
+any shell without its build stamp; `ship-gate` checks the pinned manifest as
+well as the shards. Before 2026-09-27 both ran the `sqlite3` on `PATH`
+(Ubuntu's 3.45.1), so 141 cases declared 3.45.1 behaviour: 127 shard cases and
+14 manifest cases. The generated `gen_*` shards were regenerated. Hand-written
+shard cases took the pinned shell's stdout where 3.53.1 prints differently:
+column, box, table, line, html, tabs and quote modes, round-trip precision
+for reals (up to 17 digits), `.tables` column width, `sqlite_schema` in
+`.schema`, mode flags that reset an earlier `-header`, `-separator`, `-nullvalue` or `-newline`
+(10201, 10203-10205), and `PRAGMA secure_delete` = 0 (10254).
+
+The pinned manifest (`generated_manifest.json`, cases 1-1127) is otherwise
+frozen. These manifest cases were migrated by hand to the pinned shell:
+
+| Case | Name | Was (3.45.1 or unverified) | Now (3.53.1) |
+|---|---|---|---|
+| 00110, 00176 | `DOT_MODE_LINE_COLUMN_TABLE_BOX_MARKDOWN`, `OPT_LINE_MODE` | line mode fragment `a = 1` | `a: 1` (and `b: x`) |
+| 00163 | `DOT_FILECTRL_CATALOG` | exit 0 | exit 1, prints `Available file-controls:` |
+| 00164 | `DOT_IMPOSTER_CATALOG` | exit 0 | exit 1, `Usage: .imposter INDEX IMPOSTER` |
+| 00167 | `DOT_UNMODULE_CATALOG` | exit 0 | exit 1, unknown command `unmodule` |
+| 00168 | `DOT_CHECK_CATALOG` | exit 0 | exit 1, `no .testcase is active` |
+| 00171 | `OPT_HELP` | exit 1 | exit 0; help text on stderr |
+| 00178 | `OPT_HTML_MODE` | fragment `<TD>1</TD>` | `<TD>1` then `<TD>x`, no closing tags |
+| 00194 | `OPT_IFEXISTS_NEGATIVE_TEMPFILE` | `unknown option: -ifexists` | `-ifexists` refuses the missing file |
+| 00199 | `OPT_PAGECACHE` | stdout `1` | a `Page cache size increased ...` line, then `1` |
+| 00219, 00220 | `UPDATE_LIMIT_OPTIONAL`, `DELETE_LIMIT_OPTIONAL` | exit 0 with updated rows | exit 1, `near "ORDER": syntax error` (declared shared rejection) |
+| 00222 | `OPT_ESCAPE_SYMBOL` | fragment `\n` (RedlineDB's output) | the newline stays unescaped |
+| 00226 | `OPT_NOFOLLOW_CATALOG` | exit 0 | exit 1, `-nofollow` refuses the missing file |
+
+Cases the pinned build cannot express are declared in
+`subrepos/redline-testing/metadata/sqlite_parity/declared-deviations.json`
+and listed in the report: the `soundex()` cases 11437-11439 and 00219/00220
+record the shared rejection, and 10546, written to show that a default build
+lacks `median()`, now checks `median()` because the pinned build enables
+`SQLITE_ENABLE_PERCENTILE`.
+
 ## SQL Surface
 
 | Feature row | Status | Test path | Owner | Notes |

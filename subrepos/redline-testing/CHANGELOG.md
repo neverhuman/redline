@@ -37,6 +37,14 @@ for the publish + attestation flow.
   release. They used to run `sqlite3` from PATH (Ubuntu's 3.45.1), so the
   corpus was blessed against a different build from the oracle it is scored
   against.
+- The `sqlite_parity` corpus is re-blessed against the pinned 3.53.1 shell:
+  141 cases declared 3.45.1 behaviour (127 shard cases, 14 manifest cases).
+  The `gen_*` shards are regenerated; hand-written shard cases take the pinned
+  shell's output; the manifest cases are migrated by hand (listed in
+  RedlineDB's `docs/sqlite-parity.md`). The `soundex()` generator rows now
+  record the pinned build's `no such function: soundex` rejection, and
+  `generate` refuses a declared fragment the capture does not contain.
+  `ship-gate` checks the pinned manifest as well as the shards by default.
 
 ### Removed
 

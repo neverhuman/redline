@@ -57,7 +57,8 @@ release-local:
 generate-check:
     cargo run -p xtask --release -- generate --check
 
-# Validate every shard under corpus/sqlite_parity/cases/ against sqlite3.
+# Validate the pinned manifest and every shard under corpus/sqlite_parity/cases/
+# against the pinned sqlite3 3.53.1 reference shell.
 ship-gate:
     cargo run -p xtask --release -- ship-gate
 
