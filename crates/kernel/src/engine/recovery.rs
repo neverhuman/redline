@@ -155,9 +155,6 @@ impl Engine {
             checkpoint: std::sync::Mutex::new(checkpoint),
             index_handles: std::sync::Mutex::new(HashMap::new()),
         });
-        if !volatile {
-            engine.attach_pressure_relief()?;
-        }
         Ok(engine)
     }
 
@@ -325,7 +322,6 @@ impl Engine {
             engine.heap.load_reusable_pages_from_pages(page_count)?;
         }
         if target == RecoveryTarget::Latest {
-            engine.attach_pressure_relief()?;
             // Replay puts heap rows into new versions on new pages, and
             // eviction may write those pages. The next recovery would replay
             // the same records again next to the copies already in the file,

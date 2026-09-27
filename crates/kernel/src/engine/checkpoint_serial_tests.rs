@@ -101,3 +101,51 @@ fn a_later_checkpoint_generation_never_records_an_older_lsn() {
         assert_eq!(reopened.get(&mut tx, *row).unwrap(), Some(vec![tag; 64]));
     }
 }
+
+/// Workplan R5, open: a checkpoint writes only pages at or below the LSN it
+/// records. A page another writer changes after the checkpoint chose that
+/// LSN is skipped whole, although it still holds committed rows older than
+/// the LSN, whose WAL the checkpoint then prunes. Recovery starts at the
+/// recorded LSN and never sees those rows again. This is why the engine
+/// does not start checkpoints on its own under memory pressure.
+#[test]
+#[ignore = "R5: a checkpoint skips a page rewritten past its LSN and loses its older rows"]
+fn checkpoint_keeps_a_committed_row_on_a_page_rewritten_past_its_lsn() {
+    let temp = TempDir::new().unwrap();
+    let config = EngineConfig {
+        heap_lanes: 1,
+        ..config()
+    };
+    let engine = Engine::create(temp.path(), config.clone()).unwrap();
+    let older = insert(&engine, 1);
+
+    let (paused_tx, paused) = mpsc::channel();
+    let (release, release_rx) = mpsc::channel::<()>();
+    let checkpoint = {
+        let engine = Arc::clone(&engine);
+        thread::spawn(move || {
+            set_after_checkpoint_cut_hook(Some(Box::new(move || {
+                paused_tx.send(()).unwrap();
+                release_rx.recv().unwrap();
+            })));
+            let control = engine.checkpoint();
+            set_after_checkpoint_cut_hook(None);
+            control.unwrap()
+        })
+    };
+    paused.recv_timeout(Duration::from_secs(10)).unwrap();
+    // The same heap page takes a newer row while the checkpoint is paused.
+    let newer = insert(&engine, 2);
+    release.send(()).unwrap();
+    checkpoint.join().unwrap();
+    drop(engine);
+
+    let reopened = Engine::open(temp.path(), config).unwrap();
+    let mut tx = reopened.begin(Isolation::Snapshot).unwrap();
+    assert_eq!(reopened.get(&mut tx, newer).unwrap(), Some(vec![2; 64]));
+    assert_eq!(
+        reopened.get(&mut tx, older).unwrap(),
+        Some(vec![1; 64]),
+        "the checkpoint lost a committed row on a page it skipped"
+    );
+}

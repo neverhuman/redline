@@ -109,6 +109,7 @@ fn assert_rows(engine: &Engine, rows: &[(RowId, usize)]) {
 fn buffer_eviction_in_normal_mode_syncs_the_wal_before_the_page_write() {
     let temp = TempDir::new().unwrap();
     let engine = Engine::create(temp.path(), config(CommitDurability::Normal, SMALL_POOL)).unwrap();
+    engine.enable_pool_pressure_checkpoints().unwrap();
     let early = watch_page_writes(&engine);
     let inserted = insert_rows(&engine, 0..ROWS);
     set_before_page_write_hook(None);
@@ -132,6 +133,7 @@ fn buffer_eviction_admits_a_page_into_a_full_dirty_pool_in_every_durability_mode
     for durability in EVERY_DURABILITY {
         let temp = TempDir::new().unwrap();
         let engine = Engine::create(temp.path(), config(durability, SMALL_POOL)).unwrap();
+        engine.enable_pool_pressure_checkpoints().unwrap();
         let early = watch_page_writes(&engine);
         let inserted = insert_rows(&engine, 0..ROWS);
         set_before_page_write_hook(None);
@@ -166,6 +168,7 @@ fn buffer_eviction_checkpoints_a_pool_full_of_dirty_index_pages_in_every_durabil
     for durability in EVERY_DURABILITY {
         let temp = TempDir::new().unwrap();
         let engine = Engine::create(temp.path(), config(durability, SMALL_POOL)).unwrap();
+        engine.enable_pool_pressure_checkpoints().unwrap();
         let index_id = create_indexed_table(&engine);
         let index = engine.index_handle(index_id).unwrap();
         let early = watch_page_writes(&engine);
@@ -233,6 +236,7 @@ fn buffer_eviction_frees_index_pages_that_recovery_dirtied() {
     assert!(reopened.buffer.stats().evictions > 0);
 
     // Commits after recovery keep evicting, and a second reopen sees them.
+    reopened.enable_pool_pressure_checkpoints().unwrap();
     let rows = insert_rows(&reopened, 0..ROWS).unwrap();
     drop(reopened);
     let again = Engine::open(temp.path(), config(CommitDurability::Normal, SMALL_POOL)).unwrap();
@@ -504,6 +508,7 @@ fn buffer_eviction_leaves_one_copy_of_each_row_after_a_reopen() {
     // replayed copies, and a page scan would return both.
     let temp = TempDir::new().unwrap();
     let engine = Engine::create(temp.path(), config(CommitDurability::Normal, SMALL_POOL)).unwrap();
+    engine.enable_pool_pressure_checkpoints().unwrap();
     let rows = insert_rows(&engine, 0..ROWS).unwrap();
     drop(engine);
 
@@ -571,6 +576,7 @@ fn buffer_eviction_of_an_open_transaction_keeps_its_ids_from_new_ones() {
     // id would make the orphaned tuples visible once the new one commits.
     let temp = TempDir::new().unwrap();
     let engine = Engine::create(temp.path(), config(CommitDurability::Normal, SMALL_POOL)).unwrap();
+    engine.enable_pool_pressure_checkpoints().unwrap();
     insert_rows(&engine, 0..3).unwrap();
     let mut open = engine.begin(Isolation::Snapshot).unwrap();
     let open_id = open.id();
@@ -669,6 +675,23 @@ fn buffer_eviction_never_tears_an_uncommitted_index_split() {
             "committed key {i}"
         );
     }
+}
+
+#[test]
+fn buffer_eviction_fails_closed_unless_pressure_checkpoints_are_enabled() {
+    // A checkpoint skips a page another writer changes while it runs, yet
+    // records an LSN past that page's committed rows, so the engine does not
+    // start one under memory pressure on its own. A pool of dirty pages then
+    // refuses the allocation, as it did on c1af369.
+    let temp = TempDir::new().unwrap();
+    let engine = Engine::create(temp.path(), config(CommitDurability::Normal, SMALL_POOL)).unwrap();
+    let inserted = insert_rows(&engine, 0..ROWS);
+    assert_eq!(
+        inserted.unwrap_err(),
+        Error::CorruptPage("no unpinned frame available for eviction")
+    );
+    assert_eq!(engine.checkpoint_info().unwrap(), None);
+    assert_eq!(engine.buffer.stats().pressure_checkpoints, 0);
 }
 
 #[test]

@@ -258,15 +258,31 @@ impl Engine {
         })
     }
 
-    /// Let the buffer pool ask for a checkpoint when it has no page it may
-    /// evict. Only a persistent engine opened to the end of its WAL does:
-    /// a volatile engine has nothing to checkpoint, and a checkpoint after
-    /// recovery to an earlier target would record the WAL end and prune the
-    /// records that recovery skipped.
-    pub(super) fn attach_pressure_relief(self: &Arc<Self>) -> Result<()> {
+    /// Let the buffer pool run a checkpoint when every unpinned frame holds
+    /// a dirty page it may not write on its own, instead of failing the
+    /// allocation with "no unpinned frame available for eviction".
+    ///
+    /// Off by default, and safe only while one thread writes. A checkpoint
+    /// does not yet take a complete cut (workplan R5): it skips a page that
+    /// another writer changes between its WAL flush and its page flush, yet
+    /// records an LSN past that page's earlier committed changes and prunes
+    /// the WAL below it. A crash, or closing without a later checkpoint that
+    /// writes the page, then loses those changes. Checkpoints the caller
+    /// runs itself share that limit; this only makes them automatic under
+    /// memory pressure. Use it only on an engine opened to the end of its
+    /// WAL: a checkpoint after recovery to an earlier target records the WAL
+    /// end. A volatile engine has nothing to checkpoint and ignores it.
+    pub fn enable_pool_pressure_checkpoints(self: &Arc<Self>) -> Result<()> {
+        if self.volatile {
+            return Ok(());
+        }
         let engine: std::sync::Weak<Self> = Arc::downgrade(self);
         let relief: std::sync::Weak<dyn PagePressureRelief> = engine;
-        self.buffer.attach_pressure_relief(relief)
+        match self.buffer.attach_pressure_relief(relief) {
+            // Already enabled.
+            Ok(()) | Err(Error::CorruptPage("buffer pool already has pressure relief")) => Ok(()),
+            Err(err) => Err(err),
+        }
     }
 
     pub fn checkpoint_info(&self) -> Result<Option<ControlFile>> {

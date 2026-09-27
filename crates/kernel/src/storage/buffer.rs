@@ -229,7 +229,8 @@ impl BufferPool {
     /// Attach what eviction asks for a checkpoint when every unpinned frame
     /// holds a dirty page it may not write alone. A pool takes one, once.
     /// Attach it only once the engine is fully open: a checkpoint during
-    /// recovery would record an LSN that replay has not reached.
+    /// recovery would record an LSN that replay has not reached. See
+    /// `Engine::enable_pool_pressure_checkpoints` for when it is safe.
     pub fn attach_pressure_relief(&self, relief: Weak<dyn PagePressureRelief>) -> Result<()> {
         self.inner
             .relief
@@ -961,7 +962,8 @@ impl Inner {
 /// undo the file never received. A B-tree split changes several pages, and
 /// HNSW links in pages it never logs, so one of those pages alone can point
 /// at a page the file does not have. When every unpinned frame holds such a
-/// page, eviction asks for a checkpoint instead.
+/// page, eviction asks the engine for a checkpoint if the engine enabled
+/// that, and otherwise fails the allocation.
 fn eviction_may_write(page: &Page) -> Result<bool> {
     Ok(page.header()?.page_lsn == Lsn::ZERO)
 }
