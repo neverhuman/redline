@@ -1,8 +1,7 @@
 use std::collections::BTreeSet;
-use std::path::{Path, PathBuf};
+use std::path::Path;
 use std::sync::{
-    Arc, Mutex,
-    atomic::{AtomicUsize, Ordering},
+    atomic::{AtomicBool, AtomicUsize, Ordering},
     mpsc,
 };
 use std::time::{Duration, Instant};
@@ -14,6 +13,7 @@ use super::case::Case;
 use super::compare::{comparable, contract_text, describe, first_difference};
 use super::engine::{EngineOutput, EngineSpec, SkippedCase};
 use super::normalize::normalize_output;
+use super::record_sink::RecordSink;
 use super::report;
 
 /// What decided a sample's `status` (SQ-02).
@@ -36,6 +36,10 @@ pub enum VerdictReason {
     /// The target kept the contract, but its exit code or output bytes
     /// differ from the reference's.
     DifferentialMismatch,
+    /// An engine run left no whole result to judge: it timed out, passed
+    /// the output cap or could not be started (SQ-09). Never a baseline
+    /// entry: a known failure must fail the same way every run.
+    ExecutionFailure,
 }
 
 impl VerdictReason {
@@ -46,6 +50,7 @@ impl VerdictReason {
             Self::ReferenceContractFailure => "reference_contract_failure",
             Self::TargetSemanticFailure => "target_semantic_failure",
             Self::DifferentialMismatch => "differential_mismatch",
+            Self::ExecutionFailure => "execution_failure",
         }
     }
 }
@@ -56,6 +61,8 @@ impl VerdictReason {
 pub enum VerdictStage {
     /// Case selection, before anything ran (capability or rewrite skips).
     Selection,
+    /// An engine run ended without a whole result (SQ-09).
+    Execution,
     /// The reference output checked against the case's declared
     /// expectations, before any comparison.
     ReferenceContract,
@@ -102,7 +109,8 @@ impl Verdict {
             VerdictReason::Skipped => "skipped",
             VerdictReason::ReferenceContractFailure
             | VerdictReason::TargetSemanticFailure
-            | VerdictReason::DifferentialMismatch => "failed",
+            | VerdictReason::DifferentialMismatch
+            | VerdictReason::ExecutionFailure => "failed",
         }
     }
 }
@@ -154,60 +162,69 @@ impl RunSummary {
     }
 }
 
-pub fn compare_cases(
-    cases: &[Case],
+/// One case as each engine runs it: the same case for `sqlite_parity`
+/// and `memory`, the RQL rewrite on the target side for `rql_phase1`. The
+/// reference case is the one judged and recorded.
+#[derive(Debug, Clone)]
+pub(super) struct CasePair {
+    pub reference: Case,
+    pub target: Case,
+}
+
+impl CasePair {
+    pub fn same(case: Case) -> Self {
+        Self {
+            target: case.clone(),
+            reference: case,
+        }
+    }
+}
+
+/// What every case of one suite run shares.
+pub(super) struct SuiteRun<'a> {
+    /// The label of progress and failure lines.
+    pub label: &'static str,
+    pub reference: &'a EngineSpec,
+    pub target: &'a EngineSpec,
+    pub tmp_root: &'a Path,
+    pub warmup: usize,
+    pub repetitions: usize,
+    pub sqlite_version: Option<String>,
+    pub progress: bool,
+    pub memory_samples: bool,
+}
+
+/// Runs a suite's cases on `workers` threads and streams each case's
+/// records to `sink` as it completes (SQ-09); skipped cases are written
+/// first. An engine that times out, floods, crashes or cannot start fails
+/// its case, not the run. Only a harness error (an artifact or record that
+/// cannot be written) stops the run; the records of every case finished by
+/// then stay on disk, and no completion marker is written.
+pub(super) fn compare_cases(
+    run: &SuiteRun<'_>,
+    pairs: &[CasePair],
     skipped: &[SkippedCase],
-    reference: &EngineSpec,
-    target: &EngineSpec,
-    out: &Path,
-    tmp_root: impl AsRef<Path>,
     workers: usize,
-    warmup: usize,
-    repetitions: usize,
-    sqlite_version: Option<String>,
-    progress: bool,
-    memory_samples: bool,
+    sink: RecordSink,
 ) -> Result<RunSummary> {
-    let tmp_root = tmp_root.as_ref();
     let started = Instant::now();
     let mut summary = RunSummary::default();
     for skipped_case in skipped {
         summary.record_skip(&skipped_case.case);
         let artifact = report::write_skip_artifact(&skipped_case.case, &skipped_case.reason)?;
-        report::append_jsonl(
-            Some(out),
-            &report::skipped_compare_record(
-                &skipped_case.case,
-                &reference.name,
-                &target.name,
-                sqlite_version.clone(),
-                Some(artifact),
-                Some(skipped_case.reason.clone()),
-            ),
-        )?;
+        sink.write_case(&[report::skipped_compare_record(
+            &skipped_case.case,
+            &run.reference.name,
+            &run.target.name,
+            run.sqlite_version.clone(),
+            Some(artifact),
+            Some(skipped_case.reason.clone()),
+        )])?;
     }
-    let total_samples = warmup.saturating_add(repetitions);
-    let case_runs = run_case_set(
-        cases,
-        reference,
-        target,
-        tmp_root.to_path_buf(),
-        workers,
-        total_samples,
-        warmup,
-        sqlite_version,
-        progress,
-        memory_samples,
-    )?;
-    for case_run in case_runs {
-        for record in &case_run.records {
-            report::append_jsonl(Some(out), record)?;
-        }
-        summary.slowest.extend(case_run.slowest);
-        summary.record_run(case_run.failure);
-    }
+    run_pairs(run, pairs, workers, &sink, &mut summary)?;
+    sink.finish()?;
     summary.elapsed = started.elapsed();
-    Ok(finish_summary(summary, "sqlite_parity", progress))
+    Ok(finish_summary(summary, run.label, run.progress))
 }
 
 struct CaseRun {
@@ -216,137 +233,94 @@ struct CaseRun {
     slowest: Vec<(String, u128)>,
 }
 
-fn run_case_set(
-    cases: &[Case],
-    reference: &EngineSpec,
-    target: &EngineSpec,
-    tmp_root: PathBuf,
-    workers: usize,
-    total_samples: usize,
-    warmup: usize,
-    sqlite_version: Option<String>,
-    progress: bool,
-    memory_samples: bool,
-) -> Result<Vec<CaseRun>> {
-    if workers <= 1 || cases.len() <= 1 {
-        return cases
-            .iter()
-            .map(|case| {
-                run_one_case(
-                    case,
-                    reference,
-                    target,
-                    &tmp_root,
-                    total_samples,
-                    warmup,
-                    sqlite_version.clone(),
-                    progress,
-                    memory_samples,
-                )
-            })
-            .collect();
-    }
-
-    let workers = workers.min(cases.len());
-    let cases = Arc::new(cases.to_vec());
-    let next = Arc::new(AtomicUsize::new(0));
-    let first_error = Arc::new(Mutex::new(None::<String>));
-    let (tx, rx) = mpsc::channel::<(usize, Result<CaseRun>)>();
-    let mut handles = Vec::with_capacity(workers);
-    for _ in 0..workers {
-        let cases = Arc::clone(&cases);
-        let next = Arc::clone(&next);
-        let first_error = Arc::clone(&first_error);
-        let tx = tx.clone();
-        let reference = reference.clone();
-        let target = target.clone();
-        let tmp_root = tmp_root.clone();
-        let sqlite_version = sqlite_version.clone();
-        handles.push(std::thread::spawn(move || {
-            loop {
-                if first_error.lock().is_ok_and(|guard| guard.is_some()) {
-                    break;
-                }
-                let index = next.fetch_add(1, Ordering::SeqCst);
-                let Some(case) = cases.get(index) else {
-                    break;
-                };
-                let result = run_one_case(
-                    case,
-                    &reference,
-                    &target,
-                    &tmp_root,
-                    total_samples,
-                    warmup,
-                    sqlite_version.clone(),
-                    progress,
-                    memory_samples,
-                );
-                if let Err(err) = &result
-                    && let Ok(mut guard) = first_error.lock()
-                {
-                    *guard = Some(err.to_string());
-                }
-                if tx.send((index, result)).is_err() {
-                    break;
-                }
-            }
-        }));
-    }
-    drop(tx);
-
-    let mut ordered = (0..cases.len()).map(|_| None).collect::<Vec<_>>();
-    for (index, result) in rx {
-        ordered[index] = Some(result);
-    }
-    for handle in handles {
-        handle
-            .join()
-            .map_err(|_| anyhow::anyhow!("sqlite parity worker thread panicked"))?;
-    }
-    ordered
-        .into_iter()
-        .enumerate()
-        .map(|(index, result)| {
-            result.unwrap_or_else(|| {
-                Err(anyhow::anyhow!("sqlite parity worker skipped case {index}"))
-            })
-        })
-        .collect()
+/// What the collector keeps of a case whose records are already written.
+struct CaseDone {
+    failure: Option<CaseFailure>,
+    slowest: Vec<(String, u128)>,
 }
 
-fn run_one_case(
-    case: &Case,
-    reference: &EngineSpec,
-    target: &EngineSpec,
-    tmp_root: &Path,
-    total_samples: usize,
-    warmup: usize,
-    sqlite_version: Option<String>,
-    progress: bool,
-    memory_samples: bool,
-) -> Result<CaseRun> {
-    if progress {
-        eprintln!("sqlite_parity case={} status=running", case.display_id());
+fn run_pairs(
+    run: &SuiteRun<'_>,
+    pairs: &[CasePair],
+    workers: usize,
+    sink: &RecordSink,
+    summary: &mut RunSummary,
+) -> Result<()> {
+    let workers = workers.clamp(1, pairs.len().max(1));
+    let next = AtomicUsize::new(0);
+    let stop = AtomicBool::new(false);
+    let (sender, receiver) = mpsc::channel::<Result<CaseDone>>();
+    std::thread::scope(|scope| {
+        for _ in 0..workers {
+            let sender = sender.clone();
+            let (next, stop) = (&next, &stop);
+            scope.spawn(move || {
+                while !stop.load(Ordering::SeqCst) {
+                    let Some(pair) = pairs.get(next.fetch_add(1, Ordering::SeqCst)) else {
+                        break;
+                    };
+                    let done = run_one_case(run, pair).and_then(|case_run| {
+                        sink.write_case(&case_run.records)?;
+                        Ok(CaseDone {
+                            failure: case_run.failure,
+                            slowest: case_run.slowest,
+                        })
+                    });
+                    if done.is_err() {
+                        stop.store(true, Ordering::SeqCst);
+                    }
+                    if sender.send(done).is_err() {
+                        break;
+                    }
+                }
+            });
+        }
+        drop(sender);
+        let mut first_error = None;
+        for done in receiver {
+            match done {
+                Ok(done) => {
+                    summary.slowest.extend(done.slowest);
+                    summary.record_run(done.failure);
+                }
+                Err(error) => {
+                    first_error.get_or_insert(error);
+                }
+            }
+        }
+        first_error.map_or(Ok(()), Err)
+    })
+}
+
+fn run_one_case(run: &SuiteRun<'_>, pair: &CasePair) -> Result<CaseRun> {
+    let case = &pair.reference;
+    if run.progress {
+        eprintln!("{} case={} status=running", run.label, case.display_id());
     }
+    let total_samples = run.warmup.saturating_add(run.repetitions);
     let mut failure_reasons = BTreeSet::new();
     let mut records = Vec::with_capacity(total_samples);
     let mut slowest = Vec::new();
     for sample_index in 0..total_samples {
-        let measured_index = sample_index.checked_sub(warmup);
+        let measured_index = sample_index.checked_sub(run.warmup);
         let sample_role = if let Some(index) = measured_index {
             format!("measured:{}", index.saturating_add(1))
         } else {
             "warmup".to_owned()
         };
-        let reference_output = reference.run_case(case, tmp_root, memory_samples)?;
-        let target_output = target.run_case(case, tmp_root, memory_samples)?;
+        let reference_output =
+            run.reference
+                .run_case_bounded(&pair.reference, run.tmp_root, run.memory_samples);
+        let target_output =
+            run.target
+                .run_case_bounded(&pair.target, run.tmp_root, run.memory_samples);
         let verdict = judge_sample(case, &reference_output, &target_output);
         let artifact = if let Some(reason) = &verdict.diagnostic {
             let artifact =
                 report::write_failure_artifact(case, &[&reference_output, &target_output], reason)?;
             eprintln!(
-                "sqlite_parity failure case={} verdict={:?} reason={} artifact={}",
+                "{} failure case={} verdict={:?} reason={} artifact={}",
+                run.label,
                 case.display_id(),
                 verdict.reason,
                 reason,
@@ -363,7 +337,7 @@ fn run_one_case(
             sample_index,
             measured_index.map(|index| index.saturating_add(1)),
             sample_role,
-            sqlite_version.clone(),
+            run.sqlite_version.clone(),
             &verdict,
             artifact,
         ));
@@ -375,13 +349,13 @@ fn run_one_case(
         }
     }
     let failure = case_failure(case, failure_reasons);
-    if progress {
+    if run.progress {
         let status = if failure.is_some() {
             "failed"
         } else {
             "passed"
         };
-        eprintln!("sqlite_parity case={} status={status}", case.display_id());
+        eprintln!("{} case={} status={status}", run.label, case.display_id());
     }
     Ok(CaseRun {
         records,
@@ -402,15 +376,31 @@ pub(super) fn case_failure(
     })
 }
 
-/// One sample's verdict. The reference must first keep the contract the
-/// case declares; only then does anything the target does mean something.
-/// The target must keep the same contract (a UNIQUE failure is not a "no
-/// such table"), and then print what the reference printed, byte for byte.
+/// One sample's verdict. Both engine runs must first have ended with a
+/// whole result: a run killed at the deadline or the output cap, or one
+/// that never started, has nothing to judge (SQ-09). The reference must
+/// then keep the contract the case declares; only then does anything the
+/// target does mean something. The target must keep the same contract (a
+/// UNIQUE failure is not a "no such table"), and then print what the
+/// reference printed, byte for byte.
 pub(super) fn judge_sample(
     case: &Case,
     reference: &EngineOutput,
     target: &EngineOutput,
 ) -> Verdict {
+    for output in [reference, target] {
+        if !output.outcome.is_complete() {
+            return Verdict::failed(
+                VerdictReason::ExecutionFailure,
+                VerdictStage::Execution,
+                format!(
+                    "{} {}",
+                    output.engine,
+                    output.failure.as_deref().unwrap_or(output.outcome.as_str())
+                ),
+            );
+        }
+    }
     if let Err(reason) = validate_reference_contract(case, reference) {
         return Verdict::failed(
             VerdictReason::ReferenceContractFailure,
@@ -605,7 +595,48 @@ pub(super) fn finish_summary(mut summary: RunSummary, suite: &str, progress: boo
 #[cfg(test)]
 mod tests {
     use super::{Verdict, VerdictReason, VerdictStage, judge_sample, validate_compare};
-    use crate::sqlite_parity::test_fixtures::{output, unique_case};
+    use crate::sqlite_parity::bounded::ExecutionOutcome;
+    use crate::sqlite_parity::test_fixtures::{incomplete, output, plain_case, unique_case};
+
+    #[test]
+    fn incomplete_runs_fail_before_any_contract() {
+        // A run killed at the deadline or the output cap, or one that never
+        // started, left no whole result: neither the contract nor the
+        // differential may judge it, on either side.
+        let case = plain_case();
+        let healthy = |engine| output(engine, Some(0), "", "");
+        for (outcome, failure) in [
+            (ExecutionOutcome::Timeout, "timed out after 500 ms"),
+            (ExecutionOutcome::OutputLimit, "wrote more than 64 bytes"),
+            (ExecutionOutcome::SpawnError, "could not run: spawn failed"),
+        ] {
+            for (reference, target, engine) in [
+                (
+                    healthy("sqlite3"),
+                    incomplete("redlinedb", outcome, failure),
+                    "redlinedb",
+                ),
+                (
+                    incomplete("sqlite3", outcome, failure),
+                    healthy("redlinedb"),
+                    "sqlite3",
+                ),
+            ] {
+                let verdict = judge_sample(&case, &reference, &target);
+                assert_eq!(
+                    verdict.reason,
+                    VerdictReason::ExecutionFailure,
+                    "{verdict:?}"
+                );
+                assert_eq!(verdict.stage, VerdictStage::Execution);
+                assert_eq!(verdict.status(), "failed");
+                assert_eq!(
+                    verdict.diagnostic.as_deref(),
+                    Some(format!("{engine} {failure}").as_str())
+                );
+            }
+        }
+    }
 
     #[test]
     fn reference_contract_violation_fails_even_when_engines_agree() {

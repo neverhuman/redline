@@ -148,13 +148,33 @@ pub(crate) fn run_provenance(raw_text: &str) -> Value {
 }
 
 /// Official evidence for a run that wrote `run_provenance`, bound to it by
-/// `provenance_sha256` exactly as the evidence processor records it.
+/// `provenance_sha256`, with the run's completion marker, exactly as the
+/// evidence processor records them.
 pub(crate) fn official_evidence(raw_text: &str, run_provenance_text: &str) -> Value {
     let mut value = historical_evidence(raw_text);
     merge(&mut value["official_evidence"], &run_identity());
     value["suite_summaries"]["sqlite_parity"]["provenance_sha256"] =
         sha256_hex(run_provenance_text).into();
+    value["suite_summaries"]["sqlite_parity"]["completion"] = completion(raw_text);
     value
+}
+
+/// The completion marker a finished run writes beside `raw_text`.
+pub(crate) fn completion(raw_text: &str) -> Value {
+    let records = raw_text.lines().filter(|line| !line.trim().is_empty());
+    let cases = records
+        .clone()
+        .filter_map(|line| serde_json::from_str::<Value>(line).ok())
+        .filter_map(|record| record["case_id"].as_str().map(str::to_owned))
+        .collect::<std::collections::BTreeSet<_>>();
+    json!({
+        "schema_version": "redline-testing-raw-complete-v1",
+        "suite": "sqlite_parity",
+        "raw_file": "sqlite_parity.raw.jsonl",
+        "records": records.count(),
+        "cases": cases.len(),
+        "raw_sha256": sha256_hex(raw_text),
+    })
 }
 
 pub(crate) fn pretty(value: &Value) -> String {

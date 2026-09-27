@@ -47,6 +47,63 @@ pub(crate) fn validate_official_evidence_binding(
     Ok(())
 }
 
+/// The completion marker of a run with run provenance, as the evidence
+/// processor copied it into the suite summary (SQ-09), must certify exactly
+/// these raw bytes and records. A run that stopped part way wrote readable
+/// records but no marker, and its records are not published.
+pub(crate) fn validate_completion(
+    official_evidence: &Path,
+    suite: &str,
+    raw_text: &str,
+    records: usize,
+) -> Result<()> {
+    let text = fs::read_to_string(official_evidence)
+        .with_context(|| format!("read official evidence {}", official_evidence.display()))?;
+    let value: serde_json::Value = serde_json::from_str(&text)
+        .with_context(|| format!("parse official evidence {}", official_evidence.display()))?;
+    let Some(completion) = value
+        .get("suite_summaries")
+        .and_then(|summaries| summaries.get(suite))
+        .and_then(|entry| entry.get("completion"))
+    else {
+        bail!(
+            "official evidence {} records no completion marker for {suite}: the run that wrote these records did not finish",
+            official_evidence.display()
+        );
+    };
+    if completion
+        .get("schema_version")
+        .and_then(|value| value.as_str())
+        != Some(COMPLETION_SCHEMA)
+    {
+        bail!(
+            "{suite} completion marker has schema {:?}",
+            completion.get("schema_version")
+        );
+    }
+    let raw_sha256 = super::utils::sha256_hex(raw_text);
+    if completion
+        .get("raw_sha256")
+        .and_then(|value| value.as_str())
+        != Some(raw_sha256.as_str())
+    {
+        bail!(
+            "{suite} completion marker certifies raw SHA-256 {:?}, but the raw input is {raw_sha256}",
+            completion.get("raw_sha256")
+        );
+    }
+    if completion.get("records").and_then(|value| value.as_u64()) != Some(records as u64) {
+        bail!(
+            "{suite} completion marker certifies {:?} records, but the raw input has {records}",
+            completion.get("records")
+        );
+    }
+    Ok(())
+}
+
+/// The completion marker schema the runner writes (`record_sink`).
+const COMPLETION_SCHEMA: &str = "redline-testing-raw-complete-v1";
+
 pub(crate) fn read_official_evidence_versions(
     official_evidence: &Path,
 ) -> Result<EvidenceVersions> {

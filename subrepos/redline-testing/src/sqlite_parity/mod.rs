@@ -1,3 +1,4 @@
+mod bounded;
 pub mod case;
 mod catalog;
 mod compare;
@@ -6,6 +7,7 @@ mod identity;
 mod known_failures;
 mod memory;
 mod normalize;
+mod record_sink;
 mod report;
 mod rql_phase1;
 mod runner;
@@ -19,16 +21,21 @@ use std::path::PathBuf;
 
 use anyhow::Result;
 
+pub use bounded::{Limits, check_kill};
 pub use catalog::all_cases;
 pub use engine::REFERENCE_CLI_BIN;
 pub use identity::{assertion_policy_sha256, corpus_sha256};
 pub use known_failures::{BaselineSource, KNOWN_FAILURES_SCHEMA, KnownFailures};
-pub use rql_phase1::{RunConfig as RqlPhase1RunConfig, rql_phase1_cases};
+pub use record_sink::completion_marker_path;
+pub use rql_phase1::rql_phase1_cases;
 pub use runner::RunSummary;
 #[cfg(test)]
 pub(crate) use runner::{CaseFailure, VerdictReason};
 
 pub struct RunConfig {
+    /// The suite the records belong to: `sqlite_parity`, `memory` or
+    /// `rql_phase1`.
+    pub suite: &'static str,
     pub reference_bin: PathBuf,
     pub target_bin: PathBuf,
     pub output: PathBuf,
@@ -38,12 +45,17 @@ pub struct RunConfig {
     pub warmup: usize,
     pub progress: bool,
     pub memory_samples: bool,
+    /// Only these case ids (a diagnostic run); every case when empty.
+    pub case_ids: Vec<String>,
+    /// The deadline and output cap of every engine run (SQ-09).
+    pub limits: Limits,
 }
 
 pub fn run(config: RunConfig) -> Result<RunSummary> {
-    let cases = catalog::selected_official_cases()?;
-    let reference = engine::EngineSpec::new(engine::REFERENCE_CLI_BIN, config.reference_bin);
-    let target = engine::EngineSpec::new("redlinedb", config.target_bin);
+    let cases = catalog::narrow_to_ids(catalog::selected_official_cases()?, &config.case_ids)?;
+    let reference = engine::EngineSpec::new(engine::REFERENCE_CLI_BIN, config.reference_bin)
+        .with_limits(config.limits);
+    let target = engine::EngineSpec::new("redlinedb", config.target_bin).with_limits(config.limits);
     runner::validate_compare_engines(&reference, &target)?;
     let capabilities = reference.sqlite_shell_capabilities()?;
     let sqlite_version = capabilities
@@ -57,22 +69,31 @@ pub fn run(config: RunConfig) -> Result<RunSummary> {
     let target_capabilities = target.target_capabilities().ok();
     let partition =
         engine::partition_cases(cases, capabilities.as_ref(), target_capabilities.as_ref());
-    runner::compare_cases(
-        &partition.runnable,
-        &partition.skipped,
-        &reference,
-        &target,
-        &config.output,
-        config.tmp_root,
-        config.workers,
-        config.warmup,
-        config.repetitions,
+    let pairs = partition
+        .runnable
+        .into_iter()
+        .map(runner::CasePair::same)
+        .collect::<Vec<_>>();
+    let run = runner::SuiteRun {
+        label: "sqlite_parity",
+        reference: &reference,
+        target: &target,
+        tmp_root: &config.tmp_root,
+        warmup: config.warmup,
+        repetitions: config.repetitions,
         sqlite_version,
-        config.progress,
-        config.memory_samples,
+        progress: config.progress,
+        memory_samples: config.memory_samples,
+    };
+    runner::compare_cases(
+        &run,
+        &pairs,
+        &partition.skipped,
+        config.workers,
+        record_sink::RecordSink::open(&config.output, config.suite)?,
     )
 }
 
-pub fn run_rql_phase1(config: RqlPhase1RunConfig) -> Result<RunSummary> {
+pub fn run_rql_phase1(config: RunConfig) -> Result<RunSummary> {
     rql_phase1::run(config)
 }

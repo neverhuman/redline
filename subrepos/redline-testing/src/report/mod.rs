@@ -32,9 +32,12 @@ use std::path::Path;
 use anyhow::{Context, Result, bail};
 
 use evidence::{
-    artifact_names_for_suite, read_official_evidence_versions, validate_official_evidence_binding,
+    artifact_names_for_suite, read_official_evidence_versions, validate_completion,
+    validate_official_evidence_binding,
 };
-use provenance::{REPORT_PROVENANCE_SCHEMA, Renderer, ReportProvenanceJson, load_report_identity};
+use provenance::{
+    REPORT_PROVENANCE_SCHEMA, Renderer, ReportMode, ReportProvenanceJson, load_report_identity,
+};
 use qualification::build_sqlite_qualification;
 use render::{
     block_text, remove_block_if_present, render_report_block, render_sqlite_badge, replace_block,
@@ -96,6 +99,18 @@ pub fn generate(options: ReportOptions) -> Result<()> {
     }
     // Measured identities come from the run alone; see provenance.rs.
     let identity = load_report_identity(&options, &raw_text, &raw_records)?;
+    // A run with run provenance must have finished; a historical run
+    // predates completion markers.
+    if identity.mode == ReportMode::Official
+        && let Some(official_evidence) = &options.official_evidence
+    {
+        validate_completion(
+            official_evidence,
+            &options.suite,
+            &raw_text,
+            raw_records.len(),
+        )?;
+    }
 
     if let Some(expected_repetitions) = options.expected_repetitions {
         let measured = raw_records

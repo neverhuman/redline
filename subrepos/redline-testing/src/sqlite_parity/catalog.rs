@@ -1,4 +1,6 @@
-use anyhow::{Context, Result, bail};
+use std::collections::BTreeSet;
+
+use anyhow::{Context, Result, anyhow, bail};
 
 use super::case::Case;
 
@@ -70,6 +72,36 @@ pub fn selected_official_cases() -> Result<Vec<Case>> {
         bail!("sqlite parity selection matched zero cases");
     }
     Ok(cases)
+}
+
+/// `cases` narrowed to `case_ids`, or all of them when it is empty. An id
+/// that names no case in `cases` is an error, so a typo never selects less
+/// than was asked for.
+pub(super) fn narrow_to_ids(cases: Vec<Case>, case_ids: &[String]) -> Result<Vec<Case>> {
+    if case_ids.is_empty() {
+        return Ok(cases);
+    }
+    let wanted = case_ids
+        .iter()
+        .map(|id| {
+            id.trim()
+                .parse::<usize>()
+                .map_err(|_| anyhow!("--case-id {id:?} is not a case id"))
+        })
+        .collect::<Result<BTreeSet<_>>>()?;
+    let selected = cases
+        .into_iter()
+        .filter(|case| wanted.contains(&case.id))
+        .collect::<Vec<_>>();
+    let found = selected.iter().map(|case| case.id).collect::<BTreeSet<_>>();
+    let missing = wanted
+        .difference(&found)
+        .map(|id| format!("{id:05}"))
+        .collect::<Vec<_>>();
+    if !missing.is_empty() {
+        bail!("--case-id names no selected case: {}", missing.join(", "));
+    }
+    Ok(selected)
 }
 
 #[cfg(test)]

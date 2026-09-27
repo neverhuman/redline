@@ -1,11 +1,11 @@
-use std::fs::{self, OpenOptions};
-use std::io::Write;
+use std::fs;
 use std::path::{Path, PathBuf};
 
 use anyhow::{Context, Result};
 use serde::Serialize;
 use sha2::{Digest, Sha256};
 
+use super::bounded::ExecutionOutcome;
 use super::case::{Case, ComparisonMode};
 use super::compare::NORMALIZATION_POLICY;
 use super::engine::EngineOutput;
@@ -34,6 +34,11 @@ pub struct CompareRecord {
     pub status: String,
     pub verdict_reason: VerdictReason,
     pub stage: VerdictStage,
+    /// How the sample's engine runs ended (SQ-09): the first that did not
+    /// exit on its own, the reference's before the target's, else `exited`.
+    pub execution_outcome: ExecutionOutcome,
+    pub reference_execution_outcome: ExecutionOutcome,
+    pub target_execution_outcome: ExecutionOutcome,
     /// The comparison rules this record was judged by (SQ-06).
     pub normalization_policy: &'static str,
     pub comparison_mode: ComparisonMode,
@@ -57,27 +62,6 @@ pub struct CompareRecord {
     pub target_peak_rss_kb: Option<u64>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub target_rss_sampled_kb: Option<u64>,
-}
-
-pub fn append_jsonl<T: Serialize>(out: Option<&Path>, value: &T) -> Result<()> {
-    if let Some(out) = out {
-        if let Some(parent) = out.parent()
-            && !parent.as_os_str().is_empty()
-        {
-            fs::create_dir_all(parent)
-                .with_context(|| format!("create parent for {}", out.display()))?;
-        }
-        let mut file = OpenOptions::new()
-            .create(true)
-            .append(true)
-            .open(out)
-            .with_context(|| format!("open jsonl report {}", out.display()))?;
-        serde_json::to_writer(&mut file, value)?;
-        file.write_all(b"\n")?;
-    } else {
-        println!("{}", serde_json::to_string(value)?);
-    }
-    Ok(())
 }
 
 pub fn skipped_compare_record(
@@ -110,6 +94,9 @@ pub fn skipped_compare_record(
         status: "skipped".to_owned(),
         verdict_reason: VerdictReason::Skipped,
         stage: VerdictStage::Selection,
+        execution_outcome: ExecutionOutcome::NotRun,
+        reference_execution_outcome: ExecutionOutcome::NotRun,
+        target_execution_outcome: ExecutionOutcome::NotRun,
         normalization_policy: NORMALIZATION_POLICY,
         comparison_mode: case.comparison_mode,
         reference_exit_code: None,
@@ -166,6 +153,12 @@ pub fn compare_record(
         status: verdict.status().to_owned(),
         verdict_reason: verdict.reason,
         stage: verdict.stage,
+        execution_outcome: [reference_output.outcome, target_output.outcome]
+            .into_iter()
+            .find(|outcome| *outcome != ExecutionOutcome::Exited)
+            .unwrap_or(ExecutionOutcome::Exited),
+        reference_execution_outcome: reference_output.outcome,
+        target_execution_outcome: target_output.outcome,
         normalization_policy: NORMALIZATION_POLICY,
         comparison_mode: case.comparison_mode,
         reference_exit_code: reference_output.status_code,

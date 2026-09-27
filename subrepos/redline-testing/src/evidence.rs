@@ -50,6 +50,9 @@ pub struct OfficialSuiteEvidence {
     pub failed_case_ids: Option<BTreeSet<String>>,
     /// The case ids the known-failures baseline lists for this suite.
     pub known_failure_ids: Option<BTreeSet<String>>,
+    /// The completion marker of `raw_path` (SQ-09), for a suite whose
+    /// records the runner streams.
+    pub completion_path: Option<PathBuf>,
 }
 
 impl OfficialSuiteEvidence {
@@ -75,7 +78,14 @@ impl OfficialSuiteEvidence {
             skipped: summary.skipped,
             failed_case_ids: Some(failed_case_ids(summary)),
             known_failure_ids: None,
+            completion_path: None,
         }
+    }
+
+    /// Declares the completion marker the runner wrote beside `raw_path`.
+    pub fn with_completion_marker(mut self) -> Self {
+        self.completion_path = Some(crate::sqlite_parity::completion_marker_path(&self.raw_path));
+        self
     }
 
     /// Records the baseline's case ids for this suite beside its failures.
@@ -117,6 +127,9 @@ pub struct OfficialEvidenceConfig {
     pub suites: Vec<OfficialSuiteEvidence>,
     /// The SQLite known-failures baseline the run was gated with.
     pub known_failures: Option<BaselineSource>,
+    /// The bound on every engine run (SQ-09).
+    pub case_timeout_ms: u128,
+    pub max_output_bytes: usize,
 }
 
 #[derive(Debug, Serialize)]
@@ -151,6 +164,8 @@ struct OfficialSuiteJson {
     failed_case_ids: Option<BTreeSet<String>>,
     #[serde(skip_serializing_if = "Option::is_none")]
     known_failure_ids: Option<BTreeSet<String>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    completion_path: Option<String>,
 }
 
 /// The known-failures baseline a run was gated with.
@@ -183,6 +198,8 @@ struct OfficialEvidenceJson {
     warmup: usize,
     memory_samples: bool,
     tmp_root: String,
+    case_timeout_ms: u128,
+    max_output_bytes: usize,
 }
 
 #[derive(Debug, Serialize)]
@@ -448,6 +465,9 @@ pub fn write_official_evidence(config: OfficialEvidenceConfig) -> Result<()> {
             &config.output_dir,
             &suite.provenance_path,
         )?;
+        if let Some(completion_path) = &suite.completion_path {
+            insert_hash(&mut output_file_hashes, &config.output_dir, completion_path)?;
+        }
         suites.insert(
             suite.name.clone(),
             OfficialSuiteJson {
@@ -463,6 +483,10 @@ pub fn write_official_evidence(config: OfficialEvidenceConfig) -> Result<()> {
                 provenance_path: relative_display(&config.output_dir, &suite.provenance_path),
                 failed_case_ids: suite.failed_case_ids,
                 known_failure_ids: suite.known_failure_ids,
+                completion_path: suite
+                    .completion_path
+                    .as_deref()
+                    .map(|path| relative_display(&config.output_dir, path)),
             },
         );
     }
@@ -489,6 +513,8 @@ pub fn write_official_evidence(config: OfficialEvidenceConfig) -> Result<()> {
         warmup: config.warmup,
         memory_samples: config.memory_samples,
         tmp_root: display_path(&config.tmp_root),
+        case_timeout_ms: config.case_timeout_ms,
+        max_output_bytes: config.max_output_bytes,
     };
     let evidence_path = config.output_dir.join("official-evidence.json");
     fs::write(

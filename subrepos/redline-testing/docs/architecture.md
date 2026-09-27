@@ -12,7 +12,9 @@ src/report/           report rendering + official-evidence bundle (over JSONL)
 src/evidence.rs       evidence bundle hashing + serialization
 src/sqlite_parity/    SQLite-parity suite
   ├── engine.rs       subprocess SQL driver (the data-access / adapter seam)
+  ├── bounded.rs      process-group, deadline and output-cap bounds per run
   ├── runner.rs       case scheduling + compare loop
+  ├── record_sink.rs  streamed raw records + completion marker
   ├── rql_phase1.rs   Redline Query Language phase-1 SQL→JSON lowering
   ├── catalog.rs      case catalog + capability gating
   ├── case.rs         case model
@@ -30,7 +32,9 @@ xtask/                dev-only corpus, badge, and receipt tooling (not shipped)
 ## Data-access boundary
 
 There is **no in-process database driver**. Every "DB access" is a subprocess
-invocation of an external `sqlite3` / `psql` shell with a bounded timeout. The
+invocation of an external `sqlite3` / `psql` shell. A SQLite-shell case run is
+bounded by `sqlite_parity/bounded.rs`: its own process group, a deadline, an
+output cap, and a group kill on expiry and after exit. The
 `*/engine.rs` + `runner.rs` + `oracle.rs` modules are the data-access / adapter
 seam; the reference CLI name is centralized as
 `sqlite_parity::REFERENCE_CLI_BIN`. See [`docs/boundaries.md`](boundaries.md).

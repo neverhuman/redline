@@ -25,9 +25,27 @@
     "sample_role": { "type": "string" },
     "repetition_index": { "type": ["integer", "null"], "minimum": 1 },
     "status": { "enum": ["passed", "failed", "skipped"] },
+    "verdict_reason": {
+      "enum": [
+        "passed",
+        "skipped",
+        "reference_contract_failure",
+        "target_semantic_failure",
+        "differential_mismatch",
+        "execution_failure"
+      ]
+    },
+    "execution_outcome": { "$ref": "#/$defs/execution_outcome" },
+    "reference_execution_outcome": { "$ref": "#/$defs/execution_outcome" },
+    "target_execution_outcome": { "$ref": "#/$defs/execution_outcome" },
     "memory_status": { "enum": ["sampled", "unavailable", "disabled", "not_run"] },
     "reference_elapsed_ns": { "type": "integer", "minimum": 0 },
     "target_elapsed_ns": { "type": "integer", "minimum": 0 }
   },
-  "additionalProperties": true
+  "additionalProperties": true,
+  "$defs": {
+    "execution_outcome": {
+      "enum": ["exited", "signal", "timeout", "output_limit", "spawn_error", "not_run"]
+    }
+  }
 }

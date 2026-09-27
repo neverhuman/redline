@@ -87,6 +87,19 @@ for the publish + attestation flow.
   is fatal. Summaries, `summary.json` and `official-evidence.json` list failed
   (and skipped) case ids, and the official evidence records the baseline's
   sha256.
+- Case execution is bounded (SQ-09). Each engine run gets its own process
+  group, a stdin writer thread and stdout/stderr reader threads capped at
+  `--max-output-bytes` (default 16 MiB), and a deadline, `--case-timeout-ms`
+  (default 60000); a timeout or a byte past the cap kills the whole group, and
+  what a run leaves in its group is killed after it exits. A run that timed
+  out, passed the cap or could not start fails its sample as
+  `execution_failure` (stage `execution`) instead of hanging, exhausting
+  memory or aborting the run; raw records gain `execution_outcome`,
+  `reference_execution_outcome` and `target_execution_outcome`. Records are
+  streamed through one writer thread as each case completes, and a finished
+  suite writes `<raw>.complete.json`; `official-evidence.json` declares and
+  hashes it (`completion_path`) and records `case_timeout_ms` and
+  `max_output_bytes`. `run --case-id` narrows one suite for diagnosis.
 
 ### Removed
 

@@ -181,6 +181,11 @@ fn malformed_baselines_are_rejected() {
             "not a target failure",
         ),
         (
+            // A timed-out or capped run fails differently from run to run.
+            entry("sqlite_parity", "00001", "N", "execution_failure"),
+            "not a target failure",
+        ),
+        (
             entry("sqlite_parity", "00001", " ", "target_semantic_failure"),
             "name is empty",
         ),

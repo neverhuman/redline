@@ -3,6 +3,7 @@
 
 use std::time::Duration;
 
+use super::bounded::ExecutionOutcome;
 use super::case::{Case, Priority, Profile};
 use super::engine::EngineOutput;
 
@@ -48,7 +49,8 @@ pub(super) fn plain_case() -> Case {
     case
 }
 
-/// What one engine printed, byte for byte.
+/// What one engine printed, byte for byte; a missing status code is a
+/// death by signal.
 pub(super) fn output(
     engine: &str,
     status_code: Option<i32>,
@@ -67,5 +69,19 @@ pub(super) fn output(
         memory_status: "disabled".to_owned(),
         peak_rss_kb: None,
         rss_sampled_kb: None,
+        outcome: if status_code.is_some() {
+            ExecutionOutcome::Exited
+        } else {
+            ExecutionOutcome::Signal
+        },
+        failure: None,
     }
+}
+
+/// A run that left no whole result: timed out, capped or never started.
+pub(super) fn incomplete(engine: &str, outcome: ExecutionOutcome, failure: &str) -> EngineOutput {
+    let mut run = output(engine, None, "partial", "");
+    run.outcome = outcome;
+    run.failure = Some(failure.to_owned());
+    run
 }

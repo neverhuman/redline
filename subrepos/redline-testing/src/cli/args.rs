@@ -56,6 +56,18 @@ pub(crate) struct RunArgs {
     /// failure fails the run.
     #[arg(long)]
     pub(crate) sqlite_known_failures: Option<PathBuf>,
+    /// Kill an engine run's whole process group once it has run this long;
+    /// the sample is recorded as an execution failure (`timeout`).
+    #[arg(long, default_value_t = 60_000)]
+    pub(crate) case_timeout_ms: u64,
+    /// Kill an engine run's whole process group once it has written more
+    /// than this many bytes to stdout or to stderr (`output_limit`).
+    #[arg(long, default_value_t = 16 * 1024 * 1024)]
+    pub(crate) max_output_bytes: usize,
+    /// Run only these case ids (repeatable). A diagnostic narrowing of one
+    /// SQLite-shell suite; never official evidence.
+    #[arg(long = "case-id", value_name = "ID")]
+    pub(crate) case_ids: Vec<String>,
 }
 
 #[derive(Debug, Args)]

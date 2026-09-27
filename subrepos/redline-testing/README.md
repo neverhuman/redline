@@ -105,8 +105,13 @@ redline-testing run \
   --repetitions 1 \
   --warmup 0 \
   --progress auto \
+  --case-timeout-ms 60000 \   # kill an engine run's process group after this
+  --max-output-bytes 16777216 \ # ... or once it writes more to stdout or stderr
   --memory-samples            # Linux /proc RSS sampling (memory suite)
 ```
+
+`--case-id <ID>` (repeatable) narrows one SQLite-shell suite to the named
+cases for diagnosis; such a run is never official evidence.
 
 ### Environment variables
 
@@ -305,6 +310,18 @@ The target is then held to the same declared exit code and fragments
 byte (`differential_mismatch`; a case may declare `comparison_mode: cli_text_lf`
 or `ignore_line_prefixes`). A child killed by a signal never passes. Each raw
 record carries `verdict_reason`, `stage` and `normalization_policy`.
+
+**Bounded cases:** every engine run starts in its own process group. Its stdin
+is written by a separate thread and its stdout and stderr are drained while it
+runs, at most `--max-output-bytes` each. At `--case-timeout-ms`, or at the
+first byte past the cap, the whole group is killed; after any run, whatever is
+left of its group is killed too. A sample whose run timed out, passed the cap
+or could not start fails as `execution_failure` (stage `execution`); raw
+records carry `execution_outcome` (`exited`, `signal`, `timeout`,
+`output_limit`, `spawn_error`, `not_run`) and the same per engine. Records are
+appended as each case completes, and a finished suite writes
+`<raw>.complete.json` (the raw file's SHA-256 and record and case counts),
+which the RedlineDB evidence processor and `report` require.
 
 **Known failures:** `run --sqlite-known-failures <path>` publishes the
 `sqlite_parity` and `memory` failures a baseline lists as failures and fails the

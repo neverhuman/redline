@@ -8,6 +8,7 @@ use std::time::{Duration, Instant};
 use anyhow::{Context, Result, bail};
 use sha2::{Digest, Sha256};
 
+use super::bounded::{self, Captured, ExecutionOutcome, Limits};
 use super::case::{Case, Profile};
 use super::memory::ProcessMemory;
 use super::text::sanitize_identifier;
@@ -21,6 +22,8 @@ pub const REFERENCE_CLI_BIN: &str = "sqlite3";
 pub struct EngineSpec {
     pub name: String,
     pub bin: PathBuf,
+    /// The deadline and output cap every run of a case is held to (SQ-09).
+    pub limits: Limits,
     identity: Arc<OnceLock<Result<BinaryIdentity, String>>>,
 }
 
@@ -45,6 +48,10 @@ pub struct EngineOutput {
     pub memory_status: String,
     pub peak_rss_kb: Option<u64>,
     pub rss_sampled_kb: Option<u64>,
+    /// How the run ended (SQ-09).
+    pub outcome: ExecutionOutcome,
+    /// Why a run that is not `outcome.is_complete()` left no whole result.
+    pub failure: Option<String>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -332,7 +339,89 @@ impl EngineSpec {
         Self {
             name: name.into(),
             bin: bin.into(),
+            limits: Limits::default(),
             identity: Arc::new(OnceLock::new()),
+        }
+    }
+
+    pub fn with_limits(mut self, limits: Limits) -> Self {
+        self.limits = limits;
+        self
+    }
+
+    /// `run_case`, with a run that could not be prepared, spawned or waited
+    /// for turned into an output whose outcome says so (`spawn_error`): an
+    /// engine error fails its case, never the whole run.
+    pub fn run_case_bounded(
+        &self,
+        case: &Case,
+        tmp_root: &Path,
+        memory_samples: bool,
+    ) -> EngineOutput {
+        let started = Instant::now();
+        self.run_case(case, tmp_root, memory_samples)
+            .unwrap_or_else(|error| {
+                self.not_started(started.elapsed(), memory_samples, format!("{error:#}"))
+            })
+    }
+
+    fn not_started(&self, elapsed: Duration, memory_samples: bool, error: String) -> EngineOutput {
+        let identity = self.binary_identity().ok();
+        EngineOutput {
+            engine: self.name.clone(),
+            executable_path: identity.as_ref().map_or_else(
+                || self.bin.display().to_string(),
+                |id| id.executable_path.clone(),
+            ),
+            executable_sha256: identity
+                .as_ref()
+                .map(|id| id.executable_sha256.clone())
+                .unwrap_or_default(),
+            version: identity.map(|id| id.version).unwrap_or_default(),
+            status_code: None,
+            elapsed,
+            stdout: Vec::new(),
+            stderr: Vec::new(),
+            memory_status: ProcessMemory::default().status(memory_samples).to_owned(),
+            peak_rss_kb: None,
+            rss_sampled_kb: None,
+            outcome: ExecutionOutcome::SpawnError,
+            failure: Some(format!("could not run: {error}")),
+        }
+    }
+
+    /// The output of one bounded run.
+    fn output(
+        &self,
+        identity: BinaryIdentity,
+        captured: Captured,
+        memory_samples: bool,
+    ) -> EngineOutput {
+        let failure = match captured.outcome {
+            ExecutionOutcome::Timeout => Some(format!(
+                "timed out after {} ms; its process group was killed",
+                self.limits.timeout_ms()
+            )),
+            ExecutionOutcome::OutputLimit => Some(format!(
+                "wrote more than {} bytes to stdout or stderr; its process group was killed",
+                self.limits.max_output_bytes
+            )),
+            _ => None,
+        };
+        EngineOutput {
+            engine: self.name.clone(),
+            executable_path: identity.executable_path,
+            executable_sha256: identity.executable_sha256,
+            version: identity.version,
+            status_code: captured.status.code(),
+            elapsed: captured.elapsed,
+            stdout: captured.stdout,
+            stderr: captured.stderr,
+            memory_status: captured.memory.status(memory_samples).to_owned(),
+            peak_rss_kb: captured.memory.peak_rss_kb,
+            rss_sampled_kb: captured.memory.rss_sampled_kb,
+            outcome: captured.outcome,
+            failure,
         }
     }
 
@@ -375,9 +464,8 @@ impl EngineSpec {
                 .with_context(|| format!("write fixture {}", path.display()))?;
         }
 
-        let start = Instant::now();
         if let Some(script) = &case.script {
-            return self.run_script(case, script, &case_tmp, start, identity, memory_samples);
+            return self.run_script(case, script, &case_tmp, identity, memory_samples);
         }
 
         let db_path = db_path_for(&self.name, case, tmp_root, &case_tmp)?;
@@ -393,28 +481,16 @@ impl EngineSpec {
                 command.arg(replace_tmp(arg, &case_tmp));
             }
         }
-        let output = run_command(
+        let captured = run_command(
             &mut command,
             Some(replace_tmp(&case.stdin, &case_tmp)),
             &case_tmp,
             &self.name,
             memory_samples,
+            self.limits,
         )
         .with_context(|| format!("run {} case {}", self.name, case.display_id()))?;
-        let elapsed = start.elapsed();
-        Ok(EngineOutput {
-            engine: self.name.clone(),
-            executable_path: identity.executable_path,
-            executable_sha256: identity.executable_sha256,
-            version: identity.version,
-            status_code: output.status.code(),
-            elapsed,
-            stdout: output.stdout,
-            stderr: output.stderr,
-            memory_status: output.memory.status(memory_samples).to_owned(),
-            peak_rss_kb: output.memory.peak_rss_kb,
-            rss_sampled_kb: output.memory.rss_sampled_kb,
-        })
+        Ok(self.output(identity, captured, memory_samples))
     }
 
     pub fn sqlite_shell_capabilities(&self) -> Result<Option<ShellCapabilities>> {
@@ -448,7 +524,6 @@ impl EngineSpec {
         case: &Case,
         script: &str,
         case_tmp: &Path,
-        start: Instant,
         identity: BinaryIdentity,
         memory_samples: bool,
     ) -> Result<EngineOutput> {
@@ -460,116 +535,42 @@ impl EngineSpec {
             .arg(&script_path)
             .env("SQLITE_BIN", &self.bin)
             .env("SQLITE_PARITY_TMP", case_tmp);
-        let output = run_command(&mut command, None, case_tmp, &self.name, memory_samples)
-            .with_context(|| format!("run script case {}", case.display_id()))?;
-        Ok(EngineOutput {
-            engine: self.name.clone(),
-            executable_path: identity.executable_path,
-            executable_sha256: identity.executable_sha256,
-            version: identity.version,
-            status_code: output.status.code(),
-            elapsed: start.elapsed(),
-            stdout: output.stdout,
-            stderr: output.stderr,
-            memory_status: output.memory.status(memory_samples).to_owned(),
-            peak_rss_kb: output.memory.peak_rss_kb,
-            rss_sampled_kb: output.memory.rss_sampled_kb,
-        })
+        let captured = run_command(
+            &mut command,
+            None,
+            case_tmp,
+            &self.name,
+            memory_samples,
+            self.limits,
+        )
+        .with_context(|| format!("run script case {}", case.display_id()))?;
+        Ok(self.output(identity, captured, memory_samples))
     }
 }
 
-struct CapturedOutput {
-    status: std::process::ExitStatus,
-    stdout: Vec<u8>,
-    stderr: Vec<u8>,
-    memory: ProcessMemory,
-}
-
+/// One bounded run (`bounded`): piped when memory is not sampled, else with
+/// stdout and stderr in files beside the case so the child can be polled.
 fn run_command(
     command: &mut Command,
     stdin_text: Option<String>,
     case_tmp: &Path,
     engine_name: &str,
     memory_samples: bool,
-) -> Result<CapturedOutput> {
+    limits: Limits,
+) -> Result<Captured> {
+    let stdin = stdin_text.map(String::into_bytes);
     if !memory_samples {
-        command.stdin(if stdin_text.is_some() {
-            Stdio::piped()
-        } else {
-            Stdio::null()
-        });
-        command.stdout(Stdio::piped());
-        command.stderr(Stdio::piped());
-        let mut child = command.spawn().context("spawn sqlite parity child")?;
-        if let Some(stdin_text) = stdin_text {
-            let mut stdin = child
-                .stdin
-                .take()
-                .context("child stdin unavailable for sqlite parity case")?;
-            stdin
-                .write_all(stdin_text.as_bytes())
-                .context("write sqlite parity child stdin")?;
-        }
-        let output = child
-            .wait_with_output()
-            .context("wait sqlite parity child")?;
-        return Ok(CapturedOutput {
-            status: output.status,
-            stdout: output.stdout,
-            stderr: output.stderr,
-            memory: ProcessMemory::default(),
-        });
+        return bounded::run_piped(command, stdin, limits);
     }
-
     let output_prefix = sanitize_identifier(engine_name);
-    let stdout_path = case_tmp.join(format!("{output_prefix}.stdout"));
-    let stderr_path = case_tmp.join(format!("{output_prefix}.stderr"));
-    command.stdin(if stdin_text.is_some() {
-        Stdio::piped()
-    } else {
-        Stdio::null()
-    });
-    command.stdout(Stdio::from(
-        fs::File::create(&stdout_path)
-            .with_context(|| format!("create {}", stdout_path.display()))?,
-    ));
-    command.stderr(Stdio::from(
-        fs::File::create(&stderr_path)
-            .with_context(|| format!("create {}", stderr_path.display()))?,
-    ));
-    let mut child = command.spawn().context("spawn sqlite parity child")?;
-    if let Some(stdin_text) = stdin_text {
-        let mut stdin = child
-            .stdin
-            .take()
-            .context("child stdin unavailable for sqlite parity case")?;
-        stdin
-            .write_all(stdin_text.as_bytes())
-            .context("write sqlite parity child stdin")?;
-    }
-    let mut memory = ProcessMemory::default();
-    let status = loop {
-        if memory_samples {
-            memory.observe_pid(child.id());
-        }
-        if let Some(status) = child.try_wait().context("poll sqlite parity child")? {
-            break status;
-        }
-        std::thread::sleep(Duration::from_millis(2));
-    };
-    if memory_samples {
-        memory.observe_pid(child.id());
-    }
-    Ok(CapturedOutput {
-        status,
-        stdout: read_output(&stdout_path)?,
-        stderr: read_output(&stderr_path)?,
-        memory,
-    })
-}
-
-fn read_output(path: &Path) -> Result<Vec<u8>> {
-    fs::read(path).with_context(|| format!("read {}", path.display()))
+    bounded::run_to_files(
+        command,
+        stdin,
+        limits,
+        &case_tmp.join(format!("{output_prefix}.stdout")),
+        &case_tmp.join(format!("{output_prefix}.stderr")),
+        memory_samples,
+    )
 }
 
 pub fn binary_identity(bin: &Path) -> Result<BinaryIdentity> {
@@ -745,7 +746,8 @@ fn make_removable(_path: &Path) -> Result<()> {
 
 #[cfg(test)]
 mod tests {
-    use super::{read_output, run_command};
+    use super::bounded::{Limits, read_capped};
+    use super::run_command;
     use std::fs;
     use std::process::Command;
 
@@ -756,7 +758,7 @@ mod tests {
             std::process::id()
         ));
         fs::write(&path, [b'a', 0xff, b'b']).expect("write binary output fixture");
-        let captured = read_output(&path).expect("read binary output");
+        let captured = read_capped(&path, 1024).expect("read binary output");
         fs::remove_file(path).expect("remove binary output fixture");
         assert_eq!(captured, b"a\xffb");
     }
@@ -775,8 +777,15 @@ mod tests {
             command
                 .arg("-c")
                 .arg("printf 'a\\253\\r\\nb \\n'; printf 'e\\377' >&2");
-            let captured = run_command(&mut command, None, &case_tmp, "probe", memory_samples)
-                .expect("run capture probe");
+            let captured = run_command(
+                &mut command,
+                None,
+                &case_tmp,
+                "probe",
+                memory_samples,
+                Limits::default(),
+            )
+            .expect("run capture probe");
             assert_eq!(
                 captured.stdout, b"a\xab\r\nb \n",
                 "memory_samples={memory_samples}"

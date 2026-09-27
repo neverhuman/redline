@@ -123,6 +123,16 @@ impl Fixture {
                     "provenance_path": "provenance.json",
                     "raw_sha256": sha256_hex(raw.as_bytes()),
                     "provenance_sha256": sha256_hex(run_provenance_text.as_bytes()),
+                    // The finished run's completion marker, as the
+                    // evidence processor copies it.
+                    "completion": {
+                        "schema_version": "redline-testing-raw-complete-v1",
+                        "suite": "sqlite_parity",
+                        "raw_file": "sqlite_parity.raw.jsonl",
+                        "records": raw.lines().count(),
+                        "cases": 1,
+                        "raw_sha256": sha256_hex(raw.as_bytes()),
+                    },
                 }
             },
         });

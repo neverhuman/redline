@@ -1,6 +1,3 @@
-use std::path::{Path, PathBuf};
-use std::time::Instant;
-
 use anyhow::{Context, Result, bail};
 use serde_json::{Value as JsonValue, json};
 use sqlparser::ast::{
@@ -13,10 +10,11 @@ use sqlparser::ast::{
 use sqlparser::dialect::SQLiteDialect;
 use sqlparser::parser::Parser;
 
+use super::RunConfig;
 use super::case::Case;
-use super::engine::{self, EngineSpec};
-use super::report;
-use super::runner::{self, RunSummary};
+use super::engine::{self, EngineSpec, SkippedCase};
+use super::record_sink::RecordSink;
+use super::runner::{self, CasePair, RunSummary, SuiteRun};
 
 const RQL_PHASE1_CATEGORIES: &[&str] = &[
     "GEN_SQL_AGGREGATE",
@@ -56,25 +54,6 @@ const RQL_PHASE1_CATEGORIES: &[&str] = &[
 ];
 
 #[derive(Debug, Clone)]
-pub struct RunConfig {
-    pub reference_bin: PathBuf,
-    pub target_bin: PathBuf,
-    pub output: PathBuf,
-    pub tmp_root: PathBuf,
-    pub workers: usize,
-    pub repetitions: usize,
-    pub warmup: usize,
-    pub progress: bool,
-    pub memory_samples: bool,
-}
-
-#[derive(Debug, Clone)]
-pub struct RqlPhase1Case {
-    pub reference: Case,
-    pub target: Case,
-}
-
-#[derive(Debug, Clone)]
 struct ShellOptions {
     mode: String,
     headers: Option<bool>,
@@ -107,10 +86,8 @@ pub fn rql_phase1_cases() -> Result<Vec<Case>> {
 }
 
 pub fn run(config: RunConfig) -> Result<RunSummary> {
-    let _workers = config.workers;
-    let started = Instant::now();
-    let reference = EngineSpec::new("sqlite3", config.reference_bin);
-    let target = EngineSpec::new("redlinedb", config.target_bin);
+    let reference = EngineSpec::new("sqlite3", config.reference_bin).with_limits(config.limits);
+    let target = EngineSpec::new("redlinedb", config.target_bin).with_limits(config.limits);
     runner::validate_compare_engines(&reference, &target)?;
 
     let capabilities = reference.sqlite_shell_capabilities()?;
@@ -119,146 +96,44 @@ pub fn run(config: RunConfig) -> Result<RunSummary> {
         .map(|capabilities| capabilities.version.clone());
     let target_capabilities = target.target_capabilities().ok();
     let partition = engine::partition_cases(
-        rql_phase1_cases()?,
+        super::catalog::narrow_to_ids(rql_phase1_cases()?, &config.case_ids)?,
         capabilities.as_ref(),
         target_capabilities.as_ref(),
     );
 
-    let mut summary = RunSummary::default();
-    for skipped_case in partition.skipped {
-        append_skip(
-            &mut summary,
-            &skipped_case.case,
-            &skipped_case.reason,
-            &reference,
-            &target,
-            sqlite_version.clone(),
-            &config.output,
-        )?;
-    }
-
-    let mut runnable = Vec::new();
+    let mut skipped = partition.skipped;
+    let mut pairs = Vec::new();
     for case in partition.runnable {
         match rewrite_case(&case) {
-            Ok(target_case) => runnable.push(RqlPhase1Case {
+            Ok(target_case) => pairs.push(CasePair {
                 reference: case,
                 target: target_case,
             }),
-            Err(err) => append_skip(
-                &mut summary,
-                &case,
-                &format!("RQL phase-1 rewrite unsupported: {err:#}"),
-                &reference,
-                &target,
-                sqlite_version.clone(),
-                &config.output,
-            )?,
+            Err(err) => skipped.push(SkippedCase {
+                case,
+                reason: format!("RQL phase-1 rewrite unsupported: {err:#}"),
+            }),
         }
     }
-
-    let total_samples = config.warmup.saturating_add(config.repetitions);
-    for rql_case in runnable {
-        if config.progress {
-            eprintln!(
-                "rql_phase1 case={} status=running",
-                rql_case.reference.display_id()
-            );
-        }
-        let mut failure_reasons = std::collections::BTreeSet::new();
-        for sample_index in 0..total_samples {
-            let measured_index = sample_index.checked_sub(config.warmup);
-            let sample_role = if let Some(index) = measured_index {
-                format!("measured:{}", index.saturating_add(1))
-            } else {
-                "warmup".to_owned()
-            };
-            let reference_output =
-                reference.run_case(&rql_case.reference, &config.tmp_root, config.memory_samples)?;
-            let target_output =
-                target.run_case(&rql_case.target, &config.tmp_root, config.memory_samples)?;
-            let verdict =
-                runner::judge_sample(&rql_case.reference, &reference_output, &target_output);
-            let artifact = if let Some(reason) = &verdict.diagnostic {
-                let artifact = report::write_failure_artifact(
-                    &rql_case.reference,
-                    &[&reference_output, &target_output],
-                    reason,
-                )?;
-                eprintln!(
-                    "rql_phase1 failure case={} reason={} artifact={}",
-                    rql_case.reference.display_id(),
-                    reason,
-                    artifact.display()
-                );
-                Some(artifact)
-            } else {
-                None
-            };
-            report::append_jsonl(
-                Some(&config.output),
-                &report::compare_record(
-                    &rql_case.reference,
-                    &reference_output,
-                    &target_output,
-                    sample_index,
-                    measured_index.map(|index| index.saturating_add(1)),
-                    sample_role,
-                    sqlite_version.clone(),
-                    &verdict,
-                    artifact,
-                ),
-            )?;
-            if measured_index.is_some() {
-                summary.slowest.push((
-                    rql_case.reference.display_id(),
-                    target_output.elapsed.as_nanos(),
-                ));
-            }
-            if !verdict.is_pass() {
-                failure_reasons.insert(verdict.reason);
-            }
-        }
-        let failure = runner::case_failure(&rql_case.reference, failure_reasons);
-        let failed = failure.is_some();
-        summary.record_run(failure);
-        if config.progress {
-            let status = if failed { "failed" } else { "passed" };
-            eprintln!(
-                "rql_phase1 case={} status={status}",
-                rql_case.reference.display_id()
-            );
-        }
-    }
-
-    summary.elapsed = started.elapsed();
-    Ok(runner::finish_summary(
-        summary,
-        "rql_phase1",
-        config.progress,
-    ))
-}
-
-fn append_skip(
-    summary: &mut RunSummary,
-    case: &Case,
-    reason: &str,
-    reference: &EngineSpec,
-    target: &EngineSpec,
-    sqlite_version: Option<String>,
-    output: &Path,
-) -> Result<()> {
-    summary.record_skip(case);
-    let artifact = report::write_skip_artifact(case, reason)?;
-    report::append_jsonl(
-        Some(output),
-        &report::skipped_compare_record(
-            case,
-            &reference.name,
-            &target.name,
-            sqlite_version,
-            Some(artifact),
-            Some(reason.to_owned()),
-        ),
+    let run = SuiteRun {
+        label: "rql_phase1",
+        reference: &reference,
+        target: &target,
+        tmp_root: &config.tmp_root,
+        warmup: config.warmup,
+        repetitions: config.repetitions,
+        sqlite_version,
+        progress: config.progress,
+        memory_samples: config.memory_samples,
+    };
+    // One worker, whatever --workers says: this suite's latency samples are
+    // taken one case at a time.
+    runner::compare_cases(
+        &run,
+        &pairs,
+        &skipped,
+        1,
+        RecordSink::open(&config.output, config.suite)?,
     )
 }
 

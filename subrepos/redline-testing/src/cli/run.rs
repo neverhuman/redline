@@ -13,11 +13,20 @@ use super::args::{ProgressMode, RunArgs, Suite};
 pub(crate) fn run_suite(args: RunArgs) -> Result<()> {
     let workers = resolve_workers(&args.workers)?;
     validate_samples(args.repetitions, args.warmup)?;
+    // Every engine run is bounded (SQ-09); refuse to start if it cannot be.
+    sqlite_parity::Limits::new(args.case_timeout_ms, args.max_output_bytes)?;
+    sqlite_parity::check_kill()?;
     let tmp_root = resolve_tmp_root(&args.tmp_root)?;
     fs::create_dir_all(&tmp_root)
         .with_context(|| format!("create tmp root {}", tmp_root.display()))?;
     let sqlite_bin = resolve_sqlite_bin(&args.sqlite_bin);
     let known_failures = load_known_failures(args.sqlite_known_failures.as_deref())?;
+    if !args.case_ids.is_empty() && matches!(args.suite, Suite::All | Suite::BeyondSqlite) {
+        bail!(
+            "--case-id narrows one SQLite-shell suite (sqlite_parity, memory or rql_phase1), not --suite {}",
+            args.suite.as_str()
+        );
+    }
 
     match args.suite {
         Suite::All => run_all_suites(&args, workers, tmp_root, sqlite_bin, &known_failures),
@@ -190,7 +199,8 @@ fn run_all_suites(
                 evidence::suite_artifact_path(output_dir, "sqlite_parity", "provenance.json"),
                 &sqlite_summary,
             )
-            .with_known_failures(known_failures.listed("sqlite_parity")),
+            .with_known_failures(known_failures.listed("sqlite_parity"))
+            .with_completion_marker(),
             OfficialSuiteEvidence::new(
                 "memory",
                 memory_output,
@@ -200,7 +210,8 @@ fn run_all_suites(
                 evidence::suite_artifact_path(output_dir, "memory", "provenance.json"),
                 &memory_summary,
             )
-            .with_known_failures(known_failures.listed("memory")),
+            .with_known_failures(known_failures.listed("memory"))
+            .with_completion_marker(),
             OfficialSuiteEvidence::new(
                 "rql_phase1",
                 rql_output,
@@ -210,7 +221,8 @@ fn run_all_suites(
                 evidence::suite_artifact_path(output_dir, "rql_phase1", "provenance.json"),
                 &rql_summary,
             )
-            .with_known_failures(known_failures.listed("rql_phase1")),
+            .with_known_failures(known_failures.listed("rql_phase1"))
+            .with_completion_marker(),
             OfficialSuiteEvidence::new(
                 "beyond_sqlite",
                 beyond_output.clone(),
@@ -223,6 +235,8 @@ fn run_all_suites(
             .without_case_ids(),
         ],
         known_failures: known_failures.source().cloned(),
+        case_timeout_ms: u128::from(args.case_timeout_ms),
+        max_output_bytes: args.max_output_bytes,
     })?;
     let problems = sqlite_gates
         .into_iter()
@@ -247,30 +261,24 @@ fn run_sqlite_like_suite(
 ) -> Result<sqlite_parity::RunSummary> {
     let memory_samples = args.memory_samples || matches!(suite, Suite::Memory);
     let started_unix_ms = evidence::now_unix_ms();
+    let config = sqlite_parity::RunConfig {
+        suite: suite.as_str(),
+        reference_bin: sqlite_bin.clone(),
+        target_bin: args.target_bin.clone(),
+        output: output.clone(),
+        tmp_root: tmp_root.clone(),
+        workers,
+        repetitions: args.repetitions,
+        warmup: args.warmup,
+        progress: progress_enabled(args.progress),
+        memory_samples,
+        case_ids: args.case_ids.clone(),
+        limits: sqlite_parity::Limits::new(args.case_timeout_ms, args.max_output_bytes)?,
+    };
     let summary = if matches!(suite, Suite::RqlPhase1) {
-        sqlite_parity::run_rql_phase1(sqlite_parity::RqlPhase1RunConfig {
-            reference_bin: sqlite_bin.clone(),
-            target_bin: args.target_bin.clone(),
-            output: output.clone(),
-            tmp_root: tmp_root.clone(),
-            workers,
-            repetitions: args.repetitions,
-            warmup: args.warmup,
-            progress: progress_enabled(args.progress),
-            memory_samples,
-        })?
+        sqlite_parity::run_rql_phase1(config)?
     } else {
-        sqlite_parity::run(sqlite_parity::RunConfig {
-            reference_bin: sqlite_bin.clone(),
-            target_bin: args.target_bin.clone(),
-            output: output.clone(),
-            tmp_root: tmp_root.clone(),
-            workers,
-            repetitions: args.repetitions,
-            warmup: args.warmup,
-            progress: progress_enabled(args.progress),
-            memory_samples,
-        })?
+        sqlite_parity::run(config)?
     };
     evidence::write_sqlite_parity_evidence(EvidenceConfig {
         suite: suite.as_str().to_owned(),

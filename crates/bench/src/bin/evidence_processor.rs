@@ -10,6 +10,8 @@ use anyhow::{Context, Result, anyhow, bail};
 use serde_json::{Map, Value};
 use sha2::{Digest, Sha256};
 
+#[path = "evidence_processor/completion.rs"]
+mod completion;
 #[path = "evidence_processor/sqlite_known_failures.rs"]
 mod sqlite_known_failures;
 
@@ -264,6 +266,16 @@ fn validated_suite(
         manifest_path.clone(),
         provenance_path.clone(),
     ]);
+    // A streamed suite is published only with the marker its finished run
+    // wrote; `run` checks the marker against the raw file.
+    let completion_path = if completion::STREAMED_SUITES.contains(&name) {
+        let path = suite_path(entry, &["completion_path"])
+            .with_context(|| format!("suite {name} declares no completion marker"))?;
+        required_paths.insert(path.clone());
+        Some(path)
+    } else {
+        None
+    };
 
     // sqlite_parity and memory publish their failures; which ones is
     // checked against the known-failures baseline in `run`. Every other
@@ -314,6 +326,9 @@ fn validated_suite(
     ] {
         result.insert(key.to_owned(), value);
     }
+    if let Some(path) = completion_path {
+        result.insert("completion_path".to_owned(), Value::String(path));
+    }
     Ok(result)
 }
 
@@ -329,11 +344,14 @@ fn add_suite_hashes(
         ("ranked_path", "ranked_sha256"),
         ("manifest_path", "manifest_sha256"),
         ("provenance_path", "provenance_sha256"),
+        ("completion_path", "completion_sha256"),
     ] {
-        let path = suite
-            .get(path_key)
-            .and_then(Value::as_str)
-            .ok_or_else(|| anyhow!("processed suite missing {path_key}"))?;
+        let Some(path) = suite.get(path_key).and_then(Value::as_str) else {
+            if path_key == "completion_path" {
+                continue;
+            }
+            bail!("processed suite missing {path_key}");
+        };
         let candidates = hash_candidates(repo_root, root, path);
         let hash = lookup_hash(output_hashes, &candidates).ok_or_else(|| {
             anyhow!(
@@ -435,6 +453,17 @@ fn run(root: PathBuf) -> Result<PathBuf> {
         if actual != expected {
             bail!("sha256 mismatch for {relative}: expected {expected}, got {actual}");
         }
+    }
+    // Every streamed suite finished: its marker certifies its raw file.
+    for name in completion::STREAMED_SUITES {
+        let suite = validated.get_mut(name).expect("validated suite");
+        let raw_path = suite["raw_path"].as_str().unwrap_or_default().to_owned();
+        let completion_path = suite["completion_path"]
+            .as_str()
+            .unwrap_or_default()
+            .to_owned();
+        let marker = completion::check_suite(&root, name, &raw_path, &completion_path)?;
+        suite.insert("completion".to_owned(), marker);
     }
     let pg: Value = serde_json::from_slice(&fs::read(root.join("postgres-qualification.json"))?)?;
     let pg_summary = &validated["beyond_sqlite"];
@@ -584,7 +613,8 @@ mod tests {
                 "summary_path": "summary.json",
                 "ranked_path": "ranked.csv",
                 "manifest_path": "manifest.json",
-                "provenance_path": "provenance.json"
+                "provenance_path": "provenance.json",
+                "completion_path": "raw.jsonl.complete.json"
             })
         };
         let mut paths = BTreeSet::new();
@@ -605,7 +635,8 @@ mod tests {
                 "summary_path": "summary.json",
                 "ranked_path": "ranked.csv",
                 "manifest_path": "manifest.json",
-                "provenance_path": "provenance.json"
+                "provenance_path": "provenance.json",
+                "completion_path": "raw.jsonl.complete.json"
             })
         };
         let mut paths = BTreeSet::new();
@@ -618,6 +649,32 @@ mod tests {
         // The three counts still have to cover the whole corpus.
         assert!(validated_suite("sqlite_parity", &suite(2_441, 5, 0), &mut paths).is_err());
         assert!(validated_suite("memory", &suite(2_440, 0, 0), &mut paths).is_err());
+    }
+
+    #[test]
+    fn streamed_suites_must_declare_their_completion_marker() {
+        let mut suite = serde_json::json!({
+            "total": 2_445, "passed": 2_445, "failed": 0, "skipped": 0,
+            "raw_path": "raw.jsonl", "summary_path": "summary.json",
+            "ranked_path": "ranked.csv", "manifest_path": "manifest.json",
+            "provenance_path": "provenance.json",
+            "completion_path": "raw.jsonl.complete.json"
+        });
+        let mut paths = BTreeSet::new();
+        let validated = validated_suite("sqlite_parity", &suite, &mut paths).expect("declared");
+        assert_eq!(validated["completion_path"], "raw.jsonl.complete.json");
+        assert!(
+            paths.contains("raw.jsonl.complete.json"),
+            "its hash is verified"
+        );
+        suite
+            .as_object_mut()
+            .expect("suite")
+            .remove("completion_path");
+        for name in ["sqlite_parity", "memory"] {
+            let error = validated_suite(name, &suite, &mut paths).expect_err("no marker");
+            assert!(format!("{error:#}").contains("declares no completion marker"));
+        }
     }
 
     #[test]

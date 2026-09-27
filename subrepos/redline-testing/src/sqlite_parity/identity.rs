@@ -6,11 +6,12 @@
 use sha2::{Digest, Sha256};
 
 /// The runner sources that decide a case verdict: case fields and their
-/// defaults, the output comparison and normalization, capability skips, the
-/// RQL phase-1 rewrite gate and the run summary. Hashing the sources means
+/// defaults, the execution bounds, the output comparison and normalization,
+/// capability skips, the RQL phase-1 rewrite gate and the run summary. Hashing the sources means
 /// any change to those rules changes the hash (unrelated edits in the same
 /// files change it too; it can be too strict, never too loose).
-const ASSERTION_POLICY_SOURCES: [(&str, &str); 7] = [
+const ASSERTION_POLICY_SOURCES: [(&str, &str); 8] = [
+    ("sqlite_parity/bounded.rs", include_str!("bounded.rs")),
     ("sqlite_parity/case.rs", include_str!("case.rs")),
     ("sqlite_parity/compare.rs", include_str!("compare.rs")),
     ("sqlite_parity/engine.rs", include_str!("engine.rs")),

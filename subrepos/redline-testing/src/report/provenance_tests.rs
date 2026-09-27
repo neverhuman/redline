@@ -114,6 +114,42 @@ fn official_error(edit: impl FnOnce(&mut Value, &mut Value), rebind: bool) -> St
 }
 
 #[test]
+fn official_report_requires_the_runs_completion_marker() {
+    // A run that stopped part way left readable records but no marker.
+    let error = official_error(
+        |_, evidence| {
+            evidence["suite_summaries"]["sqlite_parity"]
+                .as_object_mut()
+                .expect("suite summary")
+                .remove("completion");
+        },
+        false,
+    );
+    assert!(error.contains("records no completion marker"), "{error}");
+    // A marker certifies its own bytes and record count, not these.
+    let error = official_error(
+        |_, evidence| {
+            evidence["suite_summaries"]["sqlite_parity"]["completion"]["raw_sha256"] =
+                "0".repeat(64).into();
+        },
+        false,
+    );
+    assert!(error.contains("certifies raw SHA-256"), "{error}");
+    let error = official_error(
+        |_, evidence| {
+            evidence["suite_summaries"]["sqlite_parity"]["completion"]["records"] = 2.into();
+        },
+        false,
+    );
+    assert!(
+        error.contains("certifies Some(Number(2)) records"),
+        "{error}"
+    );
+    // With the marker intact the report renders.
+    render_official(|_, _| {}, false).expect("complete run renders");
+}
+
+#[test]
 fn report_rejects_unknown_identity() {
     let raw = fixture::raw_case("00001");
     for (section, field) in [
