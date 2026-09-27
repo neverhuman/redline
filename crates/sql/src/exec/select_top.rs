@@ -297,19 +297,19 @@ fn build_select_runtime(
         fast_path_rows = Some(rows);
     }
 
-    // W4-A2b: morsel-routed primitive scan. Off by default — gated by
-    // `REDLINE_MORSEL_ROUTE=primitive_scan` (or `all`/`1`/`on`). When the
-    // env var is unset, the check is one OnceLock load + branch so default
-    // builds pay nothing here. When enabled, we route bare-column
-    // projections of Integer/Real affinity columns through the direct
-    // rowid scan + indexed projection path, skipping `eval_projection_item`
-    // for the supported shape. Falls through to the tuple path when the
-    // plan doesn't match (telemetry counters surface why) or when a runtime
-    // value's kind doesn't match the affinity-derived kind (SQLite loose
-    // typing safety net).
+    // Routed full scan. A unique point lookup stays on the index path:
+    // it returns one row, so scan order and index order are the same row.
+    // Non-unique matches still scan, which keeps multi-row order stable.
     if fast_path_rows.is_none()
         && super::morsel::morsel_route_mode().is_some()
         && let SelectSource::Table(table) = &plan.source
+        && !index_access::has_unique_point_probe(
+            conn.engine(),
+            table,
+            &plan.selection,
+            bindings,
+            plan.table_hint.as_ref(),
+        )
     {
         let tx_ref = tx.as_mut().expect("tx present");
         if let Some(rows) =

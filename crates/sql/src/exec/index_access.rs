@@ -118,6 +118,25 @@ impl IndexAccessMatch {
     }
 }
 
+/// A unique full-key point has one visible row, so its order cannot
+/// disagree with a table scan. The routed full scan should yield.
+pub(crate) fn has_unique_point_probe(
+    engine: &Engine,
+    table: &Arc<TableDef>,
+    selection: &Option<Expr>,
+    bindings: &[Option<SqlValue>],
+    hint: Option<&TableAccessHint>,
+) -> bool {
+    let Some(matched) = try_match_index_access_hinted(engine, table, selection, bindings, hint)
+    else {
+        return false;
+    };
+    matched.index.unique
+        && matched.consumed_full_predicate()
+        && matches!(matched.probe, IndexProbe::Point { .. })
+        && open_handle(engine, &matched.index).is_some()
+}
+
 /// Try to plan an index-driven access path for `(table, selection)`.
 ///
 /// Returns `None` when no index applies. The check is conservative: the
@@ -1205,5 +1224,85 @@ mod a7_collate_scan_tests {
     fn rejects_shorter_than_needle() {
         assert!(!contains_collate_nocase_ci("short"));
         assert!(!contains_collate_nocase_ci(""));
+    }
+}
+
+#[cfg(test)]
+mod unique_point_route_tests {
+    use std::sync::Arc;
+    use std::time::Duration;
+
+    use tempfile::tempdir;
+
+    use crate::connection::{Connection, Database, DbOptions};
+    use crate::statement::Step;
+    use crate::value::SqlValue;
+
+    use super::super::morsel::route::take_routed_full_scans;
+
+    fn open() -> (tempfile::TempDir, Arc<Connection>) {
+        let dir = tempdir().expect("scratch");
+        let db = Database::create(
+            dir.path().join("unique-point.db"),
+            DbOptions {
+                busy_timeout: Duration::from_secs(5),
+                ..DbOptions::default()
+            },
+        )
+        .expect("create");
+        (dir, db.connect())
+    }
+
+    fn one_integer(conn: &Arc<Connection>, sql: &str) -> i64 {
+        let _ = take_routed_full_scans();
+        let mut stmt = conn.prepare(sql).expect("prepare");
+        assert_eq!(stmt.step().expect("step"), Step::Row);
+        let SqlValue::Integer(value) = stmt.column_value(0).expect("value").clone() else {
+            panic!("expected integer");
+        };
+        assert_eq!(stmt.step().expect("done"), Step::Done);
+        value
+    }
+
+    #[test]
+    fn unique_point_does_not_full_scan_and_non_unique_still_does() {
+        let (_dir, conn) = open();
+        conn.execute("CREATE TABLE t(id INTEGER PRIMARY KEY, k INTEGER, v INTEGER)")
+            .unwrap();
+        conn.execute("CREATE UNIQUE INDEX t_k ON t(k)").unwrap();
+        let mut insert = conn
+            .prepare("INSERT INTO t(id, k, v) VALUES (?1, ?2, ?3)")
+            .unwrap();
+        for i in 0..40 {
+            insert.bind_i64(1, i).unwrap();
+            insert.bind_i64(2, i + 100).unwrap();
+            insert.bind_i64(3, i + 1000).unwrap();
+            assert_eq!(insert.step().unwrap(), Step::Done);
+            insert.reset().unwrap();
+        }
+        let _ = take_routed_full_scans();
+        assert_eq!(one_integer(&conn, "SELECT v FROM t WHERE k = 120"), 1020);
+        assert_eq!(take_routed_full_scans(), 0);
+
+        conn.execute("CREATE TABLE u(id INTEGER PRIMARY KEY, k INTEGER, v INTEGER)")
+            .unwrap();
+        conn.execute("CREATE INDEX u_k ON u(k)").unwrap();
+        let mut insert = conn
+            .prepare("INSERT INTO u(id, k, v) VALUES (?1, 7, ?2)")
+            .unwrap();
+        for i in 0..40 {
+            insert.bind_i64(1, i).unwrap();
+            insert.bind_i64(2, i).unwrap();
+            assert_eq!(insert.step().unwrap(), Step::Done);
+            insert.reset().unwrap();
+        }
+        let _ = take_routed_full_scans();
+        let mut stmt = conn.prepare("SELECT v FROM u WHERE k = 7").unwrap();
+        let mut n = 0;
+        while stmt.step().unwrap() == Step::Row {
+            n += 1;
+        }
+        assert_eq!(n, 40);
+        assert_eq!(take_routed_full_scans(), 1);
     }
 }
