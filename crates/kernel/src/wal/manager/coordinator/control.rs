@@ -74,6 +74,24 @@ impl WalCoordinator {
     }
 }
 
+impl crate::storage::PageWal for WalCoordinator {
+    fn make_durable_for_page(&self, page_lsn: Lsn) -> Result<Lsn> {
+        if self.volatile {
+            return Ok(Lsn::ZERO);
+        }
+        // A page LSN past every reserved record has nothing left to write,
+        // and `flush_until` would wait for it forever. Flush what exists and
+        // let the caller keep the page.
+        let reserved = self
+            .shared
+            .state
+            .lock()
+            .map(|state| state.reserved_lsn)
+            .map_err(|_| Error::CorruptWal("wal coordinator mutex poisoned"))?;
+        self.flush_until(page_lsn.min(reserved))
+    }
+}
+
 pub(crate) struct PageInstallFence {
     shared: Option<Arc<WalCoordinatorShared>>,
     lsn: Lsn,

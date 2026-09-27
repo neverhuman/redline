@@ -1,12 +1,12 @@
 use redlinedb_kernel::Error;
 use redlinedb_kernel::format::{Csn, Lsn, Page, PageId, PageKind, RelId, TxId};
 use redlinedb_kernel::storage::{
-    BufferPool, ControlFile, ControlStore, PageFile, TxStatusCheckpoint, TxStatusStore,
+    BufferPool, ControlFile, ControlStore, PageFile, PageWal, TxStatusCheckpoint, TxStatusStore,
 };
 use redlinedb_kernel::wal::WalPayload;
 use std::fs::OpenOptions;
 use std::io::{Seek, SeekFrom, Write};
-use std::sync::{Arc, Barrier};
+use std::sync::{Arc, Barrier, Mutex, Weak};
 use std::thread;
 use tempfile::TempDir;
 
@@ -155,34 +155,86 @@ fn buffer_pool_evicts_a_clean_frame_whose_usage_was_saturated() {
     assert_eq!(pool.resident_pages(), 1);
 }
 
+/// WAL stand-in for eviction tests. It holds records through `written`,
+/// syncs up to there when asked, and notes each request together with
+/// whether the page file already held `page` at that moment.
+struct RecordingWal {
+    file: Arc<PageFile>,
+    page: PageId,
+    written: Mutex<Lsn>,
+    durable: Mutex<Lsn>,
+    requests: Mutex<Vec<(Lsn, bool)>>,
+}
+
+impl RecordingWal {
+    fn new(file: Arc<PageFile>, page: PageId, written: Lsn) -> Self {
+        Self {
+            file,
+            page,
+            written: Mutex::new(written),
+            durable: Mutex::new(Lsn::ZERO),
+            requests: Mutex::new(Vec::new()),
+        }
+    }
+}
+
+impl PageWal for RecordingWal {
+    fn make_durable_for_page(&self, page_lsn: Lsn) -> redlinedb_kernel::Result<Lsn> {
+        let page_on_disk = self.file.read_page(self.page).is_ok();
+        self.requests.lock().unwrap().push((page_lsn, page_on_disk));
+        let written = *self.written.lock().unwrap();
+        let mut durable = self.durable.lock().unwrap();
+        *durable = (*durable).max(written);
+        Ok(*durable)
+    }
+}
+
 #[test]
 fn buffer_pool_evicts_a_dirty_page_once_its_lsn_is_durable() {
     let temp = TempDir::new().unwrap();
     let file =
         Arc::new(PageFile::create(temp.path().join("data.redline"), TEST_PAGE_SIZE).unwrap());
-    let pool = BufferPool::new(file, 1).unwrap();
+    let pool = BufferPool::new(Arc::clone(&file), 1).unwrap();
     let first = pool.allocate(PageKind::Heap, RelId(1)).unwrap();
     let first_id = first.page_id();
     first.mark_dirty(Lsn(10)).unwrap();
     drop(first);
 
+    // With no WAL attached the pool cannot show LSN 10 is durable.
     let blocked = pool.allocate(PageKind::Heap, RelId(1)).unwrap_err();
     assert_eq!(
         blocked,
         Error::CorruptPage("no unpinned frame available for eviction")
     );
 
-    pool.note_evict_durable_lsn(Lsn(9));
+    // The WAL holds records only through LSN 9, so it cannot cover the page.
+    let wal = Arc::new(RecordingWal::new(Arc::clone(&file), first_id, Lsn(9)));
+    let weak: Weak<RecordingWal> = Arc::downgrade(&wal);
+    pool.attach_wal(weak).unwrap();
     let still_blocked = pool.allocate(PageKind::Heap, RelId(1)).unwrap_err();
     assert_eq!(
         still_blocked,
         Error::CorruptPage("no unpinned frame available for eviction")
     );
+    assert!(file.read_page(first_id).is_err());
 
-    pool.note_evict_durable_lsn(Lsn(10));
+    // Once the WAL holds LSN 10, eviction makes it durable, then writes.
+    *wal.written.lock().unwrap() = Lsn(10);
     let second = pool.allocate(PageKind::Heap, RelId(1)).unwrap();
     assert_ne!(second.page_id(), first_id);
     assert_eq!(pool.resident_pages(), 1);
+    assert_eq!(
+        file.read_page(first_id).unwrap().header().unwrap().page_lsn,
+        Lsn(10)
+    );
+    let requests = wal.requests.lock().unwrap().clone();
+    assert!(!requests.is_empty());
+    assert!(
+        requests
+            .iter()
+            .all(|&(lsn, page_on_disk)| lsn == Lsn(10) && !page_on_disk),
+        "the page reached the file before the WAL covered it: {requests:?}"
+    );
 }
 
 #[test]

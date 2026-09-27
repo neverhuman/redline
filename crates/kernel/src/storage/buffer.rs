@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 use std::sync::atomic::{AtomicBool, AtomicU64, AtomicUsize, Ordering};
-use std::sync::{Arc, Condvar, Mutex, MutexGuard, Weak};
+use std::sync::{Arc, Condvar, Mutex, MutexGuard, OnceLock, Weak};
 use std::thread::{self, JoinHandle};
 use std::time::Duration;
 
@@ -8,9 +8,9 @@ use crossbeam_queue::ArrayQueue;
 use crossbeam_utils::CachePadded;
 
 use crate::format::{Lsn, Page, PageId, PageKind, RelId};
-use crate::storage::PageFile;
 use crate::storage::numa;
 use crate::storage::policy::{ActiveBufferPolicy, BufferPolicy};
+use crate::storage::{PageFile, PageWal};
 use crate::telemetry::Phase11Counters;
 use crate::{Error, Result};
 
@@ -62,11 +62,10 @@ struct Inner {
     // Phase 5 WS-B5: avoid false-sharing with adjacent counters.
     resident: CachePadded<AtomicUsize>,
     clock_hand: AtomicUsize,
-    /// Highest WAL LSN known to be written (Normal) or fsynced (Strict).
-    /// Eviction may flush a dirty page only when its page LSN is at or
-    /// below this value. Starts at zero, so a durable page is not evicted
-    /// until commit or checkpoint publishes the LSN.
-    evict_durable_lsn: AtomicU64,
+    /// The WAL that eviction makes durable through a dirty page's LSN
+    /// before it writes the page. Without one, only a dirty page with LSN
+    /// zero can be evicted. Weak, so the pool never keeps the WAL open.
+    wal: OnceLock<Weak<dyn PageWal>>,
     eviction: Mutex<()>,
     stats: BufferPoolStatsInner,
 }
@@ -164,7 +163,7 @@ impl BufferPool {
             next_page_id: AtomicU64::new(next_page_id),
             resident: CachePadded::new(AtomicUsize::new(0)),
             clock_hand: AtomicUsize::new(0),
-            evict_durable_lsn: AtomicU64::new(0),
+            wal: OnceLock::new(),
             eviction: Mutex::new(()),
             stats: BufferPoolStatsInner::default(),
         });
@@ -214,18 +213,13 @@ impl BufferPool {
         self.inner.allocate(kind, rel_id)
     }
 
-    /// Remember a WAL LSN that commit or checkpoint has made safe to evict.
-    /// The value only moves forward.
-    pub fn note_evict_durable_lsn(&self, lsn: Lsn) {
-        let atomic = &self.inner.evict_durable_lsn;
-        let mut current = atomic.load(Ordering::Relaxed);
-        while lsn.0 > current {
-            match atomic.compare_exchange_weak(current, lsn.0, Ordering::Release, Ordering::Relaxed)
-            {
-                Ok(_) => break,
-                Err(observed) => current = observed,
-            }
-        }
+    /// Attach the WAL that eviction must make durable before it writes a
+    /// dirty page. A pool takes one WAL, once.
+    pub fn attach_wal(&self, wal: Weak<dyn PageWal>) -> Result<()> {
+        self.inner
+            .wal
+            .set(wal)
+            .map_err(|_| Error::CorruptPage("buffer pool already has a wal"))
     }
 
     pub(crate) fn page_size(&self) -> usize {
@@ -613,14 +607,12 @@ impl Inner {
         if self.resident.load(Ordering::Relaxed) < self.capacity {
             return Ok(());
         }
-        let durable_lsn = Lsn(self.evict_durable_lsn.load(Ordering::Acquire));
-
         let _eviction = self
             .eviction
             .lock()
             .map_err(|_| Error::CorruptPage("buffer eviction mutex poisoned"))?;
         while self.resident.load(Ordering::Relaxed) >= self.capacity {
-            if !self.evict_one(durable_lsn)? {
+            if !self.evict_one()? {
                 return Err(Error::CorruptPage(
                     "no unpinned frame available for eviction",
                 ));
@@ -629,11 +621,14 @@ impl Inner {
         Ok(())
     }
 
-    fn evict_one(&self, durable_lsn: Lsn) -> Result<bool> {
+    fn evict_one(&self) -> Result<bool> {
         let frames = self.all_frames()?;
         if frames.is_empty() {
             return Ok(false);
         }
+        // Durable WAL LSN known to this pass. It grows each time a dirty
+        // victim asks the WAL to cover its page LSN.
+        let mut durable_lsn = Lsn::ZERO;
 
         let start = self.clock_hand.fetch_add(1, Ordering::Relaxed);
         // Usage climbs to CLOCK_MAX_USAGE on each pin and only falls here.
@@ -660,10 +655,18 @@ impl Inner {
                     .ok_or(Error::CorruptPage("resident frame missing page"))?
                     .header()?
                     .page_lsn;
-                if page_lsn > durable_lsn {
-                    continue;
-                }
+                // Release the frame before asking the WAL: the flush can wait
+                // on an fsync, and append_cell holds a frame lock while it
+                // appends. No shard lock is held here either.
                 drop(state);
+                if page_lsn > durable_lsn {
+                    durable_lsn = durable_lsn.max(self.wal_durable_through(page_lsn)?);
+                    if page_lsn > durable_lsn {
+                        continue;
+                    }
+                }
+                // Rechecks the page LSN under the frame lock, so bytes newer
+                // than the durable WAL are never written.
                 self.flush_frame_if_durable(frame, durable_lsn)?;
                 state = frame
                     .state
@@ -681,6 +684,16 @@ impl Inner {
         }
 
         Ok(false)
+    }
+
+    /// Make the attached WAL durable through `page_lsn` and return the
+    /// durable LSN. The result stays below `page_lsn` when no WAL is attached,
+    /// the WAL was dropped, or the WAL holds no record that far.
+    fn wal_durable_through(&self, page_lsn: Lsn) -> Result<Lsn> {
+        match self.wal.get().and_then(Weak::upgrade) {
+            Some(wal) => wal.make_durable_for_page(page_lsn),
+            None => Ok(Lsn::ZERO),
+        }
     }
 
     fn remove_loading_frame(&self, page_id: PageId, frame: &Arc<FrameEntry>) -> Result<()> {
@@ -812,6 +825,8 @@ impl Inner {
             (page, page_lsn)
         };
 
+        #[cfg(test)]
+        super::buffer_test_hooks::run_before_page_write_hook(page.header()?.page_id, written_lsn);
         let write_result = self.page_file.write_page(&page);
         let mut state = frame
             .state

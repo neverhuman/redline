@@ -78,11 +78,13 @@ impl Engine {
         let wal = if volatile {
             Arc::new(WalCoordinator::volatile(config.wal.clone()))
         } else {
-            Arc::new(WalCoordinator::create_with_shutdown_flush(
+            let wal = Arc::new(WalCoordinator::create_with_shutdown_flush(
                 &wal_dir,
                 config.wal.clone(),
                 flush_wal_on_shutdown(config.commit_durability),
-            )?)
+            )?);
+            attach_wal_to_buffer(&buffer, &wal)?;
+            wal
         };
         // Use the volatile constructors for in-memory engines: they skip
         // create_dir_all (already done by the caller) saving another 4–6
@@ -220,6 +222,13 @@ impl Engine {
             )
             .map_err(|_| Error::CorruptWal("open wal coordinator failed"))?,
         );
+        attach_wal_to_buffer(&buffer, &wal)?;
+        // Heap replay stamps pages with LSN zero, and page images go straight
+        // to the page file, so no page LSN tells eviction or a checkpoint
+        // which WAL a replayed change needs. The scanned WAL can still sit
+        // unsynced from the run that crashed. Make it durable before replay
+        // writes any page.
+        wal.flush_all()?;
         let heap = PageBackedHeap::new_with_wal(
             config.rel_id,
             config.heap_lanes,
@@ -314,6 +323,13 @@ impl Engine {
             RecoveryReport::from_scan(scan_report, metrics, replay_from_lsn),
         ))
     }
+}
+
+/// Eviction writes a dirty page only after this WAL is durable through the
+/// page's LSN. Volatile engines have no WAL to attach.
+fn attach_wal_to_buffer(buffer: &BufferPool, wal: &Arc<WalCoordinator>) -> Result<()> {
+    let wal: std::sync::Weak<WalCoordinator> = Arc::downgrade(wal);
+    buffer.attach_wal(wal)
 }
 
 pub(super) fn catalog_sync_policy(durability: CommitDurability) -> CatalogSyncPolicy {
@@ -557,21 +573,11 @@ fn recover_indexes(
             continue;
         }
         match WalPayload::decode(&record.payload)? {
-            WalPayload::PageImage {
-                page_id: _,
-                page_lsn: _,
-                page_bytes,
-            } if committed.contains(&record.tx_id) => {
-                let page = Page::from_bytes(page_bytes)?;
-                match page.header()?.kind {
-                    crate::format::PageKind::BtreeMeta
-                    | crate::format::PageKind::BtreeLeaf
-                    | crate::format::PageKind::BtreeInternal => {
-                        engine.heap.redo_page_image(page, record_end_lsn(record))?;
-                    }
-                    _ => {}
-                }
-            }
+            // `recover_index_page_images` already installed every committed
+            // index image, in LSN order, through the buffer pool. Writing an
+            // image again here would go straight to the page file: once the
+            // pool has evicted that page, an older image replaces the newer
+            // one, and the deltas below cannot restore what it drops.
             WalPayload::PageImage { .. } => {}
             WalPayload::IndexInsert {
                 tx_id,

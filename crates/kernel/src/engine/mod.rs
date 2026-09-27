@@ -3,6 +3,8 @@ pub mod lock;
 pub mod page_heap;
 pub mod tx;
 
+#[cfg(test)]
+mod buffer_eviction_tests;
 mod catalog_ops;
 #[cfg(test)]
 mod catalog_sync_tests;
