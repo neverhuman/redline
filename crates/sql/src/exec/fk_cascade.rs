@@ -22,7 +22,7 @@ use redlinedb_kernel::format::RowId;
 use crate::connection::Connection;
 use crate::error::Result;
 use crate::session::{DeferredFkCheck, SessionState};
-use crate::value::SqlValue;
+use crate::value::{SqlValue, compare_values};
 
 use super::actions::apply_parent_action;
 use super::lookup::{
@@ -152,8 +152,11 @@ pub(crate) fn enforce_fk_on_parent_change(
                         .unwrap_or(SqlValue::Null)
                 })
                 .collect();
-            // No-op when the key did not change.
-            if new_key == old_key {
+            // No-op when the key did not change. SQLite's ON UPDATE action
+            // runs only when `NOT(old.k IS new.k)`, and IS holds between
+            // INTEGER 5 and REAL 5.0, which `==` on values treats as
+            // different.
+            if key_unchanged(&old_key, &new_key) {
                 continue;
             }
         }
@@ -162,6 +165,15 @@ pub(crate) fn enforce_fk_on_parent_change(
         )?;
     }
     Ok(())
+}
+
+/// `old IS new` for every column of a parent key. The old key holds no NULL.
+fn key_unchanged(old_key: &[SqlValue], new_key: &[SqlValue]) -> bool {
+    old_key.len() == new_key.len()
+        && old_key
+            .iter()
+            .zip(new_key)
+            .all(|(old, new)| compare_values(old, new) == std::cmp::Ordering::Equal)
 }
 
 /// Top-level entrypoint for UPDATE — propagates a parent row's value

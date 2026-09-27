@@ -157,3 +157,82 @@ fn rowid_equality_with_a_bound_parameter_takes_the_literal_path() {
     let err = found(&|stmt| stmt.bind_text(1, "5")).unwrap_err();
     assert!(err.contains("comparison affinity"), "{err}");
 }
+
+// -- foreign keys: a parent key update between INTEGER and REAL --------------
+
+/// SQLite's ON UPDATE action runs only when `NOT(old.k IS new.k)`, and IS
+/// holds between INTEGER 5 and REAL 5.0. For NO ACTION the child counts for
+/// the old and the new key cancel out. So moving an untyped parent key
+/// between 5 and 5.0 leaves every child alone.
+fn fk_parent_update(child_decl: &str, parent_value: &str, new_value: &str) {
+    let lab = Lab::new();
+    lab.script(&[
+        "PRAGMA foreign_keys = ON",
+        "CREATE TABLE p(k UNIQUE)",
+        &format!("CREATE TABLE c(id INTEGER PRIMARY KEY, pk {child_decl})"),
+        &format!("INSERT INTO p(k) VALUES ({parent_value})"),
+        "INSERT INTO c(pk) VALUES (5)",
+    ]);
+    lab.expect(
+        &format!("UPDATE p SET k = {new_value} WHERE k = {parent_value}"),
+        Outcome::Done,
+    );
+    lab.expect(
+        "SELECT pk, typeof(pk) FROM c",
+        rows(&[&[int(5), text("integer")]]),
+    );
+    lab.step("SELECT k, typeof(k) FROM p");
+}
+
+#[test]
+fn fk_parent_key_update_between_integer_and_real_is_no_change() {
+    for child_decl in [
+        "REFERENCES p(k)",
+        "REFERENCES p(k) ON UPDATE CASCADE",
+        "REFERENCES p(k) ON UPDATE SET NULL",
+        "REFERENCES p(k) ON UPDATE RESTRICT",
+        "INTEGER REFERENCES p(k)",
+        "INTEGER REFERENCES p(k) ON UPDATE CASCADE",
+    ] {
+        fk_parent_update(child_decl, "5", "5.0");
+        fk_parent_update(child_decl, "5.0", "5");
+    }
+}
+
+#[test]
+fn fk_parent_key_update_to_a_different_value_still_acts() {
+    let lab = Lab::new();
+    lab.script(&[
+        "PRAGMA foreign_keys = ON",
+        "CREATE TABLE p(k UNIQUE)",
+        "CREATE TABLE c(id INTEGER PRIMARY KEY, pk REFERENCES p(k))",
+        "CREATE TABLE cc(id INTEGER PRIMARY KEY, pk REFERENCES p(k) ON UPDATE CASCADE)",
+        "INSERT INTO p(k) VALUES (5), (7)",
+        "INSERT INTO c(pk) VALUES (5)",
+        "INSERT INTO cc(pk) VALUES (7)",
+    ]);
+    lab.expect(
+        "UPDATE p SET k = 6 WHERE k = 5",
+        Outcome::Err(lab::ErrKind::ForeignKey),
+    );
+    lab.expect("UPDATE p SET k = '7' WHERE k = 7", Outcome::Done);
+    lab.expect(
+        "SELECT pk, typeof(pk) FROM cc",
+        rows(&[&[text("7"), text("text")]]),
+    );
+}
+
+#[test]
+fn fk_parent_row_replaced_with_its_key_as_real_keeps_children() {
+    let lab = Lab::new();
+    lab.script(&[
+        "PRAGMA foreign_keys = ON",
+        "CREATE TABLE p(id INTEGER PRIMARY KEY, k UNIQUE)",
+        "CREATE TABLE c(id INTEGER PRIMARY KEY, pk REFERENCES p(k) ON UPDATE CASCADE)",
+        "INSERT INTO p(id, k) VALUES (1, 5)",
+        "INSERT INTO c(pk) VALUES (5)",
+    ]);
+    lab.step("INSERT OR REPLACE INTO p(id, k) VALUES (1, 5.0)");
+    lab.step("SELECT pk, typeof(pk) FROM c");
+    lab.step("SELECT k, typeof(k) FROM p");
+}
