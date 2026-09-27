@@ -115,10 +115,7 @@ fn collect_unique_conflicts(
     if pending_indexes.is_empty() {
         return Ok(conflicts);
     }
-    if pending_indexes
-        .iter()
-        .all(|index| is_rowid_primary_key(table, index))
-    {
+    if let Some(candidate) = rowid_primary_candidate(table, &pending_indexes, values) {
         return rowid_primary_conflicts(
             conn,
             session,
@@ -126,6 +123,7 @@ fn collect_unique_conflicts(
             table,
             values,
             &pending_indexes,
+            candidate,
             skip_rowid,
             conflicts,
         );
@@ -279,16 +277,41 @@ fn is_rowid_primary_key(table: &TableDef, index: &redlinedb_kernel::catalog::Ind
     if !index.primary || index.predicate_sql.is_some() || index.keys.len() != 1 {
         return false;
     }
-    match &index.keys[0].source {
-        redlinedb_kernel::catalog::IndexKeySource::Column { attnum } => {
-            *attnum == alias || index.keys[0].ordinal == alias
-        }
-        _ => false,
+    // The key reads `attnum` (see `build_index_key_with_values`), so only
+    // that names the alias column.
+    matches!(
+        &index.keys[0].source,
+        redlinedb_kernel::catalog::IndexKeySource::Column { attnum } if *attnum == alias
+    )
+}
+
+/// The rowid that every pending index keys on, when they are all the
+/// integer primary key and the new key is a non-negative INTEGER. Affinity
+/// has already turned an exact REAL or numeric TEXT into one. Any other
+/// value (NULL, a REAL past the i64 range, TEXT, a negative) returns
+/// `None` so the caller compares key values instead: a rowid match would
+/// miss a stored key that equals this value.
+fn rowid_primary_candidate(
+    table: &TableDef,
+    indexes: &[&redlinedb_kernel::catalog::IndexDef],
+    values: &[SqlValue],
+) -> Option<RowId> {
+    if !indexes
+        .iter()
+        .all(|index| is_rowid_primary_key(table, index))
+    {
+        return None;
+    }
+    match values.get(usize::from(table.rowid_alias_column?))? {
+        SqlValue::Integer(v) if *v >= 0 => Some(RowId(*v as u64)),
+        _ => None,
     }
 }
 
 /// The integer primary key is the rowid. Compare those ids instead of
-/// decoding every column of every row.
+/// decoding every column of every row. `candidate` comes from
+/// [`rowid_primary_candidate`].
+#[allow(clippy::too_many_arguments)]
 fn rowid_primary_conflicts(
     conn: &Connection,
     session: &mut SessionState,
@@ -296,6 +319,7 @@ fn rowid_primary_conflicts(
     table: &Arc<TableDef>,
     values: &[SqlValue],
     indexes: &[&redlinedb_kernel::catalog::IndexDef],
+    candidate: RowId,
     skip_rowid: Option<RowId>,
     mut conflicts: Vec<UniqueConflict>,
 ) -> Result<Vec<UniqueConflict>> {
@@ -308,13 +332,6 @@ fn rowid_primary_conflicts(
         let lock_key = unique_key_bytes(table.table_id.0, index.index_id.0, &built.values)?;
         let guard = conn.unique_locks().lock(lock_key, tx.id().0)?;
         session.unique_guards.push(guard);
-        let Some(SqlValue::Integer(v)) = built.values.first() else {
-            continue;
-        };
-        if *v < 0 {
-            continue;
-        }
-        let candidate = RowId(*v as u64);
         if live
             .iter()
             .any(|id| *id == candidate && skip_rowid != Some(*id))
@@ -770,6 +787,10 @@ pub(crate) fn ensure_unique_constraints(
         )))
     }
 }
+
+#[cfg(test)]
+#[path = "tail_conflict_real_key_tests.rs"]
+mod real_key_tests;
 
 #[cfg(test)]
 mod tests {

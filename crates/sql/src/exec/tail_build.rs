@@ -486,17 +486,26 @@ pub(crate) fn choose_rowid_for_insert(
                 record_sqlite_sequence_rowid(session, table, rowid);
                 Ok(rowid)
             }
-            SqlValue::Real(v) if v >= 0.0 && v.fract() == 0.0 => {
-                let rowid = RowId::new(v as u64);
+            SqlValue::Real(v) => {
+                let rowid = rowid_from_real(v).ok_or(Error::DatatypeMismatch)?;
+                values[slot] = SqlValue::Integer(rowid.0 as i64);
                 record_sqlite_sequence_rowid(session, table, rowid);
                 Ok(rowid)
             }
-            SqlValue::Integer(_) | SqlValue::Real(_) => Err(Error::DatatypeMismatch),
             _ => Err(Error::DatatypeMismatch),
         }
     } else {
         Ok(engine.reserve_row_id())
     }
+}
+
+/// A REAL names a rowid only when it is a whole number in `0..2^63`, the
+/// range of a non-negative i64. `v as u64` would otherwise turn 1e19 into
+/// a rowid no INTEGER key can equal, and saturate larger values.
+fn rowid_from_real(v: f64) -> Option<RowId> {
+    // 2^63. `i64::MAX as f64` rounds up to this value, so compare with `<`.
+    const I64_END: f64 = 9_223_372_036_854_775_808.0;
+    ((0.0..I64_END).contains(&v) && v.fract() == 0.0).then(|| RowId::new(v as u64))
 }
 
 pub(crate) fn choose_rowid_for_update(
@@ -513,8 +522,7 @@ pub(crate) fn choose_rowid_for_update(
         {
             SqlValue::Null => Ok(engine.reserve_row_id()),
             SqlValue::Integer(v) if v >= 0 => Ok(RowId::new(v as u64)),
-            SqlValue::Real(v) if v >= 0.0 && v.fract() == 0.0 => Ok(RowId::new(v as u64)),
-            SqlValue::Integer(_) | SqlValue::Real(_) => Err(Error::DatatypeMismatch),
+            SqlValue::Real(v) => rowid_from_real(v).ok_or(Error::DatatypeMismatch),
             _ => Err(Error::DatatypeMismatch),
         }
     } else {
