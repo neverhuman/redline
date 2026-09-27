@@ -1,5 +1,6 @@
 mod compare;
 mod evidence;
+mod qualification;
 mod ratio;
 mod render;
 mod svg;
@@ -8,6 +9,8 @@ mod utils;
 
 #[cfg(test)]
 mod latency_tests;
+#[cfg(test)]
+mod qualification_tests;
 #[cfg(test)]
 mod tests;
 
@@ -26,8 +29,9 @@ use anyhow::{Context, Result, bail};
 use evidence::{
     artifact_names_for_suite, read_official_evidence_versions, validate_official_evidence_binding,
 };
+use qualification::build_sqlite_qualification;
 use render::{
-    ksloc_csv, render_metrics_block, render_report_block, render_sqlite_badge, replace_block,
+    remove_block_if_present, render_report_block, render_sqlite_badge, replace_block,
     replace_block_if_present,
 };
 use svg::build_svg_artifacts;
@@ -41,10 +45,19 @@ const REPORT_BEGIN: &str = "<!-- sqlite-parity-report:begin -->";
 const REPORT_END: &str = "<!-- sqlite-parity-report:end -->";
 const BADGE_BEGIN: &str = "<!-- sqlite-parity-badge:begin -->";
 const BADGE_END: &str = "<!-- sqlite-parity-badge:end -->";
-const METRICS_BEGIN: &str = "<!-- sqlite-parity-metrics:begin -->";
-const METRICS_END: &str = "<!-- sqlite-parity-metrics:end -->";
-const JANKURAI_BREAKDOWN_BEGIN: &str = "<!-- sqlite-jankurai-breakdown:begin -->";
-const JANKURAI_BREAKDOWN_END: &str = "<!-- sqlite-jankurai-breakdown:end -->";
+/// Blocks earlier renderers wrote and this one deletes: placeholder metric
+/// cards (KSLOC 1, a "Jankurai score" card of case counts, code shape,
+/// Jankurai comparison) and a raw Jankurai comparison JSON dump.
+const RETIRED_BLOCKS: [(&str, &str); 2] = [
+    (
+        "<!-- sqlite-parity-metrics:begin -->",
+        "<!-- sqlite-parity-metrics:end -->",
+    ),
+    (
+        "<!-- sqlite-jankurai-breakdown:begin -->",
+        "<!-- sqlite-jankurai-breakdown:end -->",
+    ),
+];
 
 fn validate_warmups(records: &[RawRecord], expected_warmup: usize) -> Result<()> {
     let mut cases = BTreeMap::<&str, (bool, usize)>::new();
@@ -160,45 +173,42 @@ pub fn generate(options: ReportOptions) -> Result<()> {
 
     let summary_json = serde_json::to_string_pretty(&summary)? + "\n";
     let ranked_csv = ranked_csv(&ranked);
-    let ksloc_csv = ksloc_csv();
+    let qualification = if options.suite == "sqlite_parity" {
+        Some(build_sqlite_qualification(
+            &summary,
+            &raw_records,
+            options.official_evidence.as_deref(),
+        )?)
+    } else {
+        None
+    };
     let report_block = render_report_block(
         &summary,
         &ranked,
         &raw_records,
         &options,
         evidence_versions.as_ref(),
+        qualification.as_ref(),
     );
-    let metrics_block = render_metrics_block(&options);
     let mut readme = fs::read_to_string(&options.readme)
         .with_context(|| format!("read README {}", options.readme.display()))?;
     readme = replace_block(&readme, REPORT_BEGIN, REPORT_END, &report_block);
-    if options.suite == "sqlite_parity" {
+    if let Some(qualification) = &qualification {
         readme = replace_block_if_present(
             &readme,
             BADGE_BEGIN,
             BADGE_END,
-            &render_sqlite_badge(&summary),
+            &render_sqlite_badge(qualification),
         );
     }
-    readme = replace_block(&readme, METRICS_BEGIN, METRICS_END, &metrics_block);
-    if let Some(comparison_path) = &options.jankurai_comparison
-        && comparison_path.exists()
-    {
-        let comparison_text = fs::read_to_string(comparison_path)
-            .with_context(|| format!("read jankurai comparison {}", comparison_path.display()))?;
-        readme = replace_block(
-            &readme,
-            JANKURAI_BREAKDOWN_BEGIN,
-            JANKURAI_BREAKDOWN_END,
-            &format!("\n{}\n", comparison_text.trim()),
-        );
+    for (begin, end) in RETIRED_BLOCKS {
+        readme = remove_block_if_present(&readme, begin, end);
     }
 
     let output_dir = &options.out_dir;
     let artifact_names = artifact_names_for_suite(&options.suite);
     let raw_out = output_dir.join(artifact_names.raw);
     let ranked_out = output_dir.join(artifact_names.ranked);
-    let ksloc_out = output_dir.join(artifact_names.ksloc);
     let summary_out = output_dir.join(artifact_names.summary);
     let manifest_out = output_dir.join(artifact_names.manifest);
     let provenance_out = output_dir.join(artifact_names.provenance);
@@ -225,7 +235,6 @@ pub fn generate(options: ReportOptions) -> Result<()> {
         (artifact_names.raw.to_owned(), sha256_hex(&raw_text)),
         (artifact_names.summary.to_owned(), sha256_hex(&summary_json)),
         (artifact_names.ranked.to_owned(), sha256_hex(&ranked_csv)),
-        (artifact_names.ksloc.to_owned(), sha256_hex(&ksloc_csv)),
         (options.readme.display().to_string(), sha256_hex(&readme)),
     ]);
     let command_line = normalized_command_line();
@@ -259,7 +268,6 @@ pub fn generate(options: ReportOptions) -> Result<()> {
             ("raw".to_owned(), raw_out.display().to_string()),
             ("summary".to_owned(), summary_out.display().to_string()),
             ("ranked".to_owned(), ranked_out.display().to_string()),
-            ("ksloc".to_owned(), ksloc_out.display().to_string()),
             (
                 "provenance".to_owned(),
                 provenance_out.display().to_string(),
@@ -272,7 +280,6 @@ pub fn generate(options: ReportOptions) -> Result<()> {
         raw: raw_text,
         summary: summary_json,
         ranked: ranked_csv,
-        ksloc: ksloc_csv,
         readme,
         manifest: manifest_json,
         provenance: provenance_json,
@@ -285,7 +292,6 @@ pub fn generate(options: ReportOptions) -> Result<()> {
             &raw_out,
             &summary_out,
             &ranked_out,
-            &ksloc_out,
             &manifest_out,
             &provenance_out,
             &options.readme,
@@ -299,17 +305,12 @@ pub fn generate(options: ReportOptions) -> Result<()> {
     fs::write(&raw_out, rendered.raw)?;
     fs::write(&summary_out, rendered.summary)?;
     fs::write(&ranked_out, rendered.ranked)?;
-    fs::write(&ksloc_out, rendered.ksloc.clone())?;
     fs::write(&manifest_out, rendered.manifest)?;
     fs::write(&provenance_out, rendered.provenance)?;
     fs::write(&options.readme, rendered.readme)?;
     fs::write(
         output_dir.join("raw.jsonl.sha256"),
         format!("{}\n", sha256_file(&raw_out)?),
-    )?;
-    fs::write(
-        output_dir.join("paper-data-loc-comparison.csv"),
-        rendered.ksloc,
     )?;
 
     for artifact in svg_artifacts {

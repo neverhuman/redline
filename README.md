@@ -10,7 +10,7 @@
 
 <p align="center">
   <!-- sqlite-parity-badge:begin -->
-  <a href="#sqlite-parity-status"><img src="https://img.shields.io/badge/sqlite%20parity-2445%2F2445%20(100%25)-brightgreen" alt="sqlite parity 2445/2445"></a><!-- sqlite-parity-badge:end -->
+  <a href="#sqlite-parity-status"><img src="https://img.shields.io/badge/SQLite%20SQL%2FCLI%20corpus-2445%2F2445%20%C2%B7%200%20failed%20%C2%B7%200%20skipped%20%C2%B7%203.53.1-brightgreen" alt="SQLite SQL/CLI corpus: 2445/2445 cases passed, 0 failed, 0 skipped against the sqlite3 3.53.1 shell; 6 declared deviations; not full SQLite compatibility"></a><!-- sqlite-parity-badge:end -->
   <a href="#whats-new-in-v400"><img src="https://img.shields.io/badge/corpus%20cases-2445-blue" alt="corpus cases"></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-Apache--2.0-blue" alt="license"></a>
   <a href="rust-toolchain.toml"><img src="https://img.shields.io/badge/rust-1.95-orange" alt="rust"></a>
@@ -202,21 +202,6 @@ redline-testing run --suite sqlite_parity \
 
 **85 / 100 — `pass` (advisory)** — unchanged from main; Phase 0-4 perf work introduced no code-health regressions. Full report at [`.jankurai/repo-score.md`](.jankurai/repo-score.md). Top dimensions: Ownership & navigation (100), Proof lanes & test routing (98), Contract & boundary integrity (88), Security & supply-chain posture (86).
 
-## Engine Metrics
-
-<!-- sqlite-parity-metrics:begin -->
-![SQLite parity score](assets/sqlite-jankurai-score.svg)
-
-![SQLite parity code shape](assets/sqlite-code-shape.svg)
-
-![SQLite parity median test performance](assets/sqlite-median-test-performance.svg)
-
-![SQLite parity KSLOC](assets/sqlite-parity-ksloc.svg)
-
-![SQLite parity Jankurai comparison](assets/sqlite-jankurai-comparison.svg)
-
-<!-- sqlite-parity-metrics:end -->
-
 ## Redline Mission
 
 RedlineDB keeps SQLite-shaped compatibility where that contract is valuable:
@@ -364,18 +349,34 @@ below is a dated historical measurement from
 re-rendered offline from that raw data as unfloored latency ratios.
 Current acceptance evidence is attached to the GitHub CI run.
 
+<a id="sqlite-parity-status"></a>
 <!-- sqlite-parity-report:begin -->
-**SQLite parity coverage:** **2445 / 2445** cases passed in CI. Failed: **0**. Skipped: **0**. Updated 2026-09-24.
+**SQLite SQL/CLI corpus** (redline-testing `sqlite_parity`, sqlite3 3.53.1 shell): **2445 / 2445** cases passed, **0** failed, **0** skipped. Updated 2026-09-24.
 
-**SQLite parity latency:** median per-case latency ratio **5.72x** (RedlineDB/SQLite, lower is better), p95 **56.85x**, worst **299.21x**, faster **43/2445**; **89** cases have a SQLite median under 3 ms (`below_resolution`).
+**Scope** (`sqlite_sql_cli`): each case runs one SQL or dot-command script through the `redlinedb` and `sqlite3` shells and compares their output and exit status. It does not test C ABI semantics, the database file format, or prepared-statement state.
+
+**Evidence:** qualified: official evidence run `daac7524c769` records the same 2445 total, 2445 passed, 0 failed, 0 skipped. Corpus `sqlite_parity` from redline-testing 1.0.1 (runner SHA-256 `b28c41d40009`), corpus SHA-256 unrecorded; oracle sqlite3 3.53.1 (binary SHA-256 `e99d817b62f1`), build stamp unrecorded.
+
+**Declared deviations (6):** these cases pass, but RedlineDB produces the compared output without the SQLite feature behind it.
+
+- `00093` CREATE_VIRTUAL_TABLE_FTS5_OPTIONAL: `USING fts5` creates an ordinary table, and `MATCH` is a case-insensitive substring or prefix test with no FTS5 query syntax or ranking.
+- `00094` FTS5_HIGHLIGHT_OPTIONAL: `highlight()` wraps the literal term the last `MATCH` used; there is no FTS5 tokenizer.
+- `00095` CREATE_VIRTUAL_TABLE_RTREE_OPTIONAL: `USING rtree` creates an ordinary table of the coordinate columns, with no R*Tree index.
+- `00096` DBSTAT_OPTIONAL: `USING dbstat` creates a one-row table so `count(*) > 0` is 1; it reports no page statistics.
+- `10405` PRAGMA_MODULE_LIST_FILTER: `pragma_module_list` prints SQLite's module names, including `fts3`, `fts4`, `fts3tokenize`, `fts4aux` and `fts5vocab`, which create no table.
+- `12023` PRAGMA_COMPILE_OPTIONS: `PRAGMA compile_options` prints a fixed copy of the reference build's option list, not how RedlineDB was built.
+
+**SQLite SQL/CLI corpus latency:** median per-case latency ratio **5.72x** (RedlineDB/SQLite, lower is better), p95 **56.85x**, worst **299.21x**, faster **43/2445**; **89** cases have a SQLite median under 3 ms (`below_resolution`).
 
 **Measurement boundary:** per-case CLI process wall time (`cli_case_wall_time`: process spawn, case execution and output collection; fixture writes untimed); lane=`run --suite all --workers auto --repetitions 3 --warmup 1 --tmp-root /dev/shm/redline-testing`, workers=128; not a tuned benchmark.
 
 **Benchmark metadata:** RedlineDB target version **redlinedb v4.1.0 (SQLite 3.45.1 compatibility)**, SQLite reference version **3.53.1 2026-05-05 10:34:17 c88b22011a54b4f6fbd149e9f8e4de77658ce58143a1af0e3785e4e6475127e9 (64-bit)**, redline-testing runner version **redline-testing 1.0.1**.
 
-![SQLite parity latency ratio plot](assets/sqlite-parity-latency-gap.svg)
+![SQLite SQL/CLI corpus latency ratio plot](assets/sqlite-parity-latency-gap.svg)
 
-![SQLite parity performance distribution](assets/sqlite-parity-performance-histogram.svg)
+![SQLite SQL/CLI corpus performance distribution](assets/sqlite-parity-performance-histogram.svg)
+
+![SQLite SQL/CLI corpus median ratio](assets/sqlite-median-test-performance.svg)
 
 <details id="sqlite-parity-ranked-table">
 <summary>Slowest 25 cases by latency ratio (every case is in ranked.csv)</summary>
@@ -470,22 +471,6 @@ the parser elimination benefit directly:
     --workers 10 --repetitions 3 --warmup 1 \
     --output target/perf/rql-phase1.jsonl
   ```
-
-## Jankurai Breakdown
-
-<!-- sqlite-jankurai-breakdown:begin -->
-
-{
-  "generated_by": "redline-testing jankurai-compare",
-  "redlinedb_score": 86,
-  "redlinedb_status": "unknown",
-  "score_delta": 64,
-  "sqlite_ref": "version-3.53.1",
-  "sqlite_score": 22,
-  "sqlite_status": "unknown",
-  "updated_date": "2026-09-24"
-}
-<!-- sqlite-jankurai-breakdown:end -->
 
 ## Architecture
 

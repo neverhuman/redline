@@ -1,0 +1,36 @@
+{
+  "schema_version": "redline-testing-sqlite-declared-deviations-v1",
+  "description": "sqlite_parity cases that pass on output RedlineDB produces without the SQLite feature behind it. The report lists every one that is in the run beside the pass count. A case leaves this list only in the commit that implements the feature.",
+  "deviations": [
+    {
+      "case_id": "00093",
+      "name": "CREATE_VIRTUAL_TABLE_FTS5_OPTIONAL",
+      "reason": "`USING fts5` creates an ordinary table, and `MATCH` is a case-insensitive substring or prefix test with no FTS5 query syntax or ranking."
+    },
+    {
+      "case_id": "00094",
+      "name": "FTS5_HIGHLIGHT_OPTIONAL",
+      "reason": "`highlight()` wraps the literal term the last `MATCH` used; there is no FTS5 tokenizer."
+    },
+    {
+      "case_id": "00095",
+      "name": "CREATE_VIRTUAL_TABLE_RTREE_OPTIONAL",
+      "reason": "`USING rtree` creates an ordinary table of the coordinate columns, with no R*Tree index."
+    },
+    {
+      "case_id": "00096",
+      "name": "DBSTAT_OPTIONAL",
+      "reason": "`USING dbstat` creates a one-row table so `count(*) > 0` is 1; it reports no page statistics."
+    },
+    {
+      "case_id": "10405",
+      "name": "PRAGMA_MODULE_LIST_FILTER",
+      "reason": "`pragma_module_list` prints SQLite's module names, including `fts3`, `fts4`, `fts3tokenize`, `fts4aux` and `fts5vocab`, which create no table."
+    },
+    {
+      "case_id": "12023",
+      "name": "PRAGMA_COMPILE_OPTIONS",
+      "reason": "`PRAGMA compile_options` prints a fixed copy of the reference build's option list, not how RedlineDB was built."
+    }
+  ]
+}

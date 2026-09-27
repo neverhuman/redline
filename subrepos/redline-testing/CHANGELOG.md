@@ -20,6 +20,26 @@ for the publish + attestation flow.
   and is sorted by ratio, slowest first; `summary.json` records
   `ranked_schema: redline-testing-ranked-v2` and
   `measurement_boundary: cli_case_wall_time`. A zero median is an error.
+- The `sqlite_parity` README badge and report block describe the measured
+  SQL/CLI corpus, not SQLite. The badge reads `SQLite SQL/CLI corpus` with
+  `passed/total · failed · skipped · oracle`; it is green only for a run with
+  official evidence, no failures and no skips, red with failures, orange with
+  skips, and grey `unqualified` without consistent official evidence. The
+  block names the corpus and oracle, states that C ABI semantics, the file
+  format and prepared-statement state are out of scope, and lists the
+  declared deviations from `metadata/sqlite_parity/declared-deviations.json`
+  that are in the run. It reads `corpus_sha256` and `oracle_build_stamp` from
+  the run evidence when present and prints `unrecorded` otherwise.
+
+### Removed
+
+- The placeholder report cards and their flags: `--ksloc-plot` (a hardcoded
+  `redline-testing, LOC 1`), `--jankurai-score-plot`, `--code-shape-plot` and
+  `--jankurai-comparison-plot` (case counts under Jankurai titles), and
+  `--jankurai-comparison` (a raw JSON dump). `report` no longer writes
+  `ksloc.csv` or `paper-data-loc-comparison.csv`, and it deletes the retired
+  `sqlite-parity-metrics` and `sqlite-jankurai-breakdown` README blocks
+  instead of appending them.
 
 ## [1.0.1] - 2026-05-26
 

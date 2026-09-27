@@ -19,7 +19,7 @@ The official lane builds SQLite 3.53.1 with `scripts/sqlite/build-reference.sh` 
 | Runner | `redline-testing` 1.0.1 |
 | Source file | `benchmark-results/sqlite-parity/latest/summary.json` |
 
-The README badge and the block under `sqlite-parity-report:begin` are generated from this summary. The same block records latency as per-case RedlineDB/SQLite ratios of CLI process wall time (lower is better): median **5.72x**, p95 **56.85x**, worst **299.21x**, and **43** of 2445 cases faster than SQLite. Those timings come from a 128-worker conformance run, not a tuned benchmark. A later bench moves those figures by regenerating the block. This book does not invent a new one.
+The README badge and the block under `sqlite-parity-report:begin` are generated from this summary and the official evidence behind it. Both name the corpus and the oracle, not SQLite as a whole: the badge reads `SQLite SQL/CLI corpus`, and it is green only for a run with official evidence, no failures and no skips. The same block records latency as per-case RedlineDB/SQLite ratios of CLI process wall time (lower is better): median **5.72x**, p95 **56.85x**, worst **299.21x**, and **43** of 2445 cases faster than SQLite. Those timings come from a 128-worker conformance run, not a tuned benchmark. A later bench moves those figures by regenerating the block. This book does not invent a new one.
 
 ## Virtual tables the corpus asks for
 
@@ -30,6 +30,8 @@ The README badge and the block under `sqlite-parity-report:begin` are generated 
 - `dbstat` is a one-row table, so `count(*) > 0` is `1`.
 
 An unknown module still fails with `CREATE VIRTUAL TABLE is not supported without module migration support`. `pragma_module_list` also prints `fts3`, `fts4`, `fts5vocab`, `dbpage`, and the pragma helpers. Those extra names do not create a table. This is not the SQLite C virtual-table API.
+
+The report lists cases 00093-00096 as declared deviations, with 10405 (`pragma_module_list`) and 12023 (`PRAGMA compile_options`, a fixed copy of the reference build's options). Each passes on output produced without the SQLite feature behind it. The list is `subrepos/redline-testing/metadata/sqlite_parity/declared-deviations.json`.
 
 ## What the passing surface feels like
 

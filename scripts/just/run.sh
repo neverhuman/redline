@@ -97,7 +97,6 @@ sqlite_parity_report_args() {
     --out-dir benchmark-results/sqlite-parity/latest
     --readme README.md
     --plot assets/sqlite-parity-latency-gap.svg
-    --ksloc-plot assets/sqlite-parity-ksloc.svg
     --performance-histogram-plot assets/sqlite-parity-performance-histogram.svg
     --median-test-performance-plot assets/sqlite-median-test-performance.svg
     --jankurai-score .jankurai/repo-score.json
@@ -106,14 +105,6 @@ sqlite_parity_report_args() {
     --expected-warmup "$sqlite_parity_warmup"
   )
   sqlite_parity_report_args_result+=(--official-evidence "$official_evidence")
-  if [ -f "$sqlite_jankurai_comparison_json" ]; then
-    sqlite_parity_report_args_result+=(
-      --jankurai-comparison "$sqlite_jankurai_comparison_json"
-      --jankurai-comparison-plot assets/sqlite-jankurai-comparison.svg
-      --jankurai-score-plot assets/sqlite-jankurai-score.svg
-      --code-shape-plot assets/sqlite-code-shape.svg
-    )
-  fi
 }
 
 redline_testing_tmp_root() {

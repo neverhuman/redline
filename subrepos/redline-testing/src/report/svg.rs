@@ -94,7 +94,7 @@ pub(crate) fn build_svg_artifacts(
         artifacts.push(SvgArtifact {
             path: path.clone(),
             contents: render_styled_svg(&SvgSpec {
-                title: format!("{suite_label} latency ratio histogram"),
+                title: format!("{suite_label} ratio histogram"),
                 subtitle: "Cases per RedlineDB/SQLite ratio band; CLI process wall time."
                     .to_owned(),
                 accent: suite_accent,
@@ -121,7 +121,7 @@ pub(crate) fn build_svg_artifacts(
         artifacts.push(SvgArtifact {
             path: path.clone(),
             contents: render_styled_svg(&SvgSpec {
-                title: format!("{suite_label} median test performance"),
+                title: format!("{suite_label} median ratio"),
                 subtitle:
                     "Median ratio = median of per-case ratios, not RedlineDB p50 / SQLite p50."
                         .to_owned(),
@@ -138,110 +138,6 @@ pub(crate) fn build_svg_artifacts(
                     SvgMetric {
                         label: "RedlineDB p50".to_owned(),
                         value: human_duration_ns(median_target_ns(ranked)),
-                    },
-                ],
-                bars: vec![],
-            }),
-        });
-    }
-
-    if let Some(path) = &options.ksloc_plot {
-        artifacts.push(SvgArtifact {
-            path: path.clone(),
-            contents: render_styled_svg(&SvgSpec {
-                title: format!("{suite_label} KSLOC"),
-                subtitle: "Committed report artifact for the paper-data LOC comparison.".to_owned(),
-                accent: suite_accent,
-                metrics: vec![
-                    SvgMetric {
-                        label: "Crate".to_owned(),
-                        value: "redline-testing".to_owned(),
-                    },
-                    SvgMetric {
-                        label: "LOC".to_owned(),
-                        value: "1".to_owned(),
-                    },
-                    SvgMetric {
-                        label: "Updated".to_owned(),
-                        value: options.updated_date.clone(),
-                    },
-                ],
-                bars: vec![],
-            }),
-        });
-    }
-
-    if let Some(path) = &options.jankurai_score_plot {
-        artifacts.push(SvgArtifact {
-            path: path.clone(),
-            contents: render_styled_svg(&SvgSpec {
-                title: format!("{suite_label} Jankurai score"),
-                subtitle: "Score evidence mirrored into a committed chart artifact.".to_owned(),
-                accent: "#8b5cf6",
-                metrics: vec![
-                    SvgMetric {
-                        label: "Suite".to_owned(),
-                        value: options.suite.clone(),
-                    },
-                    SvgMetric {
-                        label: "Cases".to_owned(),
-                        value: summary.total_cases.to_string(),
-                    },
-                    SvgMetric {
-                        label: "Passed".to_owned(),
-                        value: summary.passed_cases.to_string(),
-                    },
-                ],
-                bars: vec![],
-            }),
-        });
-    }
-
-    if let Some(path) = &options.code_shape_plot {
-        artifacts.push(SvgArtifact {
-            path: path.clone(),
-            contents: render_styled_svg(&SvgSpec {
-                title: format!("{suite_label} code shape"),
-                subtitle: "Static chart artifact for the Jankurai comparison block.".to_owned(),
-                accent: "#14b8a6",
-                metrics: vec![
-                    SvgMetric {
-                        label: "Suite".to_owned(),
-                        value: options.suite.clone(),
-                    },
-                    SvgMetric {
-                        label: "Ranked".to_owned(),
-                        value: ranked.len().to_string(),
-                    },
-                    SvgMetric {
-                        label: "Updated".to_owned(),
-                        value: options.updated_date.clone(),
-                    },
-                ],
-                bars: vec![],
-            }),
-        });
-    }
-
-    if let Some(path) = &options.jankurai_comparison_plot {
-        artifacts.push(SvgArtifact {
-            path: path.clone(),
-            contents: render_styled_svg(&SvgSpec {
-                title: format!("{suite_label} Jankurai comparison"),
-                subtitle: "Comparison chart for the committed Jankurai report block.".to_owned(),
-                accent: "#f59e0b",
-                metrics: vec![
-                    SvgMetric {
-                        label: "Suite".to_owned(),
-                        value: options.suite.clone(),
-                    },
-                    SvgMetric {
-                        label: "Total".to_owned(),
-                        value: summary.total_cases.to_string(),
-                    },
-                    SvgMetric {
-                        label: "Skipped".to_owned(),
-                        value: summary.skipped_cases.to_string(),
                     },
                 ],
                 bars: vec![],

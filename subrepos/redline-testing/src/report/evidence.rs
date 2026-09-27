@@ -196,7 +196,7 @@ fn raw_official_suite_hash(value: &serde_json::Value, suite: &str) -> Result<Str
         })
 }
 
-fn official_suite_entry<'a>(
+pub(crate) fn official_suite_entry<'a>(
     value: &'a serde_json::Value,
     suite: &str,
 ) -> Option<&'a serde_json::Value> {
@@ -259,7 +259,7 @@ pub(crate) fn suite_display_name(suite: &str) -> String {
     match suite {
         "memory" => "Memory".to_owned(),
         "beyond_sqlite" => "Beyond-SQLite".to_owned(),
-        "sqlite_parity" => "SQLite parity".to_owned(),
+        "sqlite_parity" => "SQLite SQL/CLI corpus".to_owned(),
         "rql_phase1" => "RQL phase 1".to_owned(),
         "all" => "All suites".to_owned(),
         other => other.replace('_', " "),
@@ -357,7 +357,6 @@ pub(crate) fn artifact_names_for_suite(suite: &str) -> ArtifactNames {
         "memory" => ArtifactNames {
             raw: "memory.raw.jsonl",
             ranked: "memory-ranked.csv",
-            ksloc: "memory-ksloc.csv",
             summary: "memory-summary.json",
             manifest: "memory-manifest.json",
             provenance: "memory-provenance.json",
@@ -365,7 +364,6 @@ pub(crate) fn artifact_names_for_suite(suite: &str) -> ArtifactNames {
         "rql_phase1" => ArtifactNames {
             raw: "rql_phase1.raw.jsonl",
             ranked: "rql-phase1-ranked.csv",
-            ksloc: "rql-phase1-ksloc.csv",
             summary: "rql-phase1-summary.json",
             manifest: "rql-phase1-manifest.json",
             provenance: "rql-phase1-provenance.json",
@@ -373,7 +371,6 @@ pub(crate) fn artifact_names_for_suite(suite: &str) -> ArtifactNames {
         "beyond_sqlite" => ArtifactNames {
             raw: "beyond_sqlite.raw.jsonl",
             ranked: "beyond-sqlite-ranked.csv",
-            ksloc: "beyond-sqlite-ksloc.csv",
             summary: "beyond-sqlite-summary.json",
             manifest: "beyond-sqlite-manifest.json",
             provenance: "beyond-sqlite-provenance.json",
@@ -381,7 +378,6 @@ pub(crate) fn artifact_names_for_suite(suite: &str) -> ArtifactNames {
         _ => ArtifactNames {
             raw: "raw.jsonl",
             ranked: "ranked.csv",
-            ksloc: "ksloc.csv",
             summary: "summary.json",
             manifest: "manifest.json",
             provenance: "provenance.json",

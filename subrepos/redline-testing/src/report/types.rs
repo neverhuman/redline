@@ -12,14 +12,9 @@ pub struct ReportOptions {
     pub out_dir: PathBuf,
     pub readme: PathBuf,
     pub plot: Option<PathBuf>,
-    pub ksloc_plot: Option<PathBuf>,
     pub performance_histogram_plot: Option<PathBuf>,
     pub median_test_performance_plot: Option<PathBuf>,
     pub jankurai_score: Option<PathBuf>,
-    pub jankurai_comparison: Option<PathBuf>,
-    pub jankurai_comparison_plot: Option<PathBuf>,
-    pub jankurai_score_plot: Option<PathBuf>,
-    pub code_shape_plot: Option<PathBuf>,
     pub updated_date: String,
     pub expected_repetitions: Option<usize>,
     pub expected_warmup: Option<usize>,
@@ -131,6 +126,58 @@ pub(crate) struct EvidenceVersions {
     pub(crate) lane: String,
 }
 
+/// What the SQLite badge and report block may claim about one `sqlite_parity`
+/// run: the corpus, the oracle and the counts, and whether validated official
+/// evidence stands behind them. It never describes SQLite compatibility beyond
+/// the SQL/CLI scripts in that corpus.
+#[derive(Debug, Clone)]
+pub(crate) struct SqliteQualification {
+    /// The surface the corpus exercises: SQL and dot commands through the CLI.
+    pub(crate) surface: &'static str,
+    /// The corpus name; its cases are compiled into the runner that ran it.
+    pub(crate) corpus_id: String,
+    /// Runner release and binary SHA-256 recorded by the run, which pin the
+    /// embedded corpus when the run recorded no corpus hash.
+    pub(crate) runner_version: Option<String>,
+    pub(crate) runner_sha256: Option<String>,
+    /// `corpus_sha256` from the run evidence, when the run recorded it.
+    pub(crate) corpus_sha256: Option<String>,
+    /// SQLite release of the reference shell, e.g. `3.53.1`.
+    pub(crate) oracle_version: Option<String>,
+    /// Reference build stamp (`oracle_build_stamp`: archive SHA3-256 and
+    /// compile flags from scripts/sqlite/build-reference.sh), when recorded.
+    pub(crate) oracle_build_id: Option<String>,
+    pub(crate) oracle_binary_sha256: Option<String>,
+    /// SHA-256 of the run's official-evidence.json.
+    pub(crate) run_id: Option<String>,
+    pub(crate) total: usize,
+    pub(crate) passed: usize,
+    pub(crate) failed: usize,
+    pub(crate) skipped: usize,
+    /// Declared deviations among the cases in this run.
+    pub(crate) deviation_count: usize,
+    pub(crate) declared_deviations: Vec<DeclaredDeviation>,
+    pub(crate) qualification: Qualification,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) enum Qualification {
+    /// Official evidence is present, bound to the raw results, and records
+    /// the same counts and a SQLite oracle version.
+    Qualified,
+    /// Why the counts are not backed by official evidence.
+    Unqualified(String),
+}
+
+/// A case that passes on output RedlineDB produces without the SQLite feature
+/// behind it (metadata/sqlite_parity/declared-deviations.json).
+#[derive(Debug, Clone, Deserialize)]
+pub(crate) struct DeclaredDeviation {
+    pub(crate) case_id: String,
+    pub(crate) name: String,
+    pub(crate) reason: String,
+}
+
 #[derive(Debug)]
 pub(crate) struct RankedCase {
     pub(crate) case_id: String,
@@ -183,7 +230,6 @@ pub(crate) struct SvgBar {
 pub(crate) struct ArtifactNames {
     pub(crate) raw: &'static str,
     pub(crate) ranked: &'static str,
-    pub(crate) ksloc: &'static str,
     pub(crate) summary: &'static str,
     pub(crate) manifest: &'static str,
     pub(crate) provenance: &'static str,
@@ -193,7 +239,6 @@ pub(crate) struct RenderedReport {
     pub(crate) raw: String,
     pub(crate) summary: String,
     pub(crate) ranked: String,
-    pub(crate) ksloc: String,
     pub(crate) readme: String,
     pub(crate) manifest: String,
     pub(crate) provenance: String,

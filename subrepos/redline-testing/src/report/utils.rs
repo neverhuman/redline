@@ -12,7 +12,6 @@ pub(crate) fn verify_existing(
     raw_out: &Path,
     summary_out: &Path,
     ranked_out: &Path,
-    ksloc_out: &Path,
     manifest_out: &Path,
     provenance_out: &Path,
     readme_out: &Path,
@@ -23,7 +22,6 @@ pub(crate) fn verify_existing(
     verify_text(raw_out, &rendered.raw)?;
     verify_text(summary_out, &rendered.summary)?;
     verify_text(ranked_out, &rendered.ranked)?;
-    verify_text(ksloc_out, &rendered.ksloc)?;
     verify_text(manifest_out, &rendered.manifest)?;
     verify_text(provenance_out, &rendered.provenance)?;
     verify_text(readme_out, &rendered.readme)?;

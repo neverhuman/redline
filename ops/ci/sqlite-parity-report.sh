@@ -30,10 +30,6 @@ report_paths=(
   .jankurai/score-history.csv
   assets/sqlite-parity-latency-gap.svg
   assets/sqlite-parity-performance-histogram.svg
-  assets/sqlite-parity-ksloc.svg
-  assets/sqlite-jankurai-comparison.svg
-  assets/sqlite-jankurai-score.svg
-  assets/sqlite-code-shape.svg
   assets/sqlite-median-test-performance.svg
   benchmark-results/sqlite-parity/latest
   paper/data/loc_comparison.csv

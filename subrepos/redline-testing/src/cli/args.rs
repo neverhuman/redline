@@ -83,21 +83,11 @@ pub(crate) struct ReportArgs {
     #[arg(long)]
     pub(crate) plot: Option<PathBuf>,
     #[arg(long)]
-    pub(crate) ksloc_plot: Option<PathBuf>,
-    #[arg(long)]
     pub(crate) performance_histogram_plot: Option<PathBuf>,
     #[arg(long)]
     pub(crate) median_test_performance_plot: Option<PathBuf>,
     #[arg(long)]
     pub(crate) jankurai_score: Option<PathBuf>,
-    #[arg(long)]
-    pub(crate) jankurai_comparison: Option<PathBuf>,
-    #[arg(long)]
-    pub(crate) jankurai_comparison_plot: Option<PathBuf>,
-    #[arg(long)]
-    pub(crate) jankurai_score_plot: Option<PathBuf>,
-    #[arg(long)]
-    pub(crate) code_shape_plot: Option<PathBuf>,
     #[arg(long)]
     pub(crate) updated_date: String,
     #[arg(long)]

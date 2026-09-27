@@ -139,11 +139,6 @@
       "command": "just score",
       "purpose": "ensure paper/figure assets stay routed and indexed"
     },
-    "assets/beyond-sqlite-feature-progress.svg": {
-      "command": "rtk just sqlite-parity-report-check",
-      "purpose": "verify the committed official evidence still feeds the beyond-SQLite feature progress chart and backlog status table",
-      "proof_lane": "sqlite-parity-report-check"
-    },
     "assets/sqlite-parity-latency-gap.svg": {
       "command": "rtk just sqlite-parity-report-check",
       "purpose": "verify the generated SQLite parity latency-gap chart stays in sync with the committed official evidence artifact",
@@ -152,16 +147,6 @@
     "assets/sqlite-parity-performance-histogram.svg": {
       "command": "rtk just sqlite-parity-report-check",
       "purpose": "verify the generated SQLite parity performance histogram stays in sync with the committed official evidence artifact",
-      "proof_lane": "sqlite-parity-report-check"
-    },
-    "assets/sqlite-parity-ksloc.svg": {
-      "command": "rtk just sqlite-parity-report-check",
-      "purpose": "verify the generated production KSLOC chart stays in sync with the committed official evidence artifact",
-      "proof_lane": "sqlite-parity-report-check"
-    },
-    "assets/sqlite-jankurai-comparison.svg": {
-      "command": "rtk just sqlite-parity-report-check",
-      "purpose": "verify the generated compact Jankurai comparison chart stays in sync with the committed official evidence artifact",
       "proof_lane": "sqlite-parity-report-check"
     },
     "CHANGELOG.md": {
@@ -446,16 +431,6 @@
       "command": "rtk just redline-testing-official",
       "purpose": "prove the Rust sqlite_parity runner stays compatible with the external redline-testing gate",
       "proof_lane": "redline-testing-official"
-    },
-    "assets/sqlite-jankurai-score.svg": {
-      "command": "rtk just sqlite-parity-report-check",
-      "purpose": "verify the generated compact Jankurai score chart stays in sync with the committed official evidence artifact",
-      "proof_lane": "sqlite-parity-report-check"
-    },
-    "assets/sqlite-code-shape.svg": {
-      "command": "rtk just sqlite-parity-report-check",
-      "purpose": "verify the generated compact code-shape chart stays in sync with the committed official evidence artifact",
-      "proof_lane": "sqlite-parity-report-check"
     },
     "assets/sqlite-median-test-performance.svg": {
       "command": "rtk just sqlite-parity-report-check",
