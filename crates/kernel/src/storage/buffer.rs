@@ -438,6 +438,8 @@ impl Inner {
     fn pin(&self, page_id: PageId) -> Result<PageGuard> {
         loop {
             if let Some(frame) = self.lookup_frame(page_id)? {
+                #[cfg(test)]
+                super::buffer_test_hooks::run_before_pin_lock_hook(page_id);
                 let mut state = frame
                     .state
                     .lock()
@@ -448,6 +450,8 @@ impl Inner {
                         .wait(state)
                         .map_err(|_| Error::CorruptPage("buffer frame wait poisoned"))?;
                 }
+                // A failed load, or an eviction since the lookup above, took
+                // this frame out of the pool. Look the page up again.
                 if state.load_failed {
                     drop(state);
                     continue;
@@ -807,13 +811,18 @@ impl Inner {
         {
             return Ok(false);
         }
-        let state = frame
+        let mut state = frame
             .state
             .lock()
             .map_err(|_| Error::CorruptPage("buffer frame poisoned"))?;
         if state.pin_count > 0 || state.dirty || state.write_in_progress || state.page.is_none() {
             return Ok(false);
         }
+        // A pin may already hold this frame from its shard lookup and be
+        // waiting for the frame lock. Mark the frame gone so that pin looks
+        // the page up again instead of pinning a frame the pool no longer
+        // holds, where no flush would ever see its changes.
+        state.load_failed = true;
         drop(state);
         shard.remove(&page_id);
         self.resident.fetch_sub(1, Ordering::Relaxed);

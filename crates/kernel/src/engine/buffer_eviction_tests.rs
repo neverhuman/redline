@@ -22,7 +22,7 @@ use crate::catalog::{
 use crate::format::{Lsn, PageGeneration, PageId, PageKind, RelId, RowId, TuplePtr};
 use crate::index::IndexRowRef;
 use crate::storage::buffer_test_hooks::{
-    fail_next_page_file_sync, page_file_syncs, set_before_page_write_hook,
+    fail_next_page_file_sync, page_file_syncs, set_before_page_write_hook, set_before_pin_lock_hook,
 };
 use crate::storage::{BufferPool, PageFile};
 use crate::txn::Isolation;
@@ -358,6 +358,40 @@ fn pool_after_an_eviction_write(temp: &TempDir) -> (Arc<BufferPool>, PageId) {
     let next = pool.allocate(PageKind::Heap, RelId(1)).unwrap();
     assert_eq!(pool.stats().evictions, 1);
     (Arc::clone(&pool), next.page_id())
+}
+
+#[test]
+fn buffer_pin_never_lands_on_a_frame_eviction_removed() {
+    // A pin finds a resident frame and only then locks it. If eviction
+    // removes the frame in between, the pin must load the page again, not
+    // pin the removed frame, where no flush would ever see its changes.
+    let temp = TempDir::new().unwrap();
+    let file = Arc::new(PageFile::create(temp.path().join("data.redline"), PAGE_SIZE).unwrap());
+    let pool = Arc::new(BufferPool::new(Arc::clone(&file), 2).unwrap());
+    let cold = pool.allocate(PageKind::Heap, RelId(1)).unwrap();
+    let cold_id = cold.page_id();
+    drop(cold);
+    pool.flush_page(cold_id, Lsn(u64::MAX)).unwrap();
+    let _held = pool.allocate(PageKind::Heap, RelId(1)).unwrap();
+
+    // The only page eviction may take is `cold`, which the pin below has
+    // already found.
+    let evicting = Arc::clone(&pool);
+    set_before_pin_lock_hook(Some(Box::new(move |_| {
+        drop(evicting.allocate(PageKind::Heap, RelId(1)).unwrap());
+    })));
+    let pinned = pool.pin(cold_id).unwrap();
+    set_before_pin_lock_hook(None);
+    assert!(pool.stats().evictions > 0, "the hook evicted nothing");
+    pinned.mark_dirty(Lsn(7)).unwrap();
+    drop(pinned);
+
+    pool.flush_all(Lsn(u64::MAX)).unwrap();
+    assert_eq!(
+        file.read_page(cold_id).unwrap().header().unwrap().page_lsn,
+        Lsn(7),
+        "a change made through the pin never reached the page file"
+    );
 }
 
 #[test]
