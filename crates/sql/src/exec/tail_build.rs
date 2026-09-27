@@ -1,6 +1,7 @@
 use std::sync::Arc;
 
 use super::*;
+use crate::planner::helpers::rowid_from_real;
 
 pub(crate) fn dml_target_rows(
     conn: &Connection,
@@ -497,15 +498,6 @@ pub(crate) fn choose_rowid_for_insert(
     } else {
         Ok(engine.reserve_row_id())
     }
-}
-
-/// A REAL names a rowid only when it is a whole number in `0..2^63`, the
-/// range of a non-negative i64. `v as u64` would otherwise turn 1e19 into
-/// a rowid no INTEGER key can equal, and saturate larger values.
-fn rowid_from_real(v: f64) -> Option<RowId> {
-    // 2^63. `i64::MAX as f64` rounds up to this value, so compare with `<`.
-    const I64_END: f64 = 9_223_372_036_854_775_808.0;
-    ((0.0..I64_END).contains(&v) && v.fract() == 0.0).then(|| RowId::new(v as u64))
 }
 
 pub(crate) fn choose_rowid_for_update(

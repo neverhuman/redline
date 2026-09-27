@@ -605,13 +605,46 @@ where
     if name.is_none() {
         return Ok(None);
     }
-    let value = eval_value(value_side, bindings)?;
-    match value {
+    match eval_value(value_side, bindings)? {
         SqlValue::Integer(v) if v >= 0 => Ok(Some(RowId::new(v as u64))),
-        SqlValue::Real(v) if v >= 0.0 && v.fract() == 0.0 => Ok(Some(RowId::new(v as u64))),
-        SqlValue::Null => Ok(None),
-        _ => Err(Error::DatatypeMismatch),
+        SqlValue::Real(v) => Ok(rowid_from_real(v)),
+        SqlValue::Text(text) => {
+            // The rowid has INTEGER affinity, so SQLite compares numeric text
+            // with it as the number. RedlineDB's WHERE evaluation does not
+            // apply comparison affinity yet, so a scan would silently find no
+            // row where SQLite finds one. Refuse the query instead of giving
+            // that answer. Text that names no rowid equals no row either way.
+            let numeric = crate::value::apply_affinity(
+                SqlValue::Text(text.clone()),
+                crate::value::Affinity::Numeric,
+            )
+            .unwrap_or(SqlValue::Text(text));
+            let names_a_rowid = match numeric {
+                SqlValue::Integer(v) => v >= 0,
+                SqlValue::Real(v) => rowid_from_real(v).is_some(),
+                _ => false,
+            };
+            if names_a_rowid {
+                return Err(Error::UnsupportedSql(
+                    "comparing a rowid with numeric text needs comparison affinity".to_owned(),
+                ));
+            }
+            Ok(None)
+        }
+        // A negative integer, a REAL that is not a whole rowid, NULL and a
+        // blob equal no rowid. The scan's WHERE evaluation then returns no
+        // row, as SQLite does.
+        SqlValue::Integer(_) | SqlValue::Null | SqlValue::Blob(_) => Ok(None),
     }
+}
+
+/// A REAL names a rowid only when it is a whole number in `0..2^63`, the
+/// range of a non-negative i64. `v as u64` would otherwise turn 1e19 into
+/// a rowid no INTEGER key can equal, and saturate larger values.
+pub(crate) fn rowid_from_real(v: f64) -> Option<RowId> {
+    // 2^63. `i64::MAX as f64` rounds up to this value, so compare with `<`.
+    const I64_END: f64 = 9_223_372_036_854_775_808.0;
+    ((0.0..I64_END).contains(&v) && v.fract() == 0.0).then(|| RowId::new(v as u64))
 }
 
 fn rowid_qualifier_matches_table(table: &TableDef, qualifiers: &[sqlparser::ast::Ident]) -> bool {
