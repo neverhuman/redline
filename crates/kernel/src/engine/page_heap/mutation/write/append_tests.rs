@@ -267,6 +267,40 @@ fn failed_append_leaves_a_reused_page_for_the_next_reinitialisation() {
 }
 
 #[test]
+fn overwrite_through_a_pointer_into_a_reused_page_is_rejected() {
+    // Vacuum reads a head, then overwrites it in place. When the page was
+    // reinitialised for reuse in between, the pointer's slot holds another
+    // row's tuple, which the overwrite must leave alone.
+    let (_dir, heap) = heap();
+    let old_row = RowId(1);
+    let old = append(
+        &heap,
+        old_row,
+        TupleVersion::new(old_row, RelId(1), TxId(1), b"aaaa".to_vec()),
+    );
+    heap.append_lanes[0].lock().unwrap().heap_page = None;
+    heap.push_reusable_page(PageKind::Heap, old.page_id)
+        .unwrap();
+    let new_row = RowId(2);
+    let new = append(
+        &heap,
+        new_row,
+        TupleVersion::new(new_row, RelId(1), TxId(1), b"bbbb".to_vec()),
+    );
+    assert_eq!((new.page_id, new.slot), (old.page_id, old.slot));
+    assert_ne!(new.generation, old.generation);
+
+    // Same encoded length as the tuple now in that slot.
+    let pruned = TupleVersion::new(old_row, RelId(1), TxId(1), b"aaaa".to_vec());
+    assert_eq!(
+        heap.overwrite_tuple(old, &pruned),
+        Err(Error::CorruptPage("tuple pointer generation mismatch"))
+    );
+    let kept = heap.read_tuple(new).unwrap();
+    assert_eq!((kept.row_id, kept.payload), (new_row, b"bbbb".to_vec()));
+}
+
+#[test]
 fn append_during_an_in_place_write_keeps_its_page_lsn() {
     let (_dir, heap) = heap();
     let heap = Arc::new(heap);

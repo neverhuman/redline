@@ -6,6 +6,9 @@ use crate::format::{PageId, PageKind, RelId, RowId, TuplePtr, TupleVersion, TxId
 use crate::txn::{Snapshot, TupleVisibility, TxState, UndoRecord};
 use crate::{Error, Result};
 
+/// A tuple pointer names a page generation that reuse has since replaced.
+pub(crate) const STALE_TUPLE_POINTER: &str = "tuple pointer generation mismatch";
+
 impl PageBackedHeap {
     pub fn get(
         &self,
@@ -232,7 +235,7 @@ impl PageBackedHeap {
         guard.with_page(|page| {
             let header = page.header()?;
             if header.generation != ptr.generation {
-                return Err(Error::CorruptPage("tuple pointer generation mismatch"));
+                return Err(Error::CorruptPage(STALE_TUPLE_POINTER));
             }
             TupleVersion::decode(page.cell(ptr.slot)?)
         })
@@ -256,6 +259,11 @@ impl PageBackedHeap {
             .ok_or(Error::CorruptPage("resident frame missing page"))?;
         #[cfg(test)]
         super::test_hooks::run_before_tuple_overwrite_hook(page);
+        // A page reinitialised for reuse since the caller read `ptr` holds
+        // other tuples; the same slot may be another row's.
+        if page.header()?.generation != ptr.generation {
+            return Err(Error::CorruptPage(STALE_TUPLE_POINTER));
+        }
         page.overwrite_cell(ptr.slot, &encoded)?;
         frame.dirty = true;
         Ok(())

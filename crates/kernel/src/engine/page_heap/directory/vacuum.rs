@@ -6,6 +6,7 @@ use crate::format::{
 use crate::txn::TxState;
 use crate::{Error, Result};
 
+use super::super::mutation::STALE_TUPLE_POINTER;
 use super::super::policy::{ActiveHeapPlacementPolicy, HeapPlacementPolicy, ReuseDecision};
 use super::super::{PageBackedHeap, VacuumStats};
 
@@ -72,7 +73,13 @@ impl PageBackedHeap {
         }
 
         current.undo_head = UndoPtr::ZERO;
-        self.overwrite_tuple(ptr, &current)?;
+        match self.overwrite_tuple(ptr, &current) {
+            Ok(()) => {}
+            // The page was reused after the head check above, so the row has
+            // moved on and this version is no longer its head.
+            Err(Error::CorruptPage(STALE_TUPLE_POINTER)) => return Ok(()),
+            Err(err) => return Err(err),
+        }
         stats.chains_pruned += 1;
         stats.undo_links_removed += removable;
         if self.page_has_no_heads(ptr.page_id)? {
