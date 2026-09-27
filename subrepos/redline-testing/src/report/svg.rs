@@ -1,7 +1,7 @@
 use super::evidence::{
-    histogram_bars, human_duration_ns, median_gap, median_sqlite_ns, median_target_ns,
-    suite_accent, suite_display_name, worst_gap,
+    human_duration_ns, median_sqlite_ns, median_target_ns, suite_accent, suite_display_name,
 };
+use super::ratio::{format_ratio, ratio_histogram_bars, summarize};
 use super::types::{
     RankedCase, RawRecord, ReportOptions, SummaryJson, SvgArtifact, SvgBar, SvgSpec,
 };
@@ -16,6 +16,7 @@ pub(crate) fn build_svg_artifacts(
 
     let suite_label = suite_display_name(&options.suite);
     let suite_accent = suite_accent(&options.suite);
+    let latency = summarize(ranked);
     let mut artifacts = Vec::new();
 
     if let Some(path) = &options.plot {
@@ -60,31 +61,27 @@ pub(crate) fn build_svg_artifacts(
             }
         } else {
             SvgSpec {
-                title: format!("{suite_label} latency gap"),
+                title: format!("{suite_label} latency ratio"),
                 subtitle: format!(
-                    "Updated {}; committed evidence bound to the report input.",
+                    "RedlineDB/SQLite per case, lower is better; CLI process wall time; {}.",
                     options.updated_date
                 ),
                 accent: suite_accent,
                 metrics: vec![
                     SvgMetric {
-                        label: "Median gap".to_owned(),
-                        value: format!("{:.2}%", median_gap(ranked)),
+                        label: "Median ratio".to_owned(),
+                        value: format_ratio(latency.median_ratio),
                     },
                     SvgMetric {
-                        label: "Worst gap".to_owned(),
-                        value: format!("{:.2}%", worst_gap(ranked)),
+                        label: "p95 ratio".to_owned(),
+                        value: format_ratio(latency.p95_ratio),
                     },
                     SvgMetric {
                         label: "Faster cases".to_owned(),
-                        value: ranked
-                            .iter()
-                            .filter(|case| case.improvement_pct > 0.0)
-                            .count()
-                            .to_string(),
+                        value: format!("{}/{}", latency.faster, latency.cases),
                     },
                 ],
-                bars: histogram_bars(ranked),
+                bars: ratio_histogram_bars(ranked),
             }
         };
         artifacts.push(SvgArtifact {
@@ -97,33 +94,25 @@ pub(crate) fn build_svg_artifacts(
         artifacts.push(SvgArtifact {
             path: path.clone(),
             contents: render_styled_svg(&SvgSpec {
-                title: format!("{suite_label} performance histogram"),
-                subtitle: "Distribution of ranked case improvements from official evidence."
+                title: format!("{suite_label} latency ratio histogram"),
+                subtitle: "Cases per RedlineDB/SQLite ratio band; CLI process wall time."
                     .to_owned(),
                 accent: suite_accent,
                 metrics: vec![
                     SvgMetric {
                         label: "Cases".to_owned(),
-                        value: ranked.len().to_string(),
+                        value: latency.cases.to_string(),
                     },
                     SvgMetric {
-                        label: "Positive".to_owned(),
-                        value: ranked
-                            .iter()
-                            .filter(|case| case.improvement_pct > 0.0)
-                            .count()
-                            .to_string(),
+                        label: "Faster (<1x)".to_owned(),
+                        value: latency.faster.to_string(),
                     },
                     SvgMetric {
-                        label: "Negative".to_owned(),
-                        value: ranked
-                            .iter()
-                            .filter(|case| case.improvement_pct <= 0.0)
-                            .count()
-                            .to_string(),
+                        label: "SQLite under 3 ms".to_owned(),
+                        value: latency.below_resolution.to_string(),
                     },
                 ],
-                bars: histogram_bars(ranked),
+                bars: ratio_histogram_bars(ranked),
             }),
         });
     }
@@ -133,20 +122,22 @@ pub(crate) fn build_svg_artifacts(
             path: path.clone(),
             contents: render_styled_svg(&SvgSpec {
                 title: format!("{suite_label} median test performance"),
-                subtitle: "Median SQLite and target timings from the ranked sample set.".to_owned(),
+                subtitle:
+                    "Median ratio = median of per-case ratios, not RedlineDB p50 / SQLite p50."
+                        .to_owned(),
                 accent: suite_accent,
                 metrics: vec![
                     SvgMetric {
-                        label: "SQLite median".to_owned(),
+                        label: "Median ratio".to_owned(),
+                        value: format_ratio(latency.median_ratio),
+                    },
+                    SvgMetric {
+                        label: "SQLite p50".to_owned(),
                         value: human_duration_ns(median_sqlite_ns(ranked)),
                     },
                     SvgMetric {
-                        label: "Target median".to_owned(),
+                        label: "RedlineDB p50".to_owned(),
                         value: human_duration_ns(median_target_ns(ranked)),
-                    },
-                    SvgMetric {
-                        label: "Median gap".to_owned(),
-                        value: format!("{:.2}%", median_gap(ranked)),
                     },
                 ],
                 bars: vec![],

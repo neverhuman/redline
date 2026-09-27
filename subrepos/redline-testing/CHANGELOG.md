@@ -14,6 +14,12 @@ for the publish + attestation flow.
   `redline-testing-v1.0.1-jain.1`; the existing `.0` tag remains unchanged.
 - Removed the remaining Python CI helper in favor of the tested Rust xtask
   implementation.
+- Latency is reported as the per-case RedlineDB/SQLite ratio with no 3 ms
+  SQLite reference floor, in both `run` and `report`. `ranked.csv` replaces
+  `improvement_pct` with `latency_ratio`, `gap_pct_raw` and `below_resolution`
+  and is sorted by ratio, slowest first; `summary.json` records
+  `ranked_schema: redline-testing-ranked-v2` and
+  `measurement_boundary: cli_case_wall_time`. A zero median is an error.
 
 ## [1.0.1] - 2026-05-26
 

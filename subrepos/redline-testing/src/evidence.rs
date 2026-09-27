@@ -5,10 +5,14 @@ use std::process::Command;
 use std::time::{SystemTime, UNIX_EPOCH};
 
 use anyhow::{Context, Result};
-use serde::{Deserialize, Serialize};
+use serde::Serialize;
 use sha2::{Digest, Sha256};
 
 use crate::sqlite_parity::RunSummary;
+use crate::{latency, report};
+
+#[cfg(test)]
+mod tests;
 
 #[derive(Debug)]
 pub struct EvidenceConfig {
@@ -131,38 +135,6 @@ struct OfficialEvidenceJson {
     tmp_root: String,
 }
 
-#[derive(Debug, Deserialize)]
-struct RawRecord {
-    case_id: String,
-    name: String,
-    #[serde(default)]
-    case_file: String,
-    priority: String,
-    profile: String,
-    category: String,
-    #[serde(default)]
-    sample_role: String,
-    #[serde(default)]
-    repetition_index: Option<usize>,
-    status: String,
-    reference_elapsed_ns: u128,
-    target_elapsed_ns: u128,
-}
-
-#[derive(Debug)]
-struct RankedCase {
-    case_id: String,
-    name: String,
-    case_file: String,
-    priority: String,
-    profile: String,
-    category: String,
-    sqlite_median_ns: u128,
-    redline_median_ns: u128,
-    improvement_pct: f64,
-    samples: usize,
-}
-
 #[derive(Debug, Serialize)]
 struct SummaryJson {
     suite: String,
@@ -176,6 +148,8 @@ struct SummaryJson {
     ranked_cases: usize,
     repetitions: usize,
     warmup: usize,
+    measurement_boundary: String,
+    ranked_schema: String,
 }
 
 #[derive(Debug, Serialize)]
@@ -224,8 +198,8 @@ struct ProvenanceJson {
 pub fn write_sqlite_parity_evidence(config: EvidenceConfig) -> Result<()> {
     let raw_text = fs::read_to_string(&config.output)
         .with_context(|| format!("read raw output {}", config.output.display()))?;
-    let raw_records = parse_raw_records(&raw_text)?;
-    let ranked = ranked_cases(&raw_records);
+    let raw_records = report::parse_raw_records(&raw_text)?;
+    let ranked = report::rank_cases(&raw_records)?;
     let output_dir = config
         .output
         .parent()
@@ -245,7 +219,7 @@ pub fn write_sqlite_parity_evidence(config: EvidenceConfig) -> Result<()> {
         elapsed_ns: config.summary.elapsed.as_nanos(),
         measured_samples: raw_records
             .iter()
-            .filter(|record| is_measured(record))
+            .filter(|record| report::is_measured(record))
             .count(),
         warmup_samples: raw_records
             .iter()
@@ -254,8 +228,10 @@ pub fn write_sqlite_parity_evidence(config: EvidenceConfig) -> Result<()> {
         ranked_cases: ranked.len(),
         repetitions: config.repetitions,
         warmup: config.warmup,
+        measurement_boundary: latency::MEASUREMENT_BOUNDARY.to_owned(),
+        ranked_schema: latency::RANKED_CSV_SCHEMA.to_owned(),
     })? + "\n";
-    let ranked_csv = ranked_csv(&ranked);
+    let ranked_csv = report::ranked_csv(&ranked);
     let manifest_json = serde_json::to_string_pretty(&ManifestJson {
         schema_version: "redline-testing-manifest-v1".to_owned(),
         suite: config.suite.clone(),
@@ -480,102 +456,6 @@ pub fn now_unix_ms() -> u128 {
         .duration_since(UNIX_EPOCH)
         .map(|duration| duration.as_millis())
         .unwrap_or(0)
-}
-
-fn parse_raw_records(raw_text: &str) -> Result<Vec<RawRecord>> {
-    let mut records = Vec::new();
-    for (index, line) in raw_text.lines().enumerate() {
-        if line.trim().is_empty() {
-            continue;
-        }
-        records.push(
-            serde_json::from_str(line)
-                .with_context(|| format!("parse raw JSONL line {}", index.saturating_add(1)))?,
-        );
-    }
-    Ok(records)
-}
-
-fn ranked_cases(records: &[RawRecord]) -> Vec<RankedCase> {
-    let mut grouped = BTreeMap::<String, Vec<&RawRecord>>::new();
-    for record in records.iter().filter(|record| is_measured(record)) {
-        grouped
-            .entry(record.case_id.clone())
-            .or_default()
-            .push(record);
-    }
-    let mut ranked = Vec::new();
-    for (case_id, records) in grouped {
-        let first = records[0];
-        let sqlite_median_ns = median(records.iter().map(|record| record.reference_elapsed_ns));
-        let redline_median_ns = median(records.iter().map(|record| record.target_elapsed_ns));
-        ranked.push(RankedCase {
-            case_id,
-            name: first.name.clone(),
-            case_file: first.case_file.clone(),
-            priority: first.priority.clone(),
-            profile: first.profile.clone(),
-            category: first.category.clone(),
-            sqlite_median_ns,
-            redline_median_ns,
-            improvement_pct: improvement_pct(sqlite_median_ns, redline_median_ns),
-            samples: records.len(),
-        });
-    }
-    ranked.sort_by(|left, right| {
-        left.improvement_pct
-            .total_cmp(&right.improvement_pct)
-            .then_with(|| left.case_id.cmp(&right.case_id))
-    });
-    ranked
-}
-
-fn ranked_csv(ranked: &[RankedCase]) -> String {
-    let mut out = String::from(
-        "rank,case_id,name,case_file,priority,profile,category,sqlite_median_ns,redline_median_ns,improvement_pct,samples\n",
-    );
-    for (index, row) in ranked.iter().enumerate() {
-        out.push_str(&format!(
-            "{},{},{},{},{},{},{},{},{},{:.6},{}\n",
-            index.saturating_add(1),
-            row.case_id,
-            csv(&row.name),
-            csv(&row.case_file),
-            row.priority,
-            row.profile,
-            csv(&row.category),
-            row.sqlite_median_ns,
-            row.redline_median_ns,
-            row.improvement_pct,
-            row.samples
-        ));
-    }
-    out
-}
-
-fn is_measured(record: &RawRecord) -> bool {
-    record.status == "passed"
-        && (record.repetition_index.is_some() || record.sample_role.starts_with("measured"))
-}
-
-fn median(values: impl Iterator<Item = u128>) -> u128 {
-    let mut values = values.collect::<Vec<_>>();
-    values.sort_unstable();
-    values[values.len() / 2]
-}
-
-fn improvement_pct(sqlite_median_ns: u128, redline_median_ns: u128) -> f64 {
-    let effective_sqlite_ns = sqlite_median_ns.max(3_000_000);
-    (effective_sqlite_ns as f64 - redline_median_ns as f64) / effective_sqlite_ns.max(1) as f64
-        * 100.0
-}
-
-fn csv(value: &str) -> String {
-    if value.contains([',', '"', '\n']) {
-        format!("\"{}\"", value.replace('"', "\"\""))
-    } else {
-        value.to_owned()
-    }
 }
 
 fn env_sha(name: &str) -> Option<String> {

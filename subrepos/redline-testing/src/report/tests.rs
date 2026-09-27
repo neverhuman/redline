@@ -375,6 +375,8 @@ fn beyond_sqlite_plot_uses_feature_progress_copy() {
         ranked_cases: 2,
         repetitions: 1,
         warmup: 0,
+        measurement_boundary: "cli_case_wall_time".to_owned(),
+        ranked_schema: "redline-testing-ranked-v2".to_owned(),
     };
     let artifacts = build_svg_artifacts(
         &summary,

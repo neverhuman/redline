@@ -9,5 +9,7 @@
   "warmup_samples": 2445,
   "ranked_cases": 2445,
   "repetitions": 3,
-  "warmup": 1
+  "warmup": 1,
+  "measurement_boundary": "cli_case_wall_time",
+  "ranked_schema": "redline-testing-ranked-v2"
 }

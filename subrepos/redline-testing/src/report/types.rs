@@ -85,6 +85,10 @@ pub(crate) struct SummaryJson {
     pub(crate) ranked_cases: usize,
     pub(crate) repetitions: usize,
     pub(crate) warmup: usize,
+    /// What one latency sample times (`latency::MEASUREMENT_BOUNDARY`).
+    pub(crate) measurement_boundary: String,
+    /// Column layout of ranked.csv (`latency::RANKED_CSV_SCHEMA`).
+    pub(crate) ranked_schema: String,
 }
 
 #[derive(Debug, Serialize)]
@@ -123,6 +127,8 @@ pub(crate) struct EvidenceVersions {
     pub(crate) runner_version: String,
     pub(crate) target_version: String,
     pub(crate) sqlite_version: String,
+    /// How the timed run was launched, e.g. "`run --suite all --workers auto`, workers=128".
+    pub(crate) lane: String,
 }
 
 #[derive(Debug)]
@@ -135,7 +141,14 @@ pub(crate) struct RankedCase {
     pub(crate) category: String,
     pub(crate) sqlite_median_ns: u128,
     pub(crate) redline_median_ns: u128,
-    pub(crate) improvement_pct: f64,
+    /// RedlineDB median / SQLite median; lower is better.
+    pub(crate) latency_ratio: f64,
+    /// `(sqlite - redline) / sqlite * 100` with no reference floor.
+    pub(crate) gap_pct: f64,
+    /// The SQLite median is under `latency::RESOLUTION_NS`.
+    pub(crate) below_resolution: bool,
+    /// RedlineDB's median is strictly lower than SQLite's.
+    pub(crate) faster: bool,
     pub(crate) samples: usize,
 }
 

@@ -3,7 +3,7 @@ use std::path::Path;
 
 use anyhow::{Context, Result, bail};
 
-use super::types::{ArtifactNames, EvidenceVersions, RankedCase, RawRecord, SvgBar};
+use super::types::{ArtifactNames, EvidenceVersions, RankedCase, RawRecord};
 use super::utils::median_u64;
 
 pub(crate) fn validate_official_evidence_binding(
@@ -70,24 +70,17 @@ fn official_evidence_versions_from_value(
             runner_version: evidence_version(value, official_evidence, "runner")?,
             target_version: evidence_version(value, official_evidence, "target")?,
             sqlite_version: evidence_version(value, official_evidence, "sqlite")?,
+            lane: evidence_lane(value),
         }),
-        "redline-testing-official-evidence-processed-v1" => Ok(EvidenceVersions {
-            runner_version: evidence_version(
-                value.get("official_evidence").unwrap_or(value),
-                official_evidence,
-                "runner",
-            )?,
-            target_version: evidence_version(
-                value.get("official_evidence").unwrap_or(value),
-                official_evidence,
-                "target",
-            )?,
-            sqlite_version: evidence_version(
-                value.get("official_evidence").unwrap_or(value),
-                official_evidence,
-                "sqlite",
-            )?,
-        }),
+        "redline-testing-official-evidence-processed-v1" => {
+            let run = value.get("official_evidence").unwrap_or(value);
+            Ok(EvidenceVersions {
+                runner_version: evidence_version(run, official_evidence, "runner")?,
+                target_version: evidence_version(run, official_evidence, "target")?,
+                sqlite_version: evidence_version(run, official_evidence, "sqlite")?,
+                lane: evidence_lane(run),
+            })
+        }
         other => bail!(
             "unsupported official evidence schema_version {:?} in {}",
             other,
@@ -113,6 +106,53 @@ fn evidence_version(
                 official_evidence.display()
             )
         })
+}
+
+/// The timed run's launch parameters, as recorded by the runner: the
+/// subcommand, the flags that shape timing, and the resolved worker count.
+pub(crate) fn evidence_lane(run: &serde_json::Value) -> String {
+    let args = run
+        .get("command_line")
+        .and_then(|value| value.as_array())
+        .map(|args| {
+            args.iter()
+                .filter_map(|arg| arg.as_str())
+                .collect::<Vec<_>>()
+        })
+        .unwrap_or_default();
+    let mut parts = args
+        .get(1)
+        .map(|subcommand| vec![(*subcommand).to_owned()])
+        .unwrap_or_default();
+    for flag in [
+        "--suite",
+        "--workers",
+        "--repetitions",
+        "--warmup",
+        "--tmp-root",
+    ] {
+        let inline = format!("{flag}=");
+        let value = args.iter().enumerate().find_map(|(index, arg)| {
+            if *arg == flag {
+                args.get(index + 1).copied()
+            } else {
+                arg.strip_prefix(inline.as_str())
+            }
+        });
+        if let Some(value) = value {
+            parts.push(format!("{flag} {value}"));
+        }
+    }
+    let workers = match run.get("workers") {
+        Some(serde_json::Value::String(workers)) => workers.clone(),
+        Some(serde_json::Value::Number(workers)) => workers.to_string(),
+        _ => "unrecorded".to_owned(),
+    };
+    if parts.is_empty() {
+        format!("unrecorded command, workers={workers}")
+    } else {
+        format!("`{}`, workers={workers}", parts.join(" "))
+    }
 }
 
 fn processed_suite_raw_hash(value: &serde_json::Value, suite: &str) -> Result<String> {
@@ -286,26 +326,6 @@ pub(crate) fn memory_peak_summary(records: &[RawRecord]) -> Option<String> {
     ))
 }
 
-pub(crate) fn median_gap(ranked: &[RankedCase]) -> f64 {
-    if ranked.is_empty() {
-        return 0.0;
-    }
-    let mut values = ranked
-        .iter()
-        .map(|case| case.improvement_pct)
-        .collect::<Vec<_>>();
-    values.sort_by(|left, right| left.total_cmp(right));
-    values[values.len() / 2]
-}
-
-pub(crate) fn worst_gap(ranked: &[RankedCase]) -> f64 {
-    ranked
-        .iter()
-        .map(|case| case.improvement_pct)
-        .min_by(|left, right| left.total_cmp(right))
-        .unwrap_or(0.0)
-}
-
 pub(crate) fn median_sqlite_ns(ranked: &[RankedCase]) -> u128 {
     if ranked.is_empty() {
         return 0;
@@ -330,44 +350,6 @@ pub(crate) fn human_duration_ns(value: u128) -> String {
     } else {
         format!("{value}ns")
     }
-}
-
-pub(crate) fn histogram_bars(ranked: &[RankedCase]) -> Vec<SvgBar> {
-    let buckets = [
-        ("<-100%", 0.0, 0usize),
-        ("-100..-50", 0.0, 0usize),
-        ("-50..0", 0.0, 0usize),
-        ("0..50", 0.0, 0usize),
-        (">=50", 0.0, 0usize),
-    ];
-    let mut counts = buckets
-        .iter()
-        .map(|(label, value, count)| ((*label).to_owned(), *value, *count))
-        .collect::<Vec<_>>();
-    for case in ranked {
-        let pct = case.improvement_pct;
-        let bucket_index = if pct < -100.0 {
-            0
-        } else if pct < -50.0 {
-            1
-        } else if pct < 0.0 {
-            2
-        } else if pct < 50.0 {
-            3
-        } else {
-            4
-        };
-        counts[bucket_index].2 = counts[bucket_index].2.saturating_add(1);
-        counts[bucket_index].1 = counts[bucket_index].2 as f64;
-    }
-    counts
-        .into_iter()
-        .map(|(label, value, count)| SvgBar {
-            label,
-            value,
-            value_label: count.to_string(),
-        })
-        .collect()
 }
 
 pub(crate) fn artifact_names_for_suite(suite: &str) -> ArtifactNames {

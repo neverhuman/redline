@@ -10,8 +10,7 @@
 
 <p align="center">
   <!-- sqlite-parity-badge:begin -->
-  <a href="#sqlite-parity-status"><img src="https://img.shields.io/badge/sqlite%20parity-2445%2F2445%20(100%25)-brightgreen" alt="sqlite parity 2445/2445"></a>
-  <!-- sqlite-parity-badge:end -->
+  <a href="#sqlite-parity-status"><img src="https://img.shields.io/badge/sqlite%20parity-2445%2F2445%20(100%25)-brightgreen" alt="sqlite parity 2445/2445"></a><!-- sqlite-parity-badge:end -->
   <a href="#whats-new-in-v400"><img src="https://img.shields.io/badge/corpus%20cases-2445-blue" alt="corpus cases"></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-Apache--2.0-blue" alt="license"></a>
   <a href="rust-toolchain.toml"><img src="https://img.shields.io/badge/rust-1.95-orange" alt="rust"></a>
@@ -360,50 +359,54 @@ The official parity lane builds `subrepos/redline-testing` and the engine from
 this same checkout. Its processed evidence binds raw results to the runner's
 SHA-256 and enforces the declared suites and compatibility baselines. The report
 below is a dated historical measurement from
-`benchmark-results/sqlite-parity/latest/`; its original provenance is preserved.
+`benchmark-results/sqlite-parity/latest/`. Its raw data and run evidence
+(`official-evidence.processed.json`) are unchanged; the report files were
+re-rendered offline from that raw data as unfloored latency ratios.
 Current acceptance evidence is attached to the GitHub CI run.
 
 <!-- sqlite-parity-report:begin -->
 **SQLite parity coverage:** **2445 / 2445** cases passed in CI. Failed: **0**. Skipped: **0**. Updated 2026-09-24.
 
-**SQLite parity latency:** median gap **-470.97%**, worst gap **-29821.13%**, faster cases **43**.
+**SQLite parity latency:** median per-case latency ratio **5.72x** (RedlineDB/SQLite, lower is better), p95 **56.85x**, worst **299.21x**, faster **43/2445**; **89** cases have a SQLite median under 3 ms (`below_resolution`).
+
+**Measurement boundary:** per-case CLI process wall time (`cli_case_wall_time`: process spawn, case execution and output collection; fixture writes untimed); lane=`run --suite all --workers auto --repetitions 3 --warmup 1 --tmp-root /dev/shm/redline-testing`, workers=128; not a tuned benchmark.
 
 **Benchmark metadata:** RedlineDB target version **redlinedb v4.1.0 (SQLite 3.45.1 compatibility)**, SQLite reference version **3.53.1 2026-05-05 10:34:17 c88b22011a54b4f6fbd149e9f8e4de77658ce58143a1af0e3785e4e6475127e9 (64-bit)**, redline-testing runner version **redline-testing 1.0.1**.
 
-![SQLite parity latency improvement plot](assets/sqlite-parity-latency-gap.svg)
+![SQLite parity latency ratio plot](assets/sqlite-parity-latency-gap.svg)
 
 ![SQLite parity performance distribution](assets/sqlite-parity-performance-histogram.svg)
 
 <details id="sqlite-parity-ranked-table">
-<summary>Full ranked latency table</summary>
+<summary>Slowest 25 cases by latency ratio (every case is in ranked.csv)</summary>
 
-| Rank | Case | Priority | Profile | Category | SQLite median ns | RedlineDB median ns | Improvement |
-| ---: | --- | --- | --- | --- | ---: | ---: | ---: |
-| 1 | PARTIAL_INDEX | P0 | memory | SQL_INDEX | 3047144 | 911739772 | -29821.13% |
-| 2 | CHECK_CONSTRAINT_FAILURE | P0 | memory | SQL_CONSTRAINTS_NEGATIVE | 3456378 | 908472310 | -26183.94% |
-| 3 | TEMP_TABLE_TEMP_SCHEMA | P0 | memory | SQL_TEMP | 3785040 | 992305133 | -26116.50% |
-| 4 | SUBQUERIES_EXISTS_IN | P0 | memory | SQL_SELECT | 3742951 | 917873034 | -24422.71% |
-| 5 | SCHEMA_SQLITE_SCHEMA | P0 | memory | SQL_SCHEMA | 4113482 | 999957150 | -24209.26% |
-| 6 | WITH_MATERIALIZED_HINTS | P0 | memory | SQL_CTE | 2886891 | 687605831 | -22820.19% |
-| 7 | INDEXED_BY | P0 | memory | SQL_INDEX | 2879487 | 685922665 | -22764.09% |
-| 8 | DOT_PRINT | P0 | memory | CLI_DOT_COMMAND | 2361768 | 685558227 | -22751.94% |
-| 9 | DELETE_BASIC | P0 | memory | SQL_DELETE | 3336762 | 722818715 | -21562.28% |
-| 10 | DOT_SCHEMA_TABLES_INDEXES | P0 | memory | CLI_DOT_COMMAND | 3189524 | 660208320 | -20599.27% |
-| 11 | INSTEAD_OF_TRIGGER_ON_VIEW | P0 | memory | SQL_TRIGGER | 2916608 | 612825241 | -20327.51% |
-| 12 | WINDOW_NAMED_WINDOW | P0 | memory | SQL_WINDOW | 6223634 | 1265723631 | -20237.37% |
-| 13 | TABLE_CONSTRAINTS_SUCCESS | P0 | memory | SQL_CONSTRAINTS | 2682785 | 607672453 | -20155.75% |
-| 14 | DOT_DUMP | P0 | memory | CLI_DOT_COMMAND | 2839993 | 597795027 | -19826.50% |
-| 15 | CREATE_VIRTUAL_TABLE_RTREE_OPTIONAL | P2 | memory | SQL_VIRTUAL_TABLE_OPTIONAL | 3203330 | 632614508 | -19648.65% |
-| 16 | LITERALS_AND_TYPEOF | P0 | memory | SQL_EXPRESSIONS | 3491035 | 679937354 | -19376.67% |
-| 17 | PRAGMA_USER_VERSION | P0 | memory | SQL_PRAGMA | 2757767 | 579729371 | -19224.31% |
-| 18 | CORE_FORMAT_QUOTE_HEX | P0 | memory | SQL_FUNCTIONS | 3306686 | 634109968 | -19076.60% |
-| 19 | DOT_EXPLAIN | P0 | memory | CLI_DOT_COMMAND | 3259356 | 622250031 | -18991.20% |
-| 20 | DOT_TIMER | P3 | memory | CLI_DOT_COMMAND_DIAGNOSTIC | 3434697 | 650431214 | -18837.08% |
-| 21 | SELECT_CORE_EXPRESSIONS | P0 | memory | SQL_SELECT | 2748159 | 567483744 | -18816.12% |
-| 22 | CLI_REGEXP_OPTIONAL | P2 | memory | CLI_EXTENSION_OPTIONAL | 2823471 | 562118686 | -18637.29% |
-| 23 | EXPRESSION_INDEX | P0 | memory | SQL_INDEX | 4164008 | 771148884 | -18419.39% |
-| 24 | UPDATE_RETURNING | P0 | memory | SQL_UPDATE | 2876762 | 551274229 | -18275.81% |
-| 25 | GROUP_BY_HAVING | P0 | memory | SQL_AGGREGATE | 2376285 | 550938004 | -18264.60% |
+| Rank | Case | Priority | Profile | Category | SQLite median ns | RedlineDB median ns | Ratio | Gap |
+| ---: | --- | --- | --- | --- | ---: | ---: | ---: | ---: |
+| 1 | PARTIAL_INDEX | P0 | memory | SQL_INDEX | 3047144 | 911739772 | 299.21x | -29821.13% |
+| 2 | DOT_PRINT | P0 | memory | CLI_DOT_COMMAND | 2361768 | 685558227 | 290.27x | -28927.33% |
+| 3 | CHECK_CONSTRAINT_FAILURE | P0 | memory | SQL_CONSTRAINTS_NEGATIVE | 3456378 | 908472310 | 262.84x | -26183.94% |
+| 4 | TEMP_TABLE_TEMP_SCHEMA | P0 | memory | SQL_TEMP | 3785040 | 992305133 | 262.17x | -26116.50% |
+| 5 | SUBQUERIES_EXISTS_IN | P0 | memory | SQL_SELECT | 3742951 | 917873034 | 245.23x | -24422.71% |
+| 6 | SCHEMA_SQLITE_SCHEMA | P0 | memory | SQL_SCHEMA | 4113482 | 999957150 | 243.09x | -24209.26% |
+| 7 | INDEXED_BY | P0 | memory | SQL_INDEX | 2879487 | 685922665 | 238.21x | -23721.00% |
+| 8 | WITH_MATERIALIZED_HINTS | P0 | memory | SQL_CTE | 2886891 | 687605831 | 238.18x | -23718.21% |
+| 9 | GROUP_BY_HAVING | P0 | memory | SQL_AGGREGATE | 2376285 | 550938004 | 231.85x | -23084.85% |
+| 10 | TABLE_CONSTRAINTS_SUCCESS | P0 | memory | SQL_CONSTRAINTS | 2682785 | 607672453 | 226.51x | -22550.81% |
+| 11 | DELETE_BASIC | P0 | memory | SQL_DELETE | 3336762 | 722818715 | 216.62x | -21562.28% |
+| 12 | DOT_DUMP | P0 | memory | CLI_DOT_COMMAND | 2839993 | 597795027 | 210.49x | -20949.17% |
+| 13 | PRAGMA_USER_VERSION | P0 | memory | SQL_PRAGMA | 2757767 | 579729371 | 210.22x | -20921.70% |
+| 14 | INSTEAD_OF_TRIGGER_ON_VIEW | P0 | memory | SQL_TRIGGER | 2916608 | 612825241 | 210.12x | -20911.57% |
+| 15 | DOT_SCHEMA_TABLES_INDEXES | P0 | memory | CLI_DOT_COMMAND | 3189524 | 660208320 | 206.99x | -20599.27% |
+| 16 | SELECT_CORE_EXPRESSIONS | P0 | memory | SQL_SELECT | 2748159 | 567483744 | 206.50x | -20549.60% |
+| 17 | WINDOW_NAMED_WINDOW | P0 | memory | SQL_WINDOW | 6223634 | 1265723631 | 203.37x | -20237.37% |
+| 18 | CLI_REGEXP_OPTIONAL | P2 | memory | CLI_EXTENSION_OPTIONAL | 2823471 | 562118686 | 199.09x | -19808.78% |
+| 19 | CREATE_VIRTUAL_TABLE_RTREE_OPTIONAL | P2 | memory | SQL_VIRTUAL_TABLE_OPTIONAL | 3203330 | 632614508 | 197.49x | -19648.65% |
+| 20 | DELETE_RETURNING | P0 | memory | SQL_DELETE | 2700067 | 528754227 | 195.83x | -19483.00% |
+| 21 | LITERALS_AND_TYPEOF | P0 | memory | SQL_EXPRESSIONS | 3491035 | 679937354 | 194.77x | -19376.67% |
+| 22 | CORE_FORMAT_QUOTE_HEX | P0 | memory | SQL_FUNCTIONS | 3306686 | 634109968 | 191.77x | -19076.60% |
+| 23 | UPDATE_RETURNING | P0 | memory | SQL_UPDATE | 2876762 | 551274229 | 191.63x | -19063.01% |
+| 24 | DOT_EXPLAIN | P0 | memory | CLI_DOT_COMMAND | 3259356 | 622250031 | 190.91x | -18991.20% |
+| 25 | DOT_TIMER | P3 | memory | CLI_DOT_COMMAND_DIAGNOSTIC | 3434697 | 650431214 | 189.37x | -18837.08% |
 
 </details>
 <!-- sqlite-parity-report:end -->

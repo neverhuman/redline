@@ -1,15 +1,21 @@
 mod compare;
 mod evidence;
+mod ratio;
 mod render;
 mod svg;
 mod types;
 mod utils;
 
 #[cfg(test)]
+mod latency_tests;
+#[cfg(test)]
 mod tests;
 
 pub use compare::{jankurai_compare, sentinel};
 pub use types::{JankuraiCompareOptions, ReportOptions, SentinelOptions};
+// The runner writes its ranked.csv with the same parser, ranking and writer.
+pub(crate) use render::{parse_raw_records, rank_cases, ranked_csv};
+pub(crate) use utils::is_measured;
 
 use std::collections::{BTreeMap, BTreeSet};
 use std::fs;
@@ -21,8 +27,8 @@ use evidence::{
     artifact_names_for_suite, read_official_evidence_versions, validate_official_evidence_binding,
 };
 use render::{
-    ksloc_csv, parse_raw_records, rank_cases, ranked_csv, render_metrics_block,
-    render_report_block, render_sqlite_badge, replace_block, replace_block_if_present,
+    ksloc_csv, render_metrics_block, render_report_block, render_sqlite_badge, replace_block,
+    replace_block_if_present,
 };
 use svg::build_svg_artifacts;
 use types::{ManifestJson, ProvenanceJson, RawRecord, RenderedReport, SummaryJson};
@@ -91,7 +97,13 @@ pub fn generate(options: ReportOptions) -> Result<()> {
         validate_warmups(&raw_records, expected_warmup)?;
     }
 
-    let ranked = rank_cases(&raw_records);
+    // Beyond-SQLite records are feature metadata with no timings, so that
+    // suite has no latency ranking; every other suite must rank cleanly.
+    let ranked = if options.suite == "beyond_sqlite" {
+        Vec::new()
+    } else {
+        rank_cases(&raw_records)?
+    };
     let evidence_versions = options
         .official_evidence
         .as_deref()
@@ -142,6 +154,8 @@ pub fn generate(options: ReportOptions) -> Result<()> {
             .expected_repetitions
             .unwrap_or(measured_samples.max(1)),
         warmup: options.expected_warmup.unwrap_or(warmup_samples),
+        measurement_boundary: crate::latency::MEASUREMENT_BOUNDARY.to_owned(),
+        ranked_schema: crate::latency::RANKED_CSV_SCHEMA.to_owned(),
     };
 
     let summary_json = serde_json::to_string_pretty(&summary)? + "\n";

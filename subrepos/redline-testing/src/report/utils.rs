@@ -87,12 +87,6 @@ pub(crate) fn median_u64(values: impl Iterator<Item = u64>) -> Option<u64> {
     Some(values[values.len() / 2])
 }
 
-pub(crate) fn improvement_pct(sqlite_median_ns: u128, redline_median_ns: u128) -> f64 {
-    let effective_sqlite_ns = sqlite_median_ns.max(3_000_000);
-    (effective_sqlite_ns as f64 - redline_median_ns as f64) / effective_sqlite_ns.max(1) as f64
-        * 100.0
-}
-
 pub(crate) fn parse_score(path: &Path) -> Result<Score> {
     let text = fs::read_to_string(path).with_context(|| format!("read {}", path.display()))?;
     let value: serde_json::Value =

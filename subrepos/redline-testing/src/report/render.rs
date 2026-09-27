@@ -5,8 +5,12 @@ use anyhow::{Context, Result};
 use super::evidence::{
     memory_peak_summary, memory_status_summary, suite_display_name, suite_subject,
 };
+use super::ratio::{format_ratio, summarize};
 use super::types::{EvidenceVersions, RankedCase, RawRecord, ReportOptions, SummaryJson};
-use super::utils::{csv, improvement_pct, is_measured, median};
+use super::utils::{csv, is_measured, median};
+use crate::latency::{
+    CaseLatency, MEASUREMENT_BOUNDARY, MEASUREMENT_BOUNDARY_TEXT, RANKED_CSV_HEADER,
+};
 
 pub(crate) fn parse_raw_records(raw_text: &str) -> Result<Vec<RawRecord>> {
     let mut records = Vec::new();
@@ -22,7 +26,11 @@ pub(crate) fn parse_raw_records(raw_text: &str) -> Result<Vec<RawRecord>> {
     Ok(records)
 }
 
-pub(crate) fn rank_cases(records: &[RawRecord]) -> Vec<RankedCase> {
+/// Per-case medians and latency ratios, slowest relative to SQLite first.
+///
+/// A measured case with a zero median on either side is an error: a missing
+/// timing must never turn into a ratio, let alone a win.
+pub(crate) fn rank_cases(records: &[RawRecord]) -> Result<Vec<RankedCase>> {
     let mut grouped = BTreeMap::<String, Vec<&RawRecord>>::new();
     for record in records.iter().filter(|record| is_measured(record)) {
         grouped
@@ -35,6 +43,8 @@ pub(crate) fn rank_cases(records: &[RawRecord]) -> Vec<RankedCase> {
         let first = group[0];
         let sqlite_median_ns = median(group.iter().map(|record| record.reference_elapsed_ns));
         let redline_median_ns = median(group.iter().map(|record| record.target_elapsed_ns));
+        let latency = CaseLatency::from_medians(sqlite_median_ns, redline_median_ns)
+            .with_context(|| format!("rank case {case_id}"))?;
         ranked.push(RankedCase {
             case_id,
             name: first.name.clone(),
@@ -44,25 +54,27 @@ pub(crate) fn rank_cases(records: &[RawRecord]) -> Vec<RankedCase> {
             category: first.category.clone(),
             sqlite_median_ns,
             redline_median_ns,
-            improvement_pct: improvement_pct(sqlite_median_ns, redline_median_ns),
+            latency_ratio: latency.latency_ratio,
+            gap_pct: latency.gap_pct,
+            below_resolution: latency.below_resolution,
+            faster: latency.faster,
             samples: group.len(),
         });
     }
     ranked.sort_by(|left, right| {
-        left.improvement_pct
-            .total_cmp(&right.improvement_pct)
+        right
+            .latency_ratio
+            .total_cmp(&left.latency_ratio)
             .then_with(|| left.case_id.cmp(&right.case_id))
     });
-    ranked
+    Ok(ranked)
 }
 
 pub(crate) fn ranked_csv(ranked: &[RankedCase]) -> String {
-    let mut out = String::from(
-        "rank,case_id,name,case_file,priority,profile,category,sqlite_median_ns,redline_median_ns,improvement_pct,samples\n",
-    );
+    let mut out = String::from(RANKED_CSV_HEADER);
     for (index, row) in ranked.iter().enumerate() {
         out.push_str(&format!(
-            "{},{},{},{},{},{},{},{},{},{:.6},{}\n",
+            "{},{},{},{},{},{},{},{},{},{:.6},{:.6},{},{}\n",
             index.saturating_add(1),
             row.case_id,
             csv(&row.name),
@@ -72,7 +84,9 @@ pub(crate) fn ranked_csv(ranked: &[RankedCase]) -> String {
             csv(&row.category),
             row.sqlite_median_ns,
             row.redline_median_ns,
-            row.improvement_pct,
+            row.latency_ratio,
+            row.gap_pct,
+            row.below_resolution,
             row.samples
         ));
     }
@@ -92,25 +106,22 @@ pub(crate) fn render_report_block(
 ) -> String {
     let suite_label = suite_display_name(&options.suite);
     let suite_subject = suite_subject(&options.suite);
-    let median_gap = if ranked.is_empty() {
-        0.0
-    } else {
-        let mut values = ranked
-            .iter()
-            .map(|case| case.improvement_pct)
-            .collect::<Vec<_>>();
-        values.sort_by(|left, right| left.total_cmp(right));
-        values[values.len() / 2]
-    };
-    let worst_gap = ranked
-        .iter()
-        .map(|case| case.improvement_pct)
-        .min_by(|left, right| left.total_cmp(right))
-        .unwrap_or(0.0);
-    let faster_cases = ranked
-        .iter()
-        .filter(|case| case.improvement_pct > 0.0)
-        .count();
+    let latency = summarize(ranked);
+    let latency_line = format!(
+        "median per-case latency ratio **{}** (RedlineDB/SQLite, lower is better), p95 **{}**, worst **{}**, faster **{}/{}**; **{}** cases have a SQLite median under 3 ms (`below_resolution`)",
+        format_ratio(latency.median_ratio),
+        format_ratio(latency.p95_ratio),
+        format_ratio(latency.worst_ratio),
+        latency.faster,
+        latency.cases,
+        latency.below_resolution
+    );
+    let lane = evidence_versions.map_or("unrecorded (no official evidence)", |versions| {
+        versions.lane.as_str()
+    });
+    let boundary_line = format!(
+        "**Measurement boundary:** {MEASUREMENT_BOUNDARY_TEXT} (`{MEASUREMENT_BOUNDARY}`: process spawn, case execution and output collection; fixture writes untimed); lane={lane}; not a tuned benchmark.\n\n"
+    );
     let mut block = String::new();
     block.push_str(&format!(
         "**{} coverage:** **{} / {}** {} passed in CI. Failed: **{}**. Skipped: **{}**. Updated {}.\n\n",
@@ -141,23 +152,13 @@ pub(crate) fn render_report_block(
             let memory_peaks = memory_peak_summary(raw_records)
                 .unwrap_or_else(|| "no RSS samples were captured".to_owned());
             block.push_str(&format!(
-                "**{} latency:** median gap **{:.2}%**, worst gap **{:.2}%**, faster cases **{}**. RSS sampling: **{}**. {}.\n\n",
-                suite_label,
-                median_gap,
-                worst_gap,
-                faster_cases,
-                memory_status,
-                memory_peaks
+                "**{suite_label} latency:** {latency_line}. RSS sampling: **{memory_status}**. {memory_peaks}.\n\n"
             ));
+            block.push_str(&boundary_line);
         }
         _ => {
-            block.push_str(&format!(
-                "**{} latency:** median gap **{:.2}%**, worst gap **{:.2}%**, faster cases **{}**.\n\n",
-                suite_label,
-                median_gap,
-                worst_gap,
-                faster_cases
-            ));
+            block.push_str(&format!("**{suite_label} latency:** {latency_line}.\n\n"));
+            block.push_str(&boundary_line);
         }
     }
     if let Some(evidence_versions) = evidence_versions {
@@ -170,7 +171,7 @@ pub(crate) fn render_report_block(
     }
     if let Some(plot) = &options.plot {
         block.push_str(&format!(
-            "![{} latency improvement plot]({})\n\n",
+            "![{} latency ratio plot]({})\n\n",
             suite_label,
             plot.display()
         ));
@@ -186,17 +187,17 @@ pub(crate) fn render_report_block(
     let table_summary = if options.suite == "beyond_sqlite" {
         "Full ranked feature table"
     } else {
-        "Full ranked latency table"
+        "Slowest 25 cases by latency ratio (every case is in ranked.csv)"
     };
     block.push_str(&format!(
         "<details id=\"{}\">\n<summary>{}</summary>\n\n",
         table_id, table_summary
     ));
-    block.push_str("| Rank | Case | Priority | Profile | Category | SQLite median ns | RedlineDB median ns | Improvement |\n");
-    block.push_str("| ---: | --- | --- | --- | --- | ---: | ---: | ---: |\n");
+    block.push_str("| Rank | Case | Priority | Profile | Category | SQLite median ns | RedlineDB median ns | Ratio | Gap |\n");
+    block.push_str("| ---: | --- | --- | --- | --- | ---: | ---: | ---: | ---: |\n");
     for (index, row) in ranked.iter().take(25).enumerate() {
         block.push_str(&format!(
-            "| {} | {} | {} | {} | {} | {} | {} | {:+.2}% |\n",
+            "| {} | {} | {} | {} | {} | {} | {} | {} | {:+.2}% |\n",
             index + 1,
             row.name,
             row.priority,
@@ -204,7 +205,8 @@ pub(crate) fn render_report_block(
             row.category,
             row.sqlite_median_ns,
             row.redline_median_ns,
-            row.improvement_pct
+            format_ratio(row.latency_ratio),
+            row.gap_pct
         ));
     }
     block.push_str("\n</details>\n");

@@ -2,6 +2,7 @@ mod beyond_sqlite;
 mod cli;
 mod evidence;
 mod exceptions;
+mod latency;
 mod report;
 mod sqlite_parity;
 
