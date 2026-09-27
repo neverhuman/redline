@@ -238,6 +238,54 @@ fn buffer_eviction_frees_index_pages_that_recovery_dirtied() {
 }
 
 #[test]
+fn buffer_eviction_frees_leaves_that_replayed_scattered_keys() {
+    // Keys inserted out of order land on most leaves after each leaf's last
+    // split image, so replaying their inserts dirties far more leaves than
+    // the reopened pool holds. Recovery cannot checkpoint, so those leaves
+    // have to be pages eviction may write.
+    let temp = TempDir::new().unwrap();
+    let engine = Engine::create(temp.path(), config(CommitDurability::Normal, 1024)).unwrap();
+    let index_id = create_indexed_table(&engine);
+    let index = engine.index_handle(index_id).unwrap();
+    for i in (0..KEYS).map(scattered) {
+        let tx = engine.begin(Isolation::Snapshot).unwrap();
+        index
+            .insert_tx(tx.id(), &index_key(i), index_row(i))
+            .unwrap();
+        engine.commit(tx).unwrap();
+    }
+    // Delete marks replay onto leaves the same way.
+    let deleted = |i: usize| i % 3 == 0;
+    for i in (0..KEYS).map(scattered).filter(|i| deleted(*i)) {
+        let tx = engine.begin(Isolation::Snapshot).unwrap();
+        index
+            .delete_mark_tx(tx.id(), &index_key(i), index_row(i))
+            .unwrap();
+        engine.commit(tx).unwrap();
+    }
+    assert_eq!(engine.buffer.stats().evictions, 0);
+    drop(index);
+    drop(engine);
+
+    let reopened = Engine::open(temp.path(), config(CommitDurability::Normal, SMALL_POOL))
+        .unwrap_or_else(|err| panic!("recovery into a {SMALL_POOL}-page pool failed: {err:?}"));
+    assert!(reopened.buffer.stats().evictions > 0);
+    let index = reopened.index_handle(index_id).unwrap();
+    for i in 0..KEYS {
+        let expected = if deleted(i) {
+            vec![]
+        } else {
+            vec![index_row(i)]
+        };
+        assert_eq!(
+            index.point_lookup(&index_key(i)).unwrap(),
+            expected,
+            "key {i}"
+        );
+    }
+}
+
+#[test]
 fn buffer_eviction_after_open_finds_the_replayed_wal_durable() {
     // UnsafeDev skips the shutdown fsync, so the reopened WAL may be written
     // but not durable. Replay stamps heap pages with LSN zero, which gives

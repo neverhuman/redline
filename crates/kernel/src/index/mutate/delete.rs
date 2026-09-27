@@ -24,6 +24,7 @@ impl BtreeIndex {
             row,
             None,
             tx_id != TxId::ZERO,
+            false,
             Lsn::new(1),
         )
     }
@@ -35,7 +36,7 @@ impl BtreeIndex {
         row: IndexRowRef,
         lsn: Lsn,
     ) -> Result<()> {
-        self.delete_mark_tx_inner(tx_id, logical_key, row, None, false, lsn)
+        self.delete_mark_tx_inner(tx_id, logical_key, row, None, false, true, lsn)
     }
 
     pub fn delete_mark_tx_visible(
@@ -53,6 +54,7 @@ impl BtreeIndex {
             row,
             Some((tx_status, snapshot, owner)),
             tx_id != TxId::ZERO,
+            false,
             Lsn::new(1),
         )
     }
@@ -64,6 +66,7 @@ impl BtreeIndex {
         row: IndexRowRef,
         visibility: Option<(&ConcurrentTxStatus, &Snapshot, Option<TxId>)>,
         emit_wal: bool,
+        recovered: bool,
         lsn: Lsn,
     ) -> Result<()> {
         let mut probe = KeyBuf::new();
@@ -118,6 +121,15 @@ impl BtreeIndex {
                 }
             }
             if changed {
+                let unlogged_lsn = if recovered {
+                    super::recovered_leaf_lsn(&page)?
+                } else {
+                    lsn
+                };
+                let page_ref = page
+                    .page
+                    .as_mut()
+                    .ok_or(Error::CorruptPage("resident frame missing page"))?;
                 let mut staged = page_ref.clone();
                 Self::rewrite_leaf(
                     &mut staged,
@@ -149,7 +161,7 @@ impl BtreeIndex {
                     crate::wal::run_before_page_install_hook();
                     end_lsn
                 } else {
-                    lsn
+                    unlogged_lsn
                 };
                 guard.install_dirty(staged, publish_lsn)?;
                 drop(install_fence);

@@ -16,7 +16,14 @@ impl BtreeIndex {
         logical_key: &[u8],
         row: IndexRowRef,
     ) -> Result<()> {
-        self.insert_tx_inner(tx_id, logical_key, row, tx_id != TxId::ZERO, Lsn::new(1))
+        self.insert_tx_inner(
+            tx_id,
+            logical_key,
+            row,
+            tx_id != TxId::ZERO,
+            false,
+            Lsn::new(1),
+        )
     }
 
     pub(crate) fn insert_recovered_tx(
@@ -26,15 +33,20 @@ impl BtreeIndex {
         row: IndexRowRef,
         lsn: Lsn,
     ) -> Result<()> {
-        self.insert_tx_inner(tx_id, logical_key, row, false, lsn)
+        self.insert_tx_inner(tx_id, logical_key, row, false, true, lsn)
     }
 
+    /// `recovered` marks a committed insert that recovery replays. A leaf
+    /// it changes without splitting keeps a page LSN eviction may write
+    /// (see `recovered_leaf_lsn`); a split it causes stamps `lsn` on every
+    /// page it touches.
     fn insert_tx_inner(
         &self,
         tx_id: crate::format::TxId,
         logical_key: &[u8],
         row: IndexRowRef,
         emit_wal: bool,
+        recovered: bool,
         lsn: Lsn,
     ) -> Result<()> {
         let mut physical = KeyBuf::new();
@@ -112,8 +124,17 @@ impl BtreeIndex {
                 )?;
                 return Ok(());
             }
+            let unlogged_lsn = if recovered {
+                super::recovered_leaf_lsn(&page)?
+            } else {
+                lsn
+            };
             // Stage off the live frame. A flush during the WAL append still
             // sees the previous leaf bytes and the previous page LSN.
+            let page_ref = page
+                .page
+                .as_mut()
+                .ok_or(Error::CorruptPage("resident frame missing page"))?;
             let mut staged = page_ref.clone();
             if super::insert_leaf::direct_leaf_insert_enabled() {
                 super::insert_leaf::insert_one_cell(&mut staged, slot, &entries[slot])?;
@@ -148,7 +169,7 @@ impl BtreeIndex {
                     },
                 )?
             } else {
-                lsn
+                unlogged_lsn
             };
             #[cfg(test)]
             if emit_wal {
