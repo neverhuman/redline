@@ -403,12 +403,24 @@ impl Database {
         self.private_memory
     }
 
+    /// The sync policy for a metadata sidecar written now. It follows the
+    /// live commit durability, which `PRAGMA synchronous` changes, rather
+    /// than the durability the database was opened with.
+    fn live_metadata_sync_policy(&self) -> MetadataSyncPolicy {
+        match self.metadata_sync_policy {
+            MetadataSyncPolicy::Disabled => MetadataSyncPolicy::Disabled,
+            MetadataSyncPolicy::Durable | MetadataSyncPolicy::Volatile => {
+                MetadataSyncPolicy::from_commit_durability(self.engine.commit_durability())
+            }
+        }
+    }
+
     pub(crate) fn user_version(&self) -> i64 {
         *self.user_version.lock().expect("user_version poisoned")
     }
 
     pub(crate) fn set_user_version(&self, value: i64) -> Result<()> {
-        save_user_version(self.path.as_ref(), value, self.metadata_sync_policy)?;
+        save_user_version(self.path.as_ref(), value, self.live_metadata_sync_policy())?;
         *self.user_version.lock().expect("user_version poisoned") = value;
         Ok(())
     }
@@ -608,11 +620,25 @@ fn save_user_version(base: &Path, value: i64, sync_policy: MetadataSyncPolicy) -
         writeln!(file, "{value}").map_err(KernelError::Io)?;
         if sync_policy.syncs_metadata() {
             file.sync_all().map_err(KernelError::Io)?;
+            #[cfg(test)]
+            user_version_sync_tests::note_sync(false);
         }
     }
     fs::rename(&temp_path, &path).map_err(KernelError::Io)?;
+    if sync_policy.syncs_metadata() {
+        // The rename is durable only once the directory entry is.
+        File::open(base)
+            .and_then(|dir| dir.sync_all())
+            .map_err(KernelError::Io)?;
+        #[cfg(test)]
+        user_version_sync_tests::note_sync(true);
+    }
     Ok(())
 }
+
+#[cfg(test)]
+#[path = "user_version_sync_tests.rs"]
+mod user_version_sync_tests;
 
 #[cfg(test)]
 mod volatile_root_tests {
