@@ -305,3 +305,31 @@ fn fk_check_reports_a_child_holding_nan_text() {
         rows(&[&[text("c"), int(1), text("p"), int(0)]]),
     );
 }
+
+// -- rows that predate a column keep their stored NULLs ------------------------
+
+/// A row written before ADD COLUMN lacks the new column, which reads as its
+/// DEFAULT. A NULL the row did store stays NULL even when its column has a
+/// DEFAULT, as in SQLite, where only fields missing from the end of the
+/// record take the DEFAULT.
+#[test]
+fn short_row_keeps_a_stored_null_in_a_column_with_a_default() {
+    let lab = Lab::new();
+    lab.script(&[
+        "CREATE TABLE t(id INTEGER PRIMARY KEY, a INTEGER DEFAULT 1)",
+        "INSERT INTO t(id, a) VALUES (1, NULL)",
+        "ALTER TABLE t ADD COLUMN c INTEGER DEFAULT 5",
+    ]);
+    let stored = rows(&[&[int(1), Val::Null, text("null"), int(5)]]);
+    lab.expect("SELECT id, a, typeof(a), c FROM t", stored.clone());
+    lab.expect("SELECT id, a, typeof(a), c FROM t WHERE id = 1", stored);
+    lab.step_split(
+        "CREATE UNIQUE INDEX uc ON t(a, c)",
+        "ALTER TABLE t ADD CONSTRAINT uc UNIQUE (a, c)",
+    );
+    lab.expect("INSERT INTO t(id, a, c) VALUES (2, 1, 5)", Outcome::Done);
+    lab.expect(
+        "SELECT id, a, c FROM t ORDER BY id",
+        rows(&[&[int(1), Val::Null, int(5)], &[int(2), int(1), int(5)]]),
+    );
+}

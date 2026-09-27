@@ -171,6 +171,22 @@ pub(crate) fn build_default_values(
     compute_stored_generated_columns(table, values)
 }
 
+/// Complete a row written before columns were added to its table. The
+/// columns missing from the end of the row read as their DEFAULT, as in
+/// SQLite; a NULL the row stored stays NULL even when its column has one.
+pub(crate) fn complete_short_row(
+    table: &Arc<TableDef>,
+    mut values: Vec<SqlValue>,
+) -> Result<Vec<SqlValue>> {
+    let stored = values.len();
+    if stored >= table.columns.len() {
+        return Ok(values);
+    }
+    let provided: Vec<bool> = (0..table.columns.len()).map(|idx| idx < stored).collect();
+    values.resize(table.columns.len(), SqlValue::Null);
+    build_default_values_for_omitted(table, values, &provided)
+}
+
 fn build_default_values_for_omitted(
     table: &Arc<TableDef>,
     mut values: Vec<SqlValue>,

@@ -306,11 +306,7 @@ pub(crate) fn load_table_row_by_rowid(
     if table_id != table.table_id.0 {
         return Ok(None);
     }
-    let mut values = values;
-    if values.len() < table.columns.len() {
-        values.resize(table.columns.len(), SqlValue::Null);
-        values = build_default_values(table, values)?;
-    }
+    let mut values = complete_short_row(table, values)?;
     // Phase-11 SQL-D A6: materialise VIRTUAL generated columns at
     // read time. STORED columns were already computed and persisted
     // at write time, so we leave their slots alone.

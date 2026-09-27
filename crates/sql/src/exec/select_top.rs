@@ -1940,10 +1940,7 @@ fn dispatch_parallel_covering_scan(
         if table_id != table.table_id.0 {
             continue;
         }
-        if values.len() < table.columns.len() {
-            values.resize(table.columns.len(), SqlValue::Null);
-            values = build_default_values(table, values)?;
-        }
+        values = complete_short_row(table, values)?;
         let table_row = TableRow {
             rowid: heap_row.row_id,
             values,
