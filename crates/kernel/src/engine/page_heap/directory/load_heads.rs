@@ -54,16 +54,21 @@ impl Identity {
     }
 }
 
-#[derive(Debug)]
-struct Candidate {
-    ptr: TuplePtr,
-    identity: Identity,
-}
-
-/// Head candidates collected over a page scan.
+/// Head candidates collected over a page scan. Only tuple pointers are
+/// kept, so the rebuild stays close to the size of the directory it builds;
+/// tied versions are read back when their tie is broken.
 #[derive(Debug, Default)]
 pub(super) struct HeadChoices {
-    rows: HashMap<(RelId, RowId), (Rank, Vec<Candidate>)>,
+    rows: HashMap<(RelId, RowId), Choice>,
+}
+
+/// The best rank seen for a row and the versions that share it, in scan
+/// order. Most rows have one, which needs no allocation.
+#[derive(Debug)]
+struct Choice {
+    rank: Rank,
+    first: TuplePtr,
+    ties: Vec<TuplePtr>,
 }
 
 impl HeadChoices {
@@ -79,68 +84,85 @@ impl HeadChoices {
             TxState::Committed(csn) => Rank::Committed(csn),
             TxState::InProgress | TxState::Aborted => Rank::Uncommitted,
         };
-        let candidate = Candidate {
-            ptr,
-            identity: Identity::of(tuple),
+        let fresh = Choice {
+            rank,
+            first: ptr,
+            ties: Vec::new(),
         };
-        let entry = self
-            .rows
-            .entry((rel_id, tuple.row_id))
-            .or_insert_with(|| (rank, Vec::new()));
-        if rank > entry.0 {
-            *entry = (rank, Vec::new());
-        }
-        if rank == entry.0 {
-            entry.1.push(candidate);
+        match self.rows.entry((rel_id, tuple.row_id)) {
+            std::collections::hash_map::Entry::Vacant(slot) => {
+                slot.insert(fresh);
+            }
+            std::collections::hash_map::Entry::Occupied(mut slot) => {
+                let choice = slot.get_mut();
+                if rank > choice.rank {
+                    *choice = fresh;
+                } else if rank == choice.rank {
+                    choice.ties.push(ptr);
+                }
+            }
         }
     }
 
-    /// The chosen head of every row. `read_undo` loads the undo record a
-    /// tied version points at; a record it cannot read breaks no tie.
+    /// The chosen head of every row. `read_tuple` reads a tied version back
+    /// and `read_undo` the undo record it points at; one either cannot read
+    /// breaks no tie.
     pub(super) fn into_heads(
         self,
+        mut read_tuple: impl FnMut(TuplePtr) -> Option<TupleVersion>,
         mut read_undo: impl FnMut(UndoPtr) -> Option<UndoRecord>,
     ) -> Vec<(RelId, RowId, TuplePtr)> {
         let mut heads = Vec::with_capacity(self.rows.len());
-        for ((rel_id, row_id), (_, candidates)) in self.rows {
-            if let Some(ptr) = newest(&candidates, &mut read_undo) {
-                heads.push((rel_id, row_id, ptr));
-            }
+        for ((rel_id, row_id), choice) in self.rows {
+            let ptr = if choice.ties.is_empty() {
+                choice.first
+            } else {
+                let mut tied = Vec::with_capacity(choice.ties.len() + 1);
+                tied.push(choice.first);
+                tied.extend(choice.ties);
+                newest(&tied, &mut read_tuple, &mut read_undo)
+            };
+            heads.push((rel_id, row_id, ptr));
         }
         heads
     }
 }
 
+/// The newest of several versions that share a rank, given in scan order.
 fn newest(
-    candidates: &[Candidate],
+    tied: &[TuplePtr],
+    read_tuple: &mut impl FnMut(TuplePtr) -> Option<TupleVersion>,
     read_undo: &mut impl FnMut(UndoPtr) -> Option<UndoRecord>,
-) -> Option<TuplePtr> {
-    if candidates.len() <= 1 {
-        return candidates.first().map(|candidate| candidate.ptr);
-    }
-    let mut replaced = vec![false; candidates.len()];
-    for (index, candidate) in candidates.iter().enumerate() {
-        if candidate.identity.undo_head == UndoPtr::ZERO {
+) -> TuplePtr {
+    let tuples: Vec<Option<TupleVersion>> = tied.iter().map(|ptr| read_tuple(*ptr)).collect();
+    let identities: Vec<Option<Identity>> = tuples
+        .iter()
+        .map(|t| t.as_ref().map(Identity::of))
+        .collect();
+    let mut replaced = vec![false; tied.len()];
+    for (index, tuple) in tuples.iter().enumerate() {
+        let Some(tuple) = tuple else {
+            continue;
+        };
+        if tuple.undo_head == UndoPtr::ZERO {
             continue;
         }
-        let Some(undo) = read_undo(candidate.identity.undo_head) else {
+        let Some(undo) = read_undo(tuple.undo_head) else {
             continue;
         };
         let Ok(before) = TupleVersion::decode(&undo.before_image) else {
             continue;
         };
         let before = Identity::of(&before);
-        for (other, older) in candidates.iter().enumerate() {
-            if other != index && older.identity == before {
+        for (other, older) in identities.iter().enumerate() {
+            if other != index && *older == Some(before) {
                 replaced[other] = true;
             }
         }
     }
-    candidates
-        .iter()
+    tied.iter()
         .zip(&replaced)
         .rev()
         .find(|(_, replaced)| !**replaced)
-        .or_else(|| candidates.iter().zip(&replaced).next_back())
-        .map(|(candidate, _)| candidate.ptr)
+        .map_or(tied[tied.len() - 1], |(ptr, _)| *ptr)
 }

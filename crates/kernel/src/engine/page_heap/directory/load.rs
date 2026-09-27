@@ -48,7 +48,11 @@ impl PageBackedHeap {
                 Ok(())
             })?;
         }
-        for (rel_id, row_id, ptr) in choices.into_heads(|undo| self.read_undo(undo).ok()) {
+        let heads = choices.into_heads(
+            |ptr| self.read_tuple(ptr).ok(),
+            |undo| self.read_undo(undo).ok(),
+        );
+        for (rel_id, row_id, ptr) in heads {
             if self.head(row_id)?.is_none() {
                 self.set_head(row_id, ptr)?;
             }
