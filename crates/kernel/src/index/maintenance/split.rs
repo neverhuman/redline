@@ -105,11 +105,12 @@ impl BtreeIndex {
             Some(wal) if emit_wal => Some(wal.begin_page_install()?),
             _ => None,
         };
+        // Recovery replays split images whether or not this transaction
+        // commits. Log the new right page first, so a replayed left page
+        // never links to a page whose image the WAL lacks.
         let (left_lsn, right_lsn) = if emit_wal {
-            (
-                self.record_staged_page_image(&left_page, tx_id)?,
-                self.record_staged_page_image(&right_page, tx_id)?,
-            )
+            let right_lsn = self.record_staged_page_image(&right_page, tx_id)?;
+            (self.record_staged_page_image(&left_page, tx_id)?, right_lsn)
         } else {
             (lsn, lsn)
         };
@@ -241,11 +242,10 @@ impl BtreeIndex {
                     header.right,
                     header.high_key.clone(),
                 )?;
+                // The new right page's image goes first, as for a leaf split.
                 let (left_lsn, right_lsn) = if emit_wal {
-                    (
-                        self.record_staged_page_image(&left_page, tx_id)?,
-                        self.record_staged_page_image(&right_page, tx_id)?,
-                    )
+                    let right_lsn = self.record_staged_page_image(&right_page, tx_id)?;
+                    (self.record_staged_page_image(&left_page, tx_id)?, right_lsn)
                 } else {
                     (lsn, lsn)
                 };

@@ -485,22 +485,24 @@ fn recover_heap(
     Ok(metrics)
 }
 
+/// Install every B-tree page image at or after the checkpoint.
+///
+/// A split's images describe structure, not the logging transaction's data:
+/// the split stays in memory when that transaction rolls back, and each
+/// entry in an image carries its own create and delete transaction, which
+/// visibility checks. A checkpoint taken mid-split stops at the split's
+/// first image and does not write the split's pages, whose page LSNs are
+/// past it. Those images are then the only copy of the committed entries
+/// the split moved, so they replay whether or not the transaction that
+/// logged them committed. A split appends its new right page's image before
+/// the image of the page that links to it, so a replayed link never names a
+/// page whose image is missing.
 fn recover_index_page_images(
     records: &[WalRecord],
     replay_from_lsn: Lsn,
     target: RecoveryTarget,
     buffer: &Arc<BufferPool>,
 ) -> Result<()> {
-    let mut committed = HashSet::new();
-    for record in records {
-        if record.kind == WalRecordKind::Commit
-            && let WalPayload::Commit { tx_id, csn } = WalPayload::decode(&record.payload)?
-            && commit_visible(record.lsn, csn, target)
-        {
-            committed.insert(tx_id);
-        }
-    }
-
     for record in records {
         if record.lsn < replay_from_lsn {
             continue;
@@ -508,7 +510,7 @@ fn recover_index_page_images(
         if matches!(target, RecoveryTarget::Lsn(limit) if record.lsn >= limit) {
             continue;
         }
-        if record.kind == WalRecordKind::Commit || !committed.contains(&record.tx_id) {
+        if record.kind == WalRecordKind::Commit {
             continue;
         }
         if let WalPayload::PageImage {

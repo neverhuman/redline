@@ -7,8 +7,13 @@
 //! checkpoint must not pass the split's first image until every page of the
 //! split is installed. These tests take one checkpoint at each image append
 //! of a split, through the page-install hook, then reopen without another.
+//!
+//! The split's pages stay unwritten by that checkpoint, so its images are the
+//! only copy of the committed keys the split moved. Recovery has to replay
+//! them even when the splitting transaction rolls back or never commits.
 
 use std::cell::Cell;
+use std::path::Path;
 use std::rc::Rc;
 use std::sync::Arc;
 
@@ -99,11 +104,41 @@ fn installs_per_insert() -> Vec<usize> {
     per_insert
 }
 
+/// How the transaction whose insert splits ends.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum Ending {
+    Commit,
+    Rollback,
+    /// Reopen a copy of the files taken right after the mid-split checkpoint,
+    /// as if the process died there.
+    CrashAtCheckpoint,
+}
+
+fn copy_dir(from: &Path, to: &Path) {
+    std::fs::create_dir_all(to).unwrap();
+    for entry in std::fs::read_dir(from).unwrap() {
+        let entry = entry.unwrap();
+        let target = to.join(entry.file_name());
+        if entry.file_type().unwrap().is_dir() {
+            copy_dir(&entry.path(), &target);
+        } else {
+            std::fs::copy(entry.path(), target).unwrap();
+        }
+    }
+}
+
 /// Insert keys `0..=last`, take a checkpoint at page install `at` of the
-/// last insert, which splits, and reopen without another checkpoint.
-/// Returns every way the checkpoint or the reopened index went wrong.
-fn checkpoint_at_install(last: usize, at: usize, images: &[PageKind]) -> Vec<String> {
+/// last insert, which splits, end its transaction as `ending` says, and
+/// reopen without another checkpoint. Returns every way the checkpoint or
+/// the reopened index went wrong.
+fn checkpoint_at_install(
+    last: usize,
+    at: usize,
+    images: &[PageKind],
+    ending: Ending,
+) -> Vec<String> {
     let dir = TempDir::new().unwrap();
+    let crash = TempDir::new().unwrap();
     let engine = Engine::create(dir.path(), config()).unwrap();
     let index_id = create_indexed_table(&engine);
     let index = engine.index_handle(index_id).expect("index handle");
@@ -117,6 +152,7 @@ fn checkpoint_at_install(last: usize, at: usize, images: &[PageKind]) -> Vec<Str
     let seen = Rc::new(Cell::new(None));
     let (hook_calls, hook_seen, hook_engine) =
         (Rc::clone(&calls), Rc::clone(&seen), Arc::clone(&engine));
+    let (live_path, crash_path) = (dir.path().to_path_buf(), crash.path().to_path_buf());
     hook_every_install(Rc::new(move || {
         hook_calls.set(hook_calls.get() + 1);
         if hook_calls.get() == at {
@@ -124,6 +160,9 @@ fn checkpoint_at_install(last: usize, at: usize, images: &[PageKind]) -> Vec<Str
                 .checkpoint()
                 .expect("checkpoint while a split page is uninstalled");
             hook_seen.set(Some(checkpoint.checkpoint_lsn));
+            if ending == Ending::CrashAtCheckpoint {
+                copy_dir(&live_path, &crash_path);
+            }
         }
     }));
     let tx = engine.begin(Isolation::Snapshot).unwrap();
@@ -131,11 +170,19 @@ fn checkpoint_at_install(last: usize, at: usize, images: &[PageKind]) -> Vec<Str
     let inserted = index.insert_tx(split_tx, &key(last), row(last));
     set_before_page_install_hook(None);
     inserted.unwrap();
-    engine.commit(tx).unwrap();
+    match ending {
+        Ending::Commit => {
+            engine.commit(tx).unwrap();
+        }
+        Ending::Rollback | Ending::CrashAtCheckpoint => engine.rollback(tx).unwrap(),
+    }
     let during = seen
         .get()
         .unwrap_or_else(|| panic!("insert {last} never reached page install {at}"));
 
+    // Nothing flushes the images a rolled-back split appended after the
+    // checkpoint. Flush them so the scan below sees every one.
+    let durable = engine.wal.flush_all().unwrap();
     let records = WalReader::new(&engine.wal_dir, engine.config.wal.clone())
         .scan()
         .unwrap();
@@ -164,7 +211,6 @@ fn checkpoint_at_install(last: usize, at: usize, images: &[PageKind]) -> Vec<Str
     }
     // Once the split is installed, nothing may hold the checkpoint back. This
     // writes no page, so the reopen still starts from the mid-split one.
-    let durable = engine.wal.flush_all().unwrap();
     let horizon = engine.wal.checkpoint_horizon(durable).unwrap();
     if horizon != durable {
         problems.push(format!(
@@ -173,7 +219,11 @@ fn checkpoint_at_install(last: usize, at: usize, images: &[PageKind]) -> Vec<Str
     }
     drop(index);
     drop(engine);
-    let reopened = match Engine::open(dir.path(), config()) {
+    let reopen_path = match ending {
+        Ending::Commit | Ending::Rollback => dir.path(),
+        Ending::CrashAtCheckpoint => crash.path(),
+    };
+    let reopened = match Engine::open(reopen_path, config()) {
         Ok(reopened) => reopened,
         Err(err) => {
             problems.push(format!("reopen failed: {err:?}"));
@@ -181,7 +231,11 @@ fn checkpoint_at_install(last: usize, at: usize, images: &[PageKind]) -> Vec<Str
         }
     };
     let index = reopened.index_handle(index_id).expect("reopened index");
-    for i in 0..=last {
+    let committed = match ending {
+        Ending::Commit => last + 1,
+        Ending::Rollback | Ending::CrashAtCheckpoint => last,
+    };
+    for i in 0..committed {
         match index.point_lookup(&key(i)) {
             Ok(rows) if rows == vec![row(i)] => {}
             other => problems.push(format!("key {i} after reopen: {other:?}")),
@@ -194,8 +248,9 @@ fn checkpoint_at_install(last: usize, at: usize, images: &[PageKind]) -> Vec<Str
     problems
 }
 
-#[test]
-fn checkpoint_does_not_pass_an_uninstalled_split_page() {
+/// Take a checkpoint at every page image of each split shape, ending the
+/// splitting transaction as `ending` says.
+fn every_split_image(ending: Ending) {
     let per_insert = installs_per_insert();
     let mut problems = Vec::new();
     for (shape, images) in SHAPES {
@@ -204,7 +259,7 @@ fn checkpoint_does_not_pass_an_uninstalled_split_page() {
             .position(|&installs| installs == images.len())
             .unwrap_or_else(|| panic!("no insert made a {shape}: {per_insert:?}"));
         for at in 1..=images.len() {
-            for problem in checkpoint_at_install(last, at, images) {
+            for problem in checkpoint_at_install(last, at, images, ending) {
                 problems.push(format!(
                     "{shape} (insert {last}), checkpoint at image {at} of {}: {problem}",
                     images.len()
@@ -213,4 +268,19 @@ fn checkpoint_does_not_pass_an_uninstalled_split_page() {
         }
     }
     assert!(problems.is_empty(), "{}", problems.join("\n"));
+}
+
+#[test]
+fn checkpoint_does_not_pass_an_uninstalled_split_page() {
+    every_split_image(Ending::Commit);
+}
+
+#[test]
+fn checkpoint_during_a_split_keeps_committed_keys_when_the_split_rolls_back() {
+    every_split_image(Ending::Rollback);
+}
+
+#[test]
+fn checkpoint_during_a_split_keeps_committed_keys_when_the_process_dies() {
+    every_split_image(Ending::CrashAtCheckpoint);
 }
