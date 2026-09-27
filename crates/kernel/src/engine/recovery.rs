@@ -136,7 +136,7 @@ impl Engine {
         let commit_durability_live = std::sync::atomic::AtomicU8::new(
             commit_durability_initial_u8(config.commit_durability),
         );
-        Ok(Arc::new(Self {
+        let engine = Arc::new(Self {
             config: config.clone(),
             commit_durability_live,
             volatile,
@@ -156,7 +156,11 @@ impl Engine {
             checkpoint_serial: std::sync::Mutex::new(()),
             checkpoint: std::sync::Mutex::new(checkpoint),
             index_handles: std::sync::Mutex::new(HashMap::new()),
-        }))
+        });
+        if !volatile {
+            engine.attach_pressure_relief()?;
+        }
+        Ok(engine)
     }
 
     pub fn open(path: impl AsRef<Path>, config: EngineConfig) -> Result<Arc<Self>> {
@@ -322,6 +326,9 @@ impl Engine {
                 .heap
                 .load_row_directory_from_pages(page_count, &engine.txs)?;
             engine.heap.load_reusable_pages_from_pages(page_count)?;
+        }
+        if target == RecoveryTarget::Latest {
+            engine.attach_pressure_relief()?;
         }
         Ok((
             engine,

@@ -9,7 +9,7 @@ use crate::format::{Csn, PageId, RelId, RowId, TuplePtr, TxId};
 use crate::index::BtreeIndex;
 use crate::storage::{
     BufferPool, BufferPoolStats, ControlFile, DEFAULT_CHECKPOINT_BATCH_PAGES, PageFile,
-    TxStatusCheckpoint,
+    PagePressureRelief, TxStatusCheckpoint,
 };
 use crate::telemetry::{Phase11Counters, Phase11CountersSnapshot};
 use crate::txn::Snapshot;
@@ -255,6 +255,17 @@ impl Engine {
         })
     }
 
+    /// Let the buffer pool ask for a checkpoint when it has no page it may
+    /// evict. Only a persistent engine opened to the end of its WAL does:
+    /// a volatile engine has nothing to checkpoint, and a checkpoint after
+    /// recovery to an earlier target would record the WAL end and prune the
+    /// records that recovery skipped.
+    pub(super) fn attach_pressure_relief(self: &Arc<Self>) -> Result<()> {
+        let engine: std::sync::Weak<Self> = Arc::downgrade(self);
+        let relief: std::sync::Weak<dyn PagePressureRelief> = engine;
+        self.buffer.attach_pressure_relief(relief)
+    }
+
     pub fn checkpoint_info(&self) -> Result<Option<ControlFile>> {
         self.checkpoint
             .lock()
@@ -323,6 +334,15 @@ impl Engine {
             .lock()
             .map_err(|_| Error::CorruptPage("engine index handles mutex poisoned"))?;
         Ok(handles.clone())
+    }
+}
+
+impl PagePressureRelief for Engine {
+    fn relieve_page_pressure(&self) -> Result<bool> {
+        if self.volatile {
+            return Ok(false);
+        }
+        self.checkpoint_with_stats().map(|_| true)
     }
 }
 

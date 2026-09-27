@@ -148,6 +148,57 @@ fn buffer_eviction_admits_a_page_into_a_full_dirty_pool_in_every_durability_mode
     }
 }
 
+/// Visit `0..KEYS` in an order that spreads consecutive inserts over the
+/// whole key range, so many leaves are dirty at once.
+fn scattered(i: usize) -> usize {
+    (i * 7919) % KEYS
+}
+
+#[test]
+fn buffer_eviction_checkpoints_a_pool_full_of_dirty_index_pages_in_every_durability_mode() {
+    // A dirty leaf with a logged change may not leave on its own, so a pool
+    // of such leaves has nothing to evict. Eviction asks for a checkpoint,
+    // which writes them as one cut, instead of failing the insert.
+    for durability in EVERY_DURABILITY {
+        let temp = TempDir::new().unwrap();
+        let engine = Engine::create(temp.path(), config(durability, SMALL_POOL)).unwrap();
+        let index_id = create_indexed_table(&engine);
+        let index = engine.index_handle(index_id).unwrap();
+        let early = watch_page_writes(&engine);
+        let mut inserted = Ok(());
+        for i in (0..KEYS).map(scattered) {
+            let tx = engine.begin(Isolation::Snapshot).unwrap();
+            inserted = index.insert_tx(tx.id(), &index_key(i), index_row(i));
+            if inserted.is_err() {
+                break;
+            }
+            engine.commit(tx).unwrap();
+        }
+        set_before_page_write_hook(None);
+        inserted.unwrap_or_else(|err| {
+            panic!("{durability:?}: an index insert into a pool of dirty leaves failed: {err:?}")
+        });
+        assert!(
+            engine.checkpoint_info().unwrap().is_some(),
+            "{durability:?}: no checkpoint made room"
+        );
+        assert_eq!(
+            early.borrow().as_slice(),
+            &[],
+            "{durability:?}: pages written before their WAL was durable"
+        );
+        assert_index_keys(&engine, index_id);
+        drop(index);
+        drop(engine);
+
+        // UnsafeDev may lose commits made after the last checkpoint.
+        if durability != CommitDurability::UnsafeDev {
+            let reopened = Engine::open(temp.path(), config(durability, 1024)).unwrap();
+            assert_index_keys(&reopened, index_id);
+        }
+    }
+}
+
 #[test]
 fn buffer_eviction_frees_index_pages_that_recovery_dirtied() {
     let temp = TempDir::new().unwrap();

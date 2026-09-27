@@ -10,7 +10,7 @@ use crossbeam_utils::CachePadded;
 use crate::format::{Lsn, Page, PageId, PageKind, RelId};
 use crate::storage::numa;
 use crate::storage::policy::{ActiveBufferPolicy, BufferPolicy};
-use crate::storage::{PageFile, PageWal};
+use crate::storage::{PageFile, PagePressureRelief, PageWal};
 use crate::telemetry::Phase11Counters;
 use crate::{Error, Result};
 
@@ -70,6 +70,9 @@ struct Inner {
     /// such a write, under the eviction mutex, and cleared by the next
     /// checkpoint flush that syncs.
     evicted_unsynced: AtomicBool,
+    /// Asked for a checkpoint when a clock pass finds no page it may evict.
+    /// Weak, so the pool never keeps its engine alive.
+    relief: OnceLock<Weak<dyn PagePressureRelief>>,
     eviction: Mutex<()>,
     stats: BufferPoolStatsInner,
 }
@@ -81,6 +84,8 @@ pub struct BufferPoolStats {
     pub writes: u64,
     pub evictions: u64,
     pub checkpoint_flushes: u64,
+    /// Checkpoints eviction asked for because no resident page could leave.
+    pub pressure_checkpoints: u64,
 }
 
 // Phase 5 WS-B5: avoid false-sharing with adjacent counters.
@@ -90,6 +95,13 @@ struct BufferPoolStatsInner {
     writes: CachePadded<AtomicU64>,
     evictions: CachePadded<AtomicU64>,
     checkpoint_flushes: CachePadded<AtomicU64>,
+    pressure_checkpoints: CachePadded<AtomicU64>,
+}
+
+thread_local! {
+    /// Set while this thread runs a pressure checkpoint, so that checkpoint
+    /// never asks for another one.
+    static RELIEVING_PRESSURE: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
 }
 
 #[derive(Debug)]
@@ -169,6 +181,7 @@ impl BufferPool {
             clock_hand: AtomicUsize::new(0),
             wal: OnceLock::new(),
             evicted_unsynced: AtomicBool::new(false),
+            relief: OnceLock::new(),
             eviction: Mutex::new(()),
             stats: BufferPoolStatsInner::default(),
         });
@@ -225,6 +238,17 @@ impl BufferPool {
             .wal
             .set(wal)
             .map_err(|_| Error::CorruptPage("buffer pool already has a wal"))
+    }
+
+    /// Attach what eviction asks for a checkpoint when every unpinned frame
+    /// holds a dirty page it may not write alone. A pool takes one, once.
+    /// Attach it only once the engine is fully open: a checkpoint during
+    /// recovery would record an LSN that replay has not reached.
+    pub fn attach_pressure_relief(&self, relief: Weak<dyn PagePressureRelief>) -> Result<()> {
+        self.inner
+            .relief
+            .set(relief)
+            .map_err(|_| Error::CorruptPage("buffer pool already has pressure relief"))
     }
 
     pub(crate) fn page_size(&self) -> usize {
@@ -607,6 +631,7 @@ impl Inner {
             writes: self.stats.writes.load(Ordering::Relaxed),
             evictions: self.stats.evictions.load(Ordering::Relaxed),
             checkpoint_flushes: self.stats.checkpoint_flushes.load(Ordering::Relaxed),
+            pressure_checkpoints: self.stats.pressure_checkpoints.load(Ordering::Relaxed),
         }
     }
 
@@ -654,18 +679,59 @@ impl Inner {
         if self.resident.load(Ordering::Relaxed) < self.capacity {
             return Ok(());
         }
-        let _eviction = self
-            .eviction
-            .lock()
-            .map_err(|_| Error::CorruptPage("buffer eviction mutex poisoned"))?;
-        while self.resident.load(Ordering::Relaxed) >= self.capacity {
-            if !self.evict_one()? {
+        let mut relieved = false;
+        loop {
+            {
+                let _eviction = self
+                    .eviction
+                    .lock()
+                    .map_err(|_| Error::CorruptPage("buffer eviction mutex poisoned"))?;
+                while self.resident.load(Ordering::Relaxed) >= self.capacity {
+                    if !self.evict_one()? {
+                        break;
+                    }
+                }
+                if self.resident.load(Ordering::Relaxed) < self.capacity {
+                    return Ok(());
+                }
+            }
+            // A full clock pass locked every resident frame, so this thread
+            // holds none of them, and the eviction mutex is released: the
+            // checkpoint below flushes frames and waits on that mutex.
+            if relieved || !self.relieve_pressure()? {
                 return Err(Error::CorruptPage(
                     "no unpinned frame available for eviction",
                 ));
             }
+            relieved = true;
         }
-        Ok(())
+    }
+
+    /// Ask the attached engine for a checkpoint. `false` when none is
+    /// attached, it is gone, or this thread is already running one.
+    fn relieve_pressure(&self) -> Result<bool> {
+        let Some(relief) = self.relief.get().and_then(Weak::upgrade) else {
+            return Ok(false);
+        };
+        if RELIEVING_PRESSURE.with(std::cell::Cell::get) {
+            return Ok(false);
+        }
+        struct Relieving;
+        impl Drop for Relieving {
+            fn drop(&mut self) {
+                RELIEVING_PRESSURE.with(|flag| flag.set(false));
+            }
+        }
+        RELIEVING_PRESSURE.with(|flag| flag.set(true));
+        let relieving = Relieving;
+        let relieved = relief.relieve_page_pressure();
+        drop(relieving);
+        if matches!(relieved, Ok(true)) {
+            self.stats
+                .pressure_checkpoints
+                .fetch_add(1, Ordering::Relaxed);
+        }
+        relieved
     }
 
     fn evict_one(&self) -> Result<bool> {
