@@ -191,6 +191,8 @@ impl PageBackedHeap {
                 Err(Error::PageFull) => return Ok(None),
                 Err(err) => return Err(err),
             };
+            #[cfg(test)]
+            super::super::test_hooks::run_before_heap_wal_hook(resident);
             let page_lsn = self.log_cell(tx_id, lsn, wal_payload.as_ref())?;
             staged_page.set_page_lsn(page_lsn)?;
             #[cfg(test)]

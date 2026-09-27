@@ -4,7 +4,8 @@ use std::thread;
 use std::time::Duration;
 
 use super::super::test_hooks::{
-    PageHook, set_before_heap_install_hook, set_before_tuple_overwrite_hook,
+    PageHook, set_before_heap_install_hook, set_before_heap_wal_hook,
+    set_before_tuple_overwrite_hook,
 };
 use super::PageBackedHeap;
 use crate::Error;
@@ -88,12 +89,13 @@ fn run_inside(
         .expect("the page write never reached its hook")
 }
 
-/// Run `work` on another thread once this thread's next heap append has written
-/// its WAL record and not yet installed its page. Returns whether `work` finished
-/// inside that window.
-fn run_during_heap_install(work: impl FnOnce() + Send + 'static, append: impl FnOnce()) -> bool {
-    run_inside(set_before_heap_install_hook, work, append)
-}
+/// Points inside a heap append, between copying the resident page and
+/// installing the staged one, where a concurrent writer can start. The frame
+/// latch has to cover all of them.
+const APPEND_STAGES: [(&str, fn(Option<PageHook>)); 2] = [
+    ("before its WAL append", set_before_heap_wal_hook),
+    ("before its page install", set_before_heap_install_hook),
+];
 
 #[test]
 fn fresh_append_publishes_one_cell() {
@@ -143,34 +145,40 @@ fn in_place_write_during_an_append_is_kept() {
     let mut pruned = heap.read_tuple(first_ptr).unwrap();
     pruned.undo_head = UndoPtr::ZERO;
 
-    let vacuum_heap = Arc::clone(&heap);
-    let second = RowId(2);
-    let mut second_ptr = None;
-    let finished_inside = run_during_heap_install(
-        move || vacuum_heap.overwrite_tuple(first_ptr, &pruned).unwrap(),
-        || {
-            let tuple = TupleVersion::new(second, RelId(1), TxId(1), b"second".to_vec());
-            second_ptr = Some(append(&heap, second, tuple));
-        },
-    );
+    for (row, (stage, set_hook)) in (2..).map(RowId).zip(APPEND_STAGES) {
+        let mut restored = heap.read_tuple(first_ptr).unwrap();
+        restored.undo_head = UndoPtr((9 << 16) | 3);
+        heap.overwrite_tuple(first_ptr, &restored).unwrap();
 
-    assert_eq!(
-        heap.read_tuple(first_ptr).unwrap().undo_head,
-        UndoPtr::ZERO,
-        "the append installed a page copy taken before the in-place write"
-    );
-    assert!(
-        !finished_inside,
-        "an in-place write ran between the page copy and its install"
-    );
-    let second_ptr = second_ptr.unwrap();
-    assert_eq!(second_ptr.page_id, first_ptr.page_id);
-    assert_eq!(heap.read_tuple(second_ptr).unwrap().payload, b"second");
+        let vacuum_heap = Arc::clone(&heap);
+        let pruned = pruned.clone();
+        let mut ptr = None;
+        let finished_inside = run_inside(
+            set_hook,
+            move || vacuum_heap.overwrite_tuple(first_ptr, &pruned).unwrap(),
+            || {
+                let tuple = TupleVersion::new(row, RelId(1), TxId(1), b"second".to_vec());
+                ptr = Some(append(&heap, row, tuple));
+            },
+        );
+
+        assert_eq!(
+            heap.read_tuple(first_ptr).unwrap().undo_head,
+            UndoPtr::ZERO,
+            "{stage}: the append installed a page copy taken before the in-place write"
+        );
+        assert!(
+            !finished_inside,
+            "{stage}: an in-place write ran between the page copy and its install"
+        );
+        let ptr = ptr.unwrap();
+        assert_eq!(ptr.page_id, first_ptr.page_id);
+        assert_eq!(heap.read_tuple(ptr).unwrap().payload, b"second");
+    }
 }
 
 #[test]
 fn checkpoint_during_a_heap_append_keeps_the_row_after_reopen() {
-    let dir = tempfile::tempdir().unwrap();
     let config = EngineConfig {
         buffer_pool_pages: 32,
         wal: WalConfig {
@@ -179,31 +187,35 @@ fn checkpoint_during_a_heap_append_keeps_the_row_after_reopen() {
         },
         ..EngineConfig::default()
     };
-    let engine = Engine::create(dir.path(), config.clone()).unwrap();
-    let mut tx = engine.begin(Isolation::Snapshot).unwrap();
-    let checkpoint_engine = Arc::clone(&engine);
-    let mut row = None;
-    let finished_inside = run_during_heap_install(
-        move || {
-            checkpoint_engine.checkpoint().unwrap();
-        },
-        || row = Some(engine.insert(&mut tx, b"alpha".to_vec()).unwrap()),
-    );
-    engine.commit(tx).unwrap();
-    // Drop without another checkpoint, as a crash would.
-    drop(engine);
+    for (stage, set_hook) in APPEND_STAGES {
+        let dir = tempfile::tempdir().unwrap();
+        let engine = Engine::create(dir.path(), config.clone()).unwrap();
+        let mut tx = engine.begin(Isolation::Snapshot).unwrap();
+        let checkpoint_engine = Arc::clone(&engine);
+        let mut row = None;
+        let finished_inside = run_inside(
+            set_hook,
+            move || {
+                checkpoint_engine.checkpoint().unwrap();
+            },
+            || row = Some(engine.insert(&mut tx, b"alpha".to_vec()).unwrap()),
+        );
+        engine.commit(tx).unwrap();
+        // Drop without another checkpoint, as a crash would.
+        drop(engine);
 
-    let reopened = Engine::open(dir.path(), config).unwrap();
-    let mut tx = reopened.begin(Isolation::Snapshot).unwrap();
-    assert_eq!(
-        reopened.get(&mut tx, row.unwrap()).unwrap(),
-        Some(b"alpha".to_vec()),
-        "the checkpoint moved past the heap record before its page was installed"
-    );
-    assert!(
-        !finished_inside,
-        "a checkpoint finished between a heap WAL append and its page install"
-    );
+        let reopened = Engine::open(dir.path(), config.clone()).unwrap();
+        let mut tx = reopened.begin(Isolation::Snapshot).unwrap();
+        assert_eq!(
+            reopened.get(&mut tx, row.unwrap()).unwrap(),
+            Some(b"alpha".to_vec()),
+            "{stage}: the checkpoint moved past the heap record before its page was installed"
+        );
+        assert!(
+            !finished_inside,
+            "{stage}: a checkpoint finished between a heap page copy and its install"
+        );
+    }
 }
 
 #[test]
