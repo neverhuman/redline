@@ -30,7 +30,7 @@ impl<Fs: FileSystem> WalReader<Fs> {
     pub fn scan_report(&mut self) -> Result<WalScanReport> {
         validate_config(&self.config)?;
         let segments = self.segment_numbers()?;
-        let mut records = Vec::new();
+        let mut records: Vec<WalRecord> = Vec::new();
         let mut stopped_at_tail = false;
 
         for (segment_index, segment) in segments.iter().enumerate() {
@@ -98,6 +98,13 @@ impl<Fs: FileSystem> WalReader<Fs> {
                             offset,
                             self.config.segment_bytes,
                         )?;
+                        if let Some(previous) = records.last()
+                            && record.prev_lsn != previous.lsn
+                        {
+                            return Err(Error::CorruptWal(
+                                "record prev_lsn does not match the previous record",
+                            ));
+                        }
                         records.push(record);
                         offset += record_len;
                     }

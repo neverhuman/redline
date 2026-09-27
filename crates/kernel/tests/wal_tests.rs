@@ -44,6 +44,41 @@ fn wal_record_detects_corruption() {
 }
 
 #[test]
+fn wal_scan_rejects_a_broken_prev_lsn_chain() {
+    let temp = TempDir::new().unwrap();
+    let config = WalConfig {
+        segment_bytes: 64 * 1024,
+        ..WalConfig::default()
+    };
+    let mut manager = WalManager::create(temp.path(), config.clone()).unwrap();
+    manager
+        .append(WalRecordKind::Begin, TxId(1), b"one".to_vec())
+        .unwrap();
+    manager
+        .append(WalRecordKind::Commit, TxId(1), b"two".to_vec())
+        .unwrap();
+    drop(manager);
+
+    let path = temp.path().join(format!("{:020}.wal", 1));
+    let mut bytes = std::fs::read(&path).unwrap();
+    let first_len = WalRecord::decode(&bytes).unwrap().encoded_len();
+    let prev_at = first_len + 24;
+    bytes[prev_at..prev_at + 8].copy_from_slice(&99_u64.to_le_bytes());
+    let payload_len =
+        u32::from_le_bytes(bytes[first_len + 12..first_len + 16].try_into().unwrap()) as usize;
+    let record_len = 48 + payload_len;
+    let crc = redlinedb_kernel::wal::checksum_wal_bytes(&bytes[first_len..first_len + record_len]);
+    bytes[first_len + 8..first_len + 12].copy_from_slice(&crc.to_le_bytes());
+    std::fs::write(&path, &bytes).unwrap();
+
+    let err = WalReader::new(temp.path(), config).scan().unwrap_err();
+    assert_eq!(
+        err,
+        Error::CorruptWal("record prev_lsn does not match the previous record")
+    );
+}
+
+#[test]
 fn wal_manager_appends_flushes_and_reopens() {
     let temp = TempDir::new().unwrap();
     let config = WalConfig {
