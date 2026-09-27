@@ -8,6 +8,8 @@ mod buffer_eviction_tests;
 mod catalog_ops;
 #[cfg(test)]
 mod catalog_sync_tests;
+#[cfg(test)]
+mod directory_load_tests;
 mod maintenance;
 mod recovery;
 mod runtime;

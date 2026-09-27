@@ -6,9 +6,18 @@ use crate::txn::Snapshot;
 use crate::{Error, Result};
 
 use super::super::{PageBackedHeap, advance_atomic_past};
+use super::load_heads::HeadChoices;
 
 impl PageBackedHeap {
-    pub fn load_row_directory_from_pages(&self, page_count: u64) -> Result<()> {
+    /// Rebuild the row directory from the heap pages for every row that has
+    /// no head yet. `txs` must already hold every recovered commit: it
+    /// decides which on-disk version of a row is the newest.
+    pub fn load_row_directory_from_pages(
+        &self,
+        page_count: u64,
+        txs: &ConcurrentTxStatus,
+    ) -> Result<()> {
+        let mut choices = HeadChoices::default();
         for page_no in 1..=page_count {
             let page_id = PageId(page_no);
             let guard = match self.buffer.pin(page_id) {
@@ -25,7 +34,7 @@ impl PageBackedHeap {
                     return Ok(());
                 }
 
-                for slot in (0..page.slot_count()?).rev() {
+                for slot in 0..page.slot_count()? {
                     let tuple = TupleVersion::decode(page.cell(slot)?)?;
                     advance_atomic_past(&self.next_row, tuple.row_id.0);
                     let rel_id = if tuple.rel_id == RelId::ZERO {
@@ -34,15 +43,18 @@ impl PageBackedHeap {
                         tuple.rel_id
                     };
                     let ptr = TuplePtr::new_with_generation(page_id, slot, header.generation);
-                    if self.head(tuple.row_id)?.is_none() {
-                        self.set_head(tuple.row_id, ptr)?;
-                    }
-                    if self.head_for_relation(rel_id, tuple.row_id)?.is_none() {
-                        self.set_relation_head(rel_id, tuple.row_id, ptr)?;
-                    }
+                    choices.offer(txs, rel_id, &tuple, ptr);
                 }
                 Ok(())
             })?;
+        }
+        for (rel_id, row_id, ptr) in choices.into_heads(|undo| self.read_undo(undo).ok()) {
+            if self.head(row_id)?.is_none() {
+                self.set_head(row_id, ptr)?;
+            }
+            if self.head_for_relation(rel_id, row_id)?.is_none() {
+                self.set_relation_head(rel_id, row_id, ptr)?;
+            }
         }
         Ok(())
     }

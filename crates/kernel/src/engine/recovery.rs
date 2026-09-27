@@ -316,7 +316,9 @@ impl Engine {
         recover_indexes(&scan_report.records, replay_from_lsn, target, &engine)?;
         if checkpoint.is_some() {
             let page_count = engine.heap.page_count()?;
-            engine.heap.load_row_directory_from_pages(page_count)?;
+            engine
+                .heap
+                .load_row_directory_from_pages(page_count, &engine.txs)?;
             engine.heap.load_reusable_pages_from_pages(page_count)?;
         }
         Ok((
