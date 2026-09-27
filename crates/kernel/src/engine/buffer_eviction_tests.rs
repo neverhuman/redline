@@ -20,7 +20,7 @@ use crate::catalog::{
 };
 use crate::format::{Lsn, PageGeneration, PageId, RelId, RowId, TuplePtr};
 use crate::index::IndexRowRef;
-use crate::storage::buffer_test_hooks::set_before_page_write_hook;
+use crate::storage::buffer_test_hooks::{page_file_syncs, set_before_page_write_hook};
 use crate::txn::Isolation;
 use crate::wal::WalConfig;
 use crate::{Error, Result};
@@ -209,6 +209,43 @@ fn buffer_eviction_after_open_finds_the_replayed_wal_durable() {
         "open left the replayed WAL undurable"
     );
     assert_rows(&reopened, &rows);
+}
+
+#[test]
+fn buffer_eviction_write_is_synced_by_the_next_checkpoint() {
+    // Eviction writes a page without syncing the page file. A checkpoint
+    // records an LSN past that page's WAL record and prunes the WAL below
+    // it, so it has to sync the evicted write even when it flushes nothing.
+    let temp = TempDir::new().unwrap();
+    let engine = Engine::create(temp.path(), config(CommitDurability::Normal, SMALL_POOL)).unwrap();
+    let rows = insert_rows(&engine, 0..ROWS).unwrap();
+    engine.checkpoint().unwrap();
+
+    // One dirty page, then cold reads until eviction has written it out.
+    let late = insert_rows(&engine, ROWS..ROWS + 1).unwrap();
+    let writes = engine.buffer.stats().writes;
+    let mut tx = engine.begin(Isolation::Snapshot).unwrap();
+    for (row, _) in rows.iter().chain(rows.iter()) {
+        engine.get(&mut tx, *row).unwrap();
+        if engine.buffer.stats().writes > writes {
+            break;
+        }
+    }
+    drop(tx);
+    assert_eq!(
+        engine.buffer.stats().writes,
+        writes + 1,
+        "eviction did not write the dirty page"
+    );
+
+    let syncs = page_file_syncs();
+    let checkpoint = engine.checkpoint_with_stats().unwrap();
+    assert_eq!(checkpoint.flushed_pages, 0);
+    assert!(
+        page_file_syncs() > syncs,
+        "the checkpoint left the evicted write unsynced"
+    );
+    assert_rows(&engine, &late);
 }
 
 #[test]

@@ -66,6 +66,10 @@ struct Inner {
     /// before it writes the page. Without one, only a dirty page with LSN
     /// zero can be evicted. Weak, so the pool never keeps the WAL open.
     wal: OnceLock<Weak<dyn PageWal>>,
+    /// Eviction writes a page without syncing the page file. Set before
+    /// such a write, under the eviction mutex, and cleared by the next
+    /// checkpoint flush that syncs.
+    evicted_unsynced: AtomicBool,
     eviction: Mutex<()>,
     stats: BufferPoolStatsInner,
 }
@@ -164,6 +168,7 @@ impl BufferPool {
             resident: CachePadded::new(AtomicUsize::new(0)),
             clock_hand: AtomicUsize::new(0),
             wal: OnceLock::new(),
+            evicted_unsynced: AtomicBool::new(false),
             eviction: Mutex::new(()),
             stats: BufferPoolStatsInner::default(),
         });
@@ -470,7 +475,7 @@ impl Inner {
         for (_, frame) in self.all_frames()? {
             self.flush_frame(&frame, durable_lsn)?;
         }
-        self.page_file.sync_data()
+        self.sync_flushed_pages(true)
     }
 
     fn write_page_direct(&self, page: &Page) -> Result<()> {
@@ -494,9 +499,7 @@ impl Inner {
 
     fn flush_dirty_batch(&self, durable_lsn: Lsn, max_pages: usize) -> Result<FlushStats> {
         let stats = self.flush_dirty_batch_inner(durable_lsn, max_pages)?;
-        if stats.flushed_pages > 0 {
-            self.page_file.sync_data()?;
-        }
+        self.sync_flushed_pages(stats.flushed_pages > 0)?;
         Ok(stats)
     }
 
@@ -518,9 +521,7 @@ impl Inner {
             thread::yield_now();
         }
 
-        if flushed_pages > 0 {
-            self.page_file.sync_data()?;
-        }
+        self.sync_flushed_pages(flushed_pages > 0)?;
 
         Ok(FlushStats {
             flushed_pages,
@@ -547,6 +548,28 @@ impl Inner {
             flushed_pages,
             batches: usize::from(flushed_pages > 0),
         })
+    }
+
+    /// Sync the page file after a checkpoint flush when this flush wrote a
+    /// page or an eviction wrote one since the last sync. The checkpoint that
+    /// follows records an LSN past those pages' WAL and prunes it, so an
+    /// evicted write has to be durable too. Taking the eviction mutex first
+    /// waits out an eviction write still in flight.
+    fn sync_flushed_pages(&self, flushed: bool) -> Result<()> {
+        drop(
+            self.eviction
+                .lock()
+                .map_err(|_| Error::CorruptPage("buffer eviction mutex poisoned"))?,
+        );
+        let evicted = self.evicted_unsynced.swap(false, Ordering::AcqRel);
+        if !flushed && !evicted {
+            return Ok(());
+        }
+        let synced = self.page_file.sync_data();
+        if synced.is_err() && evicted {
+            self.evicted_unsynced.store(true, Ordering::Release);
+        }
+        synced
     }
 
     fn resident_pages(&self) -> usize {
@@ -667,6 +690,7 @@ impl Inner {
                 }
                 // Rechecks the page LSN under the frame lock, so bytes newer
                 // than the durable WAL are never written.
+                self.evicted_unsynced.store(true, Ordering::Release);
                 self.flush_frame_if_durable(frame, durable_lsn)?;
                 state = frame
                     .state

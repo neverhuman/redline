@@ -111,6 +111,8 @@ impl<Fs: FileSystem> PageFile<Fs> {
             .file
             .lock()
             .map_err(|_| Error::CorruptPage("page file mutex poisoned"))?;
+        #[cfg(test)]
+        super::buffer_test_hooks::count_page_file_sync();
         file.sync_data()
     }
 
