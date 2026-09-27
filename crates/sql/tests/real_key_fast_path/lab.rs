@@ -152,11 +152,18 @@ impl Lab {
 
     /// Run one statement on both engines and require the same outcome.
     pub fn step(&self, sql: &str) -> Outcome {
-        let (expected, sqlite_msg) = run_sqlite(&self.sqlite, sql);
-        let (actual, redline_msg) = run_redline(&self.redline, sql);
+        self.step_split(sql, sql)
+    }
+
+    /// Run `sqlite_sql` on SQLite and `redline_sql` on RedlineDB and
+    /// require the same outcome. For RedlineDB statements SQLite spells
+    /// differently (e.g. `ADD CONSTRAINT` vs `CREATE UNIQUE INDEX`).
+    pub fn step_split(&self, sqlite_sql: &str, redline_sql: &str) -> Outcome {
+        let (expected, sqlite_msg) = run_sqlite(&self.sqlite, sqlite_sql);
+        let (actual, redline_msg) = run_redline(&self.redline, redline_sql);
         assert_eq!(
             actual, expected,
-            "divergence on `{sql}`\n  sqlite:  {expected:?} {sqlite_msg}\n  redline: {actual:?} {redline_msg}"
+            "divergence on `{redline_sql}`\n  sqlite:  {expected:?} {sqlite_msg}\n  redline: {actual:?} {redline_msg}"
         );
         expected
     }

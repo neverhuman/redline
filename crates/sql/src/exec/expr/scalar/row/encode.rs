@@ -54,8 +54,10 @@ pub(crate) fn sql_row_table_id(bytes: &[u8]) -> Result<Option<u64>> {
 }
 
 /// Materialise only `ordinals` (table columns, not counting the stored
-/// table id). Missing ordinals stay null. Callers that need every column
-/// use [`decode_sql_row`].
+/// table id); other columns stay null. Returns `None` when the record ends
+/// before one of `ordinals`: a row written before ALTER TABLE ADD COLUMN
+/// holds that column's DEFAULT, which only the full row load fills in.
+/// Callers that need every column use [`decode_sql_row`].
 pub(crate) fn decode_sql_key_columns(
     bytes: &[u8],
     ordinals: &[usize],
@@ -77,7 +79,10 @@ pub(crate) fn decode_sql_key_columns(
     let columns = record.column_count().map_err(|_| Error::DatatypeMismatch)?;
     for ordinal in ordinals {
         let slot = ordinal.saturating_add(1);
-        if slot >= columns || *ordinal >= width {
+        if slot >= columns {
+            return Ok(None);
+        }
+        if *ordinal >= width {
             continue;
         }
         values[*ordinal] = record

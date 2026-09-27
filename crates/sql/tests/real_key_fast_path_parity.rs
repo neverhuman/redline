@@ -326,6 +326,44 @@ fn unique_check_sees_default_of_column_added_after_rows() {
     );
 }
 
+/// ADD CONSTRAINT builds an unindexed UNIQUE over a column that rows
+/// written before ADD COLUMN do not store; those rows hold the column's
+/// DEFAULT. SQLite has no ADD CONSTRAINT, so it gets the same key as a
+/// unique index.
+#[test]
+fn unique_constraint_added_later_sees_default_of_short_rows() {
+    for (sqlite_ddl, redline_ddl) in [
+        (
+            "CREATE UNIQUE INDEX uc ON t(c)",
+            "ALTER TABLE t ADD CONSTRAINT uc UNIQUE (c)",
+        ),
+        (
+            "CREATE UNIQUE INDEX uc ON t(a, c)",
+            "ALTER TABLE t ADD CONSTRAINT uc UNIQUE (a, c)",
+        ),
+    ] {
+        let lab = Lab::new();
+        lab.script(&[
+            "CREATE TABLE t(id INTEGER PRIMARY KEY, a TEXT)",
+            "INSERT INTO t(id, a) VALUES (1, 'x')",
+            "ALTER TABLE t ADD COLUMN c INTEGER DEFAULT 5",
+        ]);
+        lab.step_split(sqlite_ddl, redline_ddl);
+        lab.expect("INSERT INTO t(id, a, c) VALUES (2, 'x', 5)", unique_err());
+        lab.expect("INSERT INTO t(id, a, c) VALUES (2, 'x', 5.0)", unique_err());
+        lab.expect("INSERT INTO t(id, a, c) VALUES (2, 'x', '5')", unique_err());
+        lab.expect("INSERT INTO t(id, a, c) VALUES (2, 'x', 6)", Outcome::Done);
+        lab.expect("UPDATE t SET c = 5.0 WHERE id = 2", unique_err());
+        lab.expect(
+            "SELECT id, a, c, typeof(c) FROM t ORDER BY id",
+            rows(&[
+                &[int(1), text("x"), int(5), text("integer")],
+                &[int(2), text("x"), int(6), text("integer")],
+            ]),
+        );
+    }
+}
+
 // -- Foreign keys with REAL keys -------------------------------------------
 
 #[test]

@@ -128,7 +128,7 @@ fn collect_unique_conflicts(
             conflicts,
         );
     }
-    if let Some(ordinals) = plain_key_ordinals(&pending_indexes) {
+    if let Some(ordinals) = plain_key_ordinals(table, &pending_indexes) {
         return column_key_conflicts(
             conn,
             session,
@@ -183,19 +183,35 @@ fn collect_unique_conflicts(
     Ok(conflicts)
 }
 
-fn plain_key_ordinals(indexes: &[&redlinedb_kernel::catalog::IndexDef]) -> Option<Vec<usize>> {
+/// Stored columns that every pending key reads, or `None` when a key needs
+/// more than the stored bytes: a partial-index predicate, an expression,
+/// or a VIRTUAL generated column (the heap stores NULL there and only the
+/// full row load computes it).
+fn plain_key_ordinals(
+    table: &TableDef,
+    indexes: &[&redlinedb_kernel::catalog::IndexDef],
+) -> Option<Vec<usize>> {
     let mut ordinals = Vec::new();
     for index in indexes {
         if index.predicate_sql.is_some() {
             return None;
         }
         for key in &index.keys {
-            match &key.source {
-                redlinedb_kernel::catalog::IndexKeySource::Column { attnum } => {
-                    ordinals.push(*attnum as usize);
-                }
-                _ => return None,
+            let redlinedb_kernel::catalog::IndexKeySource::Column { attnum } = &key.source else {
+                return None;
+            };
+            let virtual_column = table.columns.get(*attnum as usize).is_some_and(|column| {
+                column.generated.as_ref().is_some_and(|generated| {
+                    matches!(
+                        generated.kind,
+                        redlinedb_kernel::catalog::GeneratedColumnKind::Virtual
+                    )
+                })
+            });
+            if virtual_column {
+                return None;
             }
+            ordinals.push(*attnum as usize);
         }
     }
     ordinals.sort_unstable();
@@ -203,6 +219,7 @@ fn plain_key_ordinals(indexes: &[&redlinedb_kernel::catalog::IndexDef]) -> Optio
     Some(ordinals)
 }
 
+#[allow(clippy::too_many_arguments)]
 fn column_key_conflicts(
     conn: &Connection,
     session: &mut SessionState,
@@ -224,15 +241,20 @@ fn column_key_conflicts(
         else {
             continue;
         };
-        let Some((table_id, row_values)) =
-            decode_sql_key_columns(&payload, ordinals, table.columns.len())?
-        else {
-            continue;
-        };
-        if table_id != table.table_id.0 {
-            continue;
+        match decode_sql_key_columns(&payload, ordinals, table.columns.len())? {
+            Some((table_id, row_values)) => {
+                if table_id == table.table_id.0 {
+                    projected.push((rowid, row_values));
+                }
+            }
+            // The row predates a key column; load it whole so that column
+            // reads as its DEFAULT, not NULL.
+            None => {
+                if let Some(row) = load_table_row_by_rowid(conn.engine(), tx, table, rowid)? {
+                    projected.push((rowid, row.values));
+                }
+            }
         }
-        projected.push((rowid, row_values));
     }
     for index in indexes {
         let built = crate::exec::index_dml::build_index_key_with_values(table, index, values)?;
