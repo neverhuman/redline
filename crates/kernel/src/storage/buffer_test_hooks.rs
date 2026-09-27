@@ -13,6 +13,7 @@ pub(crate) type PageWriteHook = Box<dyn FnMut(PageId, Lsn)>;
 thread_local! {
     static BEFORE_PAGE_WRITE: RefCell<Option<PageWriteHook>> = const { RefCell::new(None) };
     static PAGE_FILE_SYNCS: Cell<u64> = const { Cell::new(0) };
+    static FAIL_NEXT_PAGE_FILE_SYNC: Cell<bool> = const { Cell::new(false) };
 }
 
 /// Run `hook` on this thread before every buffer pool page write, with the
@@ -36,4 +37,13 @@ pub(crate) fn page_file_syncs() -> u64 {
 
 pub(super) fn count_page_file_sync() {
     PAGE_FILE_SYNCS.with(|count| count.set(count.get().saturating_add(1)));
+}
+
+/// Make the next page file sync on this thread fail with an I/O error.
+pub(crate) fn fail_next_page_file_sync() {
+    FAIL_NEXT_PAGE_FILE_SYNC.with(|fail| fail.set(true));
+}
+
+pub(super) fn take_page_file_sync_failure() -> bool {
+    FAIL_NEXT_PAGE_FILE_SYNC.with(|fail| fail.replace(false))
 }

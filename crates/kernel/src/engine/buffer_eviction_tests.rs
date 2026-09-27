@@ -8,7 +8,8 @@
 use std::cell::{Cell, RefCell};
 use std::ops::Range;
 use std::rc::Rc;
-use std::sync::Arc;
+use std::sync::{Arc, mpsc};
+use std::thread;
 use std::time::Duration;
 
 use tempfile::TempDir;
@@ -20,7 +21,9 @@ use crate::catalog::{
 };
 use crate::format::{Lsn, PageGeneration, PageId, PageKind, RelId, RowId, TuplePtr};
 use crate::index::IndexRowRef;
-use crate::storage::buffer_test_hooks::{page_file_syncs, set_before_page_write_hook};
+use crate::storage::buffer_test_hooks::{
+    fail_next_page_file_sync, page_file_syncs, set_before_page_write_hook,
+};
 use crate::storage::{BufferPool, PageFile};
 use crate::txn::Isolation;
 use crate::wal::{WalConfig, flushed_all_through, reset_flushed_all_through};
@@ -333,18 +336,8 @@ fn buffer_eviction_write_is_synced_by_the_next_checkpoint() {
     // records behind that page and prunes the WAL below it, so its flush has
     // to sync the evicted write even when it writes no page itself.
     let temp = TempDir::new().unwrap();
-    let file = Arc::new(PageFile::create(temp.path().join("data.redline"), PAGE_SIZE).unwrap());
-    let pool = BufferPool::new(Arc::clone(&file), 1).unwrap();
-    let replayed = pool.allocate(PageKind::Heap, RelId(1)).unwrap();
-    let replayed_id = replayed.page_id();
-    drop(replayed);
-    let next = pool.allocate(PageKind::Heap, RelId(1)).unwrap();
-    assert!(
-        file.read_page(replayed_id).is_ok(),
-        "eviction did not write the dirty page"
-    );
-    pool.flush_page(next.page_id(), Lsn::ZERO).unwrap();
-    drop(next);
+    let (pool, next) = pool_after_an_eviction_write(&temp);
+    pool.flush_page(next, Lsn::ZERO).unwrap();
 
     let syncs = page_file_syncs();
     let flushed = pool.flush_dirty_batches(Lsn(u64::MAX), 64).unwrap();
@@ -352,6 +345,88 @@ fn buffer_eviction_write_is_synced_by_the_next_checkpoint() {
     assert!(
         page_file_syncs() > syncs,
         "the checkpoint flush left the evicted write unsynced"
+    );
+}
+
+/// A pool of one frame whose only page, dirty at LSN zero, eviction wrote to
+/// make room for a second page, as it writes pages replay leaves dirty.
+/// Returns the pool and the second page's id.
+fn pool_after_an_eviction_write(temp: &TempDir) -> (Arc<BufferPool>, PageId) {
+    let file = Arc::new(PageFile::create(temp.path().join("data.redline"), PAGE_SIZE).unwrap());
+    let pool = Arc::new(BufferPool::new(file, 1).unwrap());
+    drop(pool.allocate(PageKind::Heap, RelId(1)).unwrap());
+    let next = pool.allocate(PageKind::Heap, RelId(1)).unwrap();
+    assert_eq!(pool.stats().evictions, 1);
+    (Arc::clone(&pool), next.page_id())
+}
+
+#[test]
+fn buffer_eviction_write_in_flight_is_synced_by_a_concurrent_checkpoint() {
+    // A checkpoint flush that starts while eviction is still writing a page
+    // must wait for that write before it syncs; otherwise it syncs first and
+    // records its LSN over a write that may never reach the disk.
+    let temp = TempDir::new().unwrap();
+    let file = Arc::new(PageFile::create(temp.path().join("data.redline"), PAGE_SIZE).unwrap());
+    let pool = Arc::new(BufferPool::new(file, 1).unwrap());
+    drop(pool.allocate(PageKind::Heap, RelId(1)).unwrap());
+
+    let (writing_tx, writing) = mpsc::channel();
+    let (release, release_rx) = mpsc::channel::<()>();
+    let evicting = {
+        let pool = Arc::clone(&pool);
+        thread::spawn(move || {
+            set_before_page_write_hook(Some(Box::new(move |_, _| {
+                writing_tx.send(()).unwrap();
+                release_rx.recv().unwrap();
+            })));
+            let next = pool.allocate(PageKind::Heap, RelId(1)).unwrap();
+            set_before_page_write_hook(None);
+            // Clean, so the checkpoint below has nothing of its own to write.
+            pool.flush_page(next.page_id(), Lsn::ZERO).unwrap();
+        })
+    };
+    writing.recv_timeout(Duration::from_secs(10)).unwrap();
+
+    let (done_tx, done) = mpsc::channel();
+    let checkpoint = {
+        let pool = Arc::clone(&pool);
+        thread::spawn(move || {
+            let syncs = page_file_syncs();
+            pool.flush_dirty_batches(Lsn(u64::MAX), 64).unwrap();
+            done_tx.send(()).unwrap();
+            page_file_syncs() - syncs
+        })
+    };
+    let finished_during_write = done.recv_timeout(Duration::from_millis(300)).is_ok();
+    release.send(()).unwrap();
+    evicting.join().unwrap();
+    let synced = checkpoint.join().unwrap();
+    assert!(
+        !finished_during_write,
+        "the checkpoint flush finished while eviction was still writing a page"
+    );
+    assert!(
+        synced > 0,
+        "the checkpoint flush never synced the page file"
+    );
+}
+
+#[test]
+fn buffer_eviction_write_stays_owed_a_sync_after_a_failed_one() {
+    // A checkpoint whose sync fails has not made the evicted write durable,
+    // so the next checkpoint must sync even though it writes no page.
+    let temp = TempDir::new().unwrap();
+    let (pool, next) = pool_after_an_eviction_write(&temp);
+    pool.flush_page(next, Lsn::ZERO).unwrap();
+
+    fail_next_page_file_sync();
+    assert!(pool.flush_dirty_batches(Lsn(u64::MAX), 64).is_err());
+    let syncs = page_file_syncs();
+    let flushed = pool.flush_dirty_batches(Lsn(u64::MAX), 64).unwrap();
+    assert_eq!(flushed.flushed_pages, 0);
+    assert!(
+        page_file_syncs() > syncs,
+        "after a failed sync the next checkpoint flush left the evicted write unsynced"
     );
 }
 

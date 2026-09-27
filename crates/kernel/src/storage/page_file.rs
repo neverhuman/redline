@@ -113,6 +113,10 @@ impl<Fs: FileSystem> PageFile<Fs> {
             .map_err(|_| Error::CorruptPage("page file mutex poisoned"))?;
         #[cfg(test)]
         super::buffer_test_hooks::count_page_file_sync();
+        #[cfg(test)]
+        if super::buffer_test_hooks::take_page_file_sync_failure() {
+            return Err(std::io::Error::other("injected page file sync failure").into());
+        }
         file.sync_data()
     }
 
