@@ -162,6 +162,15 @@ fn checkpoint_at_install(last: usize, at: usize, images: &[PageKind]) -> Vec<Str
             "checkpoint {during:?} passed the first split image {first_image:?}"
         ));
     }
+    // Once the split is installed, nothing may hold the checkpoint back. This
+    // writes no page, so the reopen still starts from the mid-split one.
+    let durable = engine.wal.flush_all().unwrap();
+    let horizon = engine.wal.checkpoint_horizon(durable).unwrap();
+    if horizon != durable {
+        problems.push(format!(
+            "the split left an install fence behind: horizon {horizon:?}, durable {durable:?}"
+        ));
+    }
     drop(index);
     drop(engine);
     let reopened = match Engine::open(dir.path(), config()) {
