@@ -78,13 +78,11 @@ impl Engine {
         let wal = if volatile {
             Arc::new(WalCoordinator::volatile(config.wal.clone()))
         } else {
-            let wal = Arc::new(WalCoordinator::create_with_shutdown_flush(
+            Arc::new(WalCoordinator::create_with_shutdown_flush(
                 &wal_dir,
                 config.wal.clone(),
                 flush_wal_on_shutdown(config.commit_durability),
-            )?);
-            attach_wal_to_buffer(&buffer, &wal)?;
-            wal
+            )?)
         };
         // Use the volatile constructors for in-memory engines: they skip
         // create_dir_all (already done by the caller) saving another 4–6
@@ -227,9 +225,8 @@ impl Engine {
             )
             .map_err(|_| Error::CorruptWal("open wal coordinator failed"))?,
         );
-        attach_wal_to_buffer(&buffer, &wal)?;
-        // Heap replay stamps pages with LSN zero, and page images go straight
-        // to the page file, so no page LSN tells eviction or a checkpoint
+        // Heap replay stamps pages with LSN zero, which eviction may write,
+        // and page images go straight to the page file, so no page LSN says
         // which WAL a replayed change needs. The scanned WAL can still sit
         // unsynced from the run that crashed. Make it durable before replay
         // writes any page.
@@ -335,13 +332,6 @@ impl Engine {
             RecoveryReport::from_scan(scan_report, metrics, replay_from_lsn),
         ))
     }
-}
-
-/// Eviction writes a dirty page only after this WAL is durable through the
-/// page's LSN. Volatile engines have no WAL to attach.
-fn attach_wal_to_buffer(buffer: &BufferPool, wal: &Arc<WalCoordinator>) -> Result<()> {
-    let wal: std::sync::Weak<WalCoordinator> = Arc::downgrade(wal);
-    buffer.attach_wal(wal)
 }
 
 pub(super) fn catalog_sync_policy(durability: CommitDurability) -> CatalogSyncPolicy {

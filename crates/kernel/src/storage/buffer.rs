@@ -10,7 +10,7 @@ use crossbeam_utils::CachePadded;
 use crate::format::{Lsn, Page, PageId, PageKind, RelId};
 use crate::storage::numa;
 use crate::storage::policy::{ActiveBufferPolicy, BufferPolicy};
-use crate::storage::{PageFile, PagePressureRelief, PageWal};
+use crate::storage::{PageFile, PagePressureRelief};
 use crate::telemetry::Phase11Counters;
 use crate::{Error, Result};
 
@@ -62,10 +62,6 @@ struct Inner {
     // Phase 5 WS-B5: avoid false-sharing with adjacent counters.
     resident: CachePadded<AtomicUsize>,
     clock_hand: AtomicUsize,
-    /// The WAL that eviction makes durable through a dirty page's LSN
-    /// before it writes the page. Without one, only a dirty page with LSN
-    /// zero can be evicted. Weak, so the pool never keeps the WAL open.
-    wal: OnceLock<Weak<dyn PageWal>>,
     /// Eviction writes a page without syncing the page file. Set before
     /// such a write, under the eviction mutex, and cleared by the next
     /// checkpoint flush that syncs.
@@ -179,7 +175,6 @@ impl BufferPool {
             next_page_id: AtomicU64::new(next_page_id),
             resident: CachePadded::new(AtomicUsize::new(0)),
             clock_hand: AtomicUsize::new(0),
-            wal: OnceLock::new(),
             evicted_unsynced: AtomicBool::new(false),
             relief: OnceLock::new(),
             eviction: Mutex::new(()),
@@ -229,15 +224,6 @@ impl BufferPool {
 
     pub fn allocate(&self, kind: PageKind, rel_id: RelId) -> Result<PageGuard> {
         self.inner.allocate(kind, rel_id)
-    }
-
-    /// Attach the WAL that eviction must make durable before it writes a
-    /// dirty page. A pool takes one WAL, once.
-    pub fn attach_wal(&self, wal: Weak<dyn PageWal>) -> Result<()> {
-        self.inner
-            .wal
-            .set(wal)
-            .map_err(|_| Error::CorruptPage("buffer pool already has a wal"))
     }
 
     /// Attach what eviction asks for a checkpoint when every unpinned frame
@@ -739,9 +725,6 @@ impl Inner {
         if frames.is_empty() {
             return Ok(false);
         }
-        // Durable WAL LSN known to this pass. It grows each time a dirty
-        // victim asks the WAL to cover its page LSN.
-        let mut durable_lsn = Lsn::ZERO;
 
         let start = self.clock_hand.fetch_add(1, Ordering::Relaxed);
         // Usage climbs to CLOCK_MAX_USAGE on each pin and only falls here.
@@ -769,21 +752,11 @@ impl Inner {
                 if !eviction_may_write(page)? {
                     continue;
                 }
-                let page_lsn = page.header()?.page_lsn;
-                // Release the frame before asking the WAL: the flush can wait
-                // on an fsync, and append_cell holds a frame lock while it
-                // appends. No shard lock is held here either.
                 drop(state);
-                if page_lsn > durable_lsn {
-                    durable_lsn = durable_lsn.max(self.wal_durable_through(page_lsn)?);
-                    if page_lsn > durable_lsn {
-                        continue;
-                    }
-                }
-                // Rechecks the page LSN under the frame lock, so bytes newer
-                // than the durable WAL are never written.
+                // The flush rechecks the page LSN under the frame lock, so a
+                // page that took a logged change meanwhile stays.
                 self.evicted_unsynced.store(true, Ordering::Release);
-                self.flush_frame_if_durable(frame, durable_lsn)?;
+                self.flush_frame_if_durable(frame, Lsn::ZERO)?;
                 state = frame
                     .state
                     .lock()
@@ -800,16 +773,6 @@ impl Inner {
         }
 
         Ok(false)
-    }
-
-    /// Make the attached WAL durable through `page_lsn` and return the
-    /// durable LSN. The result stays below `page_lsn` when no WAL is attached,
-    /// the WAL was dropped, or the WAL holds no record that far.
-    fn wal_durable_through(&self, page_lsn: Lsn) -> Result<Lsn> {
-        match self.wal.get().and_then(Weak::upgrade) {
-            Some(wal) => wal.make_durable_for_page(page_lsn),
-            None => Ok(Lsn::ZERO),
-        }
     }
 
     fn remove_loading_frame(&self, page_id: PageId, frame: &Arc<FrameEntry>) -> Result<()> {
@@ -978,17 +941,20 @@ impl Inner {
 
 /// Whether eviction may write this dirty page out on its own.
 ///
-/// Recovery rebuilds heap and undo pages row by row from the WAL, so one of
-/// them can reach the page file alone once its WAL is durable. A B-tree split
-/// changes two pages through two page images, and recovery replays those only
-/// for committed transactions. HNSW links in a new page that it never logs.
-/// Writing one of those pages alone can leave a pointer to a page the file
-/// never received, so dirty index pages leave only through a checkpoint. A
-/// page with LSN zero is the exception: no logged change has touched it since
-/// it was allocated, read, or replayed.
+/// Only a page no logged change has touched since it was allocated, read or
+/// replayed, which is a page with LSN zero. Any other dirty page reaches the
+/// file only through a checkpoint, which writes every such page as one cut
+/// and records where recovery starts. Recovery replays heap records into
+/// new versions rather than onto the page they changed, so a heap page
+/// written ahead of that cut leaves a second copy of every row on it once
+/// the records are replayed again. Undo records are never logged, so a heap
+/// page written ahead of the undo page its new versions point into can name
+/// undo the file never received. A B-tree split changes several pages, and
+/// HNSW links in pages it never logs, so one of those pages alone can point
+/// at a page the file does not have. When every unpinned frame holds such a
+/// page, eviction asks for a checkpoint instead.
 fn eviction_may_write(page: &Page) -> Result<bool> {
-    let header = page.header()?;
-    Ok(header.page_lsn == Lsn::ZERO || matches!(header.kind, PageKind::Heap | PageKind::Undo))
+    Ok(page.header()?.page_lsn == Lsn::ZERO)
 }
 
 impl PageGuard {

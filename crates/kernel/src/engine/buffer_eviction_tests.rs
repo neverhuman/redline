@@ -18,9 +18,10 @@ use crate::catalog::{
     ColumnSpec, CreateIndexSpec, CreateTableSpec, DbName, IndexColumnSpec, IndexId, IndexOrigin,
     QualifiedName, SortDir,
 };
-use crate::format::{Lsn, PageGeneration, PageId, RelId, RowId, TuplePtr};
+use crate::format::{Lsn, PageGeneration, PageId, PageKind, RelId, RowId, TuplePtr};
 use crate::index::IndexRowRef;
 use crate::storage::buffer_test_hooks::{page_file_syncs, set_before_page_write_hook};
+use crate::storage::{BufferPool, PageFile};
 use crate::txn::Isolation;
 use crate::wal::WalConfig;
 use crate::{Error, Result};
@@ -266,45 +267,106 @@ fn buffer_eviction_after_open_finds_the_replayed_wal_durable() {
 
 #[test]
 fn buffer_eviction_write_is_synced_by_the_next_checkpoint() {
-    // Eviction writes a page without syncing the page file. A checkpoint
-    // records an LSN past that page's WAL record and prunes the WAL below
-    // it, so it has to sync the evicted write even when it flushes nothing.
+    // Eviction writes a page with LSN zero, such as one replay dirtied,
+    // without syncing the page file. A checkpoint records an LSN past the
+    // records behind that page and prunes the WAL below it, so its flush has
+    // to sync the evicted write even when it writes no page itself.
+    let temp = TempDir::new().unwrap();
+    let file = Arc::new(PageFile::create(temp.path().join("data.redline"), PAGE_SIZE).unwrap());
+    let pool = BufferPool::new(Arc::clone(&file), 1).unwrap();
+    let replayed = pool.allocate(PageKind::Heap, RelId(1)).unwrap();
+    let replayed_id = replayed.page_id();
+    drop(replayed);
+    let next = pool.allocate(PageKind::Heap, RelId(1)).unwrap();
+    assert!(
+        file.read_page(replayed_id).is_ok(),
+        "eviction did not write the dirty page"
+    );
+    pool.flush_page(next.page_id(), Lsn::ZERO).unwrap();
+    drop(next);
+
+    let syncs = page_file_syncs();
+    let flushed = pool.flush_dirty_batches(Lsn(u64::MAX), 64).unwrap();
+    assert_eq!(flushed.flushed_pages, 0);
+    assert!(
+        page_file_syncs() > syncs,
+        "the checkpoint flush left the evicted write unsynced"
+    );
+}
+
+#[test]
+fn buffer_eviction_keeps_a_heap_page_whose_undo_is_only_in_memory() {
+    // An update appends its new version to a heap page and the old one to
+    // an undo page, and only the heap change is logged. Writing that heap
+    // page alone could leave the file pointing at undo it never received.
+    let temp = TempDir::new().unwrap();
+    let engine = Engine::create(temp.path(), config(CommitDurability::Normal, 1024)).unwrap();
+    let rows = insert_rows(&engine, 0..1).unwrap();
+    let checkpoint = engine.checkpoint().unwrap();
+    let mut open = engine.begin(Isolation::Snapshot).unwrap();
+    engine.update(&mut open, rows[0].0, payload(7)).unwrap();
+    let heap_page = engine
+        .heap
+        .head_for_relation(RelId(1), rows[0].0)
+        .unwrap()
+        .unwrap()
+        .page_id;
+    let durable = engine.wal.flush_all().unwrap();
+    engine
+        .buffer
+        .flush_page_if_evictable(heap_page, durable)
+        .unwrap();
+    let on_disk = PageFile::open(&engine.data_path, PAGE_SIZE)
+        .unwrap()
+        .read_page(heap_page)
+        .unwrap();
+    assert!(
+        on_disk.header().unwrap().page_lsn <= checkpoint.checkpoint_lsn,
+        "eviction wrote the heap page holding the uncommitted update"
+    );
+    drop(open);
+}
+
+#[test]
+fn buffer_eviction_leaves_one_copy_of_each_row_after_a_reopen() {
+    // Recovery replays heap records into new versions. A heap page that
+    // eviction wrote ahead of a checkpoint would keep its rows next to the
+    // replayed copies, and a page scan would return both.
     let temp = TempDir::new().unwrap();
     let engine = Engine::create(temp.path(), config(CommitDurability::Normal, SMALL_POOL)).unwrap();
     let rows = insert_rows(&engine, 0..ROWS).unwrap();
-    engine.checkpoint().unwrap();
+    drop(engine);
 
-    // One dirty page, then cold reads until eviction has written it out.
-    let late = insert_rows(&engine, ROWS..ROWS + 1).unwrap();
-    let writes = engine.buffer.stats().writes;
-    let mut tx = engine.begin(Isolation::Snapshot).unwrap();
-    for (row, _) in rows.iter().chain(rows.iter()) {
-        engine.get(&mut tx, *row).unwrap();
-        if engine.buffer.stats().writes > writes {
-            break;
-        }
-    }
-    drop(tx);
-    assert_eq!(
-        engine.buffer.stats().writes,
-        writes + 1,
-        "eviction did not write the dirty page"
-    );
+    let reopened = Engine::open(temp.path(), config(CommitDurability::Normal, SMALL_POOL)).unwrap();
+    assert_eq!(scanned_row_tags(&reopened), (0..ROWS).collect::<Vec<_>>());
+    assert_rows(&reopened, &rows);
+}
 
-    let syncs = page_file_syncs();
-    let checkpoint = engine.checkpoint_with_stats().unwrap();
-    assert_eq!(checkpoint.flushed_pages, 0);
-    assert!(
-        page_file_syncs() > syncs,
-        "the checkpoint left the evicted write unsynced"
-    );
-    assert_rows(&engine, &late);
+/// The payload tag of every committed row a page scan returns, sorted.
+fn scanned_row_tags(engine: &Engine) -> Vec<usize> {
+    let tx = engine.begin(Isolation::Snapshot).unwrap();
+    let pages = engine.heap_page_count().unwrap();
+    let mut tags: Vec<usize> = engine
+        .parallel_scan_page_range(
+            tx.snapshot(),
+            Some(tx.id()),
+            PageId(1)..PageId(pages + 1),
+            Some(RelId(1)),
+            1,
+            None,
+        )
+        .unwrap()
+        .iter()
+        .map(|row| u64::from_le_bytes(row.payload[..8].try_into().unwrap()) as usize)
+        .collect();
+    tags.sort_unstable();
+    tags
 }
 
 #[test]
 fn buffer_eviction_of_an_open_transaction_keeps_its_ids_from_new_ones() {
-    // Eviction can write pages holding tuples of a transaction that never
-    // commits, with no checkpoint to record its id. Recovery must not hand
+    // A checkpoint eviction asks for can write pages holding tuples of a
+    // transaction that never commits. Recovery must not hand
     // that transaction id, or its row ids, to new work: a reused transaction
     // id would make the orphaned tuples visible once the new one commits.
     let temp = TempDir::new().unwrap();
@@ -318,7 +380,7 @@ fn buffer_eviction_of_an_open_transaction_keeps_its_ids_from_new_ones() {
     }
     assert!(
         engine.buffer.stats().writes > 0,
-        "eviction never wrote the open transaction's pages"
+        "no checkpoint wrote the open transaction's pages"
     );
     drop(open);
     drop(engine);
@@ -410,22 +472,17 @@ fn buffer_eviction_never_tears_an_uncommitted_index_split() {
 }
 
 #[test]
-fn buffer_eviction_without_a_wal_keeps_a_page_ahead_of_durability() {
-    // A pool that no engine attached a WAL to cannot prove a page's WAL is
-    // durable, so the dirty page stays and allocation fails closed.
+fn buffer_eviction_without_an_engine_keeps_a_page_with_a_logged_change() {
+    // A pool no engine is attached to cannot ask for a checkpoint, so the
+    // dirty page stays and allocation fails closed.
     let temp = TempDir::new().unwrap();
-    let file = Arc::new(
-        crate::storage::PageFile::create(temp.path().join("data.redline"), PAGE_SIZE).unwrap(),
-    );
-    let pool = crate::storage::BufferPool::new(file, 1).unwrap();
-    let first = pool
-        .allocate(crate::format::PageKind::Heap, RelId(1))
-        .unwrap();
+    let file = Arc::new(PageFile::create(temp.path().join("data.redline"), PAGE_SIZE).unwrap());
+    let pool = BufferPool::new(file, 1).unwrap();
+    let first = pool.allocate(PageKind::Heap, RelId(1)).unwrap();
     first.mark_dirty(Lsn(10)).unwrap();
     drop(first);
     assert_eq!(
-        pool.allocate(crate::format::PageKind::Heap, RelId(1))
-            .unwrap_err(),
+        pool.allocate(PageKind::Heap, RelId(1)).unwrap_err(),
         Error::CorruptPage("no unpinned frame available for eviction")
     );
 }

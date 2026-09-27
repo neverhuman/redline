@@ -5,7 +5,6 @@ pub mod control;
 pub mod numa;
 pub mod page_file;
 pub mod page_pressure;
-pub mod page_wal;
 pub(crate) mod policy;
 pub mod tx_status_checkpoint;
 
@@ -13,7 +12,6 @@ pub use buffer::*;
 pub use control::*;
 pub use page_file::*;
 pub use page_pressure::*;
-pub use page_wal::*;
 pub use tx_status_checkpoint::*;
 
 use std::fs::File;

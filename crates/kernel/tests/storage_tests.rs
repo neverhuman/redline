@@ -1,12 +1,14 @@
 use redlinedb_kernel::Error;
 use redlinedb_kernel::format::{Csn, Lsn, Page, PageId, PageKind, RelId, TxId};
 use redlinedb_kernel::storage::{
-    BufferPool, ControlFile, ControlStore, PageFile, PageWal, TxStatusCheckpoint, TxStatusStore,
+    BufferPool, ControlFile, ControlStore, PageFile, PagePressureRelief, TxStatusCheckpoint,
+    TxStatusStore,
 };
 use redlinedb_kernel::wal::WalPayload;
 use std::fs::OpenOptions;
 use std::io::{Seek, SeekFrom, Write};
-use std::sync::{Arc, Barrier, Mutex, Weak};
+use std::sync::atomic::{AtomicUsize, Ordering};
+use std::sync::{Arc, Barrier, Weak};
 use std::thread;
 use tempfile::TempDir;
 
@@ -155,117 +157,61 @@ fn buffer_pool_evicts_a_clean_frame_whose_usage_was_saturated() {
     assert_eq!(pool.resident_pages(), 1);
 }
 
-/// WAL stand-in for eviction tests. It holds records through `written`,
-/// syncs up to there when asked, and notes each request together with
-/// whether the page file already held `page` at that moment.
-struct RecordingWal {
-    file: Arc<PageFile>,
-    page: PageId,
-    written: Mutex<Lsn>,
-    durable: Mutex<Lsn>,
-    requests: Mutex<Vec<(Lsn, bool)>>,
+/// Engine stand-in for eviction tests: a checkpoint that writes every dirty
+/// page of the pool, counting how often eviction asked for one.
+struct CheckpointingRelief {
+    pool: Arc<BufferPool>,
+    asked: AtomicUsize,
 }
 
-impl RecordingWal {
-    fn new(file: Arc<PageFile>, page: PageId, written: Lsn) -> Self {
-        Self {
-            file,
-            page,
-            written: Mutex::new(written),
-            durable: Mutex::new(Lsn::ZERO),
-            requests: Mutex::new(Vec::new()),
-        }
-    }
-}
-
-impl PageWal for RecordingWal {
-    fn make_durable_for_page(&self, page_lsn: Lsn) -> redlinedb_kernel::Result<Lsn> {
-        let page_on_disk = self.file.read_page(self.page).is_ok();
-        self.requests.lock().unwrap().push((page_lsn, page_on_disk));
-        let written = *self.written.lock().unwrap();
-        let mut durable = self.durable.lock().unwrap();
-        *durable = (*durable).max(written);
-        Ok(*durable)
+impl PagePressureRelief for CheckpointingRelief {
+    fn relieve_page_pressure(&self) -> redlinedb_kernel::Result<bool> {
+        self.asked.fetch_add(1, Ordering::Relaxed);
+        self.pool.flush_all(Lsn(u64::MAX))?;
+        Ok(true)
     }
 }
 
 #[test]
-fn buffer_pool_evicts_a_dirty_page_once_its_lsn_is_durable() {
-    let temp = TempDir::new().unwrap();
-    let file =
-        Arc::new(PageFile::create(temp.path().join("data.redline"), TEST_PAGE_SIZE).unwrap());
-    let pool = BufferPool::new(Arc::clone(&file), 1).unwrap();
-    let first = pool.allocate(PageKind::Heap, RelId(1)).unwrap();
-    let first_id = first.page_id();
-    first.mark_dirty(Lsn(10)).unwrap();
-    drop(first);
+fn buffer_pool_asks_for_a_checkpoint_instead_of_evicting_a_logged_page() {
+    // Recovery replays heap records into new versions and never logs undo,
+    // a B-tree split spans pages, and HNSW links pages it does not log. So a
+    // dirty page with a logged change of any kind leaves the pool only
+    // through a checkpoint, never by itself.
+    for kind in [PageKind::Heap, PageKind::Undo, PageKind::BtreeLeaf] {
+        let temp = TempDir::new().unwrap();
+        let file =
+            Arc::new(PageFile::create(temp.path().join("data.redline"), TEST_PAGE_SIZE).unwrap());
+        let pool = Arc::new(BufferPool::new(Arc::clone(&file), 1).unwrap());
+        let first = pool.allocate(kind, RelId(1)).unwrap();
+        let first_id = first.page_id();
+        first.mark_dirty(Lsn(10)).unwrap();
+        drop(first);
 
-    // With no WAL attached the pool cannot show LSN 10 is durable.
-    let blocked = pool.allocate(PageKind::Heap, RelId(1)).unwrap_err();
-    assert_eq!(
-        blocked,
-        Error::CorruptPage("no unpinned frame available for eviction")
-    );
+        let blocked = pool.allocate(PageKind::Heap, RelId(1)).unwrap_err();
+        assert_eq!(
+            blocked,
+            Error::CorruptPage("no unpinned frame available for eviction"),
+            "{kind:?}"
+        );
+        assert!(file.read_page(first_id).is_err(), "{kind:?} was evicted");
 
-    // The WAL holds records only through LSN 9, so it cannot cover the page.
-    let wal = Arc::new(RecordingWal::new(Arc::clone(&file), first_id, Lsn(9)));
-    let weak: Weak<RecordingWal> = Arc::downgrade(&wal);
-    pool.attach_wal(weak).unwrap();
-    let still_blocked = pool.allocate(PageKind::Heap, RelId(1)).unwrap_err();
-    assert_eq!(
-        still_blocked,
-        Error::CorruptPage("no unpinned frame available for eviction")
-    );
-    assert!(file.read_page(first_id).is_err());
-
-    // Once the WAL holds LSN 10, eviction makes it durable, then writes.
-    *wal.written.lock().unwrap() = Lsn(10);
-    let second = pool.allocate(PageKind::Heap, RelId(1)).unwrap();
-    assert_ne!(second.page_id(), first_id);
-    assert_eq!(pool.resident_pages(), 1);
-    assert_eq!(
-        file.read_page(first_id).unwrap().header().unwrap().page_lsn,
-        Lsn(10)
-    );
-    let requests = wal.requests.lock().unwrap().clone();
-    assert!(!requests.is_empty());
-    assert!(
-        requests
-            .iter()
-            .all(|&(lsn, page_on_disk)| lsn == Lsn(10) && !page_on_disk),
-        "the page reached the file before the WAL covered it: {requests:?}"
-    );
-}
-
-#[test]
-fn buffer_pool_keeps_a_dirty_index_page_even_when_its_wal_is_durable() {
-    // A B-tree split changes two pages through two page images, and recovery
-    // replays those images only for committed transactions. Writing one page
-    // of a split alone can leave a leaf pointing at a sibling the page file
-    // never received, so dirty index pages stay until a checkpoint.
-    let temp = TempDir::new().unwrap();
-    let file =
-        Arc::new(PageFile::create(temp.path().join("data.redline"), TEST_PAGE_SIZE).unwrap());
-    let pool = BufferPool::new(Arc::clone(&file), 1).unwrap();
-    let leaf = pool.allocate(PageKind::BtreeLeaf, RelId(1)).unwrap();
-    let leaf_id = leaf.page_id();
-    leaf.mark_dirty(Lsn(10)).unwrap();
-    drop(leaf);
-    let wal = Arc::new(RecordingWal::new(Arc::clone(&file), leaf_id, Lsn(10)));
-    let weak: Weak<RecordingWal> = Arc::downgrade(&wal);
-    pool.attach_wal(weak).unwrap();
-
-    let blocked = pool.allocate(PageKind::Heap, RelId(1)).unwrap_err();
-    assert_eq!(
-        blocked,
-        Error::CorruptPage("no unpinned frame available for eviction")
-    );
-    assert!(file.read_page(leaf_id).is_err());
-
-    // A checkpoint-style flush still writes it, and then it can leave.
-    pool.flush_page(leaf_id, Lsn(10)).unwrap();
-    let heap = pool.allocate(PageKind::Heap, RelId(1)).unwrap();
-    assert_ne!(heap.page_id(), leaf_id);
+        let relief = Arc::new(CheckpointingRelief {
+            pool: Arc::clone(&pool),
+            asked: AtomicUsize::new(0),
+        });
+        let weak: Weak<CheckpointingRelief> = Arc::downgrade(&relief);
+        pool.attach_pressure_relief(weak).unwrap();
+        let second = pool.allocate(PageKind::Heap, RelId(1)).unwrap();
+        assert_ne!(second.page_id(), first_id);
+        assert_eq!(relief.asked.load(Ordering::Relaxed), 1, "{kind:?}");
+        assert_eq!(pool.stats().pressure_checkpoints, 1, "{kind:?}");
+        assert_eq!(
+            file.read_page(first_id).unwrap().header().unwrap().page_lsn,
+            Lsn(10),
+            "{kind:?}"
+        );
+    }
 }
 
 #[test]
