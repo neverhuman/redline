@@ -326,6 +326,13 @@ impl Engine {
         }
         if target == RecoveryTarget::Latest {
             engine.attach_pressure_relief()?;
+            // Replay puts heap rows into new versions on new pages, and
+            // eviction may write those pages. The next recovery would replay
+            // the same records again next to the copies already in the file,
+            // so once replay has written a page, checkpoint past it.
+            if engine.buffer.stats().writes > 0 {
+                engine.checkpoint_with_stats()?;
+            }
         }
         Ok((
             engine,

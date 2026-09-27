@@ -390,10 +390,40 @@ fn buffer_eviction_leaves_one_copy_of_each_row_after_a_reopen() {
     assert_rows(&reopened, &rows);
 }
 
-/// The payload tag of every committed row a page scan returns, sorted.
+#[test]
+fn buffer_eviction_during_replay_leaves_one_copy_after_another_reopen() {
+    // Replay writes rows into new heap pages, and eviction writes some of
+    // them before open returns. Reopening again without a checkpoint would
+    // replay the same records next to those copies.
+    let temp = TempDir::new().unwrap();
+    let engine = Engine::create(temp.path(), config(CommitDurability::Normal, 1024)).unwrap();
+    let rows = insert_rows(&engine, 0..ROWS).unwrap();
+    assert_eq!(engine.buffer.stats().writes, 0);
+    drop(engine);
+
+    for reopen in 0..2 {
+        let reopened =
+            Engine::open(temp.path(), config(CommitDurability::Normal, SMALL_POOL)).unwrap();
+        assert_eq!(
+            scanned_row_tags(&reopened),
+            (0..ROWS).collect::<Vec<_>>(),
+            "reopen {reopen}"
+        );
+        assert_rows(&reopened, &rows);
+    }
+}
+
+/// The payload tag of every committed row a page scan returns, sorted. The
+/// scan covers every page in the file and every page a row's head is on,
+/// which may not have reached the file yet.
 fn scanned_row_tags(engine: &Engine) -> Vec<usize> {
     let tx = engine.begin(Isolation::Snapshot).unwrap();
-    let pages = engine.heap_page_count().unwrap();
+    let pages = engine
+        .relation_entries(RelId(1))
+        .unwrap()
+        .iter()
+        .map(|(_, ptr)| ptr.page_id.0)
+        .fold(engine.heap_page_count().unwrap(), u64::max);
     let mut tags: Vec<usize> = engine
         .parallel_scan_page_range(
             tx.snapshot(),
