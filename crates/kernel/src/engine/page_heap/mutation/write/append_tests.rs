@@ -3,8 +3,10 @@ use std::sync::{Arc, Mutex};
 use std::thread;
 use std::time::Duration;
 
+use super::super::test_hooks::{
+    PageHook, set_before_heap_install_hook, set_before_tuple_overwrite_hook,
+};
 use super::PageBackedHeap;
-use super::install_hook::set_before_heap_install_hook;
 use crate::Error;
 use crate::engine::{Engine, EngineConfig};
 use crate::format::{
@@ -15,9 +17,10 @@ use crate::storage::{BufferPool, PageFile};
 use crate::txn::Isolation;
 use crate::wal::{WalConfig, WalCoordinator, WalPayload};
 
-/// How long an install waits for a concurrent writer before it goes on. A writer
-/// that finishes inside this window slipped between the page copy and its install.
-const INSTALL_WAIT: Duration = Duration::from_millis(250);
+/// How long a hooked page write waits for a concurrent writer before it goes on.
+/// A writer that finishes inside this window ran while the page should have been
+/// latched.
+const LATCH_WAIT: Duration = Duration::from_millis(250);
 
 fn heap_with_wal(config: WalConfig) -> (tempfile::TempDir, PageBackedHeap) {
     let dir = tempfile::tempdir().unwrap();
@@ -54,10 +57,13 @@ fn resident(heap: &PageBackedHeap, page_id: PageId) -> (PageGeneration, u16) {
         .unwrap()
 }
 
-/// Run `work` on another thread once this thread's next heap append has written
-/// its WAL record and not yet installed its page. Returns whether `work` finished
-/// inside that window.
-fn run_during_heap_install(work: impl FnOnce() + Send + 'static, append: impl FnOnce()) -> bool {
+/// Run `work` on another thread once `body` stops at the hook that `set_hook`
+/// arms. Returns whether `work` finished while `body` was stopped there.
+fn run_inside(
+    set_hook: fn(Option<PageHook>),
+    work: impl FnOnce() + Send + 'static,
+    body: impl FnOnce(),
+) -> bool {
     let (start_tx, start_rx) = mpsc::channel::<()>();
     let (done_tx, done_rx) = mpsc::channel::<()>();
     let worker = thread::spawn(move || {
@@ -68,18 +74,25 @@ fn run_during_heap_install(work: impl FnOnce() + Send + 'static, append: impl Fn
     });
     let inside = Arc::new(Mutex::new(None));
     let inside_hook = Arc::clone(&inside);
-    set_before_heap_install_hook(Some(Box::new(move |_resident: &Page| {
+    set_hook(Some(Box::new(move |_resident: &Page| {
         start_tx.send(()).expect("start the concurrent writer");
-        let finished = done_rx.recv_timeout(INSTALL_WAIT).is_ok();
-        *inside_hook.lock().expect("install window") = Some(finished);
+        let finished = done_rx.recv_timeout(LATCH_WAIT).is_ok();
+        *inside_hook.lock().expect("hook window") = Some(finished);
     })));
-    append();
-    set_before_heap_install_hook(None);
+    body();
+    set_hook(None);
     worker.join().expect("concurrent writer panicked");
     inside
         .lock()
-        .expect("install window")
-        .expect("the append never reached its page install")
+        .expect("hook window")
+        .expect("the page write never reached its hook")
+}
+
+/// Run `work` on another thread once this thread's next heap append has written
+/// its WAL record and not yet installed its page. Returns whether `work` finished
+/// inside that window.
+fn run_during_heap_install(work: impl FnOnce() + Send + 'static, append: impl FnOnce()) -> bool {
+    run_inside(set_before_heap_install_hook, work, append)
 }
 
 #[test]
@@ -239,4 +252,49 @@ fn failed_append_leaves_a_reused_page_for_the_next_reinitialisation() {
     );
     assert_eq!(resident(&heap, old.page_id), (old.generation.next(), 1));
     assert!(heap.read_tuple(old).is_err());
+}
+
+#[test]
+fn append_during_an_in_place_write_keeps_its_page_lsn() {
+    let (_dir, heap) = heap();
+    let heap = Arc::new(heap);
+    let first = RowId(1);
+    let mut tuple = TupleVersion::new(first, RelId(1), TxId(1), b"first".to_vec());
+    tuple.undo_head = UndoPtr((9 << 16) | 3);
+    let first_ptr = append(&heap, first, tuple);
+    let mut pruned = heap.read_tuple(first_ptr).unwrap();
+    pruned.undo_head = UndoPtr::ZERO;
+
+    let append_heap = Arc::clone(&heap);
+    let second = RowId(2);
+    let (ptr_tx, ptr_rx) = mpsc::channel();
+    let finished_inside = run_inside(
+        set_before_tuple_overwrite_hook,
+        move || {
+            let tuple = TupleVersion::new(second, RelId(1), TxId(1), b"second".to_vec());
+            ptr_tx.send(append(&append_heap, second, tuple)).unwrap();
+        },
+        || heap.overwrite_tuple(first_ptr, &pruned).unwrap(),
+    );
+    let second_ptr = ptr_rx.recv().unwrap();
+
+    // The second append is the newest WAL record, so its end is the page LSN.
+    let newest = heap.wal.as_ref().unwrap().flush_all().unwrap();
+    let page_lsn = heap
+        .buffer
+        .pin(first_ptr.page_id)
+        .unwrap()
+        .with_page(|page| Ok(page.header()?.page_lsn))
+        .unwrap();
+    assert_eq!(
+        page_lsn, newest,
+        "the in-place write put back a page LSN it read before the append"
+    );
+    assert!(
+        !finished_inside,
+        "an append installed between the in-place write's page read and its write"
+    );
+    assert_eq!(second_ptr.page_id, first_ptr.page_id);
+    assert_eq!(heap.read_tuple(first_ptr).unwrap().undo_head, UndoPtr::ZERO);
+    assert_eq!(heap.read_tuple(second_ptr).unwrap().payload, b"second");
 }

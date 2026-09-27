@@ -244,11 +244,21 @@ impl PageBackedHeap {
         }
         let encoded = tuple.encode()?;
         let guard = self.buffer.pin(ptr.page_id)?;
-        // Vacuum drops an undo link in place. The page still holds the live
-        // tuple, whose WAL record is the page LSN already written there.
-        let kept_lsn = guard.with_page(|page| Ok(page.header()?.page_lsn))?;
-        guard.with_page_mut(|page| page.overwrite_cell(ptr.slot, &encoded))?;
-        guard.mark_dirty(kept_lsn)
+        // Vacuum drops an undo link in place. The page still holds the live tuple, whose WAL
+        // record is the page LSN already written there, so the page LSN stays as it is. One
+        // latch covers the write and the dirty mark. With separate latches, an append could
+        // install its page between them, and the older page LSN read first would replace the
+        // append's.
+        let mut frame = guard.mutable_frame()?;
+        let page = frame
+            .page
+            .as_mut()
+            .ok_or(Error::CorruptPage("resident frame missing page"))?;
+        #[cfg(test)]
+        super::test_hooks::run_before_tuple_overwrite_hook(page);
+        page.overwrite_cell(ptr.slot, &encoded)?;
+        frame.dirty = true;
+        Ok(())
     }
 
     pub(crate) fn read_undo(&self, ptr: UndoPtr) -> Result<UndoRecord> {

@@ -194,7 +194,7 @@ impl PageBackedHeap {
             let page_lsn = self.log_cell(tx_id, lsn, wal_payload.as_ref())?;
             staged_page.set_page_lsn(page_lsn)?;
             #[cfg(test)]
-            super::install_hook::run_before_heap_install_hook(resident);
+            super::super::test_hooks::run_before_heap_install_hook(resident);
             *resident = staged_page;
             frame.dirty = true;
             Ok(Some((slot, generation)))
