@@ -185,6 +185,44 @@ fn integer_pk_out_of_range_real_key_is_rejected() {
     lab.expect(PK_DUMP, rows(&[&[int(1), text("integer"), text("kept")]]));
 }
 
+/// Integer affinity converts a REAL only below 2^63, so REAL 2^63 stays
+/// REAL and is not a rowid. (UNIQUE between INTEGER i64::MAX and REAL 2^63
+/// still collides through the f64 compare in `compare_values`; exact
+/// int/real comparison is plan item 4a. REAL -2^63 still converts; see
+/// `real_is_exact_i64` in the kernel.)
+#[test]
+fn integer_affinity_keeps_reals_at_the_i64_limits() {
+    let lab = Lab::new();
+    lab.script(&[
+        "CREATE TABLE s(id INTEGER PRIMARY KEY, i INTEGER, n NUMERIC)",
+        "INSERT INTO s(id, i, n) VALUES (1, 9223372036854775808.0, '9223372036854775808')",
+        "INSERT INTO s(id, i, n) VALUES (2, 9223372036854775807.0, '9223372036854775807.0')",
+        "INSERT INTO s(id, i, n) VALUES (3, 9223372036854774784.0, '9223372036854775807')",
+    ]);
+    lab.expect(
+        "SELECT id, typeof(i), typeof(n) FROM s ORDER BY id",
+        rows(&[
+            &[int(1), text("real"), text("real")],
+            &[int(2), text("real"), text("real")],
+            &[int(3), text("integer"), text("integer")],
+        ]),
+    );
+    lab.step("SELECT id, i, n FROM s ORDER BY id");
+    lab.expect(
+        "INSERT INTO s(id, i) VALUES (9223372036854775808.0, 1)",
+        datatype_err(),
+    );
+    lab.expect(
+        "INSERT INTO s(id, i) VALUES (9223372036854775807.0, 1)",
+        datatype_err(),
+    );
+    lab.expect(
+        "UPDATE s SET id = 9223372036854775808.0 WHERE id = 3",
+        datatype_err(),
+    );
+    lab.expect("SELECT count(*) FROM s", rows(&[&[int(3)]]));
+}
+
 // -- Unindexed UNIQUE columns (unique-key-columns fast path) ----------------
 
 fn unique_parity(declared: &str, first: &str, probes: &[&str]) {

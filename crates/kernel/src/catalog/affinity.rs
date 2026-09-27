@@ -117,8 +117,16 @@ fn parse_numeric_text(s: &str) -> Option<OwnedValue> {
     None
 }
 
+/// A whole REAL that is exactly an i64. `i64::MAX as f64` rounds up to
+/// 2^63 and `as i64` saturates there, so the upper bound is exclusive:
+/// REAL 2^63 stays REAL, as in SQLite, instead of becoming i64::MAX.
+///
+/// SQLite also keeps REAL -2^63. That bound stays inclusive because the
+/// SQL layer still evaluates the literal -9223372036854775808 as
+/// -(REAL 2^63), and SQLite reads that literal as INTEGER i64::MIN; this
+/// conversion is what stores it as INTEGER.
 fn real_is_exact_i64(v: f64) -> bool {
-    v.is_finite() && v >= i64::MIN as f64 && v <= i64::MAX as f64 && (v as i64) as f64 == v
+    v >= i64::MIN as f64 && v < i64::MAX as f64 && (v as i64) as f64 == v
 }
 
 fn format_float(v: f64) -> String {
