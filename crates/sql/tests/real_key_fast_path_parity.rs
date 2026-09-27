@@ -455,6 +455,162 @@ fn fk_untyped_parent_key_stored_as_real() {
     lab.step("SELECT pk, typeof(pk) FROM c ORDER BY id");
 }
 
+/// SQLite's fkLookupParent gives the child key the parent key column's
+/// affinity before it looks the parent up.
+#[test]
+fn fk_lookup_applies_parent_key_affinity() {
+    let lab = Lab::new();
+    lab.script(&[
+        "PRAGMA foreign_keys = ON",
+        "CREATE TABLE pr(k REAL UNIQUE)",
+        "CREATE TABLE pt(k TEXT UNIQUE)",
+        "CREATE TABLE pi(id INTEGER PRIMARY KEY)",
+        "INSERT INTO pr(k) VALUES (5)",
+        "INSERT INTO pt(k) VALUES ('5')",
+        "INSERT INTO pi(id) VALUES (5)",
+        "CREATE TABLE cr(id INTEGER PRIMARY KEY, t TEXT REFERENCES pr(k), u REFERENCES pr(k))",
+        "CREATE TABLE ct(id INTEGER PRIMARY KEY, i INTEGER REFERENCES pt(k), u REFERENCES pt(k))",
+        "CREATE TABLE ci(id INTEGER PRIMARY KEY, t TEXT REFERENCES pi(id), u REFERENCES pi(id))",
+    ]);
+    lab.expect("INSERT INTO cr(t) VALUES ('5')", Outcome::Done);
+    lab.expect("INSERT INTO cr(t) VALUES (5)", Outcome::Done);
+    lab.expect("INSERT INTO cr(u) VALUES ('5.0')", Outcome::Done);
+    lab.expect("INSERT INTO cr(u) VALUES (' 5 ')", Outcome::Done);
+    lab.expect("INSERT INTO cr(u) VALUES ('5x')", fk_err());
+    lab.expect("INSERT INTO ct(i) VALUES (5)", Outcome::Done);
+    lab.expect("INSERT INTO ct(u) VALUES (5)", Outcome::Done);
+    lab.expect("INSERT INTO ct(u) VALUES (5.0)", fk_err());
+    lab.expect("INSERT INTO ci(t) VALUES (5)", Outcome::Done);
+    lab.expect("INSERT INTO ci(u) VALUES ('5')", Outcome::Done);
+    lab.expect("INSERT INTO ci(u) VALUES (5.0)", Outcome::Done);
+    lab.expect("INSERT INTO ci(u) VALUES (5.5)", fk_err());
+    lab.expect("INSERT INTO ci(u) VALUES ('x')", fk_err());
+    lab.expect("UPDATE ci SET t = '5.0' WHERE t = '5'", Outcome::Done);
+    // Implicit rowids come from an engine-wide counter in RedlineDB, so
+    // compare the stored keys, not the ids.
+    for (table, first) in [("cr", "t"), ("ct", "i"), ("ci", "t")] {
+        lab.step(&format!(
+            "SELECT {first}, typeof({first}), u, typeof(u) FROM {table} ORDER BY id"
+        ));
+    }
+}
+
+#[test]
+fn fk_deferred_and_check_apply_parent_key_affinity() {
+    let lab = Lab::new();
+    lab.script(&[
+        "PRAGMA foreign_keys = ON",
+        "CREATE TABLE p(id INTEGER PRIMARY KEY)",
+        "CREATE TABLE c(id INTEGER PRIMARY KEY, pid TEXT REFERENCES p(id) DEFERRABLE INITIALLY DEFERRED)",
+        "INSERT INTO p(id) VALUES (5)",
+        "BEGIN",
+        "INSERT INTO c(id, pid) VALUES (1, 5)",
+        "INSERT INTO c(id, pid) VALUES (2, '5.0')",
+    ]);
+    lab.expect("COMMIT", Outcome::Done);
+    lab.script(&[
+        "PRAGMA foreign_keys = OFF",
+        "INSERT INTO c(id, pid) VALUES (3, 'x'), (4, 6)",
+        "PRAGMA foreign_keys = ON",
+    ]);
+    lab.expect(
+        "PRAGMA foreign_key_check(c)",
+        rows(&[
+            &[text("c"), int(3), text("p"), int(0)],
+            &[text("c"), int(4), text("p"), int(0)],
+        ]),
+    );
+}
+
+/// SQLite's fkScanChildren compares `parent_key = child_column`, so a
+/// numeric affinity on either side makes numeric text equal its number.
+#[test]
+fn fk_parent_change_finds_children_under_comparison_affinity() {
+    let lab = Lab::new();
+    lab.script(&[
+        "PRAGMA foreign_keys = ON",
+        "CREATE TABLE p(id INTEGER PRIMARY KEY)",
+        "CREATE TABLE c(id INTEGER PRIMARY KEY, pid TEXT REFERENCES p(id))",
+        "INSERT INTO p(id) VALUES (5), (6)",
+        "INSERT INTO c(id, pid) VALUES (1, 5)",
+    ]);
+    lab.expect(
+        "SELECT pid, typeof(pid) FROM c",
+        rows(&[&[text("5"), text("text")]]),
+    );
+    lab.expect("DELETE FROM p WHERE id = 5", fk_err());
+    lab.expect("UPDATE p SET id = 7 WHERE id = 5", fk_err());
+    lab.expect("DELETE FROM p WHERE id = 6", Outcome::Done);
+
+    let lab = Lab::new();
+    lab.script(&[
+        "PRAGMA foreign_keys = ON",
+        "CREATE TABLE p(k TEXT UNIQUE)",
+        "CREATE TABLE c(id INTEGER PRIMARY KEY, n NUMERIC REFERENCES p(k), u REFERENCES p(k))",
+        "INSERT INTO p(k) VALUES ('5'), ('6')",
+        "INSERT INTO c(id, n) VALUES (1, '5')",
+        "INSERT INTO c(id, u) VALUES (2, '6')",
+    ]);
+    lab.expect(
+        "SELECT id, n, typeof(n), u, typeof(u) FROM c ORDER BY id",
+        rows(&[
+            &[int(1), int(5), text("integer"), Val::Null, text("null")],
+            &[int(2), Val::Null, text("null"), text("6"), text("text")],
+        ]),
+    );
+    lab.expect("DELETE FROM p WHERE k = '5'", fk_err());
+    lab.expect("DELETE FROM p WHERE k = '6'", fk_err());
+}
+
+/// A cascaded UPDATE writes the child column, so the value takes the
+/// child column's affinity.
+#[test]
+fn fk_cascade_writes_child_column_affinity() {
+    let lab = Lab::new();
+    lab.script(&[
+        "PRAGMA foreign_keys = ON",
+        "CREATE TABLE p(id INTEGER PRIMARY KEY, v TEXT)",
+        "CREATE TABLE c(id INTEGER PRIMARY KEY, pid REAL REFERENCES p(id) ON DELETE CASCADE ON UPDATE CASCADE)",
+        "CREATE TABLE ct(id INTEGER PRIMARY KEY, pid TEXT REFERENCES p(id) ON UPDATE CASCADE)",
+        "CREATE TABLE cd(id INTEGER PRIMARY KEY, pid REAL DEFAULT 0 REFERENCES p(id) ON DELETE SET DEFAULT)",
+        "INSERT INTO p(id, v) VALUES (0, 'zero'), (5, 'a'), (6, 'b')",
+        "INSERT INTO c(id, pid) VALUES (1, 5), (2, 5.0), (3, 6)",
+        "INSERT INTO ct(id, pid) VALUES (1, 6)",
+        "INSERT INTO cd(id, pid) VALUES (1, 5)",
+    ]);
+    lab.expect(
+        "SELECT id, pid, typeof(pid) FROM c ORDER BY id",
+        rows(&[
+            &[int(1), real(5.0), text("real")],
+            &[int(2), real(5.0), text("real")],
+            &[int(3), real(6.0), text("real")],
+        ]),
+    );
+    lab.expect("UPDATE p SET id = 7.0 WHERE id = 6", Outcome::Done);
+    lab.expect("DELETE FROM p WHERE id = 5.0", Outcome::Done);
+    lab.expect(
+        "SELECT id, pid, typeof(pid) FROM c ORDER BY id",
+        rows(&[&[int(3), real(7.0), text("real")]]),
+    );
+    lab.expect(
+        "SELECT id, pid, typeof(pid) FROM ct ORDER BY id",
+        rows(&[&[int(1), text("7"), text("text")]]),
+    );
+    lab.expect(
+        "SELECT id, pid, typeof(pid) FROM cd ORDER BY id",
+        rows(&[&[int(1), real(0.0), text("real")]]),
+    );
+    lab.script(&[
+        "PRAGMA foreign_keys = OFF",
+        "INSERT INTO c(id, pid) VALUES (4, 7.5), (5, 7.0)",
+        "PRAGMA foreign_keys = ON",
+    ]);
+    lab.expect(
+        "PRAGMA foreign_key_check(c)",
+        rows(&[&[text("c"), int(4), text("p"), int(0)]]),
+    );
+}
+
 // -- ALTER TABLE row reuse ------------------------------------------------------
 
 #[test]

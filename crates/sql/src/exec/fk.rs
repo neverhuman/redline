@@ -34,6 +34,8 @@ use super::collect_table_rows;
 
 #[path = "fk_actions.rs"]
 mod actions;
+#[path = "fk_affinity.rs"]
+mod affinity;
 #[path = "fk_cascade.rs"]
 mod cascade;
 #[path = "fk_defer.rs"]

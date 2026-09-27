@@ -120,7 +120,25 @@ pub(crate) fn enforce_fk_on_parent_change(
         } else {
             fk.on_update
         };
-        let affected = find_child_rows_matching(conn.engine(), tx, &child, &fk.columns, &old_key)?;
+        let parent_affinities: Vec<_> = parent_ords
+            .iter()
+            .map(|o| {
+                parent
+                    .columns
+                    .get(*o as usize)
+                    .map_or(redlinedb_kernel::catalog::Affinity::Blob, |column| {
+                        column.affinity
+                    })
+            })
+            .collect();
+        let affected = find_child_rows_matching(
+            conn.engine(),
+            tx,
+            &child,
+            &fk.columns,
+            &old_key,
+            &parent_affinities,
+        )?;
         if affected.is_empty() {
             continue;
         }

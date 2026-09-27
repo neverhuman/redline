@@ -13,9 +13,10 @@ use redlinedb_kernel::engine::{Engine, Txn};
 
 use crate::connection::Connection;
 use crate::error::{Error, Result};
-use crate::value::{SqlValue, compare_values};
+use crate::value::{Affinity, SqlValue, compare_values};
 
 use super::super::*;
+use super::affinity::{parent_child_equal, with_column_affinity};
 
 /// Resolve the parent table referenced by `fk` from the current schema
 /// snapshot. Errors with `ConstraintViolation` when the parent is missing,
@@ -106,7 +107,9 @@ fn rows_match(child: &[SqlValue], parent_row: &[SqlValue], parent_ords: &[u16]) 
     true
 }
 
-/// Returns true when a parent row carrying `key` exists in `parent`.
+/// Returns true when a parent row carrying `key` exists in `parent`. The
+/// child key first takes the parent key columns' affinity, as SQLite's
+/// parent lookup does.
 pub(super) fn parent_row_exists(
     engine: &Engine,
     tx: &mut Txn,
@@ -114,9 +117,17 @@ pub(super) fn parent_row_exists(
     parent_ords: &[u16],
     key: &[SqlValue],
 ) -> Result<bool> {
+    let key: Vec<SqlValue> = key
+        .iter()
+        .zip(parent_ords)
+        .map(|(value, ord)| match parent.columns.get(*ord as usize) {
+            Some(column) => with_column_affinity(value, column.affinity),
+            None => value.clone(),
+        })
+        .collect();
     let rows = collect_table_rows(engine, tx, parent)?;
     for row in rows {
-        if rows_match(key, &row.values, parent_ords) {
+        if rows_match(&key, &row.values, parent_ords) {
             return Ok(true);
         }
     }
@@ -144,29 +155,36 @@ pub(super) fn child_references(
 
 /// Find every child rowid whose FK columns equal `parent_key`. Used by
 /// the cascade driver to decide which children participate in the
-/// declared `ON DELETE` / `ON UPDATE` action.
+/// declared `ON DELETE` / `ON UPDATE` action. `parent_affinities` holds
+/// the parent key columns' affinities; each pair compares as SQLite's
+/// `parent_key = child_column` does.
 pub(super) fn find_child_rows_matching(
     engine: &Engine,
     tx: &mut Txn,
     child: &Arc<TableDef>,
     child_cols: &[u16],
     parent_key: &[SqlValue],
+    parent_affinities: &[Affinity],
 ) -> Result<Vec<(redlinedb_kernel::format::RowId, Vec<SqlValue>)>> {
     let mut hits = Vec::new();
     let rows = collect_table_rows(engine, tx, child)?;
     for row in rows {
         let mut matched = true;
-        for (cord, pv) in child_cols.iter().zip(parent_key.iter()) {
+        for ((cord, pv), paff) in child_cols
+            .iter()
+            .zip(parent_key.iter())
+            .zip(parent_affinities)
+        {
             let cv = row
                 .values
                 .get(*cord as usize)
                 .cloned()
                 .unwrap_or(SqlValue::Null);
-            if matches!(cv, SqlValue::Null) || matches!(pv, SqlValue::Null) {
-                matched = false;
-                break;
-            }
-            if compare_values(&cv, pv) != std::cmp::Ordering::Equal {
+            let caff = child
+                .columns
+                .get(*cord as usize)
+                .map_or(Affinity::Blob, |column| column.affinity);
+            if !parent_child_equal(pv, *paff, &cv, caff) {
                 matched = false;
                 break;
             }
