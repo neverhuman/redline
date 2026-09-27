@@ -294,6 +294,16 @@ metadata/
 (`sqlite3 ↔ sqlite3` for parity, `psql ↔ psql` for beyond). Failing cases
 must be fixed or deleted — there is no quarantine path.
 
+**Run verdict (`sqlite_parity`, `memory`, `rql_phase1`):** every sample first
+checks the reference against the case's declared contract. The reference must
+exit normally with `expected_exit`, print every declared stdout, stderr and
+combined fragment, and, when the case compares stdout and declares it, print
+exactly `expected_stdout` after normalization. A violation is a
+`reference_contract_failure`, even when the target agrees with the reference.
+Only then is the target compared with the reference
+(`differential_mismatch`). A child killed by a signal never passes. Each raw
+record carries `verdict_reason` and `stage`.
+
 ---
 
 ## License

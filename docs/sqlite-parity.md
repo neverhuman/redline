@@ -83,10 +83,14 @@ for reals (up to 17 digits), `.tables` column width, `sqlite_schema` in
 (10201, 10203-10205), and `PRAGMA secure_delete` = 0 (10254).
 
 The pinned manifest (`generated_manifest.json`, cases 1-1127) is otherwise
-frozen. These manifest cases were migrated by hand to the pinned shell:
+frozen. These manifest cases were migrated by hand to the pinned shell. The
+runner checks each case's declared contract on the reference before it compares
+the engines, and every case that expects a non-zero exit must declare a stderr
+or combined fragment. That is why 00142 changed.
 
 | Case | Name | Was (3.45.1 or unverified) | Now (3.53.1) |
 |---|---|---|---|
+| 00142 | `DOT_EXIT_CODE` | `.exit 7` alone, which prints nothing | prints `before-exit`, exits 7, and never runs the statement after `.exit` |
 | 00110, 00176 | `DOT_MODE_LINE_COLUMN_TABLE_BOX_MARKDOWN`, `OPT_LINE_MODE` | line mode fragment `a = 1` | `a: 1` (and `b: x`) |
 | 00163 | `DOT_FILECTRL_CATALOG` | exit 0 | exit 1, prints `Available file-controls:` |
 | 00164 | `DOT_IMPOSTER_CATALOG` | exit 0 | exit 1, `Usage: .imposter INDEX IMPOSTER` |

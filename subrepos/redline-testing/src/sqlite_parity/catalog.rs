@@ -128,6 +128,30 @@ mod tests {
     }
 
     #[test]
+    fn expected_failures_declare_an_error_fragment() {
+        // A non-zero exit alone cannot tell the declared error from any other
+        // failure (a missing table, a parse error, a crash), so every case
+        // that expects one names text the failure must print.
+        let violations = all_cases()
+            .expect("sqlite parity corpus")
+            .into_iter()
+            .filter(|case| case.expected_exit != 0)
+            .filter(|case| {
+                !case
+                    .expected_stderr_contains
+                    .iter()
+                    .chain(&case.expected_combined_contains)
+                    .any(|needle| !needle.is_empty())
+            })
+            .map(|case| case.display_id())
+            .collect::<Vec<_>>();
+        assert!(
+            violations.is_empty(),
+            "cases with a non-zero expected_exit and no stderr or combined fragment: {violations:?}"
+        );
+    }
+
+    #[test]
     fn combined_official_selection_is_ordered() {
         let cases = selected_official_cases().expect("official cases");
         assert!(!cases.is_empty());

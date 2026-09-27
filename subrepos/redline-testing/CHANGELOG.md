@@ -52,6 +52,19 @@ for the publish + attestation flow.
   was written for a build without `median()`. The report lists each kind
   under its own heading, and a unit test requires every shared rejection
   to declare a non-zero exit and a stderr fragment.
+- The runner enforces each case's declared contract on the reference before it
+  compares engines (`validate_expected` in `sqlite_parity/runner.rs`). The
+  reference must exit normally with `expected_exit`, print every declared
+  stdout, stderr and combined fragment, and match `expected_stdout` exactly
+  (normalized) when the case compares stdout. A violation fails the case as
+  `reference_contract_failure`, even when both engines agree. A child killed
+  by a signal (no exit code) never passes; two such children used to compare
+  equal. Raw records gain `verdict_reason` (`passed`, `skipped`,
+  `reference_contract_failure`, `differential_mismatch`) and `stage`
+  (`selection`, `reference_contract`, `differential`). `rql_phase1` uses the
+  same verdict. A catalog test requires every case with a non-zero
+  `expected_exit` to declare a stderr or combined fragment. Target-side
+  expectations are not enforced yet.
 
 ### Removed
 

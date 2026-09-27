@@ -8,6 +8,7 @@ use sha2::{Digest, Sha256};
 
 use super::case::Case;
 use super::engine::EngineOutput;
+use super::runner::{Verdict, VerdictReason, VerdictStage};
 
 #[derive(Debug, Serialize)]
 pub struct CompareRecord {
@@ -30,6 +31,8 @@ pub struct CompareRecord {
     pub reference_version: String,
     pub target_version: String,
     pub status: String,
+    pub verdict_reason: VerdictReason,
+    pub stage: VerdictStage,
     pub reference_exit_code: Option<i32>,
     pub target_exit_code: Option<i32>,
     pub reference_elapsed_ns: u128,
@@ -78,7 +81,6 @@ pub fn skipped_compare_record(
     reference_engine: impl Into<String>,
     target_engine: impl Into<String>,
     sqlite_version: Option<String>,
-    status: impl Into<String>,
     artifact_dir: Option<PathBuf>,
     diagnostic: Option<String>,
 ) -> CompareRecord {
@@ -101,7 +103,9 @@ pub fn skipped_compare_record(
         target_executable_sha256: String::new(),
         reference_version: String::new(),
         target_version: String::new(),
-        status: status.into(),
+        status: "skipped".to_owned(),
+        verdict_reason: VerdictReason::Skipped,
+        stage: VerdictStage::Selection,
         reference_exit_code: None,
         target_exit_code: None,
         reference_elapsed_ns: 0,
@@ -129,9 +133,8 @@ pub fn compare_record(
     repetition_index: Option<usize>,
     sample_role: impl Into<String>,
     sqlite_version: Option<String>,
-    status: impl Into<String>,
+    verdict: &Verdict,
     artifact_dir: Option<PathBuf>,
-    diagnostic: Option<String>,
 ) -> CompareRecord {
     let reference_ns = reference_output.elapsed.as_nanos().max(1) as f64;
     let ratio = target_output.elapsed.as_nanos() as f64 / reference_ns;
@@ -154,7 +157,9 @@ pub fn compare_record(
         target_executable_sha256: target_output.executable_sha256.clone(),
         reference_version: reference_output.version.clone(),
         target_version: target_output.version.clone(),
-        status: status.into(),
+        status: verdict.status().to_owned(),
+        verdict_reason: verdict.reason,
+        stage: verdict.stage,
         reference_exit_code: reference_output.status_code,
         target_exit_code: target_output.status_code,
         reference_elapsed_ns: reference_output.elapsed.as_nanos(),
@@ -165,7 +170,7 @@ pub fn compare_record(
         target_stdout_sha256: sha256_hex(&target_output.stdout),
         target_stderr_sha256: sha256_hex(&target_output.stderr),
         artifact_dir,
-        diagnostic,
+        diagnostic: verdict.diagnostic.clone(),
         memory_status: merge_memory_status(reference_output, target_output),
         reference_peak_rss_kb: reference_output.peak_rss_kb,
         reference_rss_sampled_kb: reference_output.rss_sampled_kb,

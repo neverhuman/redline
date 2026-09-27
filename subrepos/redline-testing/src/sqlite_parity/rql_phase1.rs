@@ -14,11 +14,9 @@ use sqlparser::dialect::SQLiteDialect;
 use sqlparser::parser::Parser;
 
 use super::case::Case;
-use super::engine::{self, EngineOutput, EngineSpec};
-use super::normalize::normalize_output;
+use super::engine::{self, EngineSpec};
 use super::report;
 use super::runner::{self, RunSummary};
-use super::text::sanitize_identifier;
 
 const RQL_PHASE1_CATEGORIES: &[&str] = &[
     "GEN_SQL_AGGREGATE",
@@ -178,12 +176,13 @@ pub fn run(config: RunConfig) -> Result<RunSummary> {
                 reference.run_case(&rql_case.reference, &config.tmp_root, config.memory_samples)?;
             let target_output =
                 target.run_case(&rql_case.target, &config.tmp_root, config.memory_samples)?;
-            let status = validate_compare(&rql_case.reference, &reference_output, &target_output);
-            let artifact = if let Err(reason) = &status {
+            let verdict =
+                runner::judge_sample(&rql_case.reference, &reference_output, &target_output);
+            let artifact = if let Some(reason) = &verdict.diagnostic {
                 let artifact = report::write_failure_artifact(
                     &rql_case.reference,
                     &[&reference_output, &target_output],
-                    &reason.to_string(),
+                    reason,
                 )?;
                 eprintln!(
                     "rql_phase1 failure case={} reason={} artifact={}",
@@ -205,9 +204,8 @@ pub fn run(config: RunConfig) -> Result<RunSummary> {
                     measured_index.map(|index| index.saturating_add(1)),
                     sample_role,
                     sqlite_version.clone(),
-                    if status.is_ok() { "passed" } else { "failed" },
+                    &verdict,
                     artifact,
-                    status.as_ref().err().map(|reason| reason.to_string()),
                 ),
             )?;
             if measured_index.is_some() {
@@ -216,7 +214,7 @@ pub fn run(config: RunConfig) -> Result<RunSummary> {
                     target_output.elapsed.as_nanos(),
                 ));
             }
-            if status.is_err() {
+            if !verdict.is_pass() {
                 failed = true;
             }
         }
@@ -258,7 +256,6 @@ fn append_skip(
             &reference.name,
             &target.name,
             sqlite_version,
-            "skipped",
             Some(artifact),
             Some(reason.to_owned()),
         ),
@@ -1386,44 +1383,6 @@ fn object_name_leaf(name: ObjectName) -> Result<String> {
         [ObjectNamePart::Identifier(name)] => Ok(name.value.clone()),
         _ => bail!("qualified assignment target `{name}` is outside RQL phase-1"),
     }
-}
-
-fn validate_compare(case: &Case, reference: &EngineOutput, target: &EngineOutput) -> Result<()> {
-    if reference.status_code != target.status_code {
-        bail!(
-            "exit mismatch: reference {:?}, target {:?}",
-            reference.status_code,
-            target.status_code
-        );
-    }
-    if !case.compare_stdout {
-        return Ok(());
-    }
-    let reference_stdout = normalize_compare_output(case, reference, &reference.stdout);
-    let target_stdout = normalize_compare_output(case, target, &target.stdout);
-    if reference_stdout != target_stdout {
-        bail!("stdout mismatch: reference `{reference_stdout}`, target `{target_stdout}`");
-    }
-    if reference.status_code != Some(0) || case.status == "catalog_only" {
-        return Ok(());
-    }
-    let reference_stderr = normalize_compare_output(case, reference, &reference.stderr);
-    let target_stderr = normalize_compare_output(case, target, &target.stderr);
-    if reference_stderr != target_stderr {
-        bail!("stderr mismatch: reference `{reference_stderr}`, target `{target_stderr}`");
-    }
-    Ok(())
-}
-
-fn normalize_compare_output(case: &Case, output: &EngineOutput, value: &str) -> String {
-    let normalized = normalize_output(value);
-    let marker = format!(
-        "/{}-{}-{}",
-        case.display_id(),
-        sanitize_identifier(&output.engine),
-        std::process::id()
-    );
-    normalized.replace(&marker, "/{{CASE_TMP}}")
 }
 
 #[cfg(test)]
