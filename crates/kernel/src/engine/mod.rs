@@ -9,6 +9,8 @@ mod catalog_ops;
 #[cfg(test)]
 mod catalog_sync_tests;
 #[cfg(test)]
+mod checkpoint_serial_tests;
+#[cfg(test)]
 mod directory_load_tests;
 mod maintenance;
 mod recovery;
@@ -210,6 +212,11 @@ pub struct Engine {
     phase11_counters: Arc<Phase11Counters>,
     control: ControlStore,
     tx_status_store: TxStatusStore,
+    /// Held by a checkpoint from its WAL flush to its control write. Two
+    /// checkpoints that overlapped could otherwise record their LSNs out of
+    /// order: the later generation would name the older LSN, after the other
+    /// had pruned the WAL below the newer one.
+    checkpoint_serial: Mutex<()>,
     checkpoint: Mutex<Option<ControlFile>>,
     /// Live `BtreeIndex` handles keyed by catalog `IndexId`. Populated when
     /// the engine creates an index (via `create_index`) or rehydrates from a

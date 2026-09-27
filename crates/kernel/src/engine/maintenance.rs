@@ -208,10 +208,16 @@ impl Engine {
                 flush_batches: 0,
             });
         }
+        let _serial = self
+            .checkpoint_serial
+            .lock()
+            .map_err(|_| Error::CorruptPage("checkpoint serial mutex poisoned"))?;
         let durable_lsn = self.wal.flush_all()?;
         // Do not record a checkpoint past a WAL record whose page image is
         // still unpublished. Recovery would skip that record.
         let checkpoint_lsn = self.wal.checkpoint_horizon(durable_lsn)?;
+        #[cfg(test)]
+        run_after_checkpoint_cut_hook();
         let flush = self
             .heap
             .flush_dirty_batches(checkpoint_lsn, DEFAULT_CHECKPOINT_BATCH_PAGES)?;
@@ -318,6 +324,28 @@ impl Engine {
             .map_err(|_| Error::CorruptPage("engine index handles mutex poisoned"))?;
         Ok(handles.clone())
     }
+}
+
+#[cfg(test)]
+thread_local! {
+    static AFTER_CHECKPOINT_CUT: std::cell::RefCell<Option<Box<dyn FnMut()>>> =
+        std::cell::RefCell::new(None);
+}
+
+/// Test hook that runs on this thread once a checkpoint has chosen its LSN
+/// and before it flushes a page.
+#[cfg(test)]
+pub(super) fn set_after_checkpoint_cut_hook(hook: Option<Box<dyn FnMut()>>) {
+    AFTER_CHECKPOINT_CUT.with(|slot| *slot.borrow_mut() = hook);
+}
+
+#[cfg(test)]
+fn run_after_checkpoint_cut_hook() {
+    AFTER_CHECKPOINT_CUT.with(|slot| {
+        if let Some(hook) = slot.borrow_mut().as_mut() {
+            hook();
+        }
+    });
 }
 
 #[cfg(test)]

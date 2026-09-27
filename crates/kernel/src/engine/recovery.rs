@@ -153,6 +153,7 @@ impl Engine {
             phase11_counters,
             control,
             tx_status_store,
+            checkpoint_serial: std::sync::Mutex::new(()),
             checkpoint: std::sync::Mutex::new(checkpoint),
             index_handles: std::sync::Mutex::new(HashMap::new()),
         }))
@@ -309,6 +310,7 @@ impl Engine {
             phase11_counters,
             control,
             tx_status_store,
+            checkpoint_serial: std::sync::Mutex::new(()),
             checkpoint: std::sync::Mutex::new(checkpoint),
             index_handles: std::sync::Mutex::new(HashMap::new()),
         });
