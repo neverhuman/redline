@@ -4,6 +4,8 @@ pub mod page_heap;
 pub mod tx;
 
 mod catalog_ops;
+#[cfg(test)]
+mod catalog_sync_tests;
 mod maintenance;
 mod recovery;
 mod runtime;
@@ -236,44 +238,5 @@ impl Engine {
             .store(durability.to_u8(), Ordering::Relaxed);
         self.catalog_store
             .set_sync_policy(recovery::catalog_sync_policy(durability));
-    }
-}
-
-#[cfg(test)]
-mod catalog_sync_tests {
-    use std::time::Duration;
-
-    use tempfile::TempDir;
-
-    use super::{CommitDurability, Engine, EngineConfig};
-    use crate::catalog::catalog_metadata_syncs;
-    use crate::format::RelId;
-
-    #[test]
-    fn catalog_fsync_follows_a_later_durability_change() {
-        let dir = TempDir::new().unwrap();
-        let engine = Engine::create(
-            dir.path(),
-            EngineConfig {
-                rel_id: RelId(1),
-                commit_durability: CommitDurability::Strict,
-                busy_timeout: Duration::from_millis(50),
-                ..EngineConfig::default()
-            },
-        )
-        .unwrap();
-        let before = catalog_metadata_syncs();
-        engine.set_commit_durability(CommitDurability::Normal);
-        engine
-            .catalog_store
-            .save_atomic(engine.catalog.current().as_ref())
-            .unwrap();
-        assert_eq!(catalog_metadata_syncs(), before);
-        engine.set_commit_durability(CommitDurability::Strict);
-        engine
-            .catalog_store
-            .save_atomic(engine.catalog.current().as_ref())
-            .unwrap();
-        assert!(catalog_metadata_syncs() >= before + 2);
     }
 }

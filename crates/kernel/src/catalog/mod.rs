@@ -52,9 +52,9 @@ pub use stats::{
     StatsStore, TableStats,
 };
 pub(crate) use store::CatalogSyncPolicy;
-#[cfg(test)]
-pub(crate) use store::catalog_metadata_syncs;
 pub use store::{CatalogStore, decode_snapshot, encode_snapshot};
+#[cfg(test)]
+pub(crate) use store::{catalog_dir_syncs, catalog_metadata_syncs};
 pub use system::*;
 pub use triggers::{apply_create_trigger, apply_drop_trigger, triggers_for};
 pub use value::{OwnedValue, StorageClass, ValueRef};

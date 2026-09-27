@@ -1,10 +1,12 @@
+#[cfg(test)]
+use std::cell::Cell;
 use std::fs;
 use std::io::Write;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
-#[cfg(test)]
-use std::sync::atomic::AtomicU64;
 use std::sync::atomic::{AtomicU8, Ordering};
+#[cfg(test)]
+use std::thread::LocalKey;
 
 use crate::{Error, Result};
 
@@ -31,12 +33,29 @@ pub struct CatalogStore {
     sync_policy: AtomicU8,
 }
 
+// Per thread, so a test counts only its own saves while other tests save
+// Strict catalogs in parallel.
 #[cfg(test)]
-static CATALOG_METADATA_SYNCS: AtomicU64 = AtomicU64::new(0);
+thread_local! {
+    static CATALOG_FILE_SYNCS: Cell<u64> = const { Cell::new(0) };
+    static CATALOG_DIR_SYNCS: Cell<u64> = const { Cell::new(0) };
+}
 
 #[cfg(test)]
+fn note_catalog_sync(counter: &'static LocalKey<Cell<u64>>) {
+    counter.with(|count| count.set(count.get().saturating_add(1)));
+}
+
+/// Schema-file and parent-directory fsyncs made by the calling thread.
+#[cfg(test)]
 pub(crate) fn catalog_metadata_syncs() -> u64 {
-    CATALOG_METADATA_SYNCS.load(Ordering::Relaxed)
+    CATALOG_FILE_SYNCS.with(Cell::get) + catalog_dir_syncs()
+}
+
+/// Parent-directory fsyncs made by the calling thread.
+#[cfg(test)]
+pub(crate) fn catalog_dir_syncs() -> u64 {
+    CATALOG_DIR_SYNCS.with(Cell::get)
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -130,7 +149,7 @@ impl CatalogStore {
                 crate::fail_point!("catalog::save::fsync");
                 file.sync_all()?;
                 #[cfg(test)]
-                CATALOG_METADATA_SYNCS.fetch_add(1, Ordering::Relaxed);
+                note_catalog_sync(&CATALOG_FILE_SYNCS);
             }
         }
         // Lane E failpoint: armed before the atomic rename. The staging
@@ -149,7 +168,7 @@ impl CatalogStore {
                 let dir = fs::File::open(parent)?;
                 dir.sync_all()?;
                 #[cfg(test)]
-                CATALOG_METADATA_SYNCS.fetch_add(1, Ordering::Relaxed);
+                note_catalog_sync(&CATALOG_DIR_SYNCS);
             }
         }
         Ok(())
