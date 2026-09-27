@@ -9,6 +9,7 @@ use std::path::{Path, PathBuf};
 use super::generate;
 use super::ratio::summarize;
 use super::render::rank_cases;
+use super::test_fixtures as fixture;
 use super::types::{RawRecord, ReportOptions};
 use super::utils::sha256_hex;
 use crate::latency::RANKED_CSV_HEADER;
@@ -36,6 +37,9 @@ fn raw_case(case_id: &str, name: &str, reference_ns: u128, target_ns: u128) -> S
             "status": "passed",
             "reference_elapsed_ns": reference_ns,
             "target_elapsed_ns": target_ns,
+            "reference_executable_sha256": fixture::SQLITE_SHA256,
+            "target_executable_sha256": fixture::TARGET_SHA256,
+            "reference_version": fixture::SQLITE_VERSION,
         });
         out.push_str(&serde_json::to_string(&record).expect("raw json"));
         out.push('\n');
@@ -50,9 +54,21 @@ fn write_processed_evidence(root: &Path, suite: &str, raw_text: &str) -> PathBuf
         "command_line": ["/ci/bin/redline-testing", "run", "--suite", "all", "--workers", "auto"],
         "official_evidence": {
             "schema_version": "redline-testing-official-evidence-v1",
-            "runner": { "version": "redline-testing 1.0.1" },
-            "target": { "version": "redlinedb test" },
-            "sqlite": { "version": "3.53.1 test" },
+            "runner": {
+                "binary_path": fixture::RUNNER_PATH,
+                "binary_sha256": fixture::RUNNER_SHA256,
+                "version": "redline-testing 1.0.1",
+            },
+            "target": {
+                "path": fixture::TARGET_PATH,
+                "sha256": fixture::TARGET_SHA256,
+                "version": "redlinedb test",
+            },
+            "sqlite": {
+                "path": fixture::SQLITE_PATH,
+                "sha256": fixture::SQLITE_SHA256,
+                "version": fixture::SQLITE_VERSION,
+            },
             "command_line": [
                 "/ci/bin/redline-testing", "run", "--suite", "all", "--workers", "auto",
                 "--repetitions", "3", "--warmup", "0"
@@ -97,6 +113,9 @@ fn try_generate(suite: &str, raw_text: &str) -> anyhow::Result<Generated> {
         suite: suite.to_owned(),
         input,
         official_evidence: Some(evidence),
+        // The evidence fixture records no run provenance.
+        run_provenance: None,
+        historical_run: true,
         local_diagnostics: false,
         out_dir: out_dir.clone(),
         readme: readme.clone(),

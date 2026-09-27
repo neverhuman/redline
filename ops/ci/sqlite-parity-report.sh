@@ -105,6 +105,9 @@ publish_pr() {
 
   # Generated reports, dates, charts, and README edits do not change these
   # inputs. In particular, merging this report cannot spawn another report.
+  # The runner records the same hash as source_inputs_sha256 in its run
+  # provenance; SOURCE_INPUT_PATHS in
+  # subrepos/redline-testing/src/evidence/identity.rs must list these paths.
   local inputs
   inputs=$(git ls-tree -r HEAD -- Cargo.toml Cargo.lock rust-toolchain.toml crates subrepos metadata ops scripts \
     agent/audit-policy.toml .jankurai/audit-policy.toml .github/workflows/ci.yml \

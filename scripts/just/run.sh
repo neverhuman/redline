@@ -90,6 +90,7 @@ run_sqlite_jankurai_compare() {
 sqlite_parity_report_args() {
   local updated_date="${1:?updated date required}"
   local official_evidence="${2:-benchmark-results/sqlite-parity/latest/official-evidence.processed.json}"
+  local run_provenance="benchmark-results/sqlite-parity/latest/run-provenance.json"
   sqlite_parity_report_args_result=(
     --suite sqlite_parity
     --input benchmark-results/sqlite-parity/latest/raw.jsonl
@@ -105,6 +106,15 @@ sqlite_parity_report_args() {
     --expected-warmup "$sqlite_parity_warmup"
   )
   sqlite_parity_report_args_result+=(--official-evidence "$official_evidence")
+  # The run's own provenance binds the measured target, oracle, runner and
+  # source tree. The committed 2026-09-24 run predates it; the renderer takes
+  # --historical-run only for evidence that names no run provenance, and marks
+  # that report historical.
+  if [ -f "$run_provenance" ]; then
+    sqlite_parity_report_args_result+=(--run-provenance "$run_provenance")
+  else
+    sqlite_parity_report_args_result+=(--historical-run)
+  fi
 }
 
 redline_testing_tmp_root() {
@@ -131,10 +141,25 @@ copy_redline_testing_provenance() {
 
 stage_sqlite_report_official_evidence() {
   local sqlite_parity_root="benchmark-results/sqlite-parity/latest"
+  local processed="target/redline-testing/official-evidence.processed.json"
+  local run_provenance="target/redline-testing/provenance.json"
+  local expected
+  local actual
+  # Stage the run's provenance unchanged, under its own name, only if it is
+  # the file the processed evidence hashed.
+  expected="$(jq -r '.suite_summaries.sqlite_parity.provenance_sha256 // empty' "$processed")"
+  actual="$(sha256sum "$run_provenance" | awk '{print $1}')"
+  if [ -z "$expected" ] || [ "$actual" != "$expected" ]; then
+    printf 'run provenance %s has SHA-256 %s, but %s records %s\n' \
+      "$run_provenance" "$actual" "$processed" "${expected:-nothing}" >&2
+    return 1
+  fi
   mkdir -p "$sqlite_parity_root"
   cp target/redline-testing/sqlite_parity.raw.jsonl "$sqlite_parity_root/raw.jsonl"
-  cp target/redline-testing/official-evidence.processed.json \
-    "$sqlite_parity_root/official-evidence.processed.json"
+  cp "$processed" "$sqlite_parity_root/official-evidence.processed.json"
+  cp "$run_provenance" "$sqlite_parity_root/run-provenance.json"
+  # Earlier reports wrote their own provenance under the run's file name.
+  rm -f "$sqlite_parity_root/provenance.json"
 }
 
 load_redline_testing_provenance() {
@@ -227,43 +252,14 @@ run_redline_testing_official() {
 
 run_sqlite_parity_report_check() {
   local redline_testing_bin
-  local provenance
-  local backup
-  local tmp
-  local git_sha
-  local readme_hash
-  local status
 
   sqlite_parity_report_args "$(cat benchmark-results/sqlite-parity/latest/UPDATED_DATE)"
   load_redline_testing_report_provenance benchmark-results/sqlite-parity/latest/official-evidence.processed.json
   redline_testing_bin="$(ci_install_redline_testing)"
   load_redline_testing_provenance "$redline_testing_bin"
-
-  provenance="benchmark-results/sqlite-parity/latest/provenance.json"
-  backup="$(mktemp)"
-  tmp="$(mktemp)"
-  cp "$provenance" "$backup"
-
-  # Some redline-testing releases record the current commit and dirty bit inside
-  # the checked provenance file. Temporarily normalize those volatile fields so
-  # the external runner can still check all stable report/evidence bindings.
-  git_sha="$(git rev-parse HEAD)"
-  readme_hash="$(sha256sum README.md | cut -d" " -f1)"
-  jq \
-    --arg git_sha "$git_sha" \
-    --arg readme_hash "$readme_hash" \
-    '.git_sha=$git_sha | .git_dirty=true | .output_file_hashes["README.md"]=$readme_hash' \
-    "$backup" > "$tmp"
-  mv "$tmp" "$provenance"
-
-  set +e
+  # The report records no Git state, so the committed files are checked as
+  # they are: nothing is rewritten to match this checkout.
   "$redline_testing_bin" report "${sqlite_parity_report_args_result[@]}" --check
-  status=$?
-  set -e
-
-  cp "$backup" "$provenance"
-  rm -f "$backup" "$tmp"
-  return "$status"
 }
 
 reject_legacy_sqlite_parity_lane() {

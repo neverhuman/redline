@@ -2,7 +2,7 @@
   "schema_version": "redline-testing-manifest-v1",
   "suite": "sqlite_parity",
   "command_line": [
-    "/home/ubuntu/redlineDB/target/ci/redline-testing/local-fe20cb333b96/bin/redline-testing",
+    "redline-testing",
     "report",
     "--suite",
     "sqlite_parity",
@@ -32,14 +32,15 @@
     "--expected-warmup",
     "1",
     "--official-evidence",
-    "benchmark-results/sqlite-parity/latest/official-evidence.processed.json"
+    "benchmark-results/sqlite-parity/latest/official-evidence.processed.json",
+    "--historical-run"
   ],
   "repetitions": 3,
   "warmup": 1,
   "output_files": {
-    "provenance": "benchmark-results/sqlite-parity/latest/provenance.json",
     "ranked": "benchmark-results/sqlite-parity/latest/ranked.csv",
     "raw": "benchmark-results/sqlite-parity/latest/raw.jsonl",
+    "report_provenance": "benchmark-results/sqlite-parity/latest/report-provenance.json",
     "summary": "benchmark-results/sqlite-parity/latest/summary.json"
   }
 }

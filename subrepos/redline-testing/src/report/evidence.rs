@@ -155,6 +155,50 @@ pub(crate) fn evidence_lane(run: &serde_json::Value) -> String {
     }
 }
 
+/// The SHA-256 the evidence records for `suite`'s run provenance file.
+pub(crate) fn recorded_provenance_sha256(value: &serde_json::Value, suite: &str) -> Result<String> {
+    if let Some(entry) = value
+        .get("suite_summaries")
+        .and_then(|suite_summaries| suite_summaries.get(suite))
+    {
+        return entry
+            .get("provenance_sha256")
+            .and_then(normalize_hash_value)
+            .ok_or_else(|| {
+                anyhow::anyhow!("processed evidence missing provenance_sha256 for {suite}")
+            });
+    }
+    let entry = official_suite_entry(value, suite)
+        .ok_or_else(|| anyhow::anyhow!("official evidence missing suite {suite}"))?;
+    let path = entry
+        .get("provenance_path")
+        .and_then(|value| value.as_str())
+        .ok_or_else(|| {
+            anyhow::anyhow!("official evidence suite {suite} missing provenance_path")
+        })?;
+    value
+        .get("output_file_hashes")
+        .and_then(|hashes| official_hash_lookup(hashes, &normalize_path(path)))
+        .ok_or_else(|| {
+            anyhow::anyhow!("official evidence missing output_file_hashes entry for {path}")
+        })
+}
+
+/// The file name of `suite`'s raw results as the run wrote them, which is
+/// the key the run provenance hashes them under.
+pub(crate) fn recorded_raw_file_name(value: &serde_json::Value, suite: &str) -> String {
+    let run = value.get("official_evidence").unwrap_or(value);
+    value
+        .get("suite_summaries")
+        .and_then(|suite_summaries| suite_summaries.get(suite))
+        .or_else(|| official_suite_entry(run, suite))
+        .and_then(|entry| entry.get("raw_path"))
+        .and_then(|path| path.as_str())
+        .and_then(|path| Path::new(path).file_name())
+        .and_then(|name| name.to_str())
+        .map_or_else(|| format!("{suite}.raw.jsonl"), str::to_owned)
+}
+
 fn processed_suite_raw_hash(value: &serde_json::Value, suite: &str) -> Result<String> {
     let suite_entry = value
         .get("suite_summaries")
@@ -359,28 +403,28 @@ pub(crate) fn artifact_names_for_suite(suite: &str) -> ArtifactNames {
             ranked: "memory-ranked.csv",
             summary: "memory-summary.json",
             manifest: "memory-manifest.json",
-            provenance: "memory-provenance.json",
+            report_provenance: "memory-report-provenance.json",
         },
         "rql_phase1" => ArtifactNames {
             raw: "rql_phase1.raw.jsonl",
             ranked: "rql-phase1-ranked.csv",
             summary: "rql-phase1-summary.json",
             manifest: "rql-phase1-manifest.json",
-            provenance: "rql-phase1-provenance.json",
+            report_provenance: "rql-phase1-report-provenance.json",
         },
         "beyond_sqlite" => ArtifactNames {
             raw: "beyond_sqlite.raw.jsonl",
             ranked: "beyond-sqlite-ranked.csv",
             summary: "beyond-sqlite-summary.json",
             manifest: "beyond-sqlite-manifest.json",
-            provenance: "beyond-sqlite-provenance.json",
+            report_provenance: "beyond-sqlite-report-provenance.json",
         },
         _ => ArtifactNames {
             raw: "raw.jsonl",
             ranked: "ranked.csv",
             summary: "summary.json",
             manifest: "manifest.json",
-            provenance: "provenance.json",
+            report_provenance: "report-provenance.json",
         },
     }
 }

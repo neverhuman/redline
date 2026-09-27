@@ -1,6 +1,5 @@
 use std::fs;
 use std::path::Path;
-use std::process::Command;
 
 use anyhow::{Context, Result, bail};
 use sha2::{Digest, Sha256};
@@ -13,7 +12,7 @@ pub(crate) fn verify_existing(
     summary_out: &Path,
     ranked_out: &Path,
     manifest_out: &Path,
-    provenance_out: &Path,
+    report_provenance_out: &Path,
     readme_out: &Path,
     rendered: &RenderedReport,
     svg_artifacts: &[SvgArtifact],
@@ -23,7 +22,7 @@ pub(crate) fn verify_existing(
     verify_text(summary_out, &rendered.summary)?;
     verify_text(ranked_out, &rendered.ranked)?;
     verify_text(manifest_out, &rendered.manifest)?;
-    verify_text(provenance_out, &rendered.provenance)?;
+    verify_text(report_provenance_out, &rendered.report_provenance)?;
     verify_text(readme_out, &rendered.readme)?;
     for artifact in svg_artifacts {
         verify_text(&artifact.path, &artifact.contents)?;
@@ -54,7 +53,11 @@ pub(crate) fn sha256_file(path: &Path) -> Result<String> {
 }
 
 pub(crate) fn sha256_hex(text: &str) -> String {
-    format!("{:x}", Sha256::digest(text.as_bytes()))
+    sha256_bytes(text.as_bytes())
+}
+
+pub(crate) fn sha256_bytes(bytes: &[u8]) -> String {
+    format!("{:x}", Sha256::digest(bytes))
 }
 
 pub(crate) fn csv(value: &str) -> String {
@@ -95,38 +98,24 @@ pub(crate) fn parse_score(path: &Path) -> Result<Score> {
     })
 }
 
-pub(crate) fn capture_version(path: &Path) -> Result<String> {
-    let output = Command::new(path)
-        .arg("--version")
-        .output()
-        .with_context(|| format!("run {} --version", path.display()))?;
-    Ok(String::from_utf8_lossy(&output.stdout).trim().to_owned())
-}
-
-pub(crate) fn canonical_display(path: &Path) -> String {
-    fs::canonicalize(path)
-        .map(|path| path.to_string_lossy().into_owned())
-        .unwrap_or_else(|_| path.to_string_lossy().into_owned())
-}
-
-pub(crate) fn git_sha() -> String {
-    Command::new("git")
-        .args(["rev-parse", "HEAD"])
-        .output()
-        .ok()
-        .and_then(|output| output.status.success().then(|| output.stdout))
-        .map(|stdout| String::from_utf8_lossy(&stdout).trim().to_owned())
-        .filter(|value| !value.is_empty())
-        .unwrap_or_else(|| "<unknown>".to_owned())
-}
-
-pub(crate) fn git_dirty() -> bool {
-    !Command::new("git")
-        .args(["diff", "--quiet"])
-        .status()
-        .is_ok_and(|status| status.success())
-}
-
+/// This invocation's arguments without `--check`, with the program named by
+/// its file name: where the renderer is installed is not report output.
 pub(crate) fn normalized_command_line() -> Vec<String> {
-    std::env::args().filter(|arg| arg != "--check").collect()
+    normalize_command_line(std::env::args())
+}
+
+pub(crate) fn normalize_command_line(args: impl IntoIterator<Item = String>) -> Vec<String> {
+    args.into_iter()
+        .enumerate()
+        .filter(|(_, arg)| arg != "--check")
+        .map(|(index, arg)| {
+            if index == 0 {
+                Path::new(&arg)
+                    .file_name()
+                    .map_or(arg.clone(), |name| name.to_string_lossy().into_owned())
+            } else {
+                arg
+            }
+        })
+        .collect()
 }

@@ -66,6 +66,6 @@ From a build of this repository:
 just redline-testing-official
 ```
 
-That is the long lane. `just fast` is the short local check. It does not replace the official corpus. The report generator expects `benchmark-results/sqlite-parity/latest/provenance.json` before it rewrites the README block.
+That is the long lane. `just fast` is the short local check. It does not replace the official corpus. The report generator takes the measured target, oracle and source identity only from the run's `run-provenance.json` and processed evidence in `benchmark-results/sqlite-parity/latest/`, and writes its own step to `report-provenance.json`.
 
 Next, if you are moving statements: [SQL you will write](06-sql-you-will-write.md). If the scripts came from Postgres: [Postgres coverage](05-postgres-coverage.md).

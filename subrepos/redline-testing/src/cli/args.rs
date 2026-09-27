@@ -74,6 +74,14 @@ pub(crate) struct ReportArgs {
     pub(crate) input: PathBuf,
     #[arg(long)]
     pub(crate) official_evidence: Option<PathBuf>,
+    /// The run's own provenance (target/redline-testing/provenance.json,
+    /// staged as run-provenance.json), bound by its hash in the evidence.
+    #[arg(long, conflicts_with = "historical_run")]
+    pub(crate) run_provenance: Option<PathBuf>,
+    /// Render official evidence from a run that recorded no run provenance;
+    /// the report is marked historical. Refused for evidence that names one.
+    #[arg(long)]
+    pub(crate) historical_run: bool,
     #[arg(long)]
     pub(crate) local_diagnostics: bool,
     #[arg(long)]

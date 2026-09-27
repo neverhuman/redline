@@ -1,6 +1,7 @@
 pub mod case;
 mod catalog;
 mod engine;
+mod identity;
 mod memory;
 mod normalize;
 mod report;
@@ -14,6 +15,7 @@ use anyhow::Result;
 
 pub use catalog::all_cases;
 pub use engine::REFERENCE_CLI_BIN;
+pub use identity::{assertion_policy_sha256, corpus_sha256};
 pub use rql_phase1::{RunConfig as RqlPhase1RunConfig, rql_phase1_cases};
 pub use runner::RunSummary;
 

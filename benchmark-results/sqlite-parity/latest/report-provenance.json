@@ -1,0 +1,83 @@
+{
+  "schema_version": "redline-testing-report-provenance-v1",
+  "suite": "sqlite_parity",
+  "mode": "historical",
+  "note": "historical run: it predates run provenance, so its source tree, source inputs, corpus hash, assertion policy and oracle build stamp were not recorded; the run provenance file the evidence names was not retained. Measured identities come from the processed official evidence.",
+  "measurement": {
+    "runner": {
+      "path": "/home/ubuntu/actions-runners/xbabe2-2/_work/RedlineDB/RedlineDB/target/release/redline-testing",
+      "sha256": "b28c41d40009bfe7c98832abda695c3b9d2624871c4c886991601718d8e70a78",
+      "version": "redline-testing 1.0.1"
+    },
+    "target": {
+      "path": "/home/ubuntu/actions-runners/xbabe2-2/_work/RedlineDB/RedlineDB/target/release/redlinedb",
+      "sha256": "be49779bace1d97c1d9a78f697f3a7b2bd27c6c4c6a5dccefd29304dfaa55b78",
+      "version": "redlinedb v4.1.0 (SQLite 3.45.1 compatibility)"
+    },
+    "sqlite": {
+      "path": "/home/ubuntu/actions-runners/xbabe2-2/_work/RedlineDB/RedlineDB/target/sqlite-reference/3.53.1/bin/sqlite3",
+      "sha256": "e99d817b62f1ad9ead02b8d4e410fea9d736ee82c35b9a7daa6644d4d3e5ae3a",
+      "version": "3.53.1 2026-05-05 10:34:17 c88b22011a54b4f6fbd149e9f8e4de77658ce58143a1af0e3785e4e6475127e9 (64-bit)"
+    },
+    "run": null,
+    "elapsed_ns": null
+  },
+  "parent_run_provenance": {
+    "path": null,
+    "sha256": "8de6a848353680fa72cb7d07b06dd230042dbe1fa08db04517587b651c2f8895",
+    "retained": false
+  },
+  "run_evidence_sha256": "daac7524c76944c99fdaf6ac397034c9aa5634906f035771ba83d7fd10e54ccc",
+  "processed_evidence_sha256": "44148fe725b57cc8c84bf2970012cc3c8a0d39b5130747d61d2074bc74f98fb5",
+  "raw_sha256": "9a9974fe1f8e130faa81b99065fc4ed15616ae89b110874bfac224cfc7d64421",
+  "renderer": {
+    "version": "redline-testing 1.0.1",
+    "binary_sha256": "ab8d2673573952e00d4b8c1f60ce76697ea9e0a1bd575cddff5b9815c368cfbe"
+  },
+  "command_line": [
+    "redline-testing",
+    "report",
+    "--suite",
+    "sqlite_parity",
+    "--input",
+    "benchmark-results/sqlite-parity/latest/raw.jsonl",
+    "--priorities",
+    "P0,P1,P2,P3,P4",
+    "--profiles",
+    "memory,tempfile,catalog,external_app,side_effect",
+    "--include-quarantine",
+    "--out-dir",
+    "benchmark-results/sqlite-parity/latest",
+    "--readme",
+    "README.md",
+    "--plot",
+    "assets/sqlite-parity-latency-gap.svg",
+    "--performance-histogram-plot",
+    "assets/sqlite-parity-performance-histogram.svg",
+    "--median-test-performance-plot",
+    "assets/sqlite-median-test-performance.svg",
+    "--jankurai-score",
+    ".jankurai/repo-score.json",
+    "--updated-date",
+    "2026-09-24",
+    "--expected-repetitions",
+    "3",
+    "--expected-warmup",
+    "1",
+    "--official-evidence",
+    "benchmark-results/sqlite-parity/latest/official-evidence.processed.json",
+    "--historical-run"
+  ],
+  "updated_date": "2026-09-24",
+  "output_file_hashes": {
+    "README.md#sqlite-parity-badge": "a99ac10199c8f9e63978342dedeab11fe6594f81c0693069d85d0865c5798b82",
+    "README.md#sqlite-parity-report": "1f77e2f315dc7264be9a26d19c3ef8df5ec735c3c2ac0ff651c5c1718cb7ecc5",
+    "assets/sqlite-median-test-performance.svg": "946a466877912761c74c8b9b8e0e2b17386751da8751760c86a32d85bc22f0c6",
+    "assets/sqlite-parity-latency-gap.svg": "1fbe2cb885370a23a14f0023c0934ebbbb00c40e9dd4bce57a11444f5bc34e5e",
+    "assets/sqlite-parity-performance-histogram.svg": "63111bd9f0f8948f2288b04e40c48edb76ad6a8821062bf9ca73486de43aa4c8",
+    "manifest.json": "26fcbbfe823536bc77ffc7496d5d031075fcbf959e8a4aac511636ec07ecaf95",
+    "ranked.csv": "2cd8600cdaa39c0cfd6ebb1e602645786e7b5c4373395b989c75e9c0d5b62161",
+    "raw.jsonl": "9a9974fe1f8e130faa81b99065fc4ed15616ae89b110874bfac224cfc7d64421",
+    "summary.json": "3ff7f495c67cb0b60d046db15dec84df3b23f92d34768164cb00f8f63f5aebd6"
+  }
+}

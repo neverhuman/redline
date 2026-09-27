@@ -10,6 +10,7 @@ target/release/redline-testing report \
   --suite sqlite_parity \
   --input target/redline-testing/sqlite_parity.raw.jsonl \
   --official-evidence target/redline-testing/official-evidence.processed.json \
+  --run-provenance target/redline-testing/provenance.json \
   --out-dir "$work/report" --readme "$work/README.md" \
   --updated-date "$(date -u +%F)" \
   --expected-repetitions "${REDLINEDB_SQLITE_PARITY_REPETITIONS:-3}" \

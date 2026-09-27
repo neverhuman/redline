@@ -1,5 +1,6 @@
 mod compare;
 mod evidence;
+mod provenance;
 mod qualification;
 mod ratio;
 mod render;
@@ -10,7 +11,11 @@ mod utils;
 #[cfg(test)]
 mod latency_tests;
 #[cfg(test)]
+mod provenance_tests;
+#[cfg(test)]
 mod qualification_tests;
+#[cfg(test)]
+mod test_fixtures;
 #[cfg(test)]
 mod tests;
 
@@ -22,24 +27,22 @@ pub(crate) use utils::is_measured;
 
 use std::collections::{BTreeMap, BTreeSet};
 use std::fs;
-use std::path::PathBuf;
+use std::path::Path;
 
 use anyhow::{Context, Result, bail};
 
 use evidence::{
     artifact_names_for_suite, read_official_evidence_versions, validate_official_evidence_binding,
 };
+use provenance::{REPORT_PROVENANCE_SCHEMA, Renderer, ReportProvenanceJson, load_report_identity};
 use qualification::build_sqlite_qualification;
 use render::{
-    remove_block_if_present, render_report_block, render_sqlite_badge, replace_block,
+    block_text, remove_block_if_present, render_report_block, render_sqlite_badge, replace_block,
     replace_block_if_present,
 };
 use svg::build_svg_artifacts;
-use types::{ManifestJson, ProvenanceJson, RawRecord, RenderedReport, SummaryJson};
-use utils::{
-    canonical_display, git_dirty, git_sha, normalized_command_line, sha256_file, sha256_hex,
-    verify_existing, write_text,
-};
+use types::{ManifestJson, RawRecord, RenderedReport, SummaryJson};
+use utils::{normalized_command_line, sha256_file, sha256_hex, verify_existing, write_text};
 
 const REPORT_BEGIN: &str = "<!-- sqlite-parity-report:begin -->";
 const REPORT_END: &str = "<!-- sqlite-parity-report:end -->";
@@ -91,6 +94,8 @@ pub fn generate(options: ReportOptions) -> Result<()> {
     if raw_records.is_empty() {
         bail!("sqlite parity report input is empty");
     }
+    // Measured identities come from the run alone; see provenance.rs.
+    let identity = load_report_identity(&options, &raw_text, &raw_records)?;
 
     if let Some(expected_repetitions) = options.expected_repetitions {
         let measured = raw_records
@@ -159,7 +164,7 @@ pub fn generate(options: ReportOptions) -> Result<()> {
         passed_cases,
         failed_cases,
         skipped_cases,
-        elapsed_ns: 0,
+        elapsed_ns: identity.measurement.elapsed_ns,
         measured_samples,
         warmup_samples,
         ranked_cases: ranked.len(),
@@ -189,6 +194,7 @@ pub fn generate(options: ReportOptions) -> Result<()> {
         &options,
         evidence_versions.as_ref(),
         qualification.as_ref(),
+        &identity,
     );
     let mut readme = fs::read_to_string(&options.readme)
         .with_context(|| format!("read README {}", options.readme.display()))?;
@@ -211,70 +217,91 @@ pub fn generate(options: ReportOptions) -> Result<()> {
     let ranked_out = output_dir.join(artifact_names.ranked);
     let summary_out = output_dir.join(artifact_names.summary);
     let manifest_out = output_dir.join(artifact_names.manifest);
-    let provenance_out = output_dir.join(artifact_names.provenance);
+    let report_provenance_out = output_dir.join(artifact_names.report_provenance);
 
-    let redline_testing_bin = std::env::current_exe().context("resolve current executable")?;
-    let redline_testing_binary_sha256 = sha256_file(&redline_testing_bin)?;
-    let target_bin = std::env::var_os("REDLINE_TESTING_TARGET_BIN")
-        .filter(|value| !value.is_empty())
-        .map(PathBuf::from)
-        .unwrap_or_else(|| PathBuf::from("target/release/redlinedb"));
-    let target_binary_path = canonical_display(&target_bin);
-    let target_binary_sha256 = sha256_file(&target_bin).unwrap_or_else(|_| "<unknown>".to_owned());
-    let target_version =
-        utils::capture_version(&target_bin).unwrap_or_else(|_| "<unknown>".to_owned());
-    let sqlite_binary_path = std::env::var_os("REDLINE_TESTING_SQLITE_BIN")
-        .filter(|value| !value.is_empty())
-        .map(PathBuf::from)
-        .unwrap_or_else(|| PathBuf::from(crate::sqlite_parity::REFERENCE_CLI_BIN));
-    let sqlite_binary_sha256 =
-        sha256_file(&sqlite_binary_path).unwrap_or_else(|_| "<unknown>".to_owned());
-    let sqlite_version =
-        utils::capture_version(&sqlite_binary_path).unwrap_or_else(|_| "<unknown>".to_owned());
-    let output_file_hashes = BTreeMap::from([
-        (artifact_names.raw.to_owned(), sha256_hex(&raw_text)),
-        (artifact_names.summary.to_owned(), sha256_hex(&summary_json)),
-        (artifact_names.ranked.to_owned(), sha256_hex(&ranked_csv)),
-        (options.readme.display().to_string(), sha256_hex(&readme)),
-    ]);
     let command_line = normalized_command_line();
-    let provenance = ProvenanceJson {
-        schema_version: "redline-testing-provenance-v1".to_owned(),
-        suite: options.suite.clone(),
-        redline_testing_binary_path: canonical_display(&redline_testing_bin),
-        redline_testing_binary_sha256,
-        target_binary_path,
-        target_binary_sha256,
-        target_version,
-        sqlite_binary_path: canonical_display(&sqlite_binary_path),
-        sqlite_binary_sha256,
-        sqlite_version,
-        command_line: command_line.clone(),
-        repetitions: summary.repetitions,
-        warmup: summary.warmup,
-        updated_date: options.updated_date.clone(),
-        git_sha: git_sha(),
-        git_dirty: git_dirty(),
-        output_file_hashes: output_file_hashes.clone(),
-    };
-    let provenance_json = serde_json::to_string_pretty(&provenance)? + "\n";
+    let mut output_files = BTreeMap::from([
+        ("raw".to_owned(), raw_out.display().to_string()),
+        ("summary".to_owned(), summary_out.display().to_string()),
+        ("ranked".to_owned(), ranked_out.display().to_string()),
+        (
+            "report_provenance".to_owned(),
+            report_provenance_out.display().to_string(),
+        ),
+    ]);
+    if let Some(path) = &identity.parent.path {
+        output_files.insert("run_provenance".to_owned(), path.clone());
+    }
     let manifest = ManifestJson {
         schema_version: "redline-testing-manifest-v1".to_owned(),
         suite: options.suite.clone(),
-        command_line,
+        command_line: command_line.clone(),
         repetitions: summary.repetitions,
         warmup: summary.warmup,
-        output_files: BTreeMap::from([
-            ("raw".to_owned(), raw_out.display().to_string()),
-            ("summary".to_owned(), summary_out.display().to_string()),
-            ("ranked".to_owned(), ranked_out.display().to_string()),
-            (
-                "provenance".to_owned(),
-                provenance_out.display().to_string(),
-            ),
-        ]),
+        output_files,
     };
     let manifest_json = serde_json::to_string_pretty(&manifest)? + "\n";
+    let svg_artifacts = build_svg_artifacts(&summary, &ranked, &raw_records, &options);
+
+    let raw_sha256 = sha256_hex(&raw_text);
+    let mut output_file_hashes = BTreeMap::from([
+        (artifact_names.raw.to_owned(), raw_sha256.clone()),
+        (artifact_names.summary.to_owned(), sha256_hex(&summary_json)),
+        (artifact_names.ranked.to_owned(), sha256_hex(&ranked_csv)),
+        (
+            artifact_names.manifest.to_owned(),
+            sha256_hex(&manifest_json),
+        ),
+    ]);
+    // Only the blocks this report writes: README text outside them is not
+    // report output.
+    let readme_name = options.readme.display().to_string();
+    for (begin, end) in [(REPORT_BEGIN, REPORT_END), (BADGE_BEGIN, BADGE_END)] {
+        if let Some(block) = block_text(&readme, begin, end) {
+            let marker = begin
+                .trim_start_matches("<!-- ")
+                .trim_end_matches(":begin -->");
+            output_file_hashes.insert(format!("{readme_name}#{marker}"), sha256_hex(block));
+        }
+    }
+    for artifact in &svg_artifacts {
+        output_file_hashes.insert(
+            artifact.path.display().to_string(),
+            sha256_hex(&artifact.contents),
+        );
+    }
+    let renderer = if options.check {
+        committed_renderer(&report_provenance_out)
+    } else {
+        None
+    };
+    let renderer = match renderer {
+        Some(renderer) => renderer,
+        None => {
+            let redline_testing_bin =
+                std::env::current_exe().context("resolve current executable")?;
+            Renderer {
+                version: format!("redline-testing {}", env!("CARGO_PKG_VERSION")),
+                binary_sha256: sha256_file(&redline_testing_bin)?,
+            }
+        }
+    };
+    let report_provenance = ReportProvenanceJson {
+        schema_version: REPORT_PROVENANCE_SCHEMA,
+        suite: options.suite.clone(),
+        mode: identity.mode,
+        note: identity.note(),
+        measurement: identity.measurement.clone(),
+        parent_run_provenance: identity.parent.clone(),
+        run_evidence_sha256: identity.run_evidence_sha256.clone(),
+        processed_evidence_sha256: identity.processed_evidence_sha256.clone(),
+        raw_sha256,
+        renderer,
+        command_line,
+        updated_date: options.updated_date.clone(),
+        output_file_hashes,
+    };
+    let report_provenance_json = serde_json::to_string_pretty(&report_provenance)? + "\n";
 
     let rendered = RenderedReport {
         raw: raw_text,
@@ -282,9 +309,8 @@ pub fn generate(options: ReportOptions) -> Result<()> {
         ranked: ranked_csv,
         readme,
         manifest: manifest_json,
-        provenance: provenance_json,
+        report_provenance: report_provenance_json,
     };
-    let svg_artifacts = build_svg_artifacts(&summary, &ranked, &raw_records, &options);
 
     if options.check {
         verify_existing(
@@ -293,7 +319,7 @@ pub fn generate(options: ReportOptions) -> Result<()> {
             &summary_out,
             &ranked_out,
             &manifest_out,
-            &provenance_out,
+            &report_provenance_out,
             &options.readme,
             &rendered,
             &svg_artifacts,
@@ -306,7 +332,7 @@ pub fn generate(options: ReportOptions) -> Result<()> {
     fs::write(&summary_out, rendered.summary)?;
     fs::write(&ranked_out, rendered.ranked)?;
     fs::write(&manifest_out, rendered.manifest)?;
-    fs::write(&provenance_out, rendered.provenance)?;
+    fs::write(&report_provenance_out, rendered.report_provenance)?;
     fs::write(&options.readme, rendered.readme)?;
     fs::write(
         output_dir.join("raw.jsonl.sha256"),
@@ -327,4 +353,15 @@ pub fn generate(options: ReportOptions) -> Result<()> {
     }
 
     Ok(())
+}
+
+/// The renderer block of a committed report provenance, which `--check`
+/// keeps: it names whichever build wrote the file.
+fn committed_renderer(path: &Path) -> Option<Renderer> {
+    let value: serde_json::Value = serde_json::from_str(&fs::read_to_string(path).ok()?).ok()?;
+    let renderer = value.get("renderer")?;
+    Some(Renderer {
+        version: renderer.get("version")?.as_str()?.to_owned(),
+        binary_sha256: renderer.get("binary_sha256")?.as_str()?.to_owned(),
+    })
 }

@@ -5,6 +5,7 @@ use anyhow::{Context, Result};
 use super::evidence::{
     memory_peak_summary, memory_status_summary, suite_display_name, suite_subject,
 };
+use super::provenance::{ReportIdentity, ReportMode};
 use super::qualification::counts_text;
 use super::ratio::{format_ratio, summarize};
 use super::types::{
@@ -104,6 +105,7 @@ pub(crate) fn render_report_block(
     options: &ReportOptions,
     evidence_versions: Option<&EvidenceVersions>,
     qualification: Option<&SqliteQualification>,
+    identity: &ReportIdentity,
 ) -> String {
     let suite_label = suite_display_name(&options.suite);
     let suite_subject = suite_subject(&options.suite);
@@ -125,7 +127,11 @@ pub(crate) fn render_report_block(
     );
     let mut block = String::new();
     if let Some(qualification) = qualification {
-        block.push_str(&render_sqlite_scope(qualification, &options.updated_date));
+        block.push_str(&render_sqlite_scope(
+            qualification,
+            identity,
+            &options.updated_date,
+        ));
     } else {
         block.push_str(&format!(
             "**{} coverage:** **{} / {}** {} passed in CI. Failed: **{}**. Skipped: **{}**. Updated {}.\n\n",
@@ -229,7 +235,11 @@ const SQLITE_BADGE_LABEL: &str = "SQLite SQL/CLI corpus";
 
 /// The first lines of the `sqlite_parity` block: corpus and oracle, the fixed
 /// scope sentence, the evidence behind the counts, and the declared deviations.
-fn render_sqlite_scope(qualification: &SqliteQualification, updated_date: &str) -> String {
+fn render_sqlite_scope(
+    qualification: &SqliteQualification,
+    identity: &ReportIdentity,
+    updated_date: &str,
+) -> String {
     let q = qualification;
     let oracle = q.oracle_version.as_deref().map_or_else(
         || "sqlite3 shell, version unrecorded".to_owned(),
@@ -279,6 +289,7 @@ fn render_sqlite_scope(qualification: &SqliteQualification, updated_date: &str) 
             recorded(q.oracle_build_id.as_deref()),
         ));
     }
+    out.push_str(&run_provenance_sentence(identity));
     out.push_str("\n\n");
     if q.declared_deviations.is_empty() {
         out.push_str("**Declared deviations:** none among the cases in this run.\n\n");
@@ -296,6 +307,29 @@ fn render_sqlite_scope(qualification: &SqliteQualification, updated_date: &str) 
         out.push('\n');
     }
     out
+}
+
+/// Where the measured source identity comes from, after the Evidence line.
+fn run_provenance_sentence(identity: &ReportIdentity) -> String {
+    match (identity.mode, &identity.measurement.run) {
+        (ReportMode::Official, Some(run)) => format!(
+            " Run provenance {}: source tree `{}` ({}), source inputs `{}`, assertion policy `{}`.",
+            recorded(identity.parent.sha256.as_deref()),
+            short(&run.source_tree),
+            if run.source_dirty { "dirty" } else { "clean" },
+            short(&run.source_inputs_sha256),
+            short(&run.assertion_policy_sha256),
+        ),
+        (ReportMode::Historical, _) => format!(
+            " Historical run: it predates run provenance, so its source tree is unrecorded, and its run provenance{} was not retained.",
+            identity
+                .parent
+                .sha256
+                .as_deref()
+                .map_or_else(String::new, |sha| format!(" `{}`", short(sha)))
+        ),
+        _ => String::new(),
+    }
 }
 
 /// The first 12 characters of an identifier's first line.
@@ -376,6 +410,13 @@ fn html_attribute(text: &str) -> String {
         .replace('"', "&quot;")
         .replace('<', "&lt;")
         .replace('>', "&gt;")
+}
+
+/// The text between `begin` and `end` when both are present in order.
+pub(crate) fn block_text<'a>(text: &'a str, begin: &str, end: &str) -> Option<&'a str> {
+    let start = text.find(begin)? + begin.len();
+    let stop = text.find(end)?;
+    (start <= stop).then(|| &text[start..stop])
 }
 
 /// Deletes a generated block, markers included, when both markers are

@@ -9,6 +9,7 @@ use std::path::{Path, PathBuf};
 use clap::Parser;
 
 use super::generate;
+use super::test_fixtures as fixture;
 use super::types::ReportOptions;
 use super::utils::sha256_hex;
 
@@ -38,6 +39,9 @@ fn record(
         "status": status,
         "reference_elapsed_ns": if timed { 2_000_000u128 } else { 0 },
         "target_elapsed_ns": if timed { 4_000_000u128 } else { 0 },
+        "reference_executable_sha256": if timed { ORACLE_SHA256 } else { "" },
+        "target_executable_sha256": if timed { fixture::TARGET_SHA256 } else { "" },
+        "reference_version": if timed { fixture::SQLITE_VERSION } else { "" },
     });
     format!("{value}\n")
 }
@@ -84,10 +88,19 @@ fn evidence(raw_text: &str, status: &str, counts: [usize; 4]) -> serde_json::Val
         "status": status,
         "official_evidence": {
             "schema_version": "redline-testing-official-evidence-v1",
-            "runner": { "version": "redline-testing 1.0.1", "binary_sha256": RUNNER_SHA256 },
-            "target": { "version": "redlinedb v4.1.0 (SQLite 3.45.1 compatibility)" },
+            "runner": {
+                "binary_path": fixture::RUNNER_PATH,
+                "version": "redline-testing 1.0.1",
+                "binary_sha256": RUNNER_SHA256,
+            },
+            "target": {
+                "path": fixture::TARGET_PATH,
+                "sha256": fixture::TARGET_SHA256,
+                "version": "redlinedb v4.1.0 (SQLite 3.45.1 compatibility)",
+            },
             "sqlite": {
-                "version": "3.53.1 2026-05-05 10:34:17 c88b22011a54 (64-bit)",
+                "path": fixture::SQLITE_PATH,
+                "version": fixture::SQLITE_VERSION,
                 "sha256": ORACLE_SHA256,
             },
             "status": status,
@@ -111,6 +124,9 @@ fn options(root: &Path, evidence: Option<PathBuf>) -> ReportOptions {
         suite: "sqlite_parity".to_owned(),
         input: root.join("raw.jsonl"),
         local_diagnostics: evidence.is_none(),
+        // These evidence fixtures record no run provenance.
+        historical_run: evidence.is_some(),
+        run_provenance: None,
         official_evidence: evidence,
         out_dir: root.join("out"),
         readme: root.join("README.md"),

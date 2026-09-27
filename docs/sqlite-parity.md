@@ -27,24 +27,35 @@ That runner is the sole official producer of parity evidence; engine-local
 regression tests do not produce public parity reports. CI builds the runner and
 engine from the same parent commit, stages corpus/metadata/schema/template files,
 and verifies binary and evidence hashes before accepting the processed bundle.
-The report generator requires
-`benchmark-results/sqlite-parity/latest/provenance.json` before regenerating
-README/chart outputs. Older committed reports retain their original release
-artifact provenance and dates; migration does not rewrite historical measurements.
+Two provenance files sit next to the committed report, and they are never
+merged:
 
-The provenance schema accepted by the RedlineDB report gate is deliberately
-small and hash-first:
+- `run-provenance.json` is the run's own `target/redline-testing/provenance.json`
+  (schema `redline-testing-run-provenance-v2`), staged unchanged by
+  `just sqlite-parity-report-update` after its SHA-256 matches
+  `suite_summaries.sqlite_parity.provenance_sha256` in the processed evidence.
+  It names the measured target, SQLite oracle and runner (path, SHA-256,
+  version), the source commit and tree, `source_inputs_sha256` (the
+  `.github/parity-report-inputs.sha256` recipe), `source_dirty` from
+  `git status --porcelain` over those inputs (untracked files included), the
+  corpus and assertion-policy hashes, the oracle build stamp from
+  `scripts/sqlite/build-reference.sh`, and the suite's elapsed time.
+- `report-provenance.json` (schema `redline-testing-report-provenance-v1`)
+  records the rendering: the parent run provenance hash, the run and processed
+  evidence hashes, the raw hash, the renderer, the arguments and the hashes of
+  every output (for the README, only the generated blocks). It holds no Git
+  state.
 
-- `output_file_hashes` or `output_hashes` must include `raw.jsonl` with its
-  SHA-256, either as `"raw.jsonl": "<sha256>"` or
-  `"raw.jsonl": { "sha256": "<sha256>" }`.
-- `redline_testing_binary_sha256` must record the installed
-  `redline-testing` binary SHA-256 used to write `raw.jsonl`.
-- If the provenance records a release artifact/bin hash through
-  `release_artifact.bin_sha256`, `release_artifact.binary_sha256`,
-  `redline_testing.release_artifact.bin_sha256`, `release_file_hashes`, or
-  equivalent `*_binary_sha256` fields, it must equal
-  `redline_testing_binary_sha256`.
+`redline-testing report` takes every measured identity from the processed
+evidence and the run provenance, checks them against each other and against
+every raw sample, and refuses unknown identities, a run provenance the
+evidence does not bind, and a dirty measured source. It never probes `PATH`,
+`REDLINE_TESTING_*_BIN` or Git, so `just sqlite-parity-report-check` needs no
+rewriting of committed files. The committed 2026-09-24 run predates run
+provenance: it renders only with `--historical-run`, which the renderer refuses
+for evidence that names a run provenance, and its report is marked historical.
+Older committed reports retain their original dates; migration does not rewrite
+historical measurements.
 
 Status values are deliberately narrow:
 

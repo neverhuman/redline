@@ -8,6 +8,10 @@ pub struct ReportOptions {
     pub suite: String,
     pub input: PathBuf,
     pub official_evidence: Option<PathBuf>,
+    /// The run provenance bound to `official_evidence` (official mode).
+    pub run_provenance: Option<PathBuf>,
+    /// `official_evidence` comes from a run that recorded no run provenance.
+    pub historical_run: bool,
     pub local_diagnostics: bool,
     pub out_dir: PathBuf,
     pub readme: PathBuf,
@@ -55,6 +59,14 @@ pub(crate) struct RawRecord {
     pub(crate) status: String,
     pub(crate) reference_elapsed_ns: u128,
     pub(crate) target_elapsed_ns: u128,
+    /// Executable identities the runner records on every executed sample;
+    /// a declared skip carries empty strings.
+    #[serde(default)]
+    pub(crate) reference_executable_sha256: String,
+    #[serde(default)]
+    pub(crate) target_executable_sha256: String,
+    #[serde(default)]
+    pub(crate) reference_version: String,
     #[serde(default)]
     pub(crate) memory_status: String,
     #[serde(default)]
@@ -74,7 +86,9 @@ pub(crate) struct SummaryJson {
     pub(crate) passed_cases: usize,
     pub(crate) failed_cases: usize,
     pub(crate) skipped_cases: usize,
-    pub(crate) elapsed_ns: u128,
+    /// The run's own elapsed time from its run provenance; `null` when the
+    /// run recorded none (historical or local reports).
+    pub(crate) elapsed_ns: Option<u128>,
     pub(crate) measured_samples: usize,
     pub(crate) warmup_samples: usize,
     pub(crate) ranked_cases: usize,
@@ -94,27 +108,6 @@ pub(crate) struct ManifestJson {
     pub(crate) repetitions: usize,
     pub(crate) warmup: usize,
     pub(crate) output_files: BTreeMap<String, String>,
-}
-
-#[derive(Debug, Serialize)]
-pub(crate) struct ProvenanceJson {
-    pub(crate) schema_version: String,
-    pub(crate) suite: String,
-    pub(crate) redline_testing_binary_path: String,
-    pub(crate) redline_testing_binary_sha256: String,
-    pub(crate) target_binary_path: String,
-    pub(crate) target_binary_sha256: String,
-    pub(crate) target_version: String,
-    pub(crate) sqlite_binary_path: String,
-    pub(crate) sqlite_binary_sha256: String,
-    pub(crate) sqlite_version: String,
-    pub(crate) command_line: Vec<String>,
-    pub(crate) repetitions: usize,
-    pub(crate) warmup: usize,
-    pub(crate) updated_date: String,
-    pub(crate) git_sha: String,
-    pub(crate) git_dirty: bool,
-    pub(crate) output_file_hashes: BTreeMap<String, String>,
 }
 
 #[derive(Debug, Clone)]
@@ -232,7 +225,9 @@ pub(crate) struct ArtifactNames {
     pub(crate) ranked: &'static str,
     pub(crate) summary: &'static str,
     pub(crate) manifest: &'static str,
-    pub(crate) provenance: &'static str,
+    /// The report's own provenance. The run's provenance keeps its own
+    /// name (`provenance.json`, staged as `run-provenance.json`).
+    pub(crate) report_provenance: &'static str,
 }
 
 pub(crate) struct RenderedReport {
@@ -241,7 +236,7 @@ pub(crate) struct RenderedReport {
     pub(crate) ranked: String,
     pub(crate) readme: String,
     pub(crate) manifest: String,
-    pub(crate) provenance: String,
+    pub(crate) report_provenance: String,
 }
 
 pub(crate) struct Score {

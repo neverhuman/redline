@@ -11,8 +11,11 @@ use sha2::{Digest, Sha256};
 use crate::sqlite_parity::RunSummary;
 use crate::{latency, report};
 
+mod identity;
 #[cfg(test)]
 mod tests;
+
+pub(crate) use identity::{RUN_PROVENANCE_SCHEMA, RunIdentity};
 
 #[derive(Debug)]
 pub struct EvidenceConfig {
@@ -120,6 +123,11 @@ struct OfficialSuiteJson {
 #[derive(Debug, Serialize)]
 struct OfficialEvidenceJson {
     schema_version: String,
+    /// The per-suite provenance files follow this schema; `report` requires
+    /// them for any evidence that names one.
+    run_provenance_schema: String,
+    #[serde(flatten)]
+    run_identity: RunIdentity,
     runner: RunnerEvidence,
     target: BinaryEvidence,
     sqlite: BinaryEvidence,
@@ -164,12 +172,14 @@ struct ManifestJson {
     output_files: BTreeMap<String, String>,
 }
 
+/// The run's own provenance for one suite. `report` stages it unchanged as
+/// run-provenance.json and never rewrites it.
 #[derive(Debug, Serialize)]
 struct ProvenanceJson {
     schema_version: String,
     suite: String,
-    redlinedb_git_sha: String,
-    redlinedb_git_dirty: bool,
+    #[serde(flatten)]
+    run_identity: RunIdentity,
     target_binary_path: String,
     target_binary_sha256: String,
     target_version: String,
@@ -177,6 +187,7 @@ struct ProvenanceJson {
     redline_testing_binary_sha256: String,
     redline_testing_release_binary_sha256: String,
     redline_testing_release_tarball_sha256: Option<String>,
+    redline_testing_version: String,
     sqlite_binary_path: String,
     sqlite_binary_sha256: String,
     sqlite_version: String,
@@ -192,6 +203,8 @@ struct ProvenanceJson {
     available_parallelism: usize,
     started_unix_ms: u128,
     ended_unix_ms: u128,
+    /// Wall time of the suite run itself, from the runner's summary.
+    elapsed_ns: u128,
     output_file_hashes: BTreeMap<String, String>,
 }
 
@@ -269,11 +282,9 @@ pub fn write_sqlite_parity_evidence(config: EvidenceConfig) -> Result<()> {
         (file_name(&manifest_path), sha256_file(&manifest_path)?),
     ]);
     let provenance_json = serde_json::to_string_pretty(&ProvenanceJson {
-        schema_version: "redline-testing-provenance-v1".to_owned(),
+        schema_version: RUN_PROVENANCE_SCHEMA.to_owned(),
         suite: config.suite,
-        redlinedb_git_sha: git_output(["rev-parse", "HEAD"])
-            .unwrap_or_else(|| "<unknown>".to_owned()),
-        redlinedb_git_dirty: git_dirty(),
+        run_identity: identity::capture(&config.sqlite_bin),
         target_binary_path: canonical_display(&config.target_bin),
         target_binary_sha256: sha256_file(&resolve_executable_path(&config.target_bin)?)?,
         target_version: capture_version(&config.target_bin)?,
@@ -283,6 +294,7 @@ pub fn write_sqlite_parity_evidence(config: EvidenceConfig) -> Result<()> {
         redline_testing_release_tarball_sha256: env_sha(
             "CI_REDLINE_TESTING_RELEASE_TARBALL_SHA256",
         ),
+        redline_testing_version: runner_version(),
         sqlite_binary_path: canonical_display(&config.sqlite_bin),
         sqlite_binary_sha256: sha256_file(&resolve_executable_path(&config.sqlite_bin)?)?,
         sqlite_version: capture_version(&config.sqlite_bin)?,
@@ -300,6 +312,7 @@ pub fn write_sqlite_parity_evidence(config: EvidenceConfig) -> Result<()> {
             .unwrap_or(1),
         started_unix_ms: config.started_unix_ms,
         ended_unix_ms: config.ended_unix_ms,
+        elapsed_ns: config.summary.elapsed.as_nanos(),
         output_file_hashes: output_hashes,
     })? + "\n";
     fs::write(&provenance_path, provenance_json)
@@ -331,7 +344,7 @@ pub fn write_official_evidence(config: OfficialEvidenceConfig) -> Result<()> {
         binary_sha256: redline_testing_binary_sha256,
         release_binary_sha256,
         release_tarball_sha256: env_sha("CI_REDLINE_TESTING_RELEASE_TARBALL_SHA256"),
-        version: format!("redline-testing {}", env!("CARGO_PKG_VERSION")),
+        version: runner_version(),
     };
     let target = BinaryEvidence {
         path: canonical_display(&config.target_bin),
@@ -407,6 +420,8 @@ pub fn write_official_evidence(config: OfficialEvidenceConfig) -> Result<()> {
 
     let evidence = OfficialEvidenceJson {
         schema_version: "redline-testing-official-evidence-v1".to_owned(),
+        run_provenance_schema: RUN_PROVENANCE_SCHEMA.to_owned(),
+        run_identity: identity::capture(&config.sqlite_bin),
         runner,
         target,
         sqlite,
@@ -449,6 +464,10 @@ fn file_name(path: &Path) -> String {
         .and_then(|name| name.to_str())
         .map(str::to_owned)
         .unwrap_or_else(|| display_path(path))
+}
+
+fn runner_version() -> String {
+    format!("redline-testing {}", env!("CARGO_PKG_VERSION"))
 }
 
 pub fn now_unix_ms() -> u128 {
@@ -505,26 +524,6 @@ fn canonical_display(path: &Path) -> String {
 
 fn display_path(path: &Path) -> String {
     path.to_string_lossy().into_owned()
-}
-
-fn git_output<const N: usize>(args: [&str; N]) -> Option<String> {
-    let output = Command::new("git").args(args).output().ok()?;
-    output
-        .status
-        .success()
-        .then(|| String::from_utf8_lossy(&output.stdout).trim().to_owned())
-        .filter(|value| !value.is_empty())
-}
-
-fn git_dirty() -> bool {
-    !Command::new("git")
-        .args(["diff", "--quiet"])
-        .status()
-        .is_ok_and(|status| status.success())
-        || !Command::new("git")
-            .args(["diff", "--cached", "--quiet"])
-            .status()
-            .is_ok_and(|status| status.success())
 }
 
 fn cpu_model() -> String {

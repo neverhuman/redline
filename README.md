@@ -355,7 +355,7 @@ Current acceptance evidence is attached to the GitHub CI run.
 
 **Scope** (`sqlite_sql_cli`): each case runs one SQL or dot-command script through the `redlinedb` and `sqlite3` shells and compares their output and exit status. It does not test C ABI semantics, the database file format, or prepared-statement state.
 
-**Evidence:** qualified: official evidence run `daac7524c769` records the same 2445 total, 2445 passed, 0 failed, 0 skipped. Corpus `sqlite_parity` from redline-testing 1.0.1 (runner SHA-256 `b28c41d40009`), corpus SHA-256 unrecorded; oracle sqlite3 3.53.1 (binary SHA-256 `e99d817b62f1`), build stamp unrecorded.
+**Evidence:** qualified: official evidence run `daac7524c769` records the same 2445 total, 2445 passed, 0 failed, 0 skipped. Corpus `sqlite_parity` from redline-testing 1.0.1 (runner SHA-256 `b28c41d40009`), corpus SHA-256 unrecorded; oracle sqlite3 3.53.1 (binary SHA-256 `e99d817b62f1`), build stamp unrecorded. Historical run: it predates run provenance, so its source tree is unrecorded, and its run provenance `8de6a8483536` was not retained.
 
 **Declared deviations (6):** these cases pass, but RedlineDB produces the compared output without the SQLite feature behind it.
 

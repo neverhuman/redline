@@ -79,11 +79,13 @@ if ! readelf -S "$INPUT_BIN" 2>/dev/null | grep -q '\.rela\.text\|\.rel\.text'; 
     exit 2
 fi
 
-REDLINE_SPLIT_ROOT="${REDLINE_SPLIT_ROOT:-$(cd ".." && pwd)}"
-REDLINE_TESTING_BIN="${REDLINE_TESTING_BIN:-${REDLINE_SPLIT_ROOT}/redline-testing/target/release/redline-testing}"
-SQLITE_REF_BIN="${SQLITE_REF_BIN:-$(bash scripts/sqlite/build-reference.sh 2>/dev/null || echo "${REDLINE_SPLIT_ROOT}/sqlite-reference/bin/sqlite3")}" 
+# The in-tree runner (ops/ci/lib.sh ci_install_redline_testing) and the
+# pinned reference (scripts/sqlite/build-reference.sh), both in this checkout.
+REDLINE_TESTING_BIN="${REDLINE_TESTING_BIN:-$PWD/target/release/redline-testing}"
+SQLITE_REF_BIN="${SQLITE_REF_BIN:-$(bash scripts/sqlite/build-reference.sh 2>/dev/null || echo "$PWD/target/sqlite-reference/3.53.1/bin/sqlite3")}"
 if [ ! -x "$REDLINE_TESTING_BIN" ]; then
     echo "bolt.sh: redline-testing not at $REDLINE_TESTING_BIN" >&2
+    echo "         build the in-tree runner: bash -c '. ops/ci/lib.sh && ci_install_redline_testing'" >&2
     exit 2
 fi
 if [ ! -x "$SQLITE_REF_BIN" ]; then

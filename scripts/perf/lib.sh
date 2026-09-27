@@ -8,8 +8,11 @@
 # CI parity gate (ops/ci/lib.sh::ci_resolve_redline_testing_release).
 #
 # Environment overrides:
-#   REDLINE_TESTING_BIN     path to the redline-testing binary
-#   SQLITE_REF_BIN          path to the sqlite3 reference binary
+#   REDLINE_TESTING_BIN     path to the redline-testing binary (default: the
+#                           in-tree runner, target/release/redline-testing,
+#                           built by ops/ci/lib.sh ci_install_redline_testing)
+#   SQLITE_REF_BIN          path to the sqlite3 reference binary (default: the
+#                           pinned build from scripts/sqlite/build-reference.sh)
 #   PERF_ROOT               where JSONL outputs land (default: target/perf)
 #   PERF_WORKERS            override workers (default 1 for low variance)
 #   PERF_TASKSET_CPUS       CPU list passed to taskset (default 2-5)
@@ -21,11 +24,12 @@ set -euo pipefail
 PERF_ROOT="${PERF_ROOT:-target/perf}"
 
 REDLINE_CORE_ROOT="${REDLINE_CORE_ROOT:-$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)}"
-REDLINE_SPLIT_ROOT="${REDLINE_SPLIT_ROOT:-$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)}"
-REDLINE_TESTING_BIN_DEFAULT="${REDLINE_SPLIT_ROOT}/redline-testing/target/release/redline-testing"
+# The runner and the reference both live in this checkout; no sibling
+# checkout is consulted.
+REDLINE_TESTING_BIN_DEFAULT="${REDLINE_CORE_ROOT}/target/release/redline-testing"
 REDLINE_TESTING_BIN="${REDLINE_TESTING_BIN:-$REDLINE_TESTING_BIN_DEFAULT}"
 
-SQLITE_REF_BIN_DEFAULT="${SQLITE_REF_BIN_DEFAULT:-${REDLINE_SPLIT_ROOT}/sqlite-reference/bin/sqlite3}"
+SQLITE_REF_BIN_DEFAULT="${SQLITE_REF_BIN_DEFAULT:-${REDLINE_CORE_ROOT}/target/sqlite-reference/3.53.1/bin/sqlite3}"
 SQLITE_REF_BIN="${SQLITE_REF_BIN:-$SQLITE_REF_BIN_DEFAULT}"
 
 # CI overrides everything (ops/ci/lib.sh::ci_resolve_redline_testing_release
@@ -47,7 +51,7 @@ perf_require_bins() {
   fi
   if [ ! -x "$REDLINE_TESTING_BIN" ]; then
     printf 'perf: redline-testing missing: %s\n' "$REDLINE_TESTING_BIN" >&2
-    printf '       set REDLINE_TESTING_BIN or install via ops/ci/lib.sh\n' >&2
+    printf '       build it with: bash -c %s\n' "'. ops/ci/lib.sh && ci_install_redline_testing'" >&2
     exit 2
   fi
   if [ ! -x "$SQLITE_REF_BIN" ]; then

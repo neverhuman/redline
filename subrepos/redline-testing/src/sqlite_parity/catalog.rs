@@ -8,6 +8,17 @@ const PINNED_MANIFEST: &str = include_str!("../../corpus/sqlite_parity/generated
 // Each entry is (file_stem, shard_contents_as_str).
 include!(concat!(env!("OUT_DIR"), "/extended_shards.rs"));
 
+/// Every corpus file compiled into this runner, as (name, contents): the
+/// pinned manifest first, then each shard under corpus/sqlite_parity/cases in
+/// file-name order, metadata shards included.
+pub(super) fn corpus_files() -> impl Iterator<Item = (String, &'static str)> {
+    std::iter::once(("generated_manifest.json".to_owned(), PINNED_MANIFEST)).chain(
+        EXTENDED_SHARDS
+            .iter()
+            .map(|(stem, body)| (format!("cases/{stem}.json"), *body)),
+    )
+}
+
 /// Cases from the pinned upstream manifest (IDs 1-1127). Read-only; this is
 /// the migrated artifact from RedlineDB.
 pub fn pinned_cases() -> Result<Vec<Case>> {

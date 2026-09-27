@@ -199,6 +199,8 @@ fn report_requires_official_evidence_for_committed_artifacts() {
         suite: "sqlite_parity".to_owned(),
         input,
         official_evidence: None,
+        run_provenance: None,
+        historical_run: false,
         local_diagnostics: false,
         out_dir,
         readme,
@@ -232,6 +234,9 @@ fn report_uses_official_evidence_versions_in_readme_block() {
         "status": "passed",
         "reference_elapsed_ns": 10u128,
         "target_elapsed_ns": 5u128,
+        "reference_executable_sha256": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+        "target_executable_sha256": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+        "reference_version": "3.53.1 2026-05-05 10:34:17 example (64-bit)",
     });
     let raw_text = format!("{}\n", serde_json::to_string(&raw).expect("raw json"));
     fs::write(&input, &raw_text).expect("raw");
@@ -296,6 +301,9 @@ fn report_uses_official_evidence_versions_in_readme_block() {
         suite: "sqlite_parity".to_owned(),
         input,
         official_evidence: Some(evidence),
+        // The evidence records no run provenance.
+        run_provenance: None,
+        historical_run: true,
         local_diagnostics: false,
         out_dir,
         readme: readme.clone(),
@@ -359,7 +367,7 @@ fn beyond_sqlite_plot_uses_feature_progress_copy() {
         passed_cases: 2,
         failed_cases: 0,
         skipped_cases: 2,
-        elapsed_ns: 0,
+        elapsed_ns: None,
         measured_samples: 2,
         warmup_samples: 0,
         ranked_cases: 2,
@@ -376,6 +384,8 @@ fn beyond_sqlite_plot_uses_feature_progress_copy() {
             suite: "beyond_sqlite".to_owned(),
             input: PathBuf::from("input.jsonl"),
             official_evidence: Some(PathBuf::from("official-evidence.json")),
+            run_provenance: None,
+            historical_run: true,
             local_diagnostics: true,
             out_dir: PathBuf::from("out"),
             readme: PathBuf::from("README.md"),

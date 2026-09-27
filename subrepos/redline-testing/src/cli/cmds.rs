@@ -11,6 +11,8 @@ pub(crate) fn report(args: ReportArgs) -> Result<()> {
         suite: args.suite.as_str().to_owned(),
         input: args.input,
         official_evidence: args.official_evidence,
+        run_provenance: args.run_provenance,
+        historical_run: args.historical_run,
         local_diagnostics: args.local_diagnostics,
         out_dir: args.out_dir,
         readme: args.readme,

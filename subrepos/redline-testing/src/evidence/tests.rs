@@ -119,3 +119,35 @@ fn runner_ranked_csv_has_no_reference_floor() {
         "largest ratio ranks first: {trigger}"
     );
 }
+
+#[cfg(unix)]
+#[test]
+fn run_provenance_records_the_measured_identity() {
+    let (root, _ranked, _summary) = write_evidence(&raw_case("00001", 1_000_000, 2_000_000));
+    let text = fs::read_to_string(root.path().join("provenance.json")).expect("provenance");
+    let provenance: serde_json::Value = serde_json::from_str(&text).expect("provenance json");
+    assert_eq!(provenance["schema_version"], super::RUN_PROVENANCE_SCHEMA);
+    assert_eq!(
+        provenance["corpus_sha256"],
+        crate::sqlite_parity::corpus_sha256()
+    );
+    assert_eq!(
+        provenance["assertion_policy_sha256"],
+        crate::sqlite_parity::assertion_policy_sha256()
+    );
+    // The suite's own elapsed time, not a placeholder zero.
+    assert_eq!(provenance["elapsed_ns"], 5_000_000u64);
+    assert_eq!(provenance["sqlite_version"], "3.53.1 test");
+    assert_eq!(
+        provenance["redline_testing_version"],
+        format!("redline-testing {}", env!("CARGO_PKG_VERSION"))
+    );
+    // The test runs inside this checkout, so the source is identified.
+    for key in ["source_commit", "source_tree", "source_inputs_sha256"] {
+        assert!(provenance[key].is_string(), "{key}: {text}");
+    }
+    assert!(provenance["source_dirty"].is_boolean(), "{text}");
+    assert!(provenance["source_dirty_paths"].is_array(), "{text}");
+    assert!(provenance.get("oracle_build_stamp").is_some(), "{text}");
+    assert!(provenance.get("redlinedb_git_dirty").is_none(), "{text}");
+}
