@@ -236,7 +236,10 @@ just verify
 # Build + package release tarball locally
 just release-local
 
-# Validate every corpus case against sqlite3 (ship-gate)
+# Validate every corpus case against the pinned sqlite3 3.53.1 reference
+# (ship-gate). Both xtask commands default --sqlite-bin to the shell
+# `bash scripts/sqlite/build-reference.sh` builds in the RedlineDB checkout,
+# and refuse any shell without its build stamp or of another release.
 cargo run -p xtask --release -- ship-gate
 
 # Detect drift in matrix-generated shards
@@ -249,7 +252,8 @@ cargo run --locked --quiet -p xtask -- update-badge
 ### Adding test cases
 
 **Hand-authored SQLite-parity shard:** create `corpus/sqlite_parity/cases/<N>_<name>.json`
-with IDs starting at 10001+. Each case must pass `sqlite3 ↔ sqlite3` self-compare.
+with IDs starting at 10001+. Each case must pass `sqlite3 ↔ sqlite3` self-compare
+against the pinned reference shell.
 Run `cargo run -p xtask --release -- ship-gate` to validate before committing.
 
 **Matrix-generated shard:** add a generator in [`xtask/src/generators.rs`](xtask/src/generators.rs)

@@ -5,26 +5,33 @@
 //!   * `generate` writes the matrix-product shards under
 //!     `corpus/sqlite_parity/cases/gen_*.json`. Each shard is produced by a
 //!     Rust generator: it enumerates a cartesian product of axes (functions,
-//!     inputs, modifiers, etc.), runs the resulting SQL through `sqlite3
-//!     -batch -bail :memory:`, captures the actual stdout + exit code, and
-//!     emits a JSON shard with that captured output as expected_stdout. By
-//!     construction every generated case passes the reference self-compare.
+//!     inputs, modifiers, etc.), runs the resulting SQL through the pinned
+//!     reference `sqlite3 -batch -bail :memory:`, captures the actual stdout +
+//!     exit code, and emits a JSON shard with that captured output as
+//!     expected_stdout. By construction every generated case passes the
+//!     reference self-compare.
 //!
 //!   * `generate --check` re-generates each shard in memory and asserts byte
 //!     equality with the on-disk shard. Used in CI to keep rules and shards
 //!     in sync.
 //!
 //!   * `ship-gate` walks `corpus/sqlite_parity/cases/*.json`, runs each case
-//!     through `sqlite3`, and verifies its declared expected_stdout, exit
-//!     code, and substring contains-checks match. Failing case IDs are
-//!     printed so they can be removed from the shard. This is the
-//!     authoritative ship contract for the SQLite-parity corpus.
+//!     through the pinned reference `sqlite3`, and verifies its declared
+//!     expected_stdout, exit code, and substring contains-checks match.
+//!     Failing case IDs are printed so they can be re-blessed or removed from
+//!     the shard. This is the authoritative ship contract for the
+//!     SQLite-parity corpus.
+//!
+//!   * Both default `--sqlite-bin` to the reference shell that
+//!     `scripts/sqlite/build-reference.sh` builds (see `pinned_sqlite`) and
+//!     refuse any shell that is not that stamped release.
 //!
 //!   * Repository CI helpers update the score badge and emit the cost,
 //!     readiness, artifact-support, and canary-telemetry JSON contracts.
 
 mod badge;
 mod generators;
+mod pinned_sqlite;
 mod repo_ops;
 mod sqlite_runner;
 
@@ -92,9 +99,10 @@ enum Command {
         /// Only regenerate the named rule (e.g. "math", "cast"). Default: all.
         #[arg(long)]
         only: Option<String>,
-        /// Path to the SQLite binary used to capture expected outputs.
-        #[arg(long, default_value = "sqlite3")]
-        sqlite_bin: String,
+        /// SQLite shell used to capture expected outputs. Default: the pinned
+        /// reference build; any shell must be the stamped pinned release.
+        #[arg(long)]
+        sqlite_bin: Option<PathBuf>,
     },
     /// Validate every case in every shard by running it through sqlite3 and
     /// asserting the declared expected behavior. Exits non-zero with the
@@ -103,8 +111,10 @@ enum Command {
         /// Optional path to a single shard JSON; default: every shard under
         /// corpus/sqlite_parity/cases/.
         path: Option<PathBuf>,
-        #[arg(long, default_value = "sqlite3")]
-        sqlite_bin: String,
+        /// SQLite shell to validate against. Default: the pinned reference
+        /// build; any shell must be the stamped pinned release.
+        #[arg(long)]
+        sqlite_bin: Option<PathBuf>,
     },
 }
 
@@ -143,13 +153,34 @@ fn main() -> Result<()> {
             check,
             only,
             sqlite_bin,
-        } => generators::run(&repo_root, &sqlite_bin, only.as_deref(), check),
+        } => {
+            let sqlite = oracle(&repo_root, sqlite_bin.as_deref())?;
+            generators::run(&repo_root, &sqlite, only.as_deref(), check)
+        }
         Command::ShipGate { path, sqlite_bin } => {
+            let sqlite = oracle(&repo_root, sqlite_bin.as_deref())?;
             let target = path
                 .unwrap_or_else(|| repo_root.join("corpus").join("sqlite_parity").join("cases"));
-            ship_gate(&target, &sqlite_bin)
+            ship_gate(&target, &sqlite)
         }
     }
+}
+
+/// The verified pinned reference shell, as the path string the case runner
+/// takes.
+fn oracle(repo_root: &Path, explicit: Option<&Path>) -> Result<String> {
+    let pinned = pinned_sqlite::resolve(repo_root, explicit)?;
+    eprintln!(
+        "sqlite3 oracle: {} ({}), build stamp {:?}",
+        pinned.path.display(),
+        pinned.version,
+        pinned.stamp.lines().next().unwrap_or_default()
+    );
+    pinned
+        .path
+        .to_str()
+        .map(str::to_owned)
+        .with_context(|| format!("non-UTF-8 sqlite3 path {}", pinned.path.display()))
 }
 
 fn ship_gate(target: &Path, sqlite_bin: &str) -> Result<()> {

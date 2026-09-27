@@ -30,6 +30,13 @@ for the publish + attestation flow.
   declared deviations from `metadata/sqlite_parity/declared-deviations.json`
   that are in the run. It reads `corpus_sha256` and `oracle_build_stamp` from
   the run evidence when present and prints `unrecorded` otherwise.
+- `xtask generate` and `xtask ship-gate` default `--sqlite-bin` to the pinned
+  sqlite3 3.53.1 reference that `scripts/sqlite/build-reference.sh` builds
+  (`$REDLINEDB_SQLITE_REFERENCE_PREFIX/bin/sqlite3` when that is set), and
+  refuse a shell with no `.sqlite-reference-sha3` build stamp or of another
+  release. They used to run `sqlite3` from PATH (Ubuntu's 3.45.1), so the
+  corpus was blessed against a different build from the oracle it is scored
+  against.
 
 ### Removed
 
