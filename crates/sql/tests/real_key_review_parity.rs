@@ -236,3 +236,72 @@ fn fk_parent_row_replaced_with_its_key_as_real_keeps_children() {
     lab.step("SELECT pk, typeof(pk) FROM c");
     lab.step("SELECT k, typeof(k) FROM p");
 }
+
+// -- nan and infinity spellings stay text -------------------------------------
+
+#[test]
+fn nan_and_infinity_words_keep_their_text_under_numeric_affinity() {
+    let lab = Lab::new();
+    lab.script(&["CREATE TABLE n(i INTEGER, r REAL, m NUMERIC, b)"]);
+    for word in ["nan", "NaN", " nan ", "inf", "-Infinity", "1e999"] {
+        lab.expect(
+            &format!("INSERT INTO n VALUES ('{word}', '{word}', '{word}', '{word}')"),
+            Outcome::Done,
+        );
+    }
+    lab.step("SELECT typeof(i), typeof(r), typeof(m), typeof(b), i, m, b FROM n");
+}
+
+#[test]
+fn fk_child_nan_text_finds_no_numeric_parent() {
+    let lab = Lab::new();
+    lab.script(&[
+        "PRAGMA foreign_keys = ON",
+        "CREATE TABLE p(id INTEGER PRIMARY KEY)",
+        "CREATE TABLE c(id INTEGER PRIMARY KEY, pid TEXT REFERENCES p(id) ON DELETE CASCADE)",
+        "INSERT INTO p VALUES (5), (6)",
+    ]);
+    for word in ["nan", "NaN", "Infinity"] {
+        lab.expect(
+            &format!("INSERT INTO c(pid) VALUES ('{word}')"),
+            Outcome::Err(lab::ErrKind::ForeignKey),
+        );
+    }
+    lab.expect("INSERT INTO c(id, pid) VALUES (1, '6')", Outcome::Done);
+    lab.expect("DELETE FROM p WHERE id = 5", Outcome::Done);
+    lab.expect("SELECT id, pid FROM c", rows(&[&[int(1), text("6")]]));
+}
+
+#[test]
+fn fk_nan_text_parent_key_matches_no_numeric_child() {
+    let lab = Lab::new();
+    lab.script(&[
+        "PRAGMA foreign_keys = ON",
+        "CREATE TABLE p(k TEXT PRIMARY KEY)",
+        "CREATE TABLE c(id INTEGER PRIMARY KEY, n INTEGER REFERENCES p(k) ON DELETE CASCADE)",
+        "INSERT INTO p VALUES ('5'), ('NaN'), ('inf')",
+        "INSERT INTO c VALUES (1, 5)",
+    ]);
+    lab.expect("DELETE FROM p WHERE k = 'NaN'", Outcome::Done);
+    lab.expect("DELETE FROM p WHERE k = 'inf'", Outcome::Done);
+    lab.expect(
+        "SELECT id, n, typeof(n) FROM c",
+        rows(&[&[int(1), int(5), text("integer")]]),
+    );
+}
+
+#[test]
+fn fk_check_reports_a_child_holding_nan_text() {
+    let lab = Lab::new();
+    lab.script(&[
+        "PRAGMA foreign_keys = OFF",
+        "CREATE TABLE p(id INTEGER PRIMARY KEY)",
+        "CREATE TABLE c(id INTEGER PRIMARY KEY, pid TEXT REFERENCES p(id))",
+        "INSERT INTO p VALUES (5)",
+        "INSERT INTO c VALUES (1, 'nan'), (2, '5')",
+    ]);
+    lab.expect(
+        "PRAGMA foreign_key_check",
+        rows(&[&[text("c"), int(1), text("p"), int(0)]]),
+    );
+}

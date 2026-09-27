@@ -102,7 +102,11 @@ fn contains_ascii_insensitive(haystack: &str, needle: &str) -> bool {
 
 fn parse_numeric_text(s: &str) -> Option<OwnedValue> {
     let trimmed = s.trim();
-    if trimmed.is_empty() {
+    // Rust's float parser also accepts `nan`, `inf` and `infinity` in any
+    // case. SQLite reads none of them as a number, and a REAL NaN would
+    // compare equal to every number. Every spelling SQLite does read has a
+    // digit.
+    if !trimmed.bytes().any(|byte| byte.is_ascii_digit()) {
         return None;
     }
     if let Ok(v) = trimmed.parse::<i64>() {
