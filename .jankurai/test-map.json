@@ -447,11 +447,6 @@
       "purpose": "prove the Rust sqlite_parity runner stays compatible with the external redline-testing gate",
       "proof_lane": "redline-testing-official"
     },
-    "crates/bench/src/sqlite_parity/report_gen/": {
-      "command": "rtk just sqlite-parity-report-check",
-      "purpose": "prove the committed official evidence still feeds the report generator and the derived README/SVG artifacts stay in sync",
-      "proof_lane": "sqlite-parity-report-check"
-    },
     "assets/sqlite-jankurai-score.svg": {
       "command": "rtk just sqlite-parity-report-check",
       "purpose": "verify the generated compact Jankurai score chart stays in sync with the committed official evidence artifact",

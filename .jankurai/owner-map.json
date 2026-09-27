@@ -43,7 +43,6 @@
     "crates/bench": "tools",
     "crates/bench/sqlite_parity/": "tools",
     "crates/bench/src/sqlite_parity/": "tools",
-    "crates/bench/src/sqlite_parity/report_gen/": "tools",
     "crates/bench/src/checksum.rs": "phase10-real-row-hashes",
     "crates/bench/src/fuzz/": "sqlite-parity-fuzz-d7",
     "crates/bench/tests/fuzz_parity.rs": "sqlite-parity-fuzz-d7",

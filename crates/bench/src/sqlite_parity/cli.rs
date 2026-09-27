@@ -9,7 +9,6 @@ use serde::Deserialize;
 use super::catalog;
 use super::engine::{EngineSpec, partition_cases, resolve_engine_bin};
 use super::filter::Selection;
-use super::report_gen;
 use super::runner;
 
 #[derive(Debug, Parser)]
@@ -24,7 +23,6 @@ enum Command {
     List(ListArgs),
     Run(RunArgs),
     Compare(CompareArgs),
-    Report(ReportArgs),
     JankuraiCompare(JankuraiCompareArgs),
     Sentinel(SentinelArgs),
 }
@@ -106,44 +104,6 @@ struct CompareArgs {
 }
 
 #[derive(Debug, Args)]
-struct ReportArgs {
-    #[command(flatten)]
-    select: SelectArgs,
-    #[arg(long)]
-    input: PathBuf,
-    #[arg(long)]
-    out_dir: PathBuf,
-    #[arg(long)]
-    readme: PathBuf,
-    #[arg(long)]
-    plot: PathBuf,
-    #[arg(long)]
-    ksloc_plot: PathBuf,
-    #[arg(long)]
-    performance_histogram_plot: Option<PathBuf>,
-    #[arg(long)]
-    median_test_performance_plot: Option<PathBuf>,
-    #[arg(long)]
-    jankurai_score: Option<PathBuf>,
-    #[arg(long)]
-    jankurai_comparison: Option<PathBuf>,
-    #[arg(long)]
-    jankurai_comparison_plot: Option<PathBuf>,
-    #[arg(long)]
-    jankurai_score_plot: Option<PathBuf>,
-    #[arg(long)]
-    code_shape_plot: Option<PathBuf>,
-    #[arg(long)]
-    updated_date: String,
-    #[arg(long)]
-    expected_repetitions: Option<usize>,
-    #[arg(long)]
-    expected_warmup: Option<usize>,
-    #[arg(long)]
-    check: bool,
-}
-
-#[derive(Debug, Args)]
 struct JankuraiCompareArgs {
     #[arg(long)]
     redlinedb_score: PathBuf,
@@ -197,10 +157,6 @@ pub fn run(cli: Cli) -> Result<()> {
         Command::Compare(args) => {
             reject_disabled_producer("compare")?;
             compare_selected(args)
-        }
-        Command::Report(args) => {
-            reject_disabled_producer("report")?;
-            report(args)
         }
         Command::JankuraiCompare(args) => {
             reject_disabled_producer("jankurai-compare")?;
@@ -307,31 +263,6 @@ fn compare_selected(args: CompareArgs) -> Result<()> {
     Ok(())
 }
 
-fn report(args: ReportArgs) -> Result<()> {
-    let expected_case_ids = report_case_ids(&args.select, args.select.case_list.as_deref())?;
-    report_gen::generate(report_gen::ReportOptions {
-        input: args.input,
-        case_list: args.select.case_list,
-        expected_case_ids,
-        out_dir: args.out_dir,
-        readme: args.readme,
-        plot: args.plot,
-        ksloc_plot: args.ksloc_plot,
-        performance_histogram_plot: args.performance_histogram_plot,
-        median_test_performance_plot: args.median_test_performance_plot,
-        jankurai_score: args.jankurai_score,
-        jankurai_comparison: args.jankurai_comparison,
-        jankurai_comparison_plot: args.jankurai_comparison_plot,
-        jankurai_score_plot: args.jankurai_score_plot,
-        code_shape_plot: args.code_shape_plot,
-        updated_date: args.updated_date,
-        expected_repetitions: args.expected_repetitions,
-        expected_warmup: args.expected_warmup,
-        check: args.check,
-        command: std::env::args().collect(),
-    })
-}
-
 fn jankurai_compare(args: JankuraiCompareArgs) -> Result<()> {
     let redlinedb_score = fs::read_to_string(&args.redlinedb_score).with_context(|| {
         format!(
@@ -371,19 +302,6 @@ fn deny_skipped_cases(skipped: &[super::engine::SkippedCase]) -> Result<()> {
         details,
         suffix
     );
-}
-
-fn report_case_ids(select: &SelectArgs, case_list: Option<&Path>) -> Result<BTreeSet<String>> {
-    if let Some(case_list) = case_list {
-        let ids = parse_case_list(case_list)?;
-        let all_cases = catalog::all_cases()?;
-        validate_known_case_ids(&ids, &all_cases)?;
-        return Ok(ids);
-    }
-    Ok(selected_cases(select)?
-        .into_iter()
-        .map(|case| case.display_id())
-        .collect())
 }
 
 fn sentinel(args: SentinelArgs) -> Result<()> {
