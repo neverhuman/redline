@@ -61,7 +61,7 @@ fn resident(heap: &PageBackedHeap, page_id: PageId) -> (PageGeneration, u16) {
 /// Run `work` on another thread once `body` stops at the hook that `set_hook`
 /// arms. Returns whether `work` finished while `body` was stopped there.
 fn run_inside(
-    set_hook: fn(Option<PageHook>),
+    set_hook: SetHook,
     work: impl FnOnce() + Send + 'static,
     body: impl FnOnce(),
 ) -> bool {
@@ -89,10 +89,13 @@ fn run_inside(
         .expect("the page write never reached its hook")
 }
 
+/// Arms a heap-append test hook on this thread.
+type SetHook = fn(Option<PageHook>);
+
 /// Points inside a heap append, between copying the resident page and
 /// installing the staged one, where a concurrent writer can start. The frame
 /// latch has to cover all of them.
-const APPEND_STAGES: [(&str, fn(Option<PageHook>)); 2] = [
+const APPEND_STAGES: [(&str, SetHook); 2] = [
     ("before its WAL append", set_before_heap_wal_hook),
     ("before its page install", set_before_heap_install_hook),
 ];

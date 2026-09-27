@@ -59,6 +59,7 @@ impl BtreeIndex {
         )
     }
 
+    #[allow(clippy::too_many_arguments)]
     fn delete_mark_tx_inner(
         &self,
         tx_id: TxId,

@@ -258,7 +258,7 @@ fn buffer_eviction_frees_leaves_that_replayed_scattered_keys() {
         engine.commit(tx).unwrap();
     }
     // Delete marks replay onto leaves the same way.
-    let deleted = |i: usize| i % 3 == 0;
+    let deleted = |i: usize| i.is_multiple_of(3);
     for i in (0..KEYS).map(scattered).filter(|i| deleted(*i)) {
         let tx = engine.begin(Isolation::Snapshot).unwrap();
         index
