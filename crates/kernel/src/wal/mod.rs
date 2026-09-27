@@ -12,6 +12,29 @@ pub mod segment;
 
 #[cfg(test)]
 thread_local! {
+    static FLUSHED_ALL_THROUGH: std::cell::Cell<crate::format::Lsn> =
+        const { std::cell::Cell::new(crate::format::Lsn::ZERO) };
+}
+
+/// Durable LSN the last `WalCoordinator::flush_all` on this thread returned.
+#[cfg(test)]
+pub(crate) fn flushed_all_through() -> crate::format::Lsn {
+    FLUSHED_ALL_THROUGH.with(std::cell::Cell::get)
+}
+
+/// Forget this thread's last `flush_all`.
+#[cfg(test)]
+pub(crate) fn reset_flushed_all_through() {
+    FLUSHED_ALL_THROUGH.with(|lsn| lsn.set(crate::format::Lsn::ZERO));
+}
+
+#[cfg(test)]
+pub(crate) fn note_flushed_all_through(durable: crate::format::Lsn) {
+    FLUSHED_ALL_THROUGH.with(|lsn| lsn.set(durable));
+}
+
+#[cfg(test)]
+thread_local! {
     static BEFORE_PAGE_INSTALL: std::cell::RefCell<Option<Box<dyn FnMut()>>> =
         std::cell::RefCell::new(None);
 }

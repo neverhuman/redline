@@ -263,7 +263,10 @@ impl WalCoordinator {
             .lock()
             .map_err(|_| Error::CorruptWal("wal coordinator mutex poisoned"))?
             .reserved_lsn;
-        self.flush_until(written_lsn)
+        let durable = self.flush_until(written_lsn)?;
+        #[cfg(test)]
+        crate::wal::note_flushed_all_through(durable);
+        Ok(durable)
     }
 
     fn append_with_payload(

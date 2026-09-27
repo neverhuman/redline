@@ -5,7 +5,7 @@
 //! every page write against the WAL's durable LSN. The page-write hook is per
 //! thread, and eviction runs on the thread that asked for a frame.
 
-use std::cell::RefCell;
+use std::cell::{Cell, RefCell};
 use std::ops::Range;
 use std::rc::Rc;
 use std::sync::Arc;
@@ -23,7 +23,7 @@ use crate::index::IndexRowRef;
 use crate::storage::buffer_test_hooks::{page_file_syncs, set_before_page_write_hook};
 use crate::storage::{BufferPool, PageFile};
 use crate::txn::Isolation;
-use crate::wal::WalConfig;
+use crate::wal::{WalConfig, flushed_all_through, reset_flushed_all_through};
 use crate::{Error, Result};
 
 const SMALL_POOL: usize = 16;
@@ -288,27 +288,40 @@ fn buffer_eviction_frees_leaves_that_replayed_scattered_keys() {
 #[test]
 fn buffer_eviction_after_open_finds_the_replayed_wal_durable() {
     // UnsafeDev skips the shutdown fsync, so the reopened WAL may be written
-    // but not durable. Replay stamps heap pages with LSN zero, which gives
-    // eviction no LSN to ask the WAL about. Open makes the scanned WAL
-    // durable before replay writes a page.
+    // but not durable. Replay stamps heap pages with LSN zero, so no page
+    // LSN says which WAL a replayed page needs, and eviction writes those
+    // pages while replay runs. Open has to make the scanned WAL durable
+    // before the first of those writes, not merely by the time it returns.
     let temp = TempDir::new().unwrap();
     let engine = Engine::create(temp.path(), config(CommitDurability::UnsafeDev, 1024)).unwrap();
     let rows = insert_rows(&engine, 0..ROWS).unwrap();
     drop(engine);
 
-    let (reopened, report) = Engine::open_with_recovery_report(
+    reset_flushed_all_through();
+    let at_first_write = Rc::new(Cell::new(None));
+    let sink = Rc::clone(&at_first_write);
+    set_before_page_write_hook(Some(Box::new(move |_, _| {
+        if sink.get().is_none() {
+            sink.set(Some(flushed_all_through()));
+        }
+    })));
+    let opened = Engine::open_with_recovery_report(
         temp.path(),
         config(CommitDurability::Strict, SMALL_POOL),
-    )
-    .unwrap();
+    );
+    set_before_page_write_hook(None);
+    let (reopened, report) = opened.unwrap();
     assert!(report.valid_end_lsn > Lsn::ZERO);
     assert!(
         reopened.buffer.stats().evictions > 0,
         "replay never evicted a page"
     );
+    let durable_at_first_write = at_first_write.get().expect("replay never wrote a page");
     assert!(
-        reopened.wal.durable_lsn().unwrap() >= report.valid_end_lsn,
-        "open left the replayed WAL undurable"
+        durable_at_first_write >= report.valid_end_lsn,
+        "replay wrote a page while the WAL was durable only through {durable_at_first_write:?}, \
+         scanned through {:?}",
+        report.valid_end_lsn
     );
     assert_rows(&reopened, &rows);
 }
