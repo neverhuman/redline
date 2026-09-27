@@ -236,8 +236,11 @@ impl Engine {
             published_csn: self.txs.published_csn(),
             entries: self.txs.committed_states(),
         })?;
+        // The WAL pruned below this checkpoint holds the catalog snapshots
+        // recovery would otherwise rebuild the schema from, so the saved
+        // file must be durable even when commits currently skip fsync.
         self.catalog_store
-            .save_atomic(self.catalog.current().as_ref())?;
+            .save_durable(self.catalog.current().as_ref())?;
         // Lane E failpoint: armed before the new control-file generation lands
         // on disk. A crash here forces recovery to fall back to the previous
         // generation, exercising the dual-control-file protocol.

@@ -133,3 +133,29 @@ fn ddl_commit_fsyncs_the_catalog_only_under_live_strict() {
     let saved = engine.catalog_store.load().unwrap().unwrap();
     assert!(saved.tables.iter().any(|table| &*table.name == "t2"));
 }
+
+#[test]
+fn checkpoint_fsyncs_the_catalog_whatever_the_live_durability() {
+    // The checkpoint makes its control file durable and prunes the WAL below
+    // it, including the catalog snapshots recovery would rebuild the schema
+    // from. An unsynced schema file could then come back empty or stale.
+    for opened in [CommitDurability::Strict, CommitDurability::Normal] {
+        for live in [
+            CommitDurability::Strict,
+            CommitDurability::Normal,
+            CommitDurability::UnsafeDev,
+        ] {
+            let dir = TempDir::new().unwrap();
+            let engine = engine(dir.path(), opened);
+            engine.set_commit_durability(live);
+            commit_create_table(&engine, "t");
+            let before = syncs();
+            engine.checkpoint().unwrap();
+            assert_eq!(
+                syncs_since(before),
+                (1, 1),
+                "opened {opened:?}, live {live:?}"
+            );
+        }
+    }
+}

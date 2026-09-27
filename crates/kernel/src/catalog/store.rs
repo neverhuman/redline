@@ -131,7 +131,23 @@ impl CatalogStore {
         self.save_atomic(snapshot)
     }
 
+    /// Save under the live sync policy, which follows commit durability.
     pub fn save_atomic(&self, snapshot: &SchemaSnapshot) -> Result<()> {
+        self.save_atomic_with(snapshot, self.sync_policy())
+    }
+
+    /// Save and fsync whatever the live policy says. A checkpoint prunes the
+    /// WAL that holds the catalog's other copy, so its save has to be
+    /// durable in every mode.
+    pub(crate) fn save_durable(&self, snapshot: &SchemaSnapshot) -> Result<()> {
+        self.save_atomic_with(snapshot, CatalogSyncPolicy::Durable)
+    }
+
+    fn save_atomic_with(
+        &self,
+        snapshot: &SchemaSnapshot,
+        sync_policy: CatalogSyncPolicy,
+    ) -> Result<()> {
         let bytes = encode_snapshot_file(snapshot)?;
         let staging = self.path.with_extension("tmp");
         {
@@ -145,7 +161,7 @@ impl CatalogStore {
             // fsync. Crashing here lets the OS keep the staging file in
             // page cache only; recovery must still see the prior atomic
             // snapshot.
-            if self.sync_policy().syncs_metadata() {
+            if sync_policy.syncs_metadata() {
                 crate::fail_point!("catalog::save::fsync");
                 file.sync_all()?;
                 #[cfg(test)]
@@ -163,7 +179,7 @@ impl CatalogStore {
             // makes the rename durable. A crash here may lose the rename even
             // though the inode bytes are durable, exercising the parent-fsync
             // contract.
-            if self.sync_policy().syncs_metadata() {
+            if sync_policy.syncs_metadata() {
                 crate::fail_point!("catalog::save::parent_fsync");
                 let dir = fs::File::open(parent)?;
                 dir.sync_all()?;
