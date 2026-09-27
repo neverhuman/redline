@@ -294,6 +294,30 @@ impl BufferPool {
         self.inner.flush_page(page_id, durable_lsn)
     }
 
+    /// Write `page_id` only if eviction would: a dirty page that eviction
+    /// must keep resident is left alone. Lets a test choose which pages an
+    /// eviction pass reaches.
+    #[cfg(test)]
+    pub(crate) fn flush_page_if_evictable(&self, page_id: PageId, durable_lsn: Lsn) -> Result<()> {
+        let Some(frame) = self.inner.lookup_frame(page_id)? else {
+            return Ok(());
+        };
+        let may_write = {
+            let state = frame
+                .state
+                .lock()
+                .map_err(|_| Error::CorruptPage("buffer frame poisoned"))?;
+            match state.page.as_ref() {
+                Some(page) => !state.dirty || eviction_may_write(page)?,
+                None => false,
+            }
+        };
+        if may_write {
+            self.inner.flush_frame_if_durable(&frame, durable_lsn)?;
+        }
+        Ok(())
+    }
+
     pub fn flush_all(&self, durable_lsn: Lsn) -> Result<()> {
         self.inner.flush_all(durable_lsn)
     }
@@ -672,12 +696,14 @@ impl Inner {
                 continue;
             }
             if state.dirty {
-                let page_lsn = state
+                let page = state
                     .page
                     .as_ref()
-                    .ok_or(Error::CorruptPage("resident frame missing page"))?
-                    .header()?
-                    .page_lsn;
+                    .ok_or(Error::CorruptPage("resident frame missing page"))?;
+                if !eviction_may_write(page)? {
+                    continue;
+                }
+                let page_lsn = page.header()?.page_lsn;
                 // Release the frame before asking the WAL: the flush can wait
                 // on an fsync, and append_cell holds a frame lock while it
                 // appends. No shard lock is held here either.
@@ -882,6 +908,21 @@ impl Inner {
     fn shard_idx(&self, page_id: PageId) -> usize {
         page_id.0 as usize % self.shards.len()
     }
+}
+
+/// Whether eviction may write this dirty page out on its own.
+///
+/// Recovery rebuilds heap and undo pages row by row from the WAL, so one of
+/// them can reach the page file alone once its WAL is durable. A B-tree split
+/// changes two pages through two page images, and recovery replays those only
+/// for committed transactions. HNSW links in a new page that it never logs.
+/// Writing one of those pages alone can leave a pointer to a page the file
+/// never received, so dirty index pages leave only through a checkpoint. A
+/// page with LSN zero is the exception: no logged change has touched it since
+/// it was allocated, read, or replayed.
+fn eviction_may_write(page: &Page) -> Result<bool> {
+    let header = page.header()?;
+    Ok(header.page_lsn == Lsn::ZERO || matches!(header.kind, PageKind::Heap | PageKind::Undo))
 }
 
 impl PageGuard {

@@ -238,6 +238,37 @@ fn buffer_pool_evicts_a_dirty_page_once_its_lsn_is_durable() {
 }
 
 #[test]
+fn buffer_pool_keeps_a_dirty_index_page_even_when_its_wal_is_durable() {
+    // A B-tree split changes two pages through two page images, and recovery
+    // replays those images only for committed transactions. Writing one page
+    // of a split alone can leave a leaf pointing at a sibling the page file
+    // never received, so dirty index pages stay until a checkpoint.
+    let temp = TempDir::new().unwrap();
+    let file =
+        Arc::new(PageFile::create(temp.path().join("data.redline"), TEST_PAGE_SIZE).unwrap());
+    let pool = BufferPool::new(Arc::clone(&file), 1).unwrap();
+    let leaf = pool.allocate(PageKind::BtreeLeaf, RelId(1)).unwrap();
+    let leaf_id = leaf.page_id();
+    leaf.mark_dirty(Lsn(10)).unwrap();
+    drop(leaf);
+    let wal = Arc::new(RecordingWal::new(Arc::clone(&file), leaf_id, Lsn(10)));
+    let weak: Weak<RecordingWal> = Arc::downgrade(&wal);
+    pool.attach_wal(weak).unwrap();
+
+    let blocked = pool.allocate(PageKind::Heap, RelId(1)).unwrap_err();
+    assert_eq!(
+        blocked,
+        Error::CorruptPage("no unpinned frame available for eviction")
+    );
+    assert!(file.read_page(leaf_id).is_err());
+
+    // A checkpoint-style flush still writes it, and then it can leave.
+    pool.flush_page(leaf_id, Lsn(10)).unwrap();
+    let heap = pool.allocate(PageKind::Heap, RelId(1)).unwrap();
+    assert_ne!(heap.page_id(), leaf_id);
+}
+
+#[test]
 fn buffer_pool_errors_when_all_pages_are_pinned() {
     let temp = TempDir::new().unwrap();
     let file =

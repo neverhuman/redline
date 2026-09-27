@@ -158,7 +158,7 @@ fn buffer_eviction_frees_index_pages_that_recovery_dirtied() {
     let index_id = create_indexed_table(&engine);
     let index = engine.index_handle(index_id).unwrap();
     for i in 0..KEYS {
-        let mut tx = engine.begin(Isolation::Snapshot).unwrap();
+        let tx = engine.begin(Isolation::Snapshot).unwrap();
         index
             .insert_tx(tx.id(), &index_key(i), index_row(i))
             .unwrap();
@@ -168,8 +168,10 @@ fn buffer_eviction_frees_index_pages_that_recovery_dirtied() {
     drop(index);
     drop(engine);
 
-    // Replay dirties more index leaves, stamped with their WAL LSNs, than the
-    // pool holds, and every key must still be found through the small pool.
+    // Replay installs more index pages than the pool holds, so the frames it
+    // installed at LSN zero have to leave during recovery, and replay must
+    // not later write an older image over a page it already evicted. Every
+    // key must still be found through the small pool.
     let reopened = Engine::open(temp.path(), config(CommitDurability::Normal, SMALL_POOL))
         .unwrap_or_else(|err| panic!("recovery into a {SMALL_POOL}-page pool failed: {err:?}"));
     assert_index_keys(&reopened, index_id);
@@ -303,6 +305,57 @@ fn buffer_eviction_of_an_open_transaction_keeps_its_ids_from_new_ones() {
             .all(|row| !open_payloads.contains(&row.payload)),
         "a scan shows rows of the transaction that never committed"
     );
+}
+
+#[test]
+fn buffer_eviction_never_tears_an_uncommitted_index_split() {
+    // An open transaction splits leaves that hold committed keys. Eviction
+    // must not write the old leaf, now pointing at a new right sibling, while
+    // that sibling stays in memory: recovery skips the uncommitted split's
+    // images, so the page file would name a sibling it never received.
+    let temp = TempDir::new().unwrap();
+    let engine = Engine::create(temp.path(), config(CommitDurability::Normal, 1024)).unwrap();
+    let index_id = create_indexed_table(&engine);
+    let index = engine.index_handle(index_id).unwrap();
+    for i in (0..KEYS).step_by(2) {
+        let tx = engine.begin(Isolation::Snapshot).unwrap();
+        index
+            .insert_tx(tx.id(), &index_key(i), index_row(i))
+            .unwrap();
+        engine.commit(tx).unwrap();
+    }
+    engine.checkpoint().unwrap();
+    let checkpointed_pages = engine.buffer.page_count().unwrap();
+    let open = engine.begin(Isolation::Snapshot).unwrap();
+    for i in (1..KEYS).step_by(2) {
+        index
+            .insert_tx(open.id(), &index_key(i), index_row(i))
+            .unwrap();
+    }
+
+    // Offer every page that existed at the checkpoint to eviction, the way
+    // a clock pass would reach the old leaves before their new siblings.
+    let durable = engine.wal.flush_all().unwrap();
+    for page in 1..=checkpointed_pages {
+        engine
+            .buffer
+            .flush_page_if_evictable(PageId(page), durable)
+            .unwrap();
+    }
+    drop(open);
+    drop(index);
+    drop(engine);
+
+    let reopened = Engine::open(temp.path(), config(CommitDurability::Normal, 1024))
+        .unwrap_or_else(|err| panic!("reopen after an evicted uncommitted split: {err:?}"));
+    let index = reopened.index_handle(index_id).unwrap();
+    for i in (0..KEYS).step_by(2) {
+        assert_eq!(
+            index.point_lookup(&index_key(i)).unwrap(),
+            vec![index_row(i)],
+            "committed key {i}"
+        );
+    }
 }
 
 #[test]
