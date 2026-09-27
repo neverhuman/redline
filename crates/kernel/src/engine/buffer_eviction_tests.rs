@@ -403,7 +403,7 @@ fn assert_index_keys(engine: &Engine, index_id: IndexId) {
     }
 }
 
-fn create_indexed_table(engine: &Engine) -> IndexId {
+pub(super) fn create_indexed_table(engine: &Engine) -> IndexId {
     let column = |name: &str| ColumnSpec {
         name: DbName::new(name),
         declared_type: Some("TEXT".to_owned()),

@@ -11,6 +11,8 @@ mod catalog_sync_tests;
 mod maintenance;
 mod recovery;
 mod runtime;
+#[cfg(test)]
+mod split_checkpoint_tests;
 
 use std::collections::HashMap;
 use std::path::PathBuf;

@@ -97,6 +97,14 @@ impl BtreeIndex {
             header.right,
             header.high_key.clone(),
         )?;
+        // Each page image below can be durable before its page is installed.
+        // Hold the checkpoint at the first image until both leaves, every
+        // parent or new root, and the meta page are installed: recovery
+        // skips records older than the checkpoint.
+        let install_fence = match &self.inner.wal {
+            Some(wal) if emit_wal => Some(wal.begin_page_install()?),
+            _ => None,
+        };
         let (left_lsn, right_lsn) = if emit_wal {
             (
                 self.record_staged_page_image(&left_page, tx_id)?,
@@ -118,11 +126,16 @@ impl BtreeIndex {
             emit_wal,
             lsn,
         )?;
+        drop(install_fence);
         drop(right_write);
         drop(leaf_write);
         Ok(())
     }
 
+    /// Install the split of `left_page` into its parents, splitting them or
+    /// adding a root as needed. The caller holds the WAL install fence taken
+    /// before the leaf images, which keeps the checkpoint behind every page
+    /// image appended here until that page is installed.
     #[allow(clippy::too_many_arguments)]
     fn propagate_split(
         &self,

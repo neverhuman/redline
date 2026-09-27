@@ -409,6 +409,8 @@ impl BtreeIndex {
             page_bytes: image.as_bytes().to_vec(),
         };
         let append = wal.append(WalRecordKind::PageImage, tx_id, payload.encode()?)?;
+        #[cfg(test)]
+        crate::wal::run_before_page_install_hook();
         Ok(append.end_lsn)
     }
 
@@ -545,6 +547,8 @@ impl BtreeIndex {
         guard.with_page(Self::read_meta)
     }
 
+    /// Point the meta page at a new root. Only a split calls this, while it
+    /// holds the install fence taken before its first page image.
     pub(super) fn set_meta_root(
         &self,
         root_page_id: PageId,
