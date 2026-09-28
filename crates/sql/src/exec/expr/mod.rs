@@ -34,6 +34,14 @@ impl<'row, 'bindings> CaseEvaluator for ScalarCaseEvaluator<'row, 'bindings> {
             affinity::expr_affinity(self.row, value),
         )
     }
+
+    fn case_collation(
+        &self,
+        operand: &Expr,
+        condition: &Expr,
+    ) -> Option<crate::collation::Collation> {
+        comparison_collation(operand, condition, self.row)
+    }
 }
 
 pub(crate) mod affinity;
@@ -410,6 +418,8 @@ pub(crate) fn eval_scalar(
             low: low_expr,
             high: high_expr,
         } => {
+            let low_collation = comparison_collation(expr, low_expr, row);
+            let high_collation = comparison_collation(expr, high_expr, row);
             let value = eval_scalar(expr, row, bindings)?;
             let low = eval_scalar(low_expr, row, bindings)?;
             let high = eval_scalar(high_expr, row, bindings)?;
@@ -420,7 +430,7 @@ pub(crate) fn eval_scalar(
                 SqlValue::Null
             } else {
                 // `x BETWEEN a AND b` is `x >= a AND x <= b`, each with its
-                // own comparison affinity.
+                // own comparison affinity and (Q5-10) its own collation.
                 let bound = |bound_expr: &Expr, bound_value: SqlValue| {
                     if affinity::may_convert(&value, &bound_value) {
                         let cmp = affinity::CmpAffinity::between(
@@ -434,8 +444,10 @@ pub(crate) fn eval_scalar(
                 };
                 let (v_low, low) = bound(low_expr, low);
                 let (v_high, high) = bound(high_expr, high);
-                let mut ok = compare_values(&v_low, &low) != Ordering::Less
-                    && compare_values(&v_high, &high) != Ordering::Greater;
+                let mut ok = compare_with_collation(&v_low, &low, low_collation.as_ref())
+                    != Ordering::Less
+                    && compare_with_collation(&v_high, &high, high_collation.as_ref())
+                        != Ordering::Greater;
                 if *negated {
                     ok = !ok;
                 }

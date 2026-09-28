@@ -28,11 +28,25 @@ pub(crate) fn sort_groups_by_order_by(
         }
         keys.push(row_keys);
     }
+    // Q5-10: each term sorts under its collation, resolved against the
+    // first row of the first group.
+    let sample = groups.iter().find_map(|group| group.first());
+    let collations: Vec<Option<crate::collation::Collation>> = order_by
+        .iter()
+        .map(|order| {
+            let context = sample.map(|row| row.context());
+            grouped_order_collation(&order.expr, projection, context.as_ref())
+        })
+        .collect();
     let mut rows: Vec<(usize, Vec<SqlValue>)> =
         std::mem::take(projected).into_iter().enumerate().collect();
     rows.sort_by(|(a, _), (b, _)| {
         for (idx, order) in order_by.iter().enumerate() {
-            let mut ord = compare_values(&keys[*a][idx], &keys[*b][idx]);
+            let mut ord = crate::exec::expr::coerce::compare_with_collation(
+                &keys[*a][idx],
+                &keys[*b][idx],
+                collations[idx].as_ref(),
+            );
             if matches!(order.options.asc, Some(false)) {
                 ord = ord.reverse();
             }
@@ -44,6 +58,36 @@ pub(crate) fn sort_groups_by_order_by(
     });
     projected.extend(rows.into_iter().map(|(_, row)| row));
     Ok(())
+}
+
+fn grouped_order_collation(
+    expr: &Expr,
+    projection: &[SelectItem],
+    context: Option<&RowContext<'_>>,
+) -> Option<crate::collation::Collation> {
+    if let Some(explicit) = crate::exec::expr::coerce::collation_from_expr(expr) {
+        return Some(explicit);
+    }
+    let context = context?;
+    // `ORDER BY 2` sorts under the second result column's collation.
+    if let Some(column) = super::super::order_position::order_position(expr) {
+        return match projection.get(column) {
+            Some(SelectItem::UnnamedExpr(item) | SelectItem::ExprWithAlias { expr: item, .. }) => {
+                crate::exec::expr::coerce::expr_collation(item, context)
+            }
+            _ => None,
+        };
+    }
+    if let Expr::Identifier(ident) = expr {
+        for item in projection {
+            if let SelectItem::ExprWithAlias { alias, expr } = item
+                && alias.value.eq_ignore_ascii_case(&ident.value)
+            {
+                return crate::exec::expr::coerce::expr_collation(expr, context);
+            }
+        }
+    }
+    crate::exec::expr::coerce::expr_collation(expr, context)
 }
 
 fn eval_grouped_order_key(
@@ -82,49 +126,61 @@ pub(crate) fn sort_projected_rows_by_order_by(
     projection: &[SelectItem],
     order_by: &[OrderByExpr],
     bindings: &[Option<SqlValue>],
+    output_collations: &[Option<crate::collation::Collation>],
 ) -> Result<()> {
     enum OrderResolution {
-        Column(usize),
+        Column(usize, Option<crate::collation::Collation>),
         Constant(SqlValue),
     }
 
-    let mut recipes: Vec<(OrderResolution, bool, &OrderByExpr)> =
-        Vec::with_capacity(order_by.len());
+    let mut recipes: Vec<(OrderResolution, bool)> = Vec::with_capacity(order_by.len());
     for order in order_by {
         let desc = matches!(order.options.asc, Some(false));
-        let resolved = resolve_order_against_projection(&order.expr, projection)?;
+        // Q5-10: `ORDER BY col COLLATE c` sorts that output column under c;
+        // a bare column sorts under the output column's own collation.
+        let (target, explicit) = match &order.expr {
+            Expr::Collate { expr, .. } => (
+                expr.as_ref(),
+                crate::exec::expr::coerce::collation_from_expr(&order.expr),
+            ),
+            other => (other, None),
+        };
+        let resolved = resolve_order_against_projection(target, projection)?;
         let resolution = match resolved {
-            Some(idx) => OrderResolution::Column(idx),
+            Some(idx) => OrderResolution::Column(
+                idx,
+                explicit.or_else(|| output_collations.get(idx).cloned().flatten()),
+            ),
             None => {
                 // NEW-01: a position (`ORDER BY 2`, `2 COLLATE NOCASE`).
                 if let Some(column) = super::super::order_position::order_position(&order.expr)
                     && column < projection_output_arity(projection)
                 {
-                    OrderResolution::Column(column)
+                    OrderResolution::Column(
+                        column,
+                        explicit.or_else(|| output_collations.get(column).cloned().flatten()),
+                    )
                 } else {
                     let ctx = RowContext::Empty;
                     OrderResolution::Constant(eval_scalar(&order.expr, &ctx, bindings)?)
                 }
             }
         };
-        recipes.push((resolution, desc, order));
+        recipes.push((resolution, desc));
     }
 
     projected.sort_by(|a, b| {
-        for (recipe, desc, order) in &recipes {
-            let (lv, rv) = match recipe {
-                OrderResolution::Column(idx) => {
+        for (recipe, desc) in &recipes {
+            let (lv, rv, collation) = match recipe {
+                OrderResolution::Column(idx, collation) => {
                     let lv = a.get(*idx).cloned().unwrap_or(SqlValue::Null);
                     let rv = b.get(*idx).cloned().unwrap_or(SqlValue::Null);
                     // `ORDER BY 1 COLLATE NOCASE` sorts by the collation.
-                    (
-                        super::super::order_position::collate_sort_value(order, lv),
-                        super::super::order_position::collate_sort_value(order, rv),
-                    )
+                    (lv, rv, collation.as_ref())
                 }
-                OrderResolution::Constant(value) => (value.clone(), value.clone()),
+                OrderResolution::Constant(value) => (value.clone(), value.clone(), None),
             };
-            let mut ord = compare_values(&lv, &rv);
+            let mut ord = crate::exec::expr::coerce::compare_with_collation(&lv, &rv, collation);
             if *desc {
                 ord = ord.reverse();
             }
@@ -200,8 +256,16 @@ pub(crate) fn eval_group_key(
     bindings: &[Option<SqlValue>],
 ) -> Result<Vec<SqlValue>> {
     let mut out = Vec::with_capacity(group_by.len());
+    let context = row.context();
     for expr in group_by {
-        out.push(eval_scalar(expr, &row.context(), bindings)?);
+        // Q5-10: rows whose key values the key's collation calls equal
+        // form one group.
+        let collation = crate::exec::expr::coerce::expr_collation(expr, &context);
+        let value = eval_scalar(expr, &context, bindings)?;
+        out.push(crate::exec::expr::coerce::collation_key(
+            value,
+            collation.as_ref(),
+        ));
     }
     Ok(out)
 }

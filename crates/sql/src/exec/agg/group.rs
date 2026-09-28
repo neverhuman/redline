@@ -74,10 +74,16 @@ pub(crate) fn execute_grouped_select(
                 out.push(projected);
             }
         }
-        out.sort_by(|left, right| compare_rows(left, right));
-        out.dedup_by(|left, right| compare_rows(left, right) == Ordering::Equal);
+        let collations = crate::exec::expr::coerce::plan_output_collations(plan);
+        sort_and_dedup(&mut out, &collations);
         if !plan.order_by.is_empty() {
-            sort_projected_rows_by_order_by(&mut out, &plan.projection, &plan.order_by, bindings)?;
+            sort_projected_rows_by_order_by(
+                &mut out,
+                &plan.projection,
+                &plan.order_by,
+                bindings,
+                &collations,
+            )?;
         }
         return Ok(out.into_iter().skip(offset).take(limit).collect());
     }
@@ -139,10 +145,16 @@ pub(crate) fn execute_grouped_select(
                 out.push(projected);
             }
         }
-        out.sort_by(|left, right| compare_rows(left, right));
-        out.dedup_by(|left, right| compare_rows(left, right) == Ordering::Equal);
+        let collations = crate::exec::expr::coerce::plan_output_collations(plan);
+        sort_and_dedup(&mut out, &collations);
         if !plan.order_by.is_empty() {
-            sort_projected_rows_by_order_by(&mut out, &plan.projection, &plan.order_by, bindings)?;
+            sort_projected_rows_by_order_by(
+                &mut out,
+                &plan.projection,
+                &plan.order_by,
+                bindings,
+                &collations,
+            )?;
         }
         return Ok(out.into_iter().skip(offset).take(limit).collect());
     }
@@ -526,4 +538,30 @@ fn is_bare_column_ref(expr: &Expr) -> bool {
         Expr::Nested(inner) => is_bare_column_ref(inner),
         _ => false,
     }
+}
+
+/// Sort `rows` and drop duplicates, where two rows are duplicates when
+/// every column is equal under that column's collation (Q5-10). Among
+/// duplicates the first in input order stays.
+fn sort_and_dedup(
+    rows: &mut Vec<Vec<SqlValue>>,
+    collations: &[Option<crate::collation::Collation>],
+) {
+    if collations.iter().all(Option::is_none) {
+        rows.sort_by(|left, right| compare_rows(left, right));
+        rows.dedup_by(|left, right| compare_rows(left, right) == Ordering::Equal);
+        return;
+    }
+    let mut keyed: Vec<(Vec<SqlValue>, Vec<SqlValue>)> = rows
+        .drain(..)
+        .map(|row| {
+            (
+                crate::exec::expr::coerce::collation_keyed_row(&row, collations),
+                row,
+            )
+        })
+        .collect();
+    keyed.sort_by(|left, right| compare_rows(&left.0, &right.0));
+    keyed.dedup_by(|later, kept| compare_rows(&later.0, &kept.0) == Ordering::Equal);
+    rows.extend(keyed.into_iter().map(|(_, row)| row));
 }

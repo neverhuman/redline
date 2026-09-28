@@ -385,6 +385,7 @@ fn build_select_runtime(
                 &plan.projection,
                 &window_order_by,
                 bindings,
+                &crate::exec::expr::coerce::plan_output_collations(plan),
             )?;
         }
         let projected: Vec<Vec<SqlValue>> =
@@ -937,7 +938,13 @@ pub(super) fn order_and_project_rows_with_distinct_on(
             };
             let mut keys = Vec::with_capacity(order_by.len());
             for order in order_by {
-                keys.push(eval_order_key(order, &row.context(), &projected, bindings)?);
+                keys.push(eval_order_key(
+                    order,
+                    &row.context(),
+                    &projected,
+                    projection,
+                    bindings,
+                )?);
             }
             keyed.push((keys, row));
         }
@@ -1054,7 +1061,9 @@ pub(super) fn order_and_project_rows_with_distinct_on(
             let projected = project_row(projection, row, bindings)?;
             let keys = order_by
                 .iter()
-                .map(|order| eval_order_key(order, &row.context(), &projected, bindings))
+                .map(|order| {
+                    eval_order_key(order, &row.context(), &projected, projection, bindings)
+                })
                 .collect::<Result<Vec<_>>>()?;
             heap.push(keys, projected)?;
         }
@@ -1084,7 +1093,7 @@ pub(super) fn order_and_project_rows_with_distinct_on(
         let projected = project_row(projection, row, bindings)?;
         let keys = order_by
             .iter()
-            .map(|order| eval_order_key(order, &row.context(), &projected, bindings))
+            .map(|order| eval_order_key(order, &row.context(), &projected, projection, bindings))
             .collect::<Result<Vec<_>>>()?;
         projected_with_keys.push((keys, projected));
     }
@@ -1142,10 +1151,30 @@ fn eval_order_key(
     order: &OrderByExpr,
     row: &RowContext<'_>,
     projected: &[SqlValue],
+    projection: &[SelectItem],
     bindings: &[Option<SqlValue>],
 ) -> Result<SqlValue> {
     let value = super::order_position::order_value(order, row, projected, bindings)?;
-    Ok(super::order_position::collate_sort_value(order, value))
+    // Q5-10: a term sorts under its explicit COLLATE, else under the
+    // declared collation of the column it names (for a position, the
+    // column the result column names).
+    let collation = crate::exec::expr::coerce::collation_from_expr(&order.expr).or_else(|| {
+        match super::order_position::order_position(&order.expr) {
+            Some(column) => match projection.get(column) {
+                Some(
+                    SelectItem::UnnamedExpr(item) | SelectItem::ExprWithAlias { expr: item, .. },
+                ) => crate::exec::expr::coerce::expr_collation(item, row),
+                _ => None,
+            },
+            None => crate::exec::expr::coerce::expr_collation(&order.expr, row),
+        }
+    });
+    Ok(match (collation, value) {
+        (Some(collation), SqlValue::Text(text)) => {
+            SqlValue::Text(Arc::from(collation.sort_text(&text)))
+        }
+        (_, value) => value,
+    })
 }
 
 pub(super) fn collect_select_rows(
@@ -1310,6 +1339,11 @@ fn covering_projection_for_index(
     let mut col_to_index_pos: std::collections::HashMap<usize, usize> =
         std::collections::HashMap::new();
     for (pos, key) in index.keys.iter().enumerate() {
+        // Q5-10: a NOCASE or RTRIM key holds normalized text, not the
+        // stored value, so its column is read from the heap.
+        if super::key_normalizes_text(key) {
+            continue;
+        }
         let IndexKeySource::Column { attnum } = key.source else {
             // A6 SQL-D: expression keys are not addressable by table
             // column ordinal; skip from the covering map.
@@ -1403,6 +1437,9 @@ fn order_satisfied_by_index_with_prefix(
         if !col.folded.as_ref().eq_ignore_ascii_case(&ident.value) {
             return false;
         }
+        if !super::index_collation::key_orders_like_column(key, col) {
+            return false;
+        }
     }
     true
 }
@@ -1444,6 +1481,9 @@ fn order_reverse_satisfied_by_index(
             return false;
         };
         if !col.folded.as_ref().eq_ignore_ascii_case(&ident.value) {
+            return false;
+        }
+        if !super::index_collation::key_orders_like_column(key, col) {
             return false;
         }
     }

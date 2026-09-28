@@ -894,6 +894,7 @@ fn try_resolve_zero_arg_pragma_tvf(
             default_value: None,
             default_expr: None,
             generated: None,
+            collation: None,
         })
         .collect();
     let table_def = Arc::new(redlinedb_kernel::catalog::TableDef {

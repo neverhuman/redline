@@ -173,6 +173,7 @@ fn synth_cross_db_table_def(
             default_value: None,
             default_expr: None,
             generated: None,
+            collation: None,
         })
         .collect();
     let rel = next_cross_db_rel_id();

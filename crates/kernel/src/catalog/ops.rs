@@ -232,6 +232,10 @@ pub fn apply_create_table(
             default_value,
             default_expr,
             generated: column.generated.clone(),
+            collation: column
+                .collation
+                .as_deref()
+                .and_then(super::collation::canonical_collation),
         });
     }
 
@@ -352,6 +356,13 @@ pub fn apply_create_table(
         flags |= TABLE_FLAG_AUTOINCREMENT;
     }
 
+    // PRIMARY KEY and UNIQUE keys compare with the declared collation of
+    // their columns (Q5-10).
+    for index in &mut indexes {
+        super::collation::inherit_key_collations_from(&columns, &mut index.keys);
+        super::collation::check_index_key_collations(&index.keys)?;
+    }
+
     let table = Arc::new(TableDef {
         table_id,
         schema_id,
@@ -419,7 +430,10 @@ pub fn apply_create_index(
     let relation_id = next_relation_id;
     next_relation_id.0 += 1;
 
-    let keys = build_index_keys(&table, &spec.columns)?;
+    let mut keys = build_index_keys(&table, &spec.columns)?;
+    // A key with no COLLATE of its own compares as its column does (Q5-10).
+    super::collation::inherit_key_collations(&table, &mut keys);
+    super::collation::check_index_key_collations(&keys)?;
     let index = IndexDef {
         index_id,
         table_id: table.table_id,
@@ -657,6 +671,10 @@ pub fn apply_alter_table(
                 default_value: column.default_value.clone(),
                 default_expr: None,
                 generated: None,
+                collation: column
+                    .collation
+                    .as_deref()
+                    .and_then(super::collation::canonical_collation),
             });
             if !table_constraints.is_empty() {
                 let column_lookup: HashMap<Box<str>, u16> = table
@@ -1004,6 +1022,8 @@ fn apply_alter_add_constraint(
                     collation: None,
                 });
             }
+            super::collation::inherit_key_collations_from(&table.columns, &mut keys);
+            super::collation::check_index_key_collations(&keys)?;
             let display_name = name
                 .as_ref()
                 .map(|n| n.original().to_owned())
@@ -1330,7 +1350,7 @@ fn build_index_keys(table: &TableDef, columns: &[IndexColumnSpec]) -> Result<Vec
             collation: column
                 .collation
                 .as_deref()
-                .map(|s| s.to_ascii_uppercase().into_boxed_str()),
+                .map(super::collation::explicit_key_collation),
         });
     }
     Ok(keys)

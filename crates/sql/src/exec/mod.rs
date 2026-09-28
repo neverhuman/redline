@@ -52,6 +52,8 @@ pub(crate) mod vec;
 
 mod agg;
 mod agg_eval;
+mod index_collation;
+pub(crate) use index_collation::key_normalizes_text;
 pub(crate) mod intern;
 use agg::*;
 mod alter;

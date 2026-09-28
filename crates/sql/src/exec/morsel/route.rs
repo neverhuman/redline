@@ -170,6 +170,12 @@ pub(crate) fn classify_for_routing(
         return Err(DeclineReason::Shape);
     }
 
+    // Q5-10: the filter kernels compare text byte-wise; a column with a
+    // declared collation compares under it, which the tuple path applies.
+    if plan.selection.is_some() && table.columns.iter().any(|c| c.collation.is_some()) {
+        return Err(DeclineReason::Predicate);
+    }
+
     // W4-A3/A5: extract the predicate, if any. W4-A5 widens to a
     // SmallVec so AND-conjunctions yield multiple per-row checks.
     let predicates: smallvec::SmallVec<[RoutedPredicate; 2]> = match plan.selection.as_ref() {
@@ -872,6 +878,7 @@ mod tests {
                 default_value: None,
                 default_expr: None,
                 generated: None,
+                collation: None,
             }],
             indexes: Vec::new(),
             constraints: Vec::new(),

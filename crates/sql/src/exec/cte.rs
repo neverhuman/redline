@@ -176,6 +176,7 @@ pub(crate) fn synth_table_def_with_folded(
             default_value: None,
             default_expr: None,
             generated: None,
+            collation: None,
         })
         .collect();
     let rel = next_cte_rel_id();

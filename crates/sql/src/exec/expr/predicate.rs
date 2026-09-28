@@ -2,6 +2,7 @@ use super::*;
 use std::cell::RefCell;
 
 use super::affinity::CmpAffinity;
+use crate::collation::Collation;
 use redlinedb_kernel::catalog::Affinity;
 
 #[derive(Clone, Copy, Debug, Hash, PartialEq, Eq)]
@@ -40,6 +41,15 @@ pub(crate) trait CaseEvaluator {
     fn comparison_affinity(&self, _operand: &Expr, _value: &Expr) -> CmpAffinity {
         CmpAffinity::None
     }
+
+    /// The collation `CASE operand WHEN condition` compares under (Q5-10).
+    fn case_collation(
+        &self,
+        _operand: &Expr,
+        _condition: &Expr,
+    ) -> Option<crate::collation::Collation> {
+        None
+    }
 }
 
 pub(crate) fn eval_case<E>(
@@ -64,13 +74,16 @@ where
             if matches!(condition, SqlValue::Null) {
                 continue;
             }
+            // Q5-10: after the comparison affinity, the WHEN compares under
+            // its collation.
+            let collation = evaluator.case_collation(operand_expr, &when.condition);
             let equal = if super::affinity::may_convert(&operand, &condition) {
                 let affinity = evaluator.comparison_affinity(operand_expr, &when.condition);
                 let (left, right) =
                     super::affinity::apply_pair(operand.clone(), condition, affinity);
-                compare_values(&left, &right) == Ordering::Equal
+                compare_with_collation(&left, &right, collation.as_ref()) == Ordering::Equal
             } else {
-                compare_values(&operand, &condition) == Ordering::Equal
+                compare_with_collation(&operand, &condition, collation.as_ref()) == Ordering::Equal
             };
             if equal {
                 return evaluator.eval_case_expr(&when.result);
@@ -196,6 +209,7 @@ fn row_eq(
     left: &[SqlValue],
     right: &[SqlValue],
     affinity: &mut dyn FnMut(usize) -> CmpAffinity,
+    collations: &[Option<Collation>],
 ) -> Result<Option<bool>> {
     if left.len() != right.len() {
         return Err(Error::UnsupportedSql(format!(
@@ -208,17 +222,28 @@ fn row_eq(
         if matches!(l, SqlValue::Null) || matches!(r, SqlValue::Null) {
             return Ok(None);
         }
+        let collation = collations.get(i).and_then(Option::as_ref);
         let ord = if super::affinity::may_convert(l, r) {
             let (l, r) = super::affinity::apply_pair(l.clone(), r.clone(), affinity(i));
-            compare_values(&l, &r)
+            compare_with_collation(&l, &r, collation)
         } else {
-            compare_values(l, r)
+            compare_with_collation(l, r, collation)
         };
         if ord != Ordering::Equal {
             return Ok(Some(false));
         }
     }
     Ok(Some(true))
+}
+
+/// The collations of the left operand of `IN`: one per row-value
+/// component, each its explicit COLLATE or its column's (Q5-10).
+fn in_lhs_collations(expr: &Expr, row: &RowContext<'_>) -> Vec<Option<Collation>> {
+    match expr {
+        Expr::Tuple(exprs) => exprs.iter().map(|expr| expr_collation(expr, row)).collect(),
+        Expr::Nested(inner) => in_lhs_collations(inner, row),
+        _ => vec![expr_collation(expr, row)],
+    }
 }
 
 /// The affinities of the left operand of `IN`: one per row-value component.
@@ -294,9 +319,19 @@ pub(crate) fn in_list_result(
             .map(CmpAffinity::of_optional)
             .collect()
     });
+    let mut lhs_collations: Option<Vec<Option<Collation>>> = None;
     for item in list {
         let candidate = row_values_for_expr(item, row, bindings)?;
-        match row_eq(&value, &candidate, &mut |i| affinities.get(i))? {
+        // Q5-10: a single value compares as `expr = item` would; a row value
+        // compares each component under its left operand's collation.
+        let item_collations;
+        let collations = if value.len() == 1 {
+            item_collations = [comparison_collation(expr, item, row)];
+            &item_collations[..]
+        } else {
+            lhs_collations.get_or_insert_with(|| in_lhs_collations(expr, row))
+        };
+        match row_eq(&value, &candidate, &mut |i| affinities.get(i), collations)? {
             Some(true) => {
                 found = true;
                 break;
@@ -340,6 +375,8 @@ pub(crate) fn in_subquery_result(
             .collect()
     });
     let mut affinity = |i| affinities.get(i);
+    // Q5-10: `x IN (SELECT ...)` compares under the collation of `x`.
+    let collations = in_lhs_collations(expr, row);
     if in_subquery_is_cacheable(subquery) {
         if let Some(result) = IN_SUBQUERY_ROW_CACHE.with(|cache| {
             let cache = cache.borrow();
@@ -349,6 +386,7 @@ pub(crate) fn in_subquery_result(
                     rows.iter().map(Vec::as_slice),
                     negated,
                     &mut affinity,
+                    &collations,
                 )
             })
         }) {
@@ -367,6 +405,7 @@ pub(crate) fn in_subquery_result(
             rows.iter().map(Vec::as_slice),
             negated,
             &mut affinity,
+            &collations,
         )?;
         if !used_correlated_lookup {
             IN_SUBQUERY_ROW_CACHE.with(|cache| {
@@ -385,6 +424,7 @@ pub(crate) fn in_subquery_result(
         rows.iter().map(Vec::as_slice),
         negated,
         &mut affinity,
+        &collations,
     )
 }
 
@@ -393,6 +433,7 @@ fn finish_in_rows<'a, I>(
     rows: I,
     negated: bool,
     affinity: &mut dyn FnMut(usize) -> CmpAffinity,
+    collations: &[Option<Collation>],
 ) -> Result<SqlValue>
 where
     I: IntoIterator<Item = &'a [SqlValue]>,
@@ -400,7 +441,7 @@ where
     let mut found = false;
     let mut saw_null = false;
     for row in rows {
-        match row_eq(value, row, affinity)? {
+        match row_eq(value, row, affinity, collations)? {
             Some(true) => {
                 found = true;
                 break;

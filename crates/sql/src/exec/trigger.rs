@@ -307,6 +307,7 @@ fn synth_view_trigger_table(view_name: &str, columns: &[String]) -> Arc<TableDef
                 default_value: None,
                 default_expr: None,
                 generated: None,
+                collation: None,
             })
             .collect(),
         indexes: Vec::new(),

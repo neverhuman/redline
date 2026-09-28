@@ -21,7 +21,7 @@
 use std::sync::Arc;
 
 use redlinedb_kernel::catalog::{
-    EncodedIndexKey, IndexDef, IndexKeySource, SortDir, TableDef, encode_index_key,
+    EncodedIndexKey, IndexDef, IndexKeyDef, IndexKeySource, SortDir, TableDef, encode_index_key,
 };
 use redlinedb_kernel::engine::{Engine, Txn};
 use redlinedb_kernel::format::RowId;
@@ -160,25 +160,6 @@ pub(crate) fn try_match_index_access(
     try_match_index_access_hinted(engine, table, selection, bindings, None)
 }
 
-/// Allocation-free case-insensitive substring scan for the literal
-/// `"collate nocase"`. Used by `try_match_index_access_hinted` to bail out
-/// of index-probe matching when the table's `normalized_sql` declares a
-/// NOCASE collation (which the current index machinery doesn't honour).
-#[inline]
-fn contains_collate_nocase_ci(haystack: &str) -> bool {
-    const NEEDLE: &[u8] = b"collate nocase";
-    let bytes = haystack.as_bytes();
-    if bytes.len() < NEEDLE.len() {
-        return false;
-    }
-    bytes.windows(NEEDLE.len()).any(|window| {
-        window
-            .iter()
-            .zip(NEEDLE.iter())
-            .all(|(a, b)| a.eq_ignore_ascii_case(b))
-    })
-}
-
 /// Phase 5 WS-A2e / A2g entry point. The optional `hint` rides through
 /// SQLite-parity `INDEXED BY` / `NOT INDEXED` table-access hints; pass
 /// `None` for callers that have no hint context (joins, CTE row sources,
@@ -199,17 +180,8 @@ pub(crate) fn try_match_index_access_hinted(
     if table.indexes.is_empty() {
         return None;
     }
-    // A7: avoid the per-SELECT `to_ascii_lowercase()` allocation. Each call
-    // here previously copied the entire normalized_sql into a fresh String
-    // just to do a case-insensitive substring check. Common case: no COLLATE
-    // NOCASE present, so the allocation was pure waste.
-    if table
-        .normalized_sql
-        .as_deref()
-        .is_some_and(contains_collate_nocase_ci)
-    {
-        return None;
-    }
+    // Q5-10: collations are checked per key and per conjunct below; a key
+    // answers only a comparison under its own collation.
     // Collect candidate {column_ordinal, equalities, range bounds} from
     // the predicate. We only walk top-level AND chains; an OR or any
     // other shape disables the optimization for this round.
@@ -251,19 +223,10 @@ pub(crate) fn try_match_index_access_hinted(
         if !crate::exec::index_partial::query_implies_index_predicate(selection, index) {
             continue;
         }
-        // A key declared `COLLATE NOCASE` stores folded text (and RTRIM or a
-        // custom collation would need its own folding), but a probe is built
-        // from the raw constant and `col = value` compares with the column's
-        // collation. Through such an index `name = 'Gamma'` found nothing
-        // on a BINARY column holding 'Gamma'. Scan instead. (A table with a
-        // NOCASE column never reaches this point.)
-        if index.keys.iter().any(|key| {
-            key.collation
-                .as_deref()
-                .is_some_and(|collation| !collation.eq_ignore_ascii_case("BINARY"))
-        }) {
-            continue;
-        }
+        // A NOCASE or RTRIM key stores folded text. It answers a comparison
+        // only under its own collation, with the probe folded the same way
+        // (`key_answers` and `probe_value` below, Q5-10); a key under any
+        // other collation cannot exist (the catalog refuses it).
         let Some(first_key) = index.keys.first() else {
             continue;
         };
@@ -275,7 +238,11 @@ pub(crate) fn try_match_index_access_hinted(
         // Multi-key expression indexes still stay out of this path until
         // every key has explicit residual and lookup proof.
         if let IndexKeySource::Expression { sql: expr_sql, .. } = &first_key.source {
-            if index.keys.len() != 1 {
+            // Q5-10: the equality match below compares BINARY.
+            if index.keys.len() != 1
+                || super::index_collation::key_collation(first_key)
+                    != crate::collation::Collation::Binary
+            {
                 continue;
             }
             if let Some((value, consumed_idx)) =
@@ -311,7 +278,8 @@ pub(crate) fn try_match_index_access_hinted(
         // Leading-column equality is the gateway. If we cannot bind the
         // leading column to a constant, skip this index entirely — we
         // never honor a non-leading-only predicate.
-        let leading_eq = first_constant_eq_for_column(&conjuncts, table, leading, bindings);
+        let leading_eq =
+            first_constant_eq_for_column(&conjuncts, table, leading, bindings, first_key);
 
         if let Some((leading_value, leading_idx)) = leading_eq {
             // Phase 5 WS-A1: track which conjunct indices the probe
@@ -332,7 +300,7 @@ pub(crate) fn try_match_index_access_hinted(
                     break;
                 };
                 let column = attnum as usize;
-                match first_constant_eq_for_column(&conjuncts, table, column, bindings) {
+                match first_constant_eq_for_column(&conjuncts, table, column, bindings, key) {
                     Some((value, idx)) => {
                         full_key.push(value);
                         consumed_idx.push(idx);
@@ -413,7 +381,7 @@ pub(crate) fn try_match_index_access_hinted(
         // No leading equality. Try a leading-column range (>=, >, <=, <,
         // BETWEEN) — also produces an `IndexRangeScan`.
         if let Some((bounds, predicates, consumed_idx)) =
-            leading_range_bounds(&conjuncts, table, leading, bindings)
+            leading_range_bounds(&conjuncts, table, leading, bindings, first_key)
         {
             // A DESC key stores every byte inverted, so its byte order is
             // the reverse of value order: the upper value bound gives the
@@ -475,7 +443,7 @@ fn suffix_range_after_prefix(
         return None;
     };
     let (bounds, predicates, consumed) =
-        leading_range_bounds(conjuncts, table, attnum as usize, bindings)?;
+        leading_range_bounds(conjuncts, table, attnum as usize, bindings, suffix_key)?;
     let leading_prefix = encode_prefix_key(index, std::slice::from_ref(leading_value));
     let start = match &bounds.lower {
         Some((value, inclusive)) => {
@@ -744,9 +712,10 @@ fn first_constant_eq_for_column(
     table: &TableDef,
     column: usize,
     bindings: &[Option<SqlValue>],
+    key: &IndexKeyDef,
 ) -> Option<(SqlValue, usize)> {
     for (idx, expr) in conjuncts.iter().enumerate() {
-        if let Some(value) = constant_eq_for_column(expr, table, column, bindings) {
+        if let Some(value) = constant_eq_for_column(expr, table, column, bindings, key) {
             // SQLite NULL parity: `col = NULL` is never true; never
             // route a NULL probe through the index — fall back to scan.
             if matches!(value, SqlValue::Null) {
@@ -763,6 +732,7 @@ fn constant_eq_for_column(
     table: &TableDef,
     column: usize,
     bindings: &[Option<SqlValue>],
+    key: &IndexKeyDef,
 ) -> Option<SqlValue> {
     let Expr::BinaryOp { left, op, right } = strip_nested(expr) else {
         return None;
@@ -772,13 +742,23 @@ fn constant_eq_for_column(
     }
     let left_col = expr_column_ordinal(left, table);
     let right_col = expr_column_ordinal(right, table);
-    if left_col == Some(column) {
-        return eval_constant(right, bindings).map(|value| probe_for_column(table, column, value));
+    let value = if left_col == Some(column) {
+        eval_constant(right, bindings)
+    } else if right_col == Some(column) {
+        eval_constant(left, bindings)
+    } else {
+        None
+    }?;
+    // Q5-10: only a key under the comparison's own collation answers it.
+    if !super::index_collation::key_answers(key, left, right, table) {
+        return None;
     }
-    if right_col == Some(column) {
-        return eval_constant(left, bindings).map(|value| probe_for_column(table, column, value));
-    }
-    None
+    // The column's affinity converts the constant first, then the key's
+    // collation folds it.
+    Some(super::index_collation::probe_value(
+        probe_for_column(table, column, value),
+        key,
+    ))
 }
 
 /// A constant probe as the comparison `column <op> constant` sees it: a
@@ -811,6 +791,7 @@ fn leading_range_bounds(
     table: &TableDef,
     column: usize,
     bindings: &[Option<SqlValue>],
+    key: &IndexKeyDef,
 ) -> Option<(LeadingRange, Vec<String>, Vec<usize>)> {
     let mut bounds = LeadingRange::default();
     let mut predicates: Vec<String> = Vec::new();
@@ -819,7 +800,8 @@ fn leading_range_bounds(
     for (idx, expr) in conjuncts.iter().enumerate() {
         let stripped = strip_nested(expr);
         if let Expr::BinaryOp { left, op, right } = stripped
-            && let Some(side) = comparison_constant_for_column(left, right, table, column, bindings)
+            && let Some(side) =
+                comparison_constant_for_column(left, right, table, column, bindings, key)
         {
             let (value, inclusive_lower, inclusive_upper, is_lower) = match op {
                 BinaryOperator::Gt if side == ColumnSide::Left => {
@@ -879,9 +861,17 @@ fn leading_range_bounds(
             high,
         } = stripped
             && expr_column_ordinal(ident, table) == Some(column)
+            && super::index_collation::key_answers(key, ident, low, table)
+            && super::index_collation::key_answers(key, ident, high, table)
         {
-            let lo = probe_for_column(table, column, eval_constant(low, bindings)?);
-            let hi = probe_for_column(table, column, eval_constant(high, bindings)?);
+            let lo = super::index_collation::probe_value(
+                probe_for_column(table, column, eval_constant(low, bindings)?),
+                key,
+            );
+            let hi = super::index_collation::probe_value(
+                probe_for_column(table, column, eval_constant(high, bindings)?),
+                key,
+            );
             if matches!(lo, SqlValue::Null) || matches!(hi, SqlValue::Null) {
                 continue;
             }
@@ -934,17 +924,24 @@ fn comparison_constant_for_column(
     table: &TableDef,
     column: usize,
     bindings: &[Option<SqlValue>],
+    key: &IndexKeyDef,
 ) -> Option<ColumnSideValue> {
+    // Q5-10: only a key under the comparison's own collation orders the
+    // range the way the comparison does.
+    if !super::index_collation::key_answers(key, left, right, table) {
+        return None;
+    }
+    let normalized = |value| super::index_collation::probe_value(value, key);
     if expr_column_ordinal(left, table) == Some(column) {
         return eval_constant(right, bindings).map(|value| ColumnSideValue {
             side: ColumnSide::Left,
-            value: probe_for_column(table, column, value),
+            value: normalized(probe_for_column(table, column, value)),
         });
     }
     if expr_column_ordinal(right, table) == Some(column) {
         return eval_constant(left, bindings).map(|value| ColumnSideValue {
             side: ColumnSide::Right,
-            value: probe_for_column(table, column, value),
+            value: normalized(probe_for_column(table, column, value)),
         });
     }
     None
@@ -976,6 +973,9 @@ fn strip_nested(expr: &Expr) -> &Expr {
 
 fn expr_column_ordinal(expr: &Expr, table: &TableDef) -> Option<usize> {
     match strip_nested(expr) {
+        // The COLLATE wrapper names the comparison's collation, which the
+        // caller checks against the key's; the column is still the column.
+        Expr::Collate { expr, .. } => expr_column_ordinal(expr, table),
         Expr::Identifier(ident) => column_ordinal_for_table(&ident.value, table),
         Expr::CompoundIdentifier(parts) => parts
             .last()
@@ -1244,7 +1244,7 @@ fn eval_constant(expr: &Expr, bindings: &[Option<SqlValue>]) -> Option<SqlValue>
             Value::DoubleQuotedString(s) => SqlValue::Text(std::sync::Arc::from(s.as_str())),
             _ => return None,
         }),
-        Expr::Nested(inner) => eval_constant(inner, bindings),
+        Expr::Nested(inner) | Expr::Collate { expr: inner, .. } => eval_constant(inner, bindings),
         Expr::UnaryOp { op, expr } => {
             let value = eval_constant(expr, bindings)?;
             match op {
@@ -1254,52 +1254,6 @@ fn eval_constant(expr: &Expr, bindings: &[Option<SqlValue>]) -> Option<SqlValue>
             }
         }
         _ => None,
-    }
-}
-
-#[cfg(test)]
-mod a7_collate_scan_tests {
-    use super::contains_collate_nocase_ci;
-
-    #[test]
-    fn matches_lowercase() {
-        assert!(contains_collate_nocase_ci(
-            "CREATE TABLE t (a TEXT collate nocase)"
-        ));
-    }
-
-    #[test]
-    fn matches_uppercase() {
-        assert!(contains_collate_nocase_ci(
-            "CREATE TABLE t (a TEXT COLLATE NOCASE)"
-        ));
-    }
-
-    #[test]
-    fn matches_mixed_case() {
-        assert!(contains_collate_nocase_ci(
-            "CREATE TABLE t (a TEXT Collate NoCase)"
-        ));
-    }
-
-    #[test]
-    fn rejects_unrelated_text() {
-        assert!(!contains_collate_nocase_ci(
-            "CREATE TABLE t (a INTEGER PRIMARY KEY)"
-        ));
-    }
-
-    #[test]
-    fn rejects_partial_match() {
-        // 'collate' alone or 'nocase' alone must not trigger.
-        assert!(!contains_collate_nocase_ci("a TEXT COLLATE BINARY"));
-        assert!(!contains_collate_nocase_ci("nocase_column TEXT"));
-    }
-
-    #[test]
-    fn rejects_shorter_than_needle() {
-        assert!(!contains_collate_nocase_ci("short"));
-        assert!(!contains_collate_nocase_ci(""));
     }
 }
 

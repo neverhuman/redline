@@ -524,6 +524,11 @@ fn compute_covering_map(
     let mut col_to_index_pos: std::collections::HashMap<usize, usize> =
         std::collections::HashMap::new();
     for (pos, key) in index.keys.iter().enumerate() {
+        // Q5-10: a NOCASE or RTRIM key holds normalized text, not the
+        // stored value, so its column is read from the heap.
+        if crate::exec::key_normalizes_text(key) {
+            continue;
+        }
         if let IndexKeySource::Column { attnum } = key.source {
             col_to_index_pos.insert(attnum as usize, pos);
         }

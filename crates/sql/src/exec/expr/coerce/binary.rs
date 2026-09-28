@@ -49,10 +49,21 @@ pub(crate) fn eval_binary(
         };
         return match_result(left, left_value, pattern, row);
     }
-    let collation = match (collation_from_expr(left), collation_from_expr(right)) {
-        (Some(c), _) => Some(c),
-        (None, Some(c)) => Some(c),
-        (None, None) => declared_collation(row, left),
+    // Q5-10: a comparison takes the explicit COLLATE (left, then right),
+    // else a column operand's declared collation (left, then right).
+    let collation = if matches!(
+        op,
+        BinaryOperator::Eq
+            | BinaryOperator::NotEq
+            | BinaryOperator::Spaceship
+            | BinaryOperator::Lt
+            | BinaryOperator::LtEq
+            | BinaryOperator::Gt
+            | BinaryOperator::GtEq
+    ) {
+        comparison_collation(left, right, row)
+    } else {
+        None
     };
     let left_value = eval_scalar(left, row, bindings)?;
     let right_value = eval_scalar(right, row, bindings)?;
@@ -329,115 +340,6 @@ fn row_values_for_table_name(row: &RowContext<'_>, name: &str) -> Option<Vec<Sql
             }
         }),
         _ => None,
-    }
-}
-
-fn declared_collation(row: &RowContext<'_>, expr: &Expr) -> Option<crate::collation::Collation> {
-    let (qualifier, name) = match expr {
-        Expr::Identifier(ident) => (None, ident.value.as_str()),
-        Expr::CompoundIdentifier(parts) if parts.len() == 2 => {
-            (Some(parts[0].value.as_str()), parts[1].value.as_str())
-        }
-        Expr::Nested(inner) => return declared_collation(row, inner),
-        _ => return None,
-    };
-    let table = match row {
-        RowContext::Table(table) => Some(table.table.as_ref()),
-        RowContext::Joined(rows) => rows.iter().find_map(|joined| {
-            let table_name = joined
-                .alias
-                .as_ref()
-                .map(|alias| alias.as_ref())
-                .unwrap_or(joined.table.name.as_ref());
-            if qualifier.is_none_or(|q| table_name.eq_ignore_ascii_case(q)) {
-                Some(joined.table.as_ref())
-            } else {
-                None
-            }
-        }),
-        _ => None,
-    }?;
-    let _ = table
-        .columns
-        .iter()
-        .find(|column| column.folded.eq_ignore_ascii_case(name))?;
-    // A8: fast-reject when the table SQL contains no `nocase` token at all.
-    // The expensive lowercase + split + per-part `.starts_with` only matters
-    // when *some* column was declared `COLLATE NOCASE`; for the common case
-    // (no NOCASE columns anywhere) we'd otherwise pay a full table-SQL
-    // String clone + downcase per call. The allocation-free check below is
-    // O(table_sql.len()) with no heap activity.
-    let raw_sql = table.normalized_sql.as_deref()?;
-    if !contains_nocase_token_ci(raw_sql) {
-        return None;
-    }
-    let sql = raw_sql.to_ascii_lowercase();
-    let needle = name.to_ascii_lowercase();
-    // A29: hoist the two needle suffixes out of the `split(',').any(..)`
-    // loop. Previously each iteration allocated two new Strings
-    // (`needle.clone() + " "` and `needle.clone() + "\t"`); for a wide
-    // table with N columns that was 2N String allocations per call. The
-    // function is invoked per binary comparison via `eval_binary`
-    // (line 17), so wide-table workloads hit this loop often.
-    let needle_space = format!("{needle} ");
-    let needle_tab = format!("{needle}\t");
-    if sql.split(',').any(|part| {
-        let part = part.rsplit('(').next().unwrap_or(part).trim();
-        (part.starts_with(&needle_space) || part.starts_with(&needle_tab))
-            && part.contains("collate nocase")
-    }) {
-        Some(crate::collation::Collation::NoCase)
-    } else {
-        None
-    }
-}
-
-/// A8 helper: allocation-free case-insensitive scan for the literal bytes
-/// `"nocase"` inside `haystack`. Used to fast-reject NOCASE-collation
-/// detection in `declared_collation` before paying for a full
-/// `to_ascii_lowercase` clone of the table's normalized SQL.
-#[inline]
-fn contains_nocase_token_ci(haystack: &str) -> bool {
-    const NEEDLE: &[u8] = b"nocase";
-    let bytes = haystack.as_bytes();
-    if bytes.len() < NEEDLE.len() {
-        return false;
-    }
-    bytes.windows(NEEDLE.len()).any(|window| {
-        window
-            .iter()
-            .zip(NEEDLE.iter())
-            .all(|(a, b)| a.eq_ignore_ascii_case(b))
-    })
-}
-
-#[cfg(test)]
-mod a8_nocase_token_tests {
-    use super::contains_nocase_token_ci;
-
-    #[test]
-    fn matches_lower_upper_mixed() {
-        assert!(contains_nocase_token_ci("a TEXT COLLATE nocase"));
-        assert!(contains_nocase_token_ci("a TEXT COLLATE NOCASE"));
-        assert!(contains_nocase_token_ci("a TEXT collate NoCase"));
-    }
-
-    #[test]
-    fn rejects_no_token() {
-        assert!(!contains_nocase_token_ci(
-            "CREATE TABLE t (a TEXT, b INTEGER)"
-        ));
-        assert!(!contains_nocase_token_ci("COLLATE BINARY"));
-        assert!(!contains_nocase_token_ci(""));
-    }
-
-    #[test]
-    fn matches_inside_identifier_too() {
-        // The fast-reject is intentionally permissive — anything containing
-        // "nocase" (case-insensitive) triggers the slow path. False positives
-        // are fine (slow path returns None anyway); false negatives would
-        // silently drop NOCASE collation, so this side has to be safe.
-        assert!(contains_nocase_token_ci("col_nocase_marker INTEGER"));
     }
 }
 

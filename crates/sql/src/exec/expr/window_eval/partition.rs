@@ -23,7 +23,7 @@ pub(super) fn partition_rows(
     for row in rows {
         let mut key = Vec::with_capacity(partition_by.len());
         for expr in partition_by {
-            key.push(eval_scalar(expr, &row.context(), bindings)?);
+            key.push(collated_key(expr, row, bindings)?);
         }
         keys.push(key);
     }
@@ -47,6 +47,17 @@ pub(super) fn partition_rows(
     Ok(groups)
 }
 
+/// `expr` for `row`, text folded by the expression's collation (Q5-10), so
+/// partitions, window order and peers follow a declared NOCASE or RTRIM.
+fn collated_key(expr: &Expr, row: &SqlRow, bindings: &[Option<SqlValue>]) -> Result<SqlValue> {
+    let context = row.context();
+    let collation = crate::exec::expr::coerce::expr_collation(expr, &context);
+    Ok(crate::exec::expr::coerce::collation_key(
+        eval_scalar(expr, &context, bindings)?,
+        collation.as_ref(),
+    ))
+}
+
 pub(super) fn order_partition(
     partition: &[usize],
     rows: &[SqlRow],
@@ -57,7 +68,7 @@ pub(super) fn order_partition(
     for &idx in partition {
         let mut key = Vec::with_capacity(order_by.len());
         for ord in order_by {
-            key.push(eval_scalar(&ord.expr, &rows[idx].context(), bindings)?);
+            key.push(collated_key(&ord.expr, &rows[idx], bindings)?);
         }
         items.push((idx, key));
     }

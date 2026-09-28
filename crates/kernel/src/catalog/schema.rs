@@ -52,6 +52,10 @@ pub struct ColumnDef {
     /// chooses STORED (computed at write, persisted) vs VIRTUAL
     /// (computed at read).
     pub generated: Option<GeneratedColumnSpec>,
+    /// Declared `COLLATE`, canonical (see `collation::canonical_collation`):
+    /// `None` is BINARY, `NOCASE` / `RTRIM` are upper-case, any other name
+    /// is kept as written. Q5-10.
+    pub collation: Option<Box<str>>,
 }
 
 #[derive(Debug, Copy, Clone, Eq, PartialEq)]
@@ -480,6 +484,10 @@ fn render_create_table(table: &TableDef) -> String {
         if let Some(declared) = &column.declared_type {
             out.push(' ');
             out.push_str(declared);
+        }
+        if let Some(collation) = &column.collation {
+            out.push_str(" COLLATE ");
+            out.push_str(collation);
         }
         let is_rowid_alias = table.rowid_alias_column == Some(idx as u16);
         let is_column_pk = column_pk_ordinals.contains(&(idx as u16));

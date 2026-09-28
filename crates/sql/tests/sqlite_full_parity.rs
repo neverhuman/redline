@@ -472,14 +472,10 @@ fn known_gap_pragmas_are_rejected_or_diverge() {
 #[test]
 fn known_full_sqlite_parity_gaps_are_explicit_failures() {
     let harness = Harness::new();
-    // A column declared COLLATE NOCASE does not order by that collation.
-    harness.assert_result_diverges(
-        &[
-            "CREATE TABLE names(name TEXT COLLATE NOCASE)",
-            "INSERT INTO names(name) VALUES ('a'), ('B')",
-        ],
-        "SELECT name FROM names ORDER BY name",
-    );
+    // Q5-10 closed this gap: ORDER BY uses the column's declared NOCASE.
+    harness.execute_both("CREATE TABLE names(name TEXT COLLATE NOCASE)");
+    harness.execute_both("INSERT INTO names(name) VALUES ('a'), ('B')");
+    harness.assert_query_matches("SELECT name FROM names ORDER BY name");
 }
 
 #[test]

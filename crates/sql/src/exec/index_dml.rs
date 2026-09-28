@@ -42,18 +42,22 @@ pub(crate) struct BuiltIndexKeyWithValues {
 }
 
 /// Apply the per-key collation normalization to a single value before it is
-/// encoded into an index key. For NOCASE, text is lowercased so the B-tree
-/// (which uses byte-level comparison) treats `'Apple'` and `'apple'` as
-/// equal. All other collations (BINARY, RTRIM, custom) leave the value
-/// unchanged — BINARY is byte-exact by definition, and RTRIM/custom
-/// collations are not yet reflected in the physical key encoding.
-fn apply_index_key_collation(value: SqlValue, collation: Option<&str>) -> SqlValue {
-    if let Some("NOCASE") = collation {
-        if let SqlValue::Text(s) = value {
-            return SqlValue::Text(s.to_ascii_lowercase().into());
+/// encoded into an index key, so the B-tree (which compares bytes) treats
+/// values the collation calls equal as one key: NOCASE lowercases ASCII,
+/// RTRIM drops trailing spaces (Q5-10). BINARY leaves the value alone; the
+/// catalog refuses any other key collation.
+pub(crate) fn apply_index_key_collation(value: SqlValue, collation: Option<&str>) -> SqlValue {
+    match value {
+        SqlValue::Text(text) => {
+            match redlinedb_kernel::catalog::collation::normalize_key_text(&text, collation) {
+                std::borrow::Cow::Borrowed(same) if same.len() == text.len() => {
+                    SqlValue::Text(text)
+                }
+                normalized => SqlValue::Text(Arc::from(&*normalized)),
+            }
         }
+        other => other,
     }
-    value
 }
 
 /// Build the encoded index key bytes for `index` from a row's column values.

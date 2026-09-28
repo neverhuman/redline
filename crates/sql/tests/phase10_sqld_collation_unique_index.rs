@@ -162,3 +162,100 @@ fn nocase_unique_index_survives_reopen_without_catalog_format_bump() {
     let result = rows(&conn, "SELECT a, b FROM t ORDER BY a");
     assert_eq!(result, vec!["1|APPLE"]);
 }
+
+// Q5-10: a UNIQUE key on a column declared NOCASE or RTRIM compares with
+// that collation, as SQLite's does, and keeps doing so after a reopen.
+
+fn assert_unique_rejects(conn: &Arc<Connection>, table: &str, first: &str, second: &str) {
+    conn.execute(&format!("INSERT INTO {table}(x) VALUES('{first}')"))
+        .unwrap_or_else(|err| panic!("{table}: insert {first:?}: {err}"));
+    let err = conn
+        .execute(&format!("INSERT INTO {table}(x) VALUES('{second}')"))
+        .expect_err(&format!(
+            "{table}: {second:?} after {first:?} must violate UNIQUE"
+        ));
+    assert!(err.to_string().contains("UNIQUE"), "{table}: {err}");
+    assert_eq!(
+        rows(conn, &format!("SELECT count(*) FROM {table}")),
+        vec!["1"],
+        "{table}"
+    );
+}
+
+const NOCASE_TABLES: [(&str, &str); 4] = [
+    ("u_col", "CREATE TABLE u_col(x TEXT COLLATE NOCASE UNIQUE)"),
+    (
+        "u_tab",
+        "CREATE TABLE u_tab(x TEXT COLLATE NOCASE, UNIQUE(x))",
+    ),
+    ("u_idx", "CREATE TABLE u_idx(x TEXT COLLATE NOCASE)"),
+    (
+        "u_pk",
+        "CREATE TABLE u_pk(x TEXT COLLATE NOCASE PRIMARY KEY)",
+    ),
+];
+
+#[test]
+fn declared_nocase_unique_rejects_case_dup() {
+    let dir = tempdir().expect("temp dir");
+    let path = dir.path().join("declared_nocase.db");
+    {
+        let db = Database::create(&path, DbOptions::default()).expect("create db");
+        let conn = db.connect();
+        for (table, ddl) in NOCASE_TABLES {
+            conn.execute(ddl)
+                .unwrap_or_else(|err| panic!("{table}: {err}"));
+        }
+        conn.execute("CREATE UNIQUE INDEX u_idx_x ON u_idx(x)")
+            .expect("unique index");
+        for (table, _) in NOCASE_TABLES {
+            assert_unique_rejects(&conn, table, "X", "x");
+        }
+    }
+    // The key collation is part of the catalog, not rebuilt from SQL text.
+    let db = Database::open(&path, DbOptions::default()).expect("reopen");
+    let conn = db.connect();
+    for (table, _) in NOCASE_TABLES {
+        let err = conn
+            .execute(&format!("INSERT INTO {table}(x) VALUES('x')"))
+            .expect_err(&format!("{table}: 'x' after reopen must violate UNIQUE"));
+        assert!(err.to_string().contains("UNIQUE"), "{table}: {err}");
+        conn.execute(&format!("INSERT INTO {table}(x) VALUES('y')"))
+            .unwrap_or_else(|err| panic!("{table}: a new value after reopen: {err}"));
+        assert_eq!(
+            rows(&conn, &format!("SELECT count(*) FROM {table} WHERE x='X'")),
+            vec!["1"],
+            "{table}"
+        );
+    }
+}
+
+#[test]
+fn rtrim_unique_rejects_trailing_space() {
+    let (_dir, conn) = open();
+    conn.execute("CREATE TABLE r_col(x TEXT COLLATE RTRIM UNIQUE)")
+        .expect("create");
+    assert_unique_rejects(&conn, "r_col", "x", "x ");
+    conn.execute("CREATE TABLE r_idx(x TEXT COLLATE RTRIM)")
+        .expect("create");
+    conn.execute("CREATE UNIQUE INDEX r_idx_x ON r_idx(x)")
+        .expect("unique index");
+    assert_unique_rejects(&conn, "r_idx", "x  ", "x");
+    // An explicit BINARY key keeps byte comparison on an RTRIM column.
+    conn.execute("CREATE TABLE r_bin(x TEXT COLLATE RTRIM)")
+        .expect("create");
+    conn.execute("CREATE UNIQUE INDEX r_bin_x ON r_bin(x COLLATE BINARY)")
+        .expect("unique index");
+    conn.execute("INSERT INTO r_bin(x) VALUES('x'), ('x ')")
+        .expect("distinct under BINARY");
+}
+
+#[test]
+fn an_index_key_with_a_collation_the_btree_cannot_order_is_refused() {
+    let (_dir, conn) = open();
+    conn.execute("CREATE TABLE t(x TEXT)").expect("create");
+    let err = conn
+        .execute("CREATE INDEX t_x ON t(x COLLATE \"en-x-icu\")")
+        .expect_err("an ICU-collated index key");
+    assert!(err.to_string().contains("index key can use only"), "{err}");
+}

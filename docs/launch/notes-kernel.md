@@ -641,3 +641,69 @@ Draft lines for the v5.0.0 CHANGELOG. The integrator owns `CHANGELOG.md`.
   process still gets `Busy`. Dead slots of in-memory sessions are also
   removed now; they used to stay in the registry for the life of the
   process.
+
+## Declared collations (workplan Q5-10)
+
+- A column declared `COLLATE NOCASE` or `COLLATE RTRIM` now compares with
+  that collation wherever SQLite uses a column's collation: `=`/`<`/...
+  with the column on either side (SQLite precedence: explicit COLLATE on
+  the left, then on the right, then the left column's, then the right
+  column's), `IN (list)`, `BETWEEN`, `CASE x WHEN`, `ORDER BY`, `GROUP BY`,
+  `DISTINCT`, `UNION`/`INTERSECT`/`EXCEPT` (each column takes the
+  collation of the left-most branch that has one), aggregate `DISTINCT`,
+  and window `PARTITION BY`/`ORDER BY`. Before, only the left operand's
+  declared NOCASE was honoured, found by splitting the table SQL on
+  commas, so `'A'=x`, quoted column names, RTRIM and every grouping and
+  sorting operator compared BINARY.
+- The declared collation is now part of the catalog (`ColumnDef::
+  collation`), read from the table SQL when a format-7 catalog loads.
+- A new index key with no COLLATE of its own inherits its column's
+  declared collation; that includes the indexes behind column and table
+  UNIQUE and PRIMARY KEY constraints. UNIQUE on a declared-NOCASE column
+  now rejects 'x' after 'X', and on a declared-RTRIM column 'x ' after
+  'x'. Keys are stored normalized (NOCASE lower-cases ASCII, RTRIM drops
+  trailing spaces); a key collation other than BINARY, NOCASE or RTRIM is
+  refused at CREATE INDEX / CREATE TABLE instead of silently ordering keys
+  by bytes.
+- The planner uses an index key for a comparison only when the key's
+  collation equals the comparison's, and normalizes the probe value the
+  same way. A BINARY column with an index on `x COLLATE NOCASE` answers a
+  BINARY `x='X'` by a scan, a NOCASE predicate through that index; the
+  old blanket "any COLLATE NOCASE in the table SQL disables every index"
+  guard is gone. An ORDER BY walks an index only when the key's collation
+  is the column's, and a covering read never returns a normalized key in
+  place of the stored text.
+- Catalog format 8 stores each column's and each index key's collation. A
+  catalog is written as format 8 once it holds any collation (a v4.1.0
+  build then refuses it rather than dropping the collations); a database
+  without collations keeps its format.
+
+### For the integrator (Q5-10, existing databases)
+
+- An index created before this change on a column that declares NOCASE or
+  RTRIM (and names no COLLATE itself) keeps the BINARY keys it was built
+  with: format-7 catalogs load its key collation from its CREATE INDEX
+  text only. Its answers stay correct (the planner uses it only for
+  BINARY comparisons, and a declared-NOCASE comparison scans), but its
+  UNIQUE stays binary until it is rebuilt.
+- Hook: `redlinedb_kernel::catalog::collation::
+  index_keys_needing_inherited_collation(table, index)` returns
+  `Some(key collations)` for exactly such an index. To connect it to
+  lane/sql's rebuild at open (commit 4c5141381, `index_rebuild.rs` and
+  `Database::open`'s rebuild of older-epoch indexes): when choosing the
+  indexes to rebuild, also take every index for which the hook returns
+  `Some`, set `index.keys[i].collation` to the returned values in the
+  catalog entry the rebuild installs, and rebuild it from the heap with the
+  SQL key builder (`index_dml::build_index_key`, which applies the key
+  collation). A UNIQUE index whose rows now share a key must fail the
+  open naming the index, as lane/sql's rebuild already does for the
+  INTEGER/REAL key change; never keep one row. The rebuilt catalog is
+  saved as format 8, so the hook returns `None` for it afterwards.
+- Merge conflicts to expect with lane/sql: `exec/expr/coerce/binary.rs`
+  (the collation choice is now one call, `comparison_collation`),
+  `exec/index_access.rs` (each matcher takes the index key and checks
+  `index_collation::key_answers`), `exec/index_dml.rs`
+  (`apply_index_key_collation`) and `engine/catalog_ops/index.rs` (the
+  backfill normalizes with `catalog::collation::normalize_key_text`).
+- Not done here: `x IN (SELECT ...)` still compares BINARY, and views and
+  CTEs do not carry a column's collation to their output columns.

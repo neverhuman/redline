@@ -191,9 +191,35 @@ impl CatalogStore {
     }
 }
 
+/// Newest catalog format this build reads and writes. Format 8 stores each
+/// column's declared collation and each index key's collation (Q5-10).
+pub const CATALOG_FORMAT_VERSION: u64 = 8;
+
+/// The format a snapshot is written in: its own, raised to 8 once any
+/// column or index key carries a collation, which older formats would drop
+/// (a v4.1.0 build then refuses the file instead of losing it).
+fn encoding_version(snapshot: &SchemaSnapshot) -> u64 {
+    let uses_collations = snapshot.tables.iter().any(|table| {
+        table
+            .columns
+            .iter()
+            .any(|column| column.collation.is_some())
+            || table
+                .indexes
+                .iter()
+                .any(|index| index.keys.iter().any(|key| key.collation.is_some()))
+    });
+    if uses_collations {
+        snapshot.meta.format_version.max(CATALOG_FORMAT_VERSION)
+    } else {
+        snapshot.meta.format_version
+    }
+}
+
 pub fn encode_snapshot(snapshot: &SchemaSnapshot) -> Result<Vec<u8>> {
     let mut out = BytesWriter::new();
-    out.u64(snapshot.meta.format_version);
+    let format_version = encoding_version(snapshot);
+    out.u64(format_version);
     out.u64(snapshot.meta.schema_epoch.0);
     out.u64(snapshot.meta.next_object_id.0);
     out.u64(snapshot.meta.next_relation_id.0);
@@ -206,7 +232,7 @@ pub fn encode_snapshot(snapshot: &SchemaSnapshot) -> Result<Vec<u8>> {
 
     out.u32(snapshot.tables.len() as u32);
     for table in &snapshot.tables {
-        encode_table(&mut out, table, snapshot.meta.format_version)?;
+        encode_table(&mut out, table, format_version)?;
     }
 
     // Lane A5-views: view section was introduced at format_version 4. Always
@@ -220,7 +246,7 @@ pub fn encode_snapshot(snapshot: &SchemaSnapshot) -> Result<Vec<u8>> {
     // Lane A5-triggers: trigger section was introduced at format_version 6.
     // Emit only when the snapshot's persisted version supports the section
     // — older catalogs round-trip without a trailing trigger block.
-    if snapshot.meta.format_version >= 6 {
+    if format_version >= 6 {
         out.u32(snapshot.triggers.len() as u32);
         for trigger in &snapshot.triggers {
             encode_trigger(&mut out, trigger)?;
@@ -233,7 +259,7 @@ pub fn encode_snapshot(snapshot: &SchemaSnapshot) -> Result<Vec<u8>> {
 pub fn decode_snapshot(bytes: &[u8]) -> Result<SchemaSnapshot> {
     let mut reader = BytesReader::new(bytes);
     let format_version = reader.u64()?;
-    if format_version > 7 {
+    if format_version > CATALOG_FORMAT_VERSION {
         return Err(Error::UnsupportedVersion(format_version as u16));
     }
     let meta = CatalogMeta {
@@ -366,6 +392,17 @@ fn decode_table(reader: &mut BytesReader<'_>, format_version: u64) -> Result<Tab
     for _ in 0..column_count {
         columns.push(decode_column(reader, format_version)?);
     }
+    if format_version < 8
+        && let Some(sql) = normalized_sql.as_deref()
+    {
+        // Before format 8 the declared collation lived only in the table
+        // SQL.
+        for (folded, collation) in super::collation::column_collations_from_create_table(sql) {
+            if let Some(column) = columns.iter_mut().find(|c| *c.folded == *folded) {
+                column.collation = Some(collation);
+            }
+        }
+    }
 
     let index_count = reader.u32()? as usize;
     let mut indexes = Vec::with_capacity(index_count);
@@ -433,6 +470,9 @@ fn encode_column(out: &mut BytesWriter, column: &ColumnDef, format_version: u64)
             }
         }
     }
+    if format_version >= 8 {
+        write_opt_str(out, column.collation.as_deref());
+    }
     Ok(())
 }
 
@@ -468,6 +508,11 @@ fn decode_column(reader: &mut BytesReader<'_>, format_version: u64) -> Result<Co
     } else {
         None
     };
+    let collation = if format_version >= 8 {
+        read_opt_box_str(reader)?
+    } else {
+        None
+    };
     Ok(ColumnDef {
         column_id,
         ordinal,
@@ -479,6 +524,7 @@ fn decode_column(reader: &mut BytesReader<'_>, format_version: u64) -> Result<Co
         default_value,
         default_expr,
         generated,
+        collation,
     })
 }
 
@@ -530,7 +576,11 @@ fn decode_index(reader: &mut BytesReader<'_>, format_version: u64) -> Result<Ind
     for _ in 0..key_count {
         keys.push(decode_index_key(reader, format_version)?);
     }
-    if let Some(sql) = normalized_sql.as_deref() {
+    // Format 8 stores each key's collation. Before it, a key had only the
+    // collation its CREATE INDEX text names.
+    if format_version < 8
+        && let Some(sql) = normalized_sql.as_deref()
+    {
         apply_index_key_collations_from_sql(&mut keys, sql);
     }
     let predicate_sql = if format_version >= 7 {
@@ -581,6 +631,9 @@ fn encode_index_key(out: &mut BytesWriter, key: &IndexKeyDef, format_version: u6
     }
     out.u8(key.sort_dir as u8);
     out.u8(key.null_order as u8);
+    if format_version >= 8 {
+        write_opt_str(out, key.collation.as_deref());
+    }
     Ok(())
 }
 
@@ -614,12 +667,17 @@ fn decode_index_key(reader: &mut BytesReader<'_>, format_version: u64) -> Result
         1 => NullOrder::Last,
         _ => return Err(Error::CatalogCorrupt("invalid null ordering")),
     };
+    let collation = if format_version >= 8 {
+        read_opt_box_str(reader)?
+    } else {
+        None
+    };
     Ok(IndexKeyDef {
         ordinal,
         source,
         sort_dir,
         null_order,
-        collation: None,
+        collation,
     })
 }
 

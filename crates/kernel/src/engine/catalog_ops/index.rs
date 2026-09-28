@@ -267,9 +267,18 @@ impl Engine {
                 let value = record
                     .value_at(&scratch, attnum as usize + col_offset)
                     .map_err(|_| Error::CorruptPage("index backfill: column out of range"))?;
-                let value = match (value, key.collation.as_deref()) {
-                    (crate::catalog::ValueRef::Text(text), Some("NOCASE")) => {
-                        OwnedValue::Text(std::sync::Arc::from(text.to_ascii_lowercase()))
+                // The key stores text as its collation compares it (Q5-10).
+                let value = match value {
+                    crate::catalog::ValueRef::Text(text) => {
+                        match crate::catalog::collation::normalize_key_text(
+                            text,
+                            key.collation.as_deref(),
+                        ) {
+                            std::borrow::Cow::Borrowed(same) if same.len() == text.len() => {
+                                value.to_owned()
+                            }
+                            normalized => OwnedValue::Text(std::sync::Arc::from(&*normalized)),
+                        }
                     }
                     _ => value.to_owned(),
                 };

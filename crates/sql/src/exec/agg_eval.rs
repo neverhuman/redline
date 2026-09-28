@@ -543,13 +543,15 @@ fn is_distinct_call(func: &sqlparser::ast::Function) -> bool {
     }
 }
 
-/// If `expr` is a `COLLATE` wrapper, return the named collation.
-fn expr_collation(expr: &Expr) -> Option<crate::collation::Collation> {
+/// The collation an aggregate argument deduplicates under: its `COLLATE`
+/// wrapper, else the declared collation of the column it names (Q5-10).
+fn expr_collation(expr: &Expr, group: &[SqlRow]) -> Option<crate::collation::Collation> {
     if let Expr::Collate { collation, .. } = expr {
         let name = collation.to_string();
         crate::collation::Collation::parse(&name)
     } else {
-        None
+        let row = group.first()?;
+        crate::exec::expr::coerce::column_collation(&row.context(), expr)
     }
 }
 
@@ -641,7 +643,7 @@ fn eval_group_function(
                         .iter()
                         .map(|a| match a {
                             FunctionArg::Unnamed(FunctionArgExpr::Expr(expr)) => {
-                                expr_collation(expr)
+                                expr_collation(expr, group)
                             }
                             _ => None,
                         })
@@ -716,7 +718,9 @@ fn eval_group_function(
             let mut seen: HashSet<Vec<u8>> = HashSet::new();
             let collation = if let FunctionArguments::List(list) = &func.args {
                 list.args.first().and_then(|a| match a {
-                    FunctionArg::Unnamed(FunctionArgExpr::Expr(expr)) => expr_collation(expr),
+                    FunctionArg::Unnamed(FunctionArgExpr::Expr(expr)) => {
+                        expr_collation(expr, group)
+                    }
                     _ => None,
                 })
             } else {
@@ -754,7 +758,9 @@ fn eval_group_function(
             let mut seen: HashSet<Vec<u8>> = HashSet::new();
             let collation = if let FunctionArguments::List(list) = &func.args {
                 list.args.first().and_then(|a| match a {
-                    FunctionArg::Unnamed(FunctionArgExpr::Expr(expr)) => expr_collation(expr),
+                    FunctionArg::Unnamed(FunctionArgExpr::Expr(expr)) => {
+                        expr_collation(expr, group)
+                    }
                     _ => None,
                 })
             } else {
@@ -901,7 +907,9 @@ fn eval_group_function(
             let mut seen: HashSet<Vec<u8>> = HashSet::new();
             let collation = if let FunctionArguments::List(list) = &func.args {
                 list.args.first().and_then(|a| match a {
-                    FunctionArg::Unnamed(FunctionArgExpr::Expr(expr)) => expr_collation(expr),
+                    FunctionArg::Unnamed(FunctionArgExpr::Expr(expr)) => {
+                        expr_collation(expr, group)
+                    }
                     _ => None,
                 })
             } else {
