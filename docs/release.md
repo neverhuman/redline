@@ -139,7 +139,7 @@ activated by renaming a new `current` link over the old one (`mv -T` or BSD
 `REDLINEDB_ROLLBACK=1` swaps them. Files the installer did not create are never
 overwritten; `REDLINEDB_MIGRATE_LEGACY=1` moves a pre-v5 flat installation into
 `versions/legacy-<time>/` first. `scripts/install-from-source.sh` activates
-source builds through the same installer.
+source builds through the same installer. `docs/install.md` is the user guide.
 
 `scripts/test-installer.sh` exercises the installer on every OS/architecture
 pair with shims (asset names, latest resolution, every refusal leaving the
@@ -148,7 +148,8 @@ at every call, two concurrent installers, rollback, legacy migration, the glibc
 2.35 and macOS 15 floors). On each platform's hosted runner
 `scripts/test-native-install.sh` installs the real candidate archive with
 `install.sh` through a file-transport curl and links a C program against the
-installation.
+installation, and `scripts/test-docs-quickstart.sh` runs the quick start of
+`docs/install.md` and `README.md` against it.
 
 ## Evidence and rollback
 

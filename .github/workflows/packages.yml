@@ -65,3 +65,5 @@ jobs:
         run: bash ops/ci/packages.sh runtime
       - name: Install the candidate with install.sh and link a C program against it
         run: bash ops/ci/packages.sh native-install
+      - name: Run the documented quick start against the candidate
+        run: bash ops/ci/packages.sh quickstart

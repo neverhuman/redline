@@ -113,11 +113,10 @@ against the v5 headers. There is no v4 compatibility alias.
   `scripts/check-publish-policy.sh` runs in the CI preflight.
 - The `redlinedb-tokio` and `redlinedb-sqlx` manifests point `repository` at
   `https://github.com/neverhuman/redline`.
-- For the integrator (not a release-note line): `README.md` still says
-  "Existing crates.io versions remain available" (there are none) and its
-  Rust dependency snippet still pins tag `v4.1.0`. The README rewrite should
-  use the snippet above and
-  link `docs/api-stability.md`. Its "Database files" section states that
+- For the integrator (not a release-note line): the README's Install section
+  (rewritten under DX-03 below) now uses the snippet above, says RedlineDB is
+  not on crates.io and links `docs/api-stability.md`. That page's "Database
+  files" section states that
   v5.0.0 writes index-format epoch 3 and that 4.x refuses such a database;
   that is the sql lane's commit 4c5141381 (`INDEX_VERSION` 2 to 3), so the
   sentence is true only once that commit is merged. `docs/testing.md` still
@@ -273,12 +272,12 @@ against the v5 headers. There is no v4 compatibility alias.
   `neverhuman/redline` (by name and id), refuses archives whose provenance
   names another repository or tag, and passes `--repo neverhuman/redline` to
   `gh` explicitly. `ops/release/authority.env` holds the constants.
-- For the integrator (not a release-note line): README and
-  `docs/manual/02-start-here.md` still show `VERSION=v4.1.0` installer
-  examples. `neverhuman/redline` has no published release yet (its
-  `releases/latest` redirects to `/releases`), and archives from before this
-  change would be refused anyway, so those examples need the v5.0.0 tag
-  once it is published.
+- For the integrator (not a release-note line): README, `docs/install.md`
+  and `docs/manual/02-start-here.md` now install `v5.0.0` with the
+  `install.sh` of that tag. `neverhuman/redline` has no published release
+  yet (its `releases/latest` redirects to `/releases`), so those commands
+  return 404 until v5.0.0 is published; CI runs them against each
+  candidate archive instead.
 
 ## Installer: one version at a time, never a mix (DX-04, DX-06)
 
@@ -359,3 +358,39 @@ against the v5 headers. There is no v4 compatibility alias.
   doctor. It named `just security-local`, which never existed; the lane is
   `just security`. The jankurai notes moved to
   `docs/contributing/tooling.md`.
+
+## One install guide that CI runs (L-08, DX-03)
+
+- `docs/install.md` is the installation guide. It held the jankurai
+  scaffolding instructions; it now covers the release packages (a quick
+  start, `SELECT 1`, a database kept on disk, pinning a version and a digest,
+  what the installer checks, the installed layout, upgrades, rollback, the
+  lock, migrating a flat install, removal), building from source, the Rust
+  git dependency (not on crates.io) and linking the C library.
+  `docs/install_redlinedb.md`, which offered the v1.0.1 installer, described
+  `install.sh` as a source build and suggested aliasing `sqlite3`, now only
+  points to it.
+- The README's Install section installs `v5.0.0` from that tag's own
+  `install.sh` (it fetched `install.sh` from `main`), runs `SELECT 1` and a
+  database on disk with the installed `redlinedb`, and uses CLI commands that
+  exist (`stats`, `backup`). It no longer shows `rtk cargo run` or the
+  nonexistent `exec` subcommand, and no longer claims crates.io versions.
+  Its embedding example is `crates/redlinedb/examples/readme.rs`.
+  `docs/manual/02-start-here.md` and `09-operate.md` describe the same
+  install, clone and layout.
+- `scripts/test-docs-quickstart.sh` runs every block marked
+  `bash quickstart` in `docs/install.md` and the README, in a fresh `HOME`
+  with `PATH=/usr/bin:/bin` and cargo, rustc, cc, node, npm, just and rtk
+  made to fail, against each platform's candidate archive in the `packages`
+  workflow, and checks each `# prints:` line (`SELECT 1` must print exactly
+  `1`). With `--static`, which the CI preflight runs, it checks that the
+  README's Rust example is the example file verbatim and that the active docs
+  carry no `jankurai init`, `VERSION=v1.0.1`, `/usr/local/bin/sqlite3`, old
+  repository name or installer fetched from `main` (migration records,
+  archived pages and these `docs/launch/` drafts may quote them). The preflight also runs
+  `cargo build --locked -p redlinedb --example readme`.
+- For the integrator (not a release-note line): this lane edited only the
+  README's Install, Development Notes and Contributing sections, outside the
+  generated blocks. The README-wide rewrite should keep the
+  ```` ```bash quickstart ```` and ```` ```rust readme ```` blocks (or move
+  them) so the checks keep running.

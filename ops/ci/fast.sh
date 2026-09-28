@@ -33,6 +33,7 @@ run_preflight() {
     # here rather than discovered by a failed build.
     bash scripts/ci-doctor.sh --profile core
     bash scripts/test-ci-doctor.sh
+    bash scripts/test-docs-quickstart.sh --static
     # The root invocation only reaches the root workspace. Each subrepo is its
     # own cargo workspace, so `cargo fmt --check` here reports clean while the
     # `components (<name>)` jobs run fmt inside the subrepo and fail -- a full
@@ -47,6 +48,8 @@ run_preflight() {
     bash ops/ci/tests/release-authority.sh
     bash scripts/parity/lint-sqlite-parity-ledger.sh
     cargo build --locked -p redlinedb-cli --bin redlinedb
+    # README.md's embedding example (test-docs-quickstart.sh keeps them equal).
+    cargo build --locked -p redlinedb --example readme
     local smoke_directory smoke_binary
     smoke_directory=$(mktemp -d)
     smoke_binary="${CARGO_TARGET_DIR:-$PWD/target}/debug/redlinedb"

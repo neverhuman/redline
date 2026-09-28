@@ -12,7 +12,9 @@ case "${1:?package lane required}" in
   installer) exec bash scripts/test-installer.sh ;;
   runtime) exec bash scripts/test-packages.sh ;;
   # The real install.sh against this platform's candidate archive through a
-  # file-transport curl, then a C program linked against the installation.
+  # file-transport curl, then a C program linked against the installation;
+  # and the documented quick start with no development toolchain on PATH.
   native-install) exec bash scripts/test-native-install.sh ;;
+  quickstart) exec bash scripts/test-docs-quickstart.sh ;;
   *) exit 64 ;;
 esac

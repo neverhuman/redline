@@ -14,6 +14,7 @@ required profile.
 | `contributor` | `just fast`, `just clippy`, `just medium`, `./scripts/check_file_sizes.sh` | core, plus just, cargo-nextest 0.9.133, git, jq and curl. rtk is optional; the `just` lanes run commands directly without it. |
 | `required` | `just required` (= `just pr-ci`), `just security`, `just redline-testing-official` | contributor, plus Node 22 and npm, Playwright's Chromium, Docker (or `REDLINE_TESTING_POSTGRES_URL`) for the PostgreSQL 16.15 lane, the pinned jankurai 1.6.11 (`bash ops/ci/install-github-tools.sh`), cargo-audit 0.22.1, cargo-deny 0.19.8 and gitleaks 8.21.2. Linux x86_64 only; CI runs it for every pull request. |
 
+Running a release package needs none of these; see [docs/install.md](docs/install.md).
 Jankurai and the audit lanes are described in
 [docs/contributing/tooling.md](docs/contributing/tooling.md).
 
@@ -32,8 +33,9 @@ Jankurai and the audit lanes are described in
 - Protected lane, as CI runs it: `just required`
 - File-size gate: `./scripts/check_file_sizes.sh`
 - Installer and packages: `bash scripts/test-installer.sh` needs no Rust;
-  `bash scripts/test-native-install.sh <dir>` runs the installer against
-  archives from `scripts/package-release.sh`.
+  `bash scripts/test-native-install.sh <dir>` and
+  `bash scripts/test-docs-quickstart.sh <dir>` run the installer and the
+  documented quick start against archives from `scripts/package-release.sh`.
 
 ## Receipts
 

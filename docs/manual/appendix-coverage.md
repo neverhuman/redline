@@ -59,5 +59,5 @@ A case leaves the open list when a raw beyond-SQLite JSONL record shows `status`
 | Why some Postgres cases are deferred in the skip list | `docs/beyond-postgres-skips.md` |
 | RQL document shape | `docs/rql.md` |
 | Crate boundaries | `docs/boundaries.md` |
-| Installer details that drift | `docs/install_redlinedb.md` is older than [Start here](02-start-here.md) |
+| Installer details | `docs/install.md`, the one installation guide; [Start here](02-start-here.md) is the short path |
 

@@ -39,6 +39,7 @@ case "${1:-all}" in
     bash scripts/test-installer.sh
     bash scripts/test-packages.sh "$OUTPUT_DIR"
     bash scripts/test-native-install.sh "$OUTPUT_DIR"
+    bash scripts/test-docs-quickstart.sh "$OUTPUT_DIR"
     ;;
   all)
     for lane in engine testing central web release-tools integration parity packaging; do "$0" "$lane"; done

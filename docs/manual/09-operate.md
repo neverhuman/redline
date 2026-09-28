@@ -44,15 +44,15 @@ A read-only open (`OpenOptions.read_only`) is not a shared reader. It takes the 
 
 ## Install layout
 
-A release install puts `redlinedb` and `redlinedb-server` on `PATH` under the prefix you chose, default `~/.local`. Headers and the native library are in that prefix as well. The optional packages are:
+A release install keeps each version in `PREFIX/lib/redlinedb/versions/<tag>/` (default prefix `~/.local`). `PREFIX/lib/redlinedb/current` names the active version and `previous` the one before it. `PREFIX/bin/redlinedb`, `redlinedb-server`, the native library in `PREFIX/lib`, and the headers in `PREFIX/include` are links through `current`, so one rename switches all of them and a failed upgrade leaves the old version whole. `REDLINEDB_ROLLBACK=1` switches back. Installing never touches a database directory. [docs/install.md](../install.md) has the full layout, rollback, and removal. The packages are:
 
 | Package | What it is |
 | --- | --- |
-| `redlinedb-v4.1.0-<platform>.tar.gz` | Engine, CLI, server, FFI |
-| `redline-testing-v4.1.0-<platform>.tar.gz` | The conformance runner |
-| `redline-web-v4.1.0-<platform>.tar.gz` | The web console |
+| `redlinedb-v5.0.0-<platform>.tar.gz` | Engine, CLI, server, FFI (what the installer installs) |
+| `redline-testing-v5.0.0-<platform>.tar.gz` | The conformance runner |
+| `redline-web-v5.0.0-<platform>.tar.gz` | The web console |
 
-Each package carries dependency notices, an SBOM, and the parent commit it was built from. Verify the checksum before you run the binary on a machine an agent can reach. `REDLINEDB_SHA256` makes the installer require the digest you pass.
+Each package carries dependency notices, an SBOM, and build provenance naming the repository, tag, and commit it was built from; for an installed version they are in `PREFIX/lib/redlinedb/current/share/redlinedb/`. The installer verifies the checksum and the provenance before it writes anything. `REDLINEDB_SHA256` makes it also require the digest you pass, and `REDLINEDB_VERIFY_ATTESTATION=1` checks the GitHub build attestation.
 
 ## Upgrading
 
