@@ -11,6 +11,8 @@ mod memory;
 mod normalize;
 mod order;
 mod record_sink;
+#[cfg(test)]
+mod reference_contract_tests;
 mod report;
 mod rql_phase1;
 mod runner;

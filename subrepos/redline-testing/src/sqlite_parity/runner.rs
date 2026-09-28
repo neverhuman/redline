@@ -748,13 +748,22 @@ mod tests {
             "{diagnostic}"
         );
 
-        // Both engines succeed where the case declares a failure.
+        // Both engines succeed where the case declares a failure. The exit
+        // code is checked first, so it is what the diagnostic names (see
+        // reference_contract_tests for each check on its own).
         let verdict = judge_sample(
             &case,
             &output("sqlite3", Some(0), "1\n", ""),
             &output("redlinedb", Some(0), "1\n", ""),
         );
         assert_eq!(verdict.reason, VerdictReason::ReferenceContractFailure);
+        assert!(
+            verdict
+                .diagnostic
+                .as_deref()
+                .is_some_and(|diagnostic| diagnostic.contains("exited 0; case expects exit 1")),
+            "{verdict:?}"
+        );
 
         // Both engines print the declared stdout fragment only on stderr.
         let mut stdout_case = unique_case();
