@@ -74,11 +74,8 @@ fn version_identifies_redlinedb_release_and_sqlite_compatibility() {
         stdout.contains(concat!("redlinedb v", env!("CARGO_PKG_VERSION"))),
         "stdout={stdout}"
     );
-    assert!(
-        stdout.contains("SQLite 3.45.1 compatibility"),
-        "stdout={stdout}"
-    );
-    assert_ne!(stdout.trim(), "3.45.1");
+    // The version names RedlineDB only; it claims no SQLite feature level.
+    assert!(!stdout.contains("SQLite"), "stdout={stdout}");
 }
 
 #[test]

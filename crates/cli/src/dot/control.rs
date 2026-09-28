@@ -9,8 +9,6 @@ use std::time::Duration;
 use super::display::parse_bool;
 use super::{CliState, DotOutcome, ExplainSetting};
 
-const SQLITE_COMPAT_VERSION: &str = "SQLite 3.45.1 compatibility";
-
 pub fn exit(args: &[&str]) -> Result<DotOutcome, String> {
     let code = match args.first() {
         Some(raw) => raw
@@ -90,10 +88,7 @@ pub fn crlf(state: &mut CliState, args: &[&str]) -> Result<DotOutcome, String> {
 pub fn version(state: &mut CliState, _args: &[&str]) -> Result<DotOutcome, String> {
     state
         .output
-        .write_line(&format!(
-            "redlinedb v{} ({SQLITE_COMPAT_VERSION})",
-            env!("CARGO_PKG_VERSION")
-        ))
+        .write_line(&format!("redlinedb v{}", env!("CARGO_PKG_VERSION")))
         .map_err(|err| err.to_string())?;
     Ok(DotOutcome::Ok)
 }

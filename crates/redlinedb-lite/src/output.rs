@@ -20,10 +20,7 @@ pub fn print_help() {
 pub fn print_version() {
     let stdout = io::stdout();
     let mut h = stdout.lock();
-    let line = format!(
-        "redlinedb v{} (SQLite 3.45.1 compatibility)\n",
-        env!("CARGO_PKG_VERSION")
-    );
+    let line = format!("redlinedb v{}\n", env!("CARGO_PKG_VERSION"));
     let _ = h.write_all(line.as_bytes());
     let _ = h.flush();
 }

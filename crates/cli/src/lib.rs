@@ -44,16 +44,12 @@ use render::{
     write_stream_delimited_value,
 };
 
-const REDLINEDB_VERSION_LINE: &str = concat!(
-    "redlinedb v",
-    env!("CARGO_PKG_VERSION"),
-    " (SQLite 3.45.1 compatibility)"
-);
+const REDLINEDB_VERSION_LINE: &str = concat!("redlinedb v", env!("CARGO_PKG_VERSION"));
 
 #[derive(Parser, Debug)]
 #[command(
     name = "redlinedb",
-    about = "RedlineDB CLI (SQLite Drop-in)",
+    about = "RedlineDB CLI (SQLite-style shell; see the README for what is compatible)",
     disable_help_flag = true,
     disable_version_flag = true
 )]

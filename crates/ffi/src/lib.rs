@@ -6,8 +6,9 @@
 //!    has its definition (with `#[unsafe(no_mangle)]` and `extern "C"`) in
 //!    one of the per-area submodules below. The cdylib's exported symbols
 //!    must include every `rldb_*` listed in those modules.
-//! 2. **SQLite-compatible (`sqlite3_*`)** — drop-in replacement entry
-//!    points defined in [`sqlite3_api`]. Each entry point delegates to
+//! 2. **SQLite-shaped (`sqlite3_*`)** — an experimental subset of
+//!    SQLite's entry points, defined in [`sqlite3_api`]; not a
+//!    `libsqlite3` replacement. Each entry point delegates to
 //!    its `rldb_*` counterpart and layers on the status-recording
 //!    side-effects callers of libsqlite3 expect.
 //!
