@@ -23,7 +23,7 @@ pub(crate) use redlinedb_kernel::catalog::{int_real_cmp, sqlite_text_is_true};
 // ScalarProgram VM tests) resolve the same submodule.
 #[path = "numeric/sum_acc.rs"]
 mod sum_acc;
-pub(crate) use sum_acc::SumAcc;
+pub(crate) use sum_acc::{IntRun, SumAcc, SumParts};
 #[path = "numeric/text_number.rs"]
 pub(crate) mod text_number;
 

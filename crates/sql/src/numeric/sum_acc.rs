@@ -22,7 +22,7 @@ use crate::value::SqlValue;
 /// `kahanBabuskaNeumaierStepInt64` does, so no integer bits are lost.
 const KBN_SPLIT: i64 = 4_503_599_627_370_496;
 
-#[derive(Debug, Clone, Copy, Default, PartialEq)]
+#[derive(Debug, Clone, Copy, PartialEq)]
 pub struct SumAcc {
     r_sum: f64,
     r_err: f64,
@@ -34,12 +34,52 @@ pub struct SumAcc {
     overflowed: bool,
     /// A non-INTEGER input arrived; SQLite then drops the overflow error.
     saw_non_int: bool,
+    /// While every input is an INTEGER (and none was removed): the exact
+    /// sum, and the lowest and highest running sum since this accumulator
+    /// started at 0. [`SumAcc::merge`] decides from them, exactly and in
+    /// input order, whether the running sum of the merged inputs left the
+    /// i64 range.
+    run: Option<IntRun>,
+}
+
+/// The integer-only history [`SumAcc::merge`] needs.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub struct IntRun {
+    pub total: i128,
+    pub lowest: i128,
+    pub highest: i128,
+}
+
+impl Default for SumAcc {
+    fn default() -> Self {
+        Self {
+            r_sum: 0.0,
+            r_err: 0.0,
+            i_sum: 0,
+            cnt: 0,
+            approx: false,
+            overflowed: false,
+            saw_non_int: false,
+            run: Some(IntRun::default()),
+        }
+    }
 }
 
 /// Flag bits for [`SumAcc::to_parts`] / [`SumAcc::from_parts`].
 const FLAG_APPROX: i64 = 1;
 const FLAG_OVERFLOWED: i64 = 2;
 const FLAG_SAW_NON_INT: i64 = 4;
+
+/// A [`SumAcc`] as plain values, for a spill file.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct SumParts {
+    pub cnt: i64,
+    pub i_sum: i64,
+    pub r_sum: f64,
+    pub r_err: f64,
+    pub flags: i64,
+    pub run: Option<IntRun>,
+}
 
 impl SumAcc {
     pub fn new() -> Self {
@@ -53,6 +93,11 @@ impl SumAcc {
 
     pub fn step_int(&mut self, v: i64) {
         self.cnt += 1;
+        if let Some(run) = &mut self.run {
+            run.total += i128::from(v);
+            run.lowest = run.lowest.min(run.total);
+            run.highest = run.highest.max(run.total);
+        }
         if self.approx {
             self.kbn_step_int(v);
             return;
@@ -70,6 +115,7 @@ impl SumAcc {
     pub fn step_real(&mut self, v: f64) {
         self.cnt += 1;
         self.saw_non_int = true;
+        self.run = None;
         if !self.approx {
             self.start_approx();
         }
@@ -116,6 +162,8 @@ impl SumAcc {
             SqlValue::Blob(v) => (None, sqlite_numeric_prefix(v)),
         };
         self.cnt -= 1;
+        // A sliding frame never merges; its history stops being one run.
+        self.run = None;
         if !self.approx {
             // Only INTEGER inputs reach an exact sum; `sqlite3_value_int64`
             // of anything else would be its truncation.
@@ -175,10 +223,16 @@ impl SumAcc {
     }
 
     /// Fold a partial accumulator that saw the inputs after this one. Used
-    /// when a spilled hash aggregate merges its partial states. Exact for
-    /// the result value; an overflow is detected from the two partial sums,
-    /// so an overflow that happened only inside `later`'s own running sum
-    /// and cancelled out again is seen as one there.
+    /// when a spilled hash aggregate merges its partial states.
+    ///
+    /// While both partials saw only INTEGERs the merge is exact: the running
+    /// sum of the merged inputs is this partial's running sums followed by
+    /// this partial's total plus each of `later`'s, so it left the i64 range
+    /// exactly when this partial's did or when this total plus `later`'s
+    /// lowest or highest running sum lies outside the range. `[MAX] | [1,
+    /// -3]` overflows as one pass does, and `[-10] | [MAX, 1, -1]` does not,
+    /// although `later` alone overflowed. Once a non-INTEGER arrived SQLite
+    /// never reports the overflow, and the REAL sums merge.
     pub fn merge(&mut self, later: &SumAcc) {
         if later.cnt == 0 {
             return;
@@ -187,6 +241,19 @@ impl SumAcc {
             *self = *later;
             return;
         }
+        if let (Some(mine), Some(theirs)) = (self.run, later.run) {
+            let base = mine.total;
+            *self = Self::from_run(
+                self.cnt + later.cnt,
+                IntRun {
+                    total: base + theirs.total,
+                    lowest: mine.lowest.min(base + theirs.lowest),
+                    highest: mine.highest.max(base + theirs.highest),
+                },
+            );
+            return;
+        }
+        self.run = None;
         self.cnt += later.cnt;
         self.saw_non_int |= later.saw_non_int;
         self.overflowed |= later.overflowed;
@@ -212,8 +279,30 @@ impl SumAcc {
         }
     }
 
-    /// Serialise for a spill file: (count, int sum, real sum, error, flags).
-    pub fn to_parts(self) -> (i64, i64, f64, f64, i64) {
+    /// The accumulator of `cnt` INTEGER inputs whose history is `run`: exact
+    /// while the running sum stayed in the i64 range, otherwise overflowed
+    /// with the REAL sum seeded from the exact total.
+    fn from_run(cnt: i64, run: IntRun) -> Self {
+        let in_range = |v: i128| v >= i128::from(i64::MIN) && v <= i128::from(i64::MAX);
+        let overflowed = !in_range(run.lowest) || !in_range(run.highest);
+        let mut acc = Self {
+            cnt,
+            run: Some(run),
+            ..Self::default()
+        };
+        if overflowed {
+            acc.overflowed = true;
+            acc.approx = true;
+            acc.r_sum = run.total as f64;
+            acc.r_err = (run.total - acc.r_sum as i128) as f64;
+        } else {
+            acc.i_sum = run.total as i64;
+        }
+        acc
+    }
+
+    /// Serialise for a spill file.
+    pub fn to_parts(self) -> SumParts {
         let mut flags = 0;
         if self.approx {
             flags |= FLAG_APPROX;
@@ -224,18 +313,26 @@ impl SumAcc {
         if self.saw_non_int {
             flags |= FLAG_SAW_NON_INT;
         }
-        (self.cnt, self.i_sum, self.r_sum, self.r_err, flags)
+        SumParts {
+            cnt: self.cnt,
+            i_sum: self.i_sum,
+            r_sum: self.r_sum,
+            r_err: self.r_err,
+            flags,
+            run: self.run,
+        }
     }
 
-    pub fn from_parts(cnt: i64, i_sum: i64, r_sum: f64, r_err: f64, flags: i64) -> Self {
+    pub fn from_parts(parts: SumParts) -> Self {
         Self {
-            r_sum,
-            r_err,
-            i_sum,
-            cnt,
-            approx: flags & FLAG_APPROX != 0,
-            overflowed: flags & FLAG_OVERFLOWED != 0,
-            saw_non_int: flags & FLAG_SAW_NON_INT != 0,
+            r_sum: parts.r_sum,
+            r_err: parts.r_err,
+            i_sum: parts.i_sum,
+            cnt: parts.cnt,
+            approx: parts.flags & FLAG_APPROX != 0,
+            overflowed: parts.flags & FLAG_OVERFLOWED != 0,
+            saw_non_int: parts.flags & FLAG_SAW_NON_INT != 0,
+            run: parts.run,
         }
     }
 
@@ -386,7 +483,66 @@ mod tests {
         split.merge(&sum_of(&values[1..]));
         assert_eq!(whole.sum(), Err(Error::IntegerOverflow));
         assert_eq!(split.sum(), Err(Error::IntegerOverflow));
-        let (cnt, i_sum, r_sum, r_err, flags) = split.to_parts();
-        assert_eq!(SumAcc::from_parts(cnt, i_sum, r_sum, r_err, flags), split);
+        assert_eq!(SumAcc::from_parts(split.to_parts()), split);
+    }
+
+    fn split_sum(first: &[i64], rest: &[i64]) -> SumAcc {
+        let ints = |values: &[i64]| -> Vec<SqlValue> {
+            values.iter().map(|v| SqlValue::Integer(*v)).collect()
+        };
+        let mut acc = sum_of(&ints(first));
+        // Through the spill encoding, as a spilled partial travels.
+        acc = SumAcc::from_parts(acc.to_parts());
+        acc.merge(&SumAcc::from_parts(sum_of(&ints(rest)).to_parts()));
+        acc
+    }
+
+    #[test]
+    fn merge_detects_overflow_in_input_order() {
+        let max = i64::MAX;
+        let min = i64::MIN;
+        let cases: &[&[i64]] = &[
+            &[max, 1, -3],
+            &[-10, max, 1, -1],
+            &[max, -1, 2],
+            &[min, -1, 1],
+            &[1, min, -1, 2],
+            &[max, max, min, min],
+            &[5, -5, max, -max],
+            &[max - 5, 3, 4],
+            &[1, 2, 3],
+        ];
+        for values in cases {
+            let whole = sum_of(
+                &values
+                    .iter()
+                    .map(|v| SqlValue::Integer(*v))
+                    .collect::<Vec<_>>(),
+            );
+            for cut in 1..values.len() {
+                let split = split_sum(&values[..cut], &values[cut..]);
+                assert_eq!(split.sum(), whole.sum(), "{values:?} cut at {cut}");
+                assert_eq!(split.total(), whole.total(), "{values:?} cut at {cut}");
+                assert_eq!(split.avg(), whole.avg(), "{values:?} cut at {cut}");
+            }
+        }
+        assert_eq!(
+            split_sum(&[max], &[1, -3]).sum(),
+            Err(Error::IntegerOverflow)
+        );
+        assert_eq!(
+            split_sum(&[-10], &[max, 1, -1]).sum(),
+            Ok(SqlValue::Integer(max - 10))
+        );
+    }
+
+    #[test]
+    fn merge_after_a_real_input_stays_approximate() {
+        let mut acc = sum_of(&[SqlValue::Real(0.5), SqlValue::Integer(i64::MAX)]);
+        acc.merge(&sum_of(&[SqlValue::Integer(1)]));
+        assert!(matches!(acc.sum(), Ok(SqlValue::Real(_))));
+        let mut acc = sum_of(&[SqlValue::Integer(i64::MAX)]);
+        acc.merge(&sum_of(&[SqlValue::Integer(1), SqlValue::Real(0.5)]));
+        assert!(matches!(acc.sum(), Ok(SqlValue::Real(_))));
     }
 }

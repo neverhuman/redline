@@ -15,7 +15,7 @@ use std::sync::Arc;
 use super::spill::{SpillFile, SpillWriter};
 use crate::error::{Error, Result};
 use crate::exec::expr::row_width;
-use crate::numeric::SumAcc;
+use crate::numeric::{IntRun, SumAcc, SumParts};
 use crate::value::{SqlValue, canonicalize, compare_values};
 
 /// One aggregate column.
@@ -115,16 +115,28 @@ impl AccState {
         })
     }
 
-    /// Spill encoding: [`STATE_WIDTH`] values per aggregate.
+    /// Spill encoding: [`STATE_WIDTH`] values per aggregate. The sum's
+    /// integer-only history ([`IntRun`]) is a 48-byte BLOB, or NULL once a
+    /// non-INTEGER arrived.
     fn encode_into(&self, row: &mut Vec<SqlValue>) {
-        let (cnt, i_sum, r_sum, r_err, flags) = self.sum.to_parts();
+        let parts = self.sum.to_parts();
         row.push(SqlValue::Integer(self.count));
-        row.push(SqlValue::Integer(cnt));
-        row.push(SqlValue::Integer(i_sum));
-        row.push(SqlValue::Real(r_sum));
-        row.push(SqlValue::Real(r_err));
-        row.push(SqlValue::Integer(flags));
+        row.push(SqlValue::Integer(parts.cnt));
+        row.push(SqlValue::Integer(parts.i_sum));
+        row.push(SqlValue::Real(parts.r_sum));
+        row.push(SqlValue::Real(parts.r_err));
+        row.push(SqlValue::Integer(parts.flags));
         row.push(self.extremum.clone().unwrap_or(SqlValue::Null));
+        row.push(match parts.run {
+            None => SqlValue::Null,
+            Some(run) => {
+                let mut bytes = Vec::with_capacity(48);
+                for v in [run.total, run.lowest, run.highest] {
+                    bytes.extend_from_slice(&v.to_le_bytes());
+                }
+                SqlValue::Blob(bytes.into())
+            }
+        });
     }
 
     fn decode(kind: AggKind, state: &[SqlValue]) -> Self {
@@ -136,10 +148,32 @@ impl AccState {
             SqlValue::Real(v) => v,
             _ => 0.0,
         };
+        let run = match &state[7] {
+            SqlValue::Blob(bytes) if bytes.len() == 48 => {
+                let at = |i: usize| {
+                    let mut word = [0_u8; 16];
+                    word.copy_from_slice(&bytes[i * 16..i * 16 + 16]);
+                    i128::from_le_bytes(word)
+                };
+                Some(IntRun {
+                    total: at(0),
+                    lowest: at(1),
+                    highest: at(2),
+                })
+            }
+            _ => None,
+        };
         Self {
             kind,
             count: int_at(0),
-            sum: SumAcc::from_parts(int_at(1), int_at(2), real_at(3), real_at(4), int_at(5)),
+            sum: SumAcc::from_parts(SumParts {
+                cnt: int_at(1),
+                i_sum: int_at(2),
+                r_sum: real_at(3),
+                r_err: real_at(4),
+                flags: int_at(5),
+                run,
+            }),
             extremum: match &state[6] {
                 SqlValue::Null => None,
                 other => Some(other.clone()),
@@ -149,7 +183,7 @@ impl AccState {
 }
 
 /// Values one spilled aggregate state occupies in a spill row.
-const STATE_WIDTH: usize = 7;
+const STATE_WIDTH: usize = 8;
 
 /// Hash group-by aggregator. Spills partial groups when the hash table
 /// exceeds the budget; the spill format is one (key, partial-state) record
@@ -531,6 +565,54 @@ mod tests {
         let rows = agg.finalize().expect("finalize");
         for (_, values) in rows {
             assert_eq!(values[0], SqlValue::Real(4_611_686_018_427_387_904.0));
+        }
+    }
+
+    /// A spill between a group's rows must not change when `sum()`
+    /// overflows: `[MAX] | [1, -3]` overflows (the running sum passes MAX
+    /// + 1) and `[-10] | [MAX, 1, -1]` does not, although the second
+    /// partial overflows on its own. A budget of one group keeps a group's
+    /// later rows together in one partial.
+    #[test]
+    fn sum_overflow_follows_input_order_across_a_spill() {
+        let one_group = crate::exec::sql_equiv::equiv_key(&key1(0)).len() + 8;
+        let cases: [(&[i64], &[i64], Result<SqlValue>); 2] = [
+            (&[i64::MAX], &[1, -3], Err(Error::IntegerOverflow)),
+            (
+                &[-10],
+                &[i64::MAX, 1, -1],
+                Ok(SqlValue::Integer(i64::MAX - 10)),
+            ),
+        ];
+        for (first, rest, want) in cases {
+            let root = tempdir().expect("tempdir");
+            let mut agg = HashAggregator::new(
+                vec![AggKind::Sum],
+                one_group,
+                1024 * 1024,
+                root.path().to_path_buf(),
+            );
+            for v in first {
+                agg.observe(key1(0), &[SqlValue::Integer(*v)])
+                    .expect("observe");
+            }
+            // A second group overflows the budget: both partials spill.
+            agg.observe(key1(1), &[SqlValue::Integer(1)])
+                .expect("observe");
+            assert!(agg.spilled_bytes() > 0, "expected a spill");
+            for v in rest {
+                agg.observe(key1(0), &[SqlValue::Integer(*v)])
+                    .expect("observe");
+            }
+            assert_eq!(agg.group_count(), 1, "the later rows share one partial");
+            let got = agg.finalize().map(|rows| {
+                rows.into_iter()
+                    .find(|(key, _)| key[0] == SqlValue::Integer(0))
+                    .expect("group 0")
+                    .1[0]
+                    .clone()
+            });
+            assert_eq!(got, want, "{first:?} | {rest:?}");
         }
     }
 }
