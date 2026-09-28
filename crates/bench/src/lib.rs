@@ -3,6 +3,7 @@ mod chaos;
 pub mod checksum;
 pub mod config;
 mod cross_engine;
+pub mod durability_evidence;
 mod engine;
 pub mod failpoint_matrix;
 pub mod fuzz;
@@ -66,6 +67,11 @@ pub fn run(cli: Cli) -> Result<()> {
             }
         }
         config::Command::FailpointChild(args) => failpoint_matrix::run_child(&args)?,
+        config::Command::DurabilityEvidence(args) => {
+            let receipt = durability_evidence::run(&args)?;
+            durability_evidence::write_and_check(&args.out, &receipt)?;
+        }
+        config::Command::DurabilityEvidenceVerify(args) => durability_evidence::verify(&args)?,
         config::Command::Gates(args) => {
             let records = report::read_jsonl(&args.input)?;
             let summary = gates::evaluate_records(&records);

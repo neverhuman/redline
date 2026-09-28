@@ -25,6 +25,10 @@ pub enum Command {
     Recover(RecoverArgs),
     RecoverMatrix(RecoverMatrixArgs),
     FailpointMatrix(FailpointMatrixArgs),
+    // Workplan R10: crash receipt for the shipped `redlinedb` shell, and the
+    // check that a receipt backs a documented durability claim.
+    DurabilityEvidence(crate::durability_evidence::DurabilityEvidenceArgs),
+    DurabilityEvidenceVerify(crate::durability_evidence::DurabilityEvidenceVerifyArgs),
     Gates(GatesArgs),
     #[command(hide = true)]
     RecoverChild(RecoverChildArgs),
