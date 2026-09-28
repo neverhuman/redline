@@ -103,7 +103,7 @@ or combined fragment. That is why 00142 changed.
 | 00194 | `OPT_IFEXISTS_NEGATIVE_TEMPFILE` | `unknown option: -ifexists` | `-ifexists` refuses the missing file |
 | 00199 | `OPT_PAGECACHE` | stdout `1` | a `Page cache size increased ...` line, then `1` |
 | 00219, 00220 | `UPDATE_LIMIT_OPTIONAL`, `DELETE_LIMIT_OPTIONAL` | exit 0 with updated rows | exit 1, `near "ORDER": syntax error` (declared shared rejection) |
-| 00222 | `OPT_ESCAPE_SYMBOL` | fragment `\n` (RedlineDB's output) | the newline stays unescaped |
+| 00222 | `OPT_ESCAPE_SYMBOL` | fragment `\n` (RedlineDB's output) for `SELECT char(10)` | `SELECT char(1)\|\|'x'` prints `␁x` (U+2401); a newline is unescaped in every mode, so the old statement could not tell whether `-escape` did anything |
 | 00226 | `OPT_NOFOLLOW_CATALOG` | exit 0 | exit 1, `-nofollow` refuses the missing file |
 
 The target is held to the same declared contract: a RedlineDB run that exits

@@ -159,7 +159,7 @@
       "case_id": "00222",
       "name": "OPT_ESCAPE_SYMBOL",
       "stage": "target_semantic_failure",
-      "reason": "`-escape symbol` prints char(10) as the two characters `\\n`; sqlite3 3.53.1 prints the newline itself, so stdout lacks the declared blank line.",
+      "reason": "`-escape symbol` prints char(1) as the raw 0x01 byte where sqlite3 3.53.1 prints U+2401, so stdout lacks the declared `\u2401x`; RedlineDB does not map control characters to their U+2400 symbols.",
       "owner": "Phase 4l: RedlineDB CLI dot-command and option output"
     },
     {
@@ -775,7 +775,7 @@
       "case_id": "00222",
       "name": "OPT_ESCAPE_SYMBOL",
       "stage": "target_semantic_failure",
-      "reason": "`-escape symbol` prints char(10) as the two characters `\\n`; sqlite3 3.53.1 prints the newline itself, so stdout lacks the declared blank line.",
+      "reason": "`-escape symbol` prints char(1) as the raw 0x01 byte where sqlite3 3.53.1 prints U+2401, so stdout lacks the declared `\u2401x`; RedlineDB does not map control characters to their U+2400 symbols.",
       "owner": "Phase 4l: RedlineDB CLI dot-command and option output"
     },
     {

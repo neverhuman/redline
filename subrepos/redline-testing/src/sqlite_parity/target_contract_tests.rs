@@ -250,3 +250,39 @@ fn stderr_on_success_is_compared_byte_for_byte() {
         "{verdict:?}"
     );
 }
+
+#[test]
+fn case_00222_fails_a_target_that_ignores_escape_symbol() {
+    // What the pinned sqlite3 3.53.1 prints for the case's statement under
+    // `-escape symbol`, and with no escaping at all (`-escape off`, or a
+    // shell that ignores the option). A statement whose two outputs are
+    // the same cannot tell whether the option did anything.
+    let case = corpus_case(222);
+    assert_eq!(case.args[..2], ["-escape", "symbol"], "{:?}", case.args);
+    let statement = case.args.last().expect("statement").as_str();
+    let (symbol, off): (&[u8], &[u8]) = match statement {
+        "SELECT char(10);" => (b"\n\n", b"\n\n"),
+        "SELECT char(1)||'x';" => ("\u{2401}x\n".as_bytes(), b"\x01x\n"),
+        other => panic!("record the pinned shell's outputs for {other:?}"),
+    };
+    // The pinned shell keeps the case's contract ...
+    assert_eq!(
+        judge_sample(
+            &case,
+            &output("sqlite3", Some(0), symbol, ""),
+            &output("redlinedb", Some(0), symbol, "")
+        ),
+        Verdict::passed()
+    );
+    // ... and a target that ignores the option breaks it.
+    let verdict = judge_sample(
+        &case,
+        &output("sqlite3", Some(0), symbol, ""),
+        &output("redlinedb", Some(0), off, ""),
+    );
+    assert_eq!(
+        verdict.reason,
+        VerdictReason::TargetSemanticFailure,
+        "a target that ignores -escape symbol passes 00222: {verdict:?}"
+    );
+}
