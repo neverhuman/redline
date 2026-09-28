@@ -108,6 +108,14 @@ fi
 
 INSTR_BIN="target/release-pgo/redlinedb"
 
+# The training workload (scripts/perf/lib.sh perf_training_command): the
+# known-failures baseline and quiet normal durability, as bolt.sh and the
+# official lane run it.
+# shellcheck source=scripts/perf/lib.sh
+. scripts/perf/lib.sh
+perf_training_command "$INSTR_BIN" /dev/shm/redline-testing-pgo \
+    target/redline-testing-pgo/training.jsonl
+
 # Final-link RUSTFLAGS — append --emit-relocs when --for-bolt so the
 # bolt.sh post-link step has the relocations it needs to rewrite.
 FINAL_LINK_EXTRA=""
@@ -118,16 +126,8 @@ fi
 # Print the full external workload under --dry-run so users can sanity-check
 # the command before committing to the multi-hour pipeline.
 print_workload_cmd() {
-    cat <<EOF
-"$REDLINE_TESTING_BIN" run \\
-    --target-bin "$INSTR_BIN" \\
-    --sqlite-bin "$SQLITE_REF_BIN" \\
-    --suite sqlite_parity \\
-    --workers "\${PERF_WORKERS:-10}" \\
-    --tmp-root /dev/shm/redline-testing-pgo \\
-    --repetitions 1 --warmup 0 \\
-    --output target/redline-testing-pgo/training.jsonl
-EOF
+    printf '%q ' "${PERF_TRAINING_COMMAND[@]}"
+    printf '\n'
 }
 
 if [ "$DRY_RUN" = "1" ]; then
@@ -156,21 +156,15 @@ fi
 
 echo ">>> [3a/3] Running full official training corpus to gather profile data"
 mkdir -p target/redline-testing-pgo
-# We allow a non-zero exit here (|| true) because the instrumented binary
-# emits extra stderr (durability notice, LLVM profile warnings) that the
-# parity harness counts as failures. The .profraw files are written by the
-# LLVM runtime regardless, so the profile is still valid.
-REDLINEDB_DEFAULT_DURABILITY=normal \
-REDLINEDB_QUIET_DURABILITY=1 \
-"$REDLINE_TESTING_BIN" run \
-    --target-bin "$INSTR_BIN" \
-    --sqlite-bin "$SQLITE_REF_BIN" \
-    --suite sqlite_parity \
-    --workers "${PERF_WORKERS:-10}" \
-    --tmp-root /dev/shm/redline-testing-pgo \
-    --repetitions 1 --warmup 0 \
-    --output target/redline-testing-pgo/training.jsonl \
-|| true
+# A non-zero exit is reported but allowed: the instrumented binary can
+# print LLVM profile warnings on stderr, which the runner counts as
+# failures the baseline does not list. The .profraw files are written by
+# the LLVM runtime regardless, so the profile is still valid.
+training_exit=0
+"${PERF_TRAINING_COMMAND[@]}" || training_exit=$?
+if [ "$training_exit" -ne 0 ]; then
+    echo "pgo.sh: the training run exited $training_exit; see target/redline-testing-pgo/training.jsonl. Continuing with its profile." >&2
+fi
 
 echo ">>> [3b/3] Merging .profraw files"
 "$LLVM_PROFDATA" merge -output="$PGO_PROFILE_DIR/merged.profdata" "$PGO_DATA_DIR"/*.profraw

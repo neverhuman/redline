@@ -24,7 +24,14 @@
 #                `run --case-id ID` (repeatable) narrows them as the runner does
 # STUB_FAIL_CASE numeric id of the failing case (default 10002)
 # STUB_ARGS_LOG  when set, each `run` appends its arguments there, prefixed
-#                with the REDLINEDB_DEFAULT_DURABILITY it saw
+#                with the REDLINEDB_DEFAULT_DURABILITY and
+#                REDLINEDB_QUIET_DURABILITY it saw
+# STUB_NO_TMP_FIXTURE  when set, leave no read-only directory in --tmp-root
+#
+# With --sqlite-known-failures <baseline>, the exit status is the runner's
+# gate instead: 0 exactly when the failed cases among those run are the
+# sqlite_parity cases the baseline lists at stage target_semantic_failure
+# (the verdict the stub records), else 1.
 #
 # Every executed record names the SHA-256 of --target-bin and --sqlite-bin,
 # as the runner's records do.
@@ -63,10 +70,11 @@ case "${1:-}" in
 esac
 
 if [ -n "${STUB_ARGS_LOG:-}" ]; then
-  printf 'durability=%s %s\n' "${REDLINEDB_DEFAULT_DURABILITY:-}" "$*" >> "$STUB_ARGS_LOG"
+  printf 'durability=%s quiet=%s %s\n' "${REDLINEDB_DEFAULT_DURABILITY:-}" \
+    "${REDLINEDB_QUIET_DURABILITY:-}" "$*" >> "$STUB_ARGS_LOG"
 fi
 
-out='' reps=1 warmup=0 tmp_root='' target_sha='' reference_sha='' only=''
+out='' reps=1 warmup=0 tmp_root='' target_sha='' reference_sha='' only='' baseline=''
 while [ $# -gt 0 ]; do
   case "$1" in
     --output) out="$2"; shift 2 ;;
@@ -76,6 +84,7 @@ while [ $# -gt 0 ]; do
     --target-bin) target_sha="$(sha256sum "$2" | awk '{print $1}')"; shift 2 ;;
     --sqlite-bin) reference_sha="$(sha256sum "$2" | awk '{print $1}')"; shift 2 ;;
     --case-id) only="$only $((10#$2))"; shift 2 ;;
+    --sqlite-known-failures) baseline="$2"; shift 2 ;;
     --*) shift 2 ;;
     *) shift ;;
   esac
@@ -94,7 +103,7 @@ rm -f "$out.complete.json"
 
 mode="${STUB_MODE:-complete}"
 
-if [ -n "$tmp_root" ]; then
+if [ -n "$tmp_root" ] && [ -z "${STUB_NO_TMP_FIXTURE:-}" ]; then
   mkdir -p "$tmp_root/00193-stub-$$/ro.db"
   : > "$tmp_root/00193-stub-$$/ro.db/data.redline"
   chmod 0555 "$tmp_root/00193-stub-$$/ro.db"
@@ -168,6 +177,23 @@ case "$mode" in
 esac
 
 write_marker "$(sha256sum "$out" | awk '{print $1}')"
+if [ -n "$baseline" ] && [ "$mode" != nonzero-without-failure ]; then
+  failed_ids=''
+  case "$mode" in
+    tolerated-failure|unexpected-failure)
+      case " $cases " in *" $((10#$fail_case)) "*) failed_ids="$fail_case" ;; esac
+      ;;
+  esac
+  listed_ids=''
+  for id in $(jq -r '.failures[] | select(.suite == "sqlite_parity" and .stage == "target_semantic_failure") | .case_id' "$baseline"); do
+    case " $cases " in *" $((10#$id)) "*) listed_ids="$listed_ids $id" ;; esac
+  done
+  if [ "${listed_ids# }" = "$failed_ids" ]; then
+    exit 0
+  fi
+  echo "stub-redline-testing: failed cases [$failed_ids] are not the listed [${listed_ids# }]" >&2
+  exit 1
+fi
 case "$mode" in
   tolerated-failure|unexpected-failure|nonzero-without-failure)
     echo "stub-redline-testing: sqlite_parity failed cases present" >&2

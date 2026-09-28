@@ -99,21 +99,22 @@ BOLT_OUT="target/release-pgo/redlinedb.bolt"
 
 mkdir -p target /dev/shm/redline-testing-bolt 2>/dev/null || mkdir -p target
 
+# The training workload (scripts/perf/lib.sh perf_training_command): the
+# known-failures baseline and quiet normal durability, as pgo.sh and the
+# official lane run it. `perf record` returns the workload's status, so a
+# failure the baseline does not list stops this script here.
+# shellcheck source=scripts/perf/lib.sh
+. scripts/perf/lib.sh
+perf_training_command "$INPUT_BIN" /dev/shm/redline-testing-bolt \
+    target/redline-testing-bolt/training.jsonl
+
 echo ">>> [1/3] perf record (cycles:u, LBR any,u,k) -> $PERF_DATA"
 rm -f "$PERF_DATA"
 perf record \
     -e cycles:u \
     -j any,u,k \
     -o "$PERF_DATA" \
-    -- "$REDLINE_TESTING_BIN" run \
-        --target-bin "$INPUT_BIN" \
-        --sqlite-bin "$SQLITE_REF_BIN" \
-        --suite sqlite_parity \
-        --workers "${PERF_WORKERS:-10}" \
-        --tmp-root /dev/shm/redline-testing-bolt \
-        --repetitions 1 \
-        --warmup 0 \
-        --output target/redline-testing-bolt/training.jsonl
+    -- "${PERF_TRAINING_COMMAND[@]}"
 
 echo ">>> [2/3] perf2bolt -> $BOLT_FDATA"
 perf2bolt \

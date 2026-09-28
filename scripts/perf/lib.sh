@@ -2,7 +2,7 @@
 # scripts/perf/lib.sh — shared environment for A/B measurement against
 # the redline-testing parity harness.
 #
-# Sourced by: full.sh and any new full-corpus perf scripts.
+# Sourced by: full.sh, pgo.sh, bolt.sh and any new full-corpus perf scripts.
 #
 # Conventions match scripts/just/run.sh + scripts/perf/pgo.sh + the
 # CI parity gate (ops/ci/lib.sh::ci_resolve_redline_testing_release).
@@ -115,7 +115,10 @@ perf_run_jsonl() {
     taskset_cmd=("taskset" "-c" "${PERF_TASKSET_CPUS:-2-5}")
   fi
 
+  # The official lane's durability, with its notice off: the notice is
+  # stderr output of every target run, and the runner compares stderr.
   REDLINEDB_DEFAULT_DURABILITY=normal \
+  REDLINEDB_QUIET_DURABILITY=1 \
   "${taskset_cmd[@]}" \
     "$REDLINE_TESTING_BIN" run \
       --target-bin   "$target_bin" \
@@ -127,6 +130,33 @@ perf_run_jsonl() {
       --warmup       "$warmup" \
       --order        "${PERF_ORDER:-alternate}" \
       --output       "$out"
+}
+
+# The runner command of a PGO or BOLT training run: every sqlite_parity
+# case once, no warmup, under the official lane's quiet normal durability,
+# and held to the known-failures baseline as the official lane is. The
+# baseline lists the cases the current target fails, so without it every
+# training run of a healthy build fails; with it, only a failure the
+# baseline does not list (or a listed case that now passes) fails the run.
+#
+# Usage: perf_training_command <target-bin> <tmp-root> <output.jsonl>
+#   sets the array PERF_TRAINING_COMMAND
+perf_training_command() {
+  local target_bin="$1" tmp_root="$2" out="$3"
+  # shellcheck disable=SC2034 # read by the scripts that source this file
+  PERF_TRAINING_COMMAND=(
+    env REDLINEDB_DEFAULT_DURABILITY=normal REDLINEDB_QUIET_DURABILITY=1
+    "$REDLINE_TESTING_BIN" run
+    --target-bin "$target_bin"
+    --sqlite-bin "$SQLITE_REF_BIN"
+    --suite sqlite_parity
+    --sqlite-known-failures "$PERF_KNOWN_FAILURES"
+    --workers "${PERF_WORKERS:-10}"
+    --tmp-root "$tmp_root"
+    --repetitions 1
+    --warmup 0
+    --output "$out"
+  )
 }
 
 # Write build-contract.json for a measured target (BM3-05): rustc -vV, the
