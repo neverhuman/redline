@@ -11,7 +11,10 @@
 //!   the deadline (`timeout`);
 //! * once the child has exited, whatever is left of its group is killed
 //!   too, so a background process it started can neither hold a pipe open
-//!   nor survive the case.
+//!   nor survive the case;
+//! * a descendant that left the group (a new session) escapes that kill,
+//!   so the streams and the stdin writer get only until the case deadline
+//!   to finish; a pipe still held open then makes the run a `timeout`.
 //!
 //! The elapsed time is taken when the child exits, before any of that
 //! cleanup, so bounding a run does not change what it measures.
@@ -25,8 +28,8 @@ use std::io::{self, Read, Write};
 use std::path::Path;
 use std::process::{Child, Command, ExitStatus, Stdio};
 use std::sync::atomic::{AtomicU8, Ordering};
-use std::sync::{Arc, mpsc};
-use std::thread::{self, JoinHandle};
+use std::sync::{Arc, Mutex, mpsc};
+use std::thread;
 use std::time::{Duration, Instant};
 
 use anyhow::{Context, Result, bail};
@@ -39,6 +42,10 @@ pub const DEFAULT_MAX_OUTPUT_BYTES: usize = 16 * 1024 * 1024;
 
 /// How often the file-capture path (memory sampling) polls its child.
 const POLL_INTERVAL: Duration = Duration::from_millis(2);
+
+/// The least time the streams and the stdin writer get to finish once the
+/// child has exited, even when it exited just before the case deadline.
+const DRAIN_GRACE: Duration = Duration::from_millis(200);
 
 /// The bounds every engine run of a case is held to.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -171,10 +178,15 @@ pub fn run_piped(
     drop(exited);
     let _ = watchdog.join();
     group.sweep();
-    let stdout = join_reader(stdout, "stdout")?;
-    let stderr = join_reader(stderr, "stderr")?;
-    if let Some(writer) = writer {
-        let _ = writer.join();
+    // A descendant that left the group escapes the sweep and may still hold
+    // a pipe. The streams and the stdin writer get until the case deadline
+    // to finish; past it, the run is a timeout and they are left behind.
+    let deadline = drain_deadline(started, limits);
+    let (stdout, stdout_held) = join_reader(stdout, deadline, "stdout")?;
+    let (stderr, stderr_held) = join_reader(stderr, deadline, "stderr")?;
+    let writer_held = writer.is_some_and(|writer| !finished_by(&writer, deadline));
+    if stdout_held || stderr_held || writer_held {
+        group.mark(FIRED_TIMEOUT);
     }
     let status = waited.context("wait for sqlite parity child")?;
     Ok(Captured {
@@ -239,8 +251,11 @@ pub fn run_to_files(
         let _ = child.wait();
     }
     group.sweep();
-    if let Some(writer) = writer {
-        let _ = writer.join();
+    if let Some(writer) = writer
+        && !finished_by(&writer, drain_deadline(started, limits))
+    {
+        // A descendant outside the group holds stdin without reading it.
+        group.mark(FIRED_TIMEOUT);
     }
     // A child that writes past the cap and exits between two polls was
     // never seen over it: the files, not the polls, say whether the kept
@@ -346,52 +361,109 @@ fn spawn_in_group(command: &mut Command) -> Result<Child> {
     command.spawn().context("spawn sqlite parity child")
 }
 
+/// When the streams and the stdin writer must have finished: the case
+/// deadline, or `DRAIN_GRACE` from now if that is later.
+fn drain_deadline(started: Instant, limits: Limits) -> Instant {
+    (started + limits.timeout).max(Instant::now() + DRAIN_GRACE)
+}
+
 /// Writes all of `stdin` and closes the pipe. A child that exits or is
 /// killed without reading it ends the write with a broken pipe, which is
-/// not an error of the run.
-fn spawn_writer(child: &mut Child, stdin: Option<Vec<u8>>) -> Option<JoinHandle<()>> {
+/// not an error of the run. The receiver hears once the write is over.
+fn spawn_writer(child: &mut Child, stdin: Option<Vec<u8>>) -> Option<mpsc::Receiver<()>> {
     let bytes = stdin?;
     let mut pipe = child.stdin.take()?;
-    Some(thread::spawn(move || {
+    let (done, finished) = mpsc::channel();
+    thread::spawn(move || {
         let _ = pipe.write_all(&bytes);
-    }))
+        drop(pipe);
+        let _ = done.send(());
+    });
+    Some(finished)
+}
+
+/// Whether the stdin writer finished by `deadline`. A writer still blocked
+/// then is left behind: nothing in the group reads its pipe any more.
+fn finished_by(writer: &mpsc::Receiver<()>, deadline: Instant) -> bool {
+    writer
+        .recv_timeout(deadline.saturating_duration_since(Instant::now()))
+        .is_ok()
+}
+
+/// A stream being drained: the bytes kept so far, and the reader's end.
+struct Reader {
+    kept: Arc<Mutex<Vec<u8>>>,
+    finished: mpsc::Receiver<io::Result<()>>,
 }
 
 fn spawn_reader<R: Read + Send + 'static>(
     pipe: Option<R>,
     cap: usize,
     group: &Arc<Group>,
-) -> JoinHandle<io::Result<Vec<u8>>> {
+) -> Reader {
     let group = Arc::clone(group);
+    let kept = Arc::new(Mutex::new(Vec::new()));
+    let (done, finished) = mpsc::channel();
+    let shared = Arc::clone(&kept);
     thread::spawn(move || {
-        let mut kept = Vec::new();
-        let Some(mut pipe) = pipe else {
-            return Ok(kept);
-        };
-        let mut buffer = [0u8; 64 * 1024];
-        loop {
-            let read = match pipe.read(&mut buffer) {
-                Ok(0) => return Ok(kept),
-                Ok(read) => read,
-                Err(error) if error.kind() == io::ErrorKind::Interrupted => continue,
-                Err(error) => return Err(error),
-            };
-            let room = cap.saturating_sub(kept.len());
-            kept.extend_from_slice(&buffer[..read.min(room)]);
-            if read > room {
-                // Keep draining (and dropping) until the kill closes the
-                // pipe, so the child is never left blocked on a full pipe.
-                group.fire(FIRED_OUTPUT_LIMIT);
-            }
-        }
-    })
+        let _ = done.send(drain(pipe, cap, &group, &shared));
+    });
+    Reader { kept, finished }
 }
 
-fn join_reader(reader: JoinHandle<io::Result<Vec<u8>>>, stream: &str) -> Result<Vec<u8>> {
-    reader
-        .join()
-        .map_err(|_| anyhow::anyhow!("sqlite parity {stream} reader panicked"))?
-        .with_context(|| format!("read sqlite parity child {stream}"))
+fn drain<R: Read>(
+    pipe: Option<R>,
+    cap: usize,
+    group: &Group,
+    kept: &Mutex<Vec<u8>>,
+) -> io::Result<()> {
+    let Some(mut pipe) = pipe else {
+        return Ok(());
+    };
+    let mut buffer = [0u8; 64 * 1024];
+    loop {
+        let read = match pipe.read(&mut buffer) {
+            Ok(0) => return Ok(()),
+            Ok(read) => read,
+            Err(error) if error.kind() == io::ErrorKind::Interrupted => continue,
+            Err(error) => return Err(error),
+        };
+        let overflow = {
+            let mut kept = kept.lock().unwrap_or_else(|poisoned| poisoned.into_inner());
+            let room = cap.saturating_sub(kept.len());
+            kept.extend_from_slice(&buffer[..read.min(room)]);
+            read > room
+        };
+        if overflow {
+            // Keep draining (and dropping) until the kill closes the
+            // pipe, so the child is never left blocked on a full pipe.
+            group.fire(FIRED_OUTPUT_LIMIT);
+        }
+    }
+}
+
+/// The bytes a stream kept, and whether its pipe was still held open at
+/// `deadline` (its reader is then left behind with what it kept so far).
+fn join_reader(reader: Reader, deadline: Instant, stream: &str) -> Result<(Vec<u8>, bool)> {
+    let held = match reader
+        .finished
+        .recv_timeout(deadline.saturating_duration_since(Instant::now()))
+    {
+        Ok(result) => {
+            result.with_context(|| format!("read sqlite parity child {stream}"))?;
+            false
+        }
+        Err(mpsc::RecvTimeoutError::Timeout) => true,
+        Err(mpsc::RecvTimeoutError::Disconnected) => {
+            bail!("sqlite parity {stream} reader panicked")
+        }
+    };
+    let kept = reader
+        .kept
+        .lock()
+        .unwrap_or_else(|poisoned| poisoned.into_inner())
+        .clone();
+    Ok((kept, held))
 }
 
 fn file_len(path: &Path) -> u64 {
@@ -538,6 +610,68 @@ mod tests {
         .expect("run");
         assert_eq!(captured.outcome, ExecutionOutcome::Exited);
         assert_eq!(captured.stdout.len(), 1024);
+    }
+
+    /// Kills every process whose command line contains `pattern`.
+    fn kill_matching(pattern: &str) {
+        let _ = Command::new("pkill")
+            .args(["-KILL", "-f", pattern])
+            .status();
+    }
+
+    #[test]
+    fn a_descendant_that_left_the_group_cannot_hold_the_harness() {
+        // The leader exits at once, but a descendant in its own session
+        // (outside the group the sweep kills) keeps stdout, stderr or stdin
+        // open. Waiting for end of file, or for the stdin writer, would
+        // block until that descendant exits; the run must instead end at
+        // the case deadline as a timeout, never pass as a whole result.
+        // The leader lingers so the descendant has left the group before
+        // the leader exits and the sweep kills what is left of it.
+        const SETTLE: &str = "sleep 0.2;";
+        let mark = format!("{}{}", std::process::id(), line!());
+        let pattern = format!("sleep 20.{mark}");
+        for (script, stdin) in [
+            (format!("setsid {pattern} & {SETTLE} echo done"), None),
+            (format!("setsid {pattern} >&2 & {SETTLE} echo done"), None),
+            (
+                format!("exec 3<&0; setsid {pattern} <&3 >/dev/null 2>&1 & {SETTLE} echo done"),
+                Some(vec![b'z'; 4 * 1024 * 1024]),
+            ),
+        ] {
+            let started = Instant::now();
+            let captured = run_piped(&mut shell(&script), stdin, limits(500, 1024)).expect("run");
+            let waited = started.elapsed();
+            kill_matching(&pattern);
+            assert!(
+                waited < Duration::from_secs(10),
+                "{script}: the harness waited {waited:?} on a descendant outside the group"
+            );
+            assert_eq!(captured.outcome, ExecutionOutcome::Timeout, "{script}");
+            assert_eq!(captured.stdout, b"done\n", "{script}");
+        }
+        // The file-capture path has no readers, but its stdin writer is
+        // held the same way.
+        let dir = tempfile::tempdir().expect("tempdir");
+        let script =
+            format!("exec 3<&0; setsid {pattern} <&3 >/dev/null 2>&1 & {SETTLE} echo done");
+        let started = Instant::now();
+        let captured = run_to_files(
+            &mut shell(&script),
+            Some(vec![b'z'; 4 * 1024 * 1024]),
+            limits(500, 1024),
+            &dir.path().join("out"),
+            &dir.path().join("err"),
+            false,
+        )
+        .expect("run");
+        let waited = started.elapsed();
+        kill_matching(&pattern);
+        assert!(
+            waited < Duration::from_secs(10),
+            "{script}: the harness waited {waited:?} on a descendant outside the group"
+        );
+        assert_eq!(captured.outcome, ExecutionOutcome::Timeout, "{script}");
     }
 
     #[test]
