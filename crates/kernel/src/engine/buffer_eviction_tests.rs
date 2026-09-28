@@ -19,7 +19,10 @@ use crate::catalog::{
     ColumnSpec, CreateIndexSpec, CreateTableSpec, DbName, IndexColumnSpec, IndexId, IndexOrigin,
     QualifiedName, SortDir,
 };
-use crate::format::{Lsn, PageGeneration, PageId, PageKind, RelId, RowId, TuplePtr};
+use crate::format::{
+    Lsn, PageGeneration, PageId, PageKind, RelId, RowId, TUPLE_FLAG_DELETED, TuplePtr,
+    TupleVersion, TxId,
+};
 use crate::index::IndexRowRef;
 use crate::storage::buffer_test_hooks::{
     fail_next_page_file_sync, page_file_syncs, set_before_page_write_hook, set_before_pin_lock_hook,
@@ -540,32 +543,53 @@ fn buffer_eviction_during_replay_leaves_one_copy_after_another_reopen() {
     }
 }
 
-/// The payload tag of every committed row a page scan returns, sorted. The
-/// scan covers every page in the file and every page a row's head is on,
-/// which may not have reached the file yet.
+/// The payload tag of every committed tuple on the heap pages, sorted. The
+/// page-range scan returns one version per row directory entry, so it cannot
+/// see a second copy of a row that nothing points at; this walk reads the
+/// pages themselves and counts every tuple that looks live on its own.
 pub(super) fn scanned_row_tags(engine: &Engine) -> Vec<usize> {
     let tx = engine.begin(Isolation::Snapshot).unwrap();
-    let pages = engine
-        .relation_entries(RelId(1))
-        .unwrap()
+    let mut tags: Vec<usize> = live_looking_tuples(engine, &tx)
         .iter()
-        .map(|(_, ptr)| ptr.page_id.0)
-        .fold(engine.heap_page_count().unwrap(), u64::max);
-    let mut tags: Vec<usize> = engine
-        .parallel_scan_page_range(
-            tx.snapshot(),
-            Some(tx.id()),
-            PageId(1)..PageId(pages + 1),
-            Some(RelId(1)),
-            1,
-            None,
-        )
-        .unwrap()
-        .iter()
-        .map(|row| u64::from_le_bytes(row.payload[..8].try_into().unwrap()) as usize)
+        .map(|payload| u64::from_le_bytes(payload[..8].try_into().unwrap()) as usize)
         .collect();
     tags.sort_unstable();
     tags
+}
+
+/// The payload of every relation-1 tuple, on any page the heap has
+/// allocated (in the file or only in the pool), whose own markers make it
+/// visible to `tx`: its creator visible, no visible ender, not a delete.
+fn live_looking_tuples(engine: &Engine, tx: &crate::engine::Txn) -> Vec<Vec<u8>> {
+    let visible = |id: TxId| engine.txs.is_tx_visible(id, tx.snapshot(), Some(tx.id()));
+    let mut out = Vec::new();
+    for page_no in 1..=engine.heap_page_count().unwrap() {
+        let guard = match engine.heap.buffer_ref().pin(PageId(page_no)) {
+            Ok(guard) => guard,
+            Err(Error::InvalidMagic { actual: 0, .. }) => continue,
+            Err(err) => panic!("pin page {page_no}: {err:?}"),
+        };
+        guard
+            .with_page(|page| {
+                if page.header()?.kind != PageKind::Heap {
+                    return Ok(());
+                }
+                for slot in 0..page.slot_count()? {
+                    let tuple = TupleVersion::decode(page.cell(slot)?)?;
+                    let ended = tuple.end_tx != TxId::ZERO && visible(tuple.end_tx);
+                    if matches!(tuple.rel_id, RelId(1) | RelId::ZERO)
+                        && visible(tuple.begin_tx)
+                        && !ended
+                        && tuple.flags & TUPLE_FLAG_DELETED == 0
+                    {
+                        out.push(tuple.payload);
+                    }
+                }
+                Ok(())
+            })
+            .unwrap();
+    }
+    out
 }
 
 #[test]
@@ -606,23 +630,11 @@ fn buffer_eviction_of_an_open_transaction_keeps_its_ids_from_new_ones() {
     );
 
     let tx = reopened.begin(Isolation::Snapshot).unwrap();
-    let pages = reopened.heap_page_count().unwrap();
-    let scanned = reopened
-        .parallel_scan_page_range(
-            tx.snapshot(),
-            Some(tx.id()),
-            PageId(1)..PageId(pages + 1),
-            Some(RelId(1)),
-            1,
-            None,
-        )
-        .unwrap();
+    let scanned = live_looking_tuples(&reopened, &tx);
     let open_payloads: Vec<Vec<u8>> = (3..ROWS).map(payload).collect();
     assert!(
-        scanned
-            .iter()
-            .all(|row| !open_payloads.contains(&row.payload)),
-        "a scan shows rows of the transaction that never committed"
+        scanned.iter().all(|row| !open_payloads.contains(row)),
+        "a page shows rows of the transaction that never committed"
     );
 }
 

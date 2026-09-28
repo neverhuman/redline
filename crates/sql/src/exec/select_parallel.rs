@@ -1,3 +1,4 @@
+use super::*;
 use crate::statement::SelectPlan;
 
 // ============================================================
@@ -43,7 +44,7 @@ impl ParallelCoveringDecision {
 /// WS-C3 R2 gate predicate. Returns the decision the gate would
 /// make for `plan` under the current thread-local context (rayon
 /// pool slot + correlated-row stack). The actual heap-side
-/// dispatch lives in `PageBackedHeap::parallel_scan_page_range`;
+/// dispatch is [`dispatch_parallel_covering_scan`];
 /// today the covering path serves results directly from the
 /// index leaf chain, so even a `Dispatch` decision is honoured
 /// by walking the existing serial cursor — the wiring is in
@@ -109,4 +110,133 @@ pub(crate) fn record_parallel_covering_decision(decision: ParallelCoveringDecisi
 /// when no covering-eligible SELECT has run since the last read.
 pub fn take_last_parallel_covering_decision() -> Option<ParallelCoveringDecision> {
     LAST_PARALLEL_DECISION.with(|cell| cell.take())
+}
+
+/// WS-C3 R3-C: dispatch the heap-side parallel scan and reshape its
+/// output into the same `Vec<Vec<SqlValue>>` projection that the
+/// serial covering path produces. The serial path walks the index
+/// leaf chain; the parallel path reads every row of
+/// `table.relation_id` on the pool's workers, applies the WHERE
+/// predicate post-scan, then evaluates `projection` per surviving row.
+///
+/// The kernel reads each row as the serial `get_for_relation` does:
+/// the version `tx` sees, never a superseded or deleted one, including
+/// rows on pages still only in the buffer pool.
+///
+/// Result ordering is intentionally NOT preserved: rows arrive in an
+/// order determined by which worker drains its pages first, and the
+/// WS-C3 R2 gate refuses to dispatch when an `ORDER BY` consumer
+/// downstream would observe a different shape. The two downstream
+/// operators that tolerate this — HashAggregator and SpillSort —
+/// re-establish order from the data itself.
+///
+/// The `pool.install(|| ...)` wrap is what keeps the worker
+/// threads bound to the database's dedicated pool; without it, the
+/// kernel would still parallelise but the `std::thread::scope`
+/// workers would not see the pool's affinity / NUMA hints.
+#[allow(clippy::too_many_arguments)]
+pub(super) fn dispatch_parallel_covering_scan(
+    engine: &Engine,
+    tx: &mut Txn,
+    table: &Arc<TableDef>,
+    selection: &Option<Expr>,
+    projection: &[SelectItem],
+    bindings: &[Option<SqlValue>],
+    worker_count: usize,
+    pool: &Arc<rayon::ThreadPool>,
+) -> Result<Vec<Vec<SqlValue>>> {
+    let heap_rows =
+        pool.install(|| engine.parallel_scan_relation(tx, table.relation_id, worker_count))?;
+
+    // Decode payloads -> SqlRow, apply WHERE, project. The decoding
+    // and predicate evaluation stay serial (downstream operator) —
+    // the parallel speedup lives in the I/O + page-pin phase.
+    let mut out: Vec<Vec<SqlValue>> = Vec::with_capacity(heap_rows.len());
+    for heap_row in heap_rows {
+        let Some((table_id, mut values)) = decode_sql_row(&heap_row.payload)? else {
+            continue;
+        };
+        if table_id != table.table_id.0 {
+            continue;
+        }
+        values = complete_short_row(table, values)?;
+        let table_row = TableRow {
+            rowid: heap_row.row_id,
+            values,
+            table: Arc::clone(table),
+            alias: None,
+        };
+        let row = SqlRow::Table(table_row);
+        if !selection_passes(selection, &row, bindings)? {
+            continue;
+        }
+        out.push(project_row(projection, &row, bindings)?);
+    }
+    Ok(out)
+}
+
+/// Test hook: run a single-table `SELECT` (a projection and an optional
+/// `WHERE`, nothing else) through the heap scan that the parallel
+/// covering-scan gate dispatches to, on the Rayon pool installed with
+/// [`super::with_current_rayon_pool`]. No SQL plan reaches that dispatch
+/// today: the covering scan needs a plan without aggregation and the gate
+/// dispatches only for one with it. The tests call it here so its answers
+/// are held to the serial scan's. Reads in the connection's open
+/// transaction when there is one, as a `SELECT` would.
+#[doc(hidden)]
+pub fn parallel_heap_scan_select(conn: &Arc<Connection>, sql: &str) -> Result<Vec<Vec<SqlValue>>> {
+    use crate::statement::PreparedKind;
+
+    let pool = super::current_rayon_pool().ok_or_else(|| {
+        Error::UnsupportedSql("the parallel heap scan needs an installed rayon pool".to_owned())
+    })?;
+    let template = conn.prepare_cached(sql)?;
+    let PreparedKind::Select(plan) = &template.kind else {
+        return Err(Error::UnsupportedSql("not a SELECT".to_owned()));
+    };
+    let SelectSource::Table(table) = &plan.source else {
+        return Err(Error::UnsupportedSql(
+            "not a single-table SELECT".to_owned(),
+        ));
+    };
+    if !plan.group_by.is_empty()
+        || super::agg::select_requires_aggregation(plan)
+        || plan.having.is_some()
+        || plan.distinct
+        || !plan.distinct_on.is_empty()
+        || !plan.order_by.is_empty()
+        || plan.limit.is_some()
+        || plan.offset.is_some()
+    {
+        return Err(Error::UnsupportedSql(
+            "the parallel heap scan takes a projection and a WHERE only".to_owned(),
+        ));
+    }
+    let (mut tx, restore_tx) = super::select_top::begin_select_tx(conn)?;
+    let rows = match tx.as_mut() {
+        Some(tx_ref) => dispatch_parallel_covering_scan(
+            conn.engine(),
+            tx_ref,
+            table,
+            &plan.selection,
+            &plan.projection,
+            &[],
+            pool.current_num_threads().max(1),
+            &pool,
+        ),
+        None => Err(Error::UnsupportedSql(
+            "no transaction to read in".to_owned(),
+        )),
+    };
+    if let Some(owned) = tx.take_owned() {
+        if restore_tx {
+            conn.with_session(|session| {
+                session.tx = Some(owned);
+                Ok(())
+            })?;
+        } else {
+            conn.engine().rollback(owned)?;
+        }
+    }
+    rows
 }

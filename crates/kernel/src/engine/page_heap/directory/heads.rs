@@ -8,7 +8,9 @@ use super::super::PageBackedHeap;
 use super::super::policy::{ActiveHeapPlacementPolicy, HeapPlacementPolicy};
 
 impl PageBackedHeap {
-    pub(super) fn all_relation_entries(&self) -> Result<Vec<(RelId, RowId, TuplePtr)>> {
+    pub(in crate::engine::page_heap) fn all_relation_entries(
+        &self,
+    ) -> Result<Vec<(RelId, RowId, TuplePtr)>> {
         let mut rows = Vec::new();
         for shard in &self.relation_row_dir {
             let shard = shard

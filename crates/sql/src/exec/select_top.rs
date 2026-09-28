@@ -1,5 +1,6 @@
 use super::select_parallel::{
-    ParallelCoveringDecision, decide_parallel_covering_scan, record_parallel_covering_decision,
+    ParallelCoveringDecision, decide_parallel_covering_scan, dispatch_parallel_covering_scan,
+    record_parallel_covering_decision,
 };
 use super::*;
 
@@ -215,13 +216,14 @@ fn build_select_runtime(
         // wires the actual dispatch: when the gate returns
         // `Dispatch` AND the downstream operator is HashAggregator
         // or SpillSort, we route the read through
-        // `Engine::parallel_scan_page_range` (the public R2 kernel
-        // API) inside `pool.install(|| ...)` so workers run in the
-        // database's dedicated Rayon pool. Without a pool installed,
-        // the gate returns `FallbackNoPool` and we keep the
-        // index-leaf serial covering path. Result-set parity vs
-        // the serial path is enforced by
-        // `tests/ws_c3_parallel_scan_dispatch.rs`.
+        // `Engine::parallel_scan_relation` inside `pool.install(|| ...)`
+        // so workers run in the database's dedicated Rayon pool.
+        // Without a pool installed, the gate returns `FallbackNoPool`
+        // and we keep the index-leaf serial covering path. The gate
+        // never returns `Dispatch` from here today: this covering path
+        // takes plans without aggregation, and the gate dispatches only
+        // for plans with it. `tests/parallel_heap_scan_versions.rs`
+        // holds the dispatched scan to the serial scan and to SQLite.
         // A5: skip the gate when no Rayon pool is installed. By default
         // `OpenOptions::rayon_threads = None`, so `current_rayon_pool()`
         // returns `None` and the gate would walk the eligibility checks
@@ -1847,120 +1849,6 @@ fn is_aggregate_function_name(func: &sqlparser::ast::Function) -> bool {
             | "var_pop"
             | "var_samp"
     )
-}
-
-/// WS-C3 R3-C: dispatch the heap-side parallel scan and reshape its
-/// output into the same `Vec<Vec<SqlValue>>` projection that the
-/// serial covering path produces. The serial path walks the index
-/// leaf chain; the parallel path walks every heap page belonging to
-/// `table.relation_id` in parallel, applies the WHERE predicate
-/// post-scan, then evaluates `projection` per surviving row.
-///
-/// Result ordering is intentionally NOT preserved: the kernel
-/// `parallel_scan_page_range` documents that rows arrive in an
-/// order determined by which worker drains its slice of pages
-/// first, and the WS-C3 R2 gate refuses to dispatch when an
-/// `ORDER BY` consumer downstream would observe a different shape.
-/// The two downstream operators that tolerate this — HashAggregator
-/// and SpillSort — re-establish order from the data itself.
-///
-/// The `pool.install(|| ...)` wrap is what keeps the worker
-/// threads bound to the database's dedicated pool; without it, the
-/// kernel would still parallelise but the `std::thread::scope`
-/// workers would not see the pool's affinity / NUMA hints.
-#[allow(clippy::too_many_arguments)]
-fn dispatch_parallel_covering_scan(
-    engine: &Engine,
-    tx: &mut Txn,
-    table: &Arc<TableDef>,
-    selection: &Option<Expr>,
-    projection: &[SelectItem],
-    bindings: &[Option<SqlValue>],
-    worker_count: usize,
-    pool: &Arc<rayon::ThreadPool>,
-) -> Result<Vec<Vec<SqlValue>>> {
-    use redlinedb_kernel::format::PageId;
-
-    // R3-C: the scan needs a page-range bound that covers every page
-    // currently holding a live tuple for this relation. The
-    // engine-level `heap_page_count` (derived from the heap file's
-    // on-disk size) is too low when writes are still buffered in
-    // the WAL + buffer pool and the heap file has not yet
-    // extended. `relation_entries` walks the in-memory row
-    // directory: every row's `TuplePtr` carries the `PageId`, so
-    // `max + 1` of those page ids is a safe upper bound that
-    // covers both flushed and buffered pages. We take the max of
-    // the two bounds so the scan also visits any pages already on
-    // disk that don't yet have a directory entry for this
-    // relation (the per-page `rel_filter` discards rows belonging
-    // to other relations).
-    let entries = engine.relation_entries(table.relation_id)?;
-    let max_page = entries
-        .iter()
-        .map(|(_, ptr)| ptr.page_id.0)
-        .max()
-        .unwrap_or(0);
-    let mut total_pages = engine.heap_page_count()?;
-    // Take whichever bound is larger — `page_count` covers any pages
-    // already extended on disk (including pages from other relations
-    // that the per-page rel_filter will skip), and `max_page+1`
-    // covers any in-memory pages not yet flushed.
-    total_pages = total_pages.max(max_page.saturating_add(1));
-    if total_pages == 0 || entries.is_empty() {
-        return Ok(Vec::new());
-    }
-    let rel_filter = Some(table.relation_id);
-    let snapshot = tx.snapshot().clone();
-    let owner = Some(tx.id());
-
-    // The pool is dedicated to this database; `install` confines the
-    // `thread::scope` workers spawned inside
-    // `parallel_scan_page_range` to that pool's affinity. We still
-    // pass `worker_count` so the dispatcher knows how many slices to
-    // make.
-    //
-    // `PageId(0)` is reserved for the control file / catalog header
-    // and pinning it returns `CorruptPage("page id zero is invalid")`,
-    // so the page range starts at `PageId(1)`. Higher non-heap pages
-    // (catalog / undo / index) are skipped per-page inside
-    // `collect_heap_page` via the page-kind check.
-    let scan_start = PageId(1);
-    let heap_rows = pool.install(|| {
-        engine.parallel_scan_page_range(
-            &snapshot,
-            owner,
-            scan_start..PageId(total_pages),
-            rel_filter,
-            worker_count,
-            None,
-        )
-    })?;
-
-    // Decode payloads -> SqlRow, apply WHERE, project. The decoding
-    // and predicate evaluation stay serial (downstream operator) —
-    // the parallel speedup lives in the I/O + page-pin phase.
-    let mut out: Vec<Vec<SqlValue>> = Vec::with_capacity(heap_rows.len());
-    for heap_row in heap_rows {
-        let Some((table_id, mut values)) = decode_sql_row(&heap_row.payload)? else {
-            continue;
-        };
-        if table_id != table.table_id.0 {
-            continue;
-        }
-        values = complete_short_row(table, values)?;
-        let table_row = TableRow {
-            rowid: heap_row.row_id,
-            values,
-            table: Arc::clone(table),
-            alias: None,
-        };
-        let row = SqlRow::Table(table_row);
-        if !selection_passes(selection, &row, bindings)? {
-            continue;
-        }
-        out.push(project_row(projection, &row, bindings)?);
-    }
-    Ok(out)
 }
 
 /// Build a SELECT runtime that yields zero rows. Used when the

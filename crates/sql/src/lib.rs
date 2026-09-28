@@ -51,13 +51,14 @@ pub use value::{SqlValue, SqlValueRef};
 /// and the per-thread Rayon pool installer so
 /// `crates/sql/tests/ws_c3_parallel_scan_safety.rs` and
 /// `crates/sql/tests/ws_c3_parallel_scan_dispatch.rs` can assert per-
-/// condition branching without reaching into private modules. Not
-/// stable — callers outside the test suite should treat the surface
-/// as internal.
+/// condition branching without reaching into private modules, and the
+/// dispatched heap scan so `crates/sql/tests/parallel_heap_scan_versions.rs`
+/// can compare its rows with the serial scan's. Not stable — callers
+/// outside the test suite should treat the surface as internal.
 #[doc(hidden)]
 pub mod ws_c3_testing {
     pub use crate::exec::select_parallel::{
-        ParallelCoveringDecision, take_last_parallel_covering_decision,
+        ParallelCoveringDecision, parallel_heap_scan_select, take_last_parallel_covering_decision,
     };
     pub use crate::exec::{
         WorkerSnapshotCarrier, current_rayon_pool, outer_row_stack_is_empty,

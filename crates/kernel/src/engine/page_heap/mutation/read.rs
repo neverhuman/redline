@@ -42,6 +42,23 @@ impl PageBackedHeap {
             return Ok(None);
         };
         let current = self.read_tuple(ptr)?;
+        self.visible_payload_for_relation(tx_status, snapshot, owner, rel_id, current)
+    }
+
+    /// The payload `snapshot` sees for a row of `rel_id` whose newest tuple
+    /// (the one the row directory names) is `current`: that tuple when it is
+    /// visible, nothing when it is a visible delete, otherwise the first
+    /// visible version down the undo chain. `get_for_relation` and the
+    /// page-range scans both resolve rows here, so the scans answer as the
+    /// serial read does.
+    pub(crate) fn visible_payload_for_relation(
+        &self,
+        tx_status: &ConcurrentTxStatus,
+        snapshot: &Snapshot,
+        owner: Option<TxId>,
+        rel_id: RelId,
+        current: TupleVersion,
+    ) -> Result<Option<Vec<u8>>> {
         if current.rel_id != rel_id {
             return Ok(None);
         }

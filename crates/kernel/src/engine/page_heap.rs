@@ -153,6 +153,12 @@ impl PageBackedHeap {
         self.buffer.page_count()
     }
 
+    /// Every page allocated so far, including pages still only in the buffer
+    /// pool. [`PageBackedHeap::page_count`] counts the page file alone.
+    pub fn allocated_page_count(&self) -> Result<u64> {
+        self.buffer.allocated_page_count()
+    }
+
     /// WS-C3 R2: borrow the underlying buffer pool. The scan module
     /// uses this to pin pages from worker threads inside a
     /// `std::thread::scope`; we keep the field itself private so other

@@ -13,8 +13,8 @@
 //! installs the pool onto the executor's per-thread slot.
 //! `decide_parallel_covering_scan` then returns `Dispatch` (when the
 //! plan shape allows) and `dispatch_parallel_covering_scan` in
-//! `crates/sql/src/exec/select_top.rs` calls
-//! `Engine::parallel_scan_page_range` inside `pool.install(|| ...)`.
+//! `crates/sql/src/exec/select_parallel.rs` calls
+//! `Engine::parallel_scan_relation` inside `pool.install(|| ...)`.
 //!
 //! Test list (matches the WS-C3 R3 brief):
 //! - `pool_absent_falls_back_serial`: no pool → `FallbackNoPool`.

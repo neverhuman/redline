@@ -169,25 +169,21 @@ impl Engine {
         self.heap.relation_rowids(rel_id)
     }
 
-    /// WS-C3 R3: number of heap pages currently allocated in the
-    /// page-backed heap. Surfaces the bound the SQL layer needs to
-    /// drive [`Engine::parallel_scan_page_range`] without touching the
-    /// private `heap` field. Counts every heap page including pages
-    /// belonging to other relations; the scan itself filters by
-    /// `rel_id`.
+    /// WS-C3 R3: number of pages allocated in the page-backed heap,
+    /// including pages still only in the buffer pool: page ids run from 1
+    /// to this count. It bounds a full [`Engine::parallel_scan_page_range`]
+    /// (`PageId(1)..PageId(count + 1)`). Counts every page, including
+    /// pages of other relations and undo and index pages; the scan reads
+    /// only pages holding a row's newest tuple.
     pub fn heap_page_count(&self) -> Result<u64> {
-        self.heap.page_count()
+        self.heap.allocated_page_count()
     }
 
     /// WS-C3 R3: thin Engine-level wrapper around
-    /// [`PageBackedHeap::parallel_scan_page_range`]. R2-B shipped the
-    /// scan API on the heap but did not expose an Engine accessor;
-    /// R3-C (this commit) plumbs the access so the SQL covering-scan
-    /// gate can actually dispatch when a per-database Rayon pool is
-    /// installed and the downstream operator is HashAggregator or
-    /// SpillSort. The wrapper performs no policy decisions — the SQL
-    /// layer is expected to wrap this call in `pool.install(|| ...)`
-    /// so workers run inside the dedicated pool's context.
+    /// [`PageBackedHeap::parallel_scan_page_range`]: the rows visible to
+    /// `snapshot` whose newest tuple is on a page in `page_range`. The
+    /// wrapper performs no policy decisions. To read a whole relation
+    /// for a transaction, use [`Engine::parallel_scan_relation`].
     pub fn parallel_scan_page_range(
         &self,
         snapshot: &Snapshot,

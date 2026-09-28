@@ -297,3 +297,26 @@ constraint failed`, names the index, says so and changes nothing; delete
 one of the rows with 4.x and open again. A database already at epoch 3
 (built from this branch before the fix) is not rebuilt at open: run
 `PRAGMA integrity_check`, and `REINDEX` any index it names.
+
+## Parallel heap scans return one visible version per row (SCAN-VERSIONS)
+
+- `Engine::parallel_scan_page_range` (and `PageBackedHeap`'s page-range
+  scans) returned every tuple on a page whose own markers looked live. An
+  UPDATE or DELETE leaves the old tuple on its page unchanged, so after an
+  UPDATE the scan returned the old version of the row next to the new one,
+  and a deleted row came back. The scan now starts from the row directory
+  and reads each row as `get_for_relation` does: the version the snapshot
+  sees (through the undo chain when the newest tuple is too new, rolled
+  back or another transaction's), never a superseded or deleted one. Rows
+  are placed by the page their newest tuple is on, so disjoint page ranges
+  return disjoint rows.
+- `Engine::heap_page_count` counted only the pages in the page file, so a
+  scan bounded by it missed rows on pages still only in the buffer pool
+  (every page before the first checkpoint). It now counts every allocated
+  page (`BufferPool::allocated_page_count`).
+- New `Engine::parallel_scan_relation(tx, rel_id, workers)` reads a whole
+  relation for a transaction with no page range, so a concurrent UPDATE
+  that moves a row to a new page cannot hide it. The SQL parallel
+  covering-scan dispatch uses it. That dispatch is still not reachable from
+  SQL: the covering scan takes only plans without aggregation, and the gate
+  dispatches only plans with it.

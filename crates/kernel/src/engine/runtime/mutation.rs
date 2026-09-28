@@ -1,4 +1,5 @@
 use super::*;
+use crate::engine::page_heap::HeapScanRow;
 
 impl Engine {
     pub fn get(&self, tx: &mut Txn, row_id: RowId) -> Result<Option<Vec<u8>>> {
@@ -20,6 +21,31 @@ impl Engine {
         let snapshot = tx.snapshot().clone();
         self.heap
             .get_for_relation(&self.txs, &snapshot, Some(tx.id()), rel_id, row_id)
+    }
+
+    /// Every row of `rel_id` that `tx` sees, read by `workers` threads that
+    /// split the relation's heap pages between them. Each row is read as
+    /// [`Engine::get_for_relation`] reads it: one version, never a
+    /// superseded or deleted one. Row order is not stable. The SQL parallel
+    /// covering-scan dispatch calls this inside `pool.install(|| ...)` so
+    /// the workers run in the database's Rayon pool.
+    pub fn parallel_scan_relation(
+        &self,
+        tx: &mut Txn,
+        rel_id: RelId,
+        workers: usize,
+    ) -> Result<Vec<HeapScanRow>> {
+        tx.ensure_open()?;
+        self.refresh_read_committed(tx);
+        let snapshot = tx.snapshot().clone();
+        self.heap.parallel_scan_relation(
+            &self.txs,
+            &snapshot,
+            Some(tx.id()),
+            Some(rel_id),
+            workers,
+            None,
+        )
     }
 
     pub fn insert(&self, tx: &mut Txn, payload: Vec<u8>) -> Result<RowId> {

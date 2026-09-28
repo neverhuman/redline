@@ -379,8 +379,17 @@ impl BufferPool {
         self.inner.stats()
     }
 
+    /// Pages in the page file. A page the pool allocated but has not
+    /// written yet is not counted; see [`BufferPool::allocated_page_count`].
     pub fn page_count(&self) -> Result<u64> {
         self.inner.page_count()
+    }
+
+    /// The highest page id allocated so far, whether or not the page has
+    /// reached the page file. A new page lives only in the pool until it is
+    /// flushed, so the file can be shorter than this.
+    pub fn allocated_page_count(&self) -> Result<u64> {
+        self.inner.allocated_page_count()
     }
 
     /// Lane INT: raw-bytes read used by the integrity checker to recompute
@@ -666,6 +675,11 @@ impl Inner {
 
     fn page_count(&self) -> Result<u64> {
         self.page_file.page_count()
+    }
+
+    fn allocated_page_count(&self) -> Result<u64> {
+        let allocated = self.next_page_id.load(Ordering::Acquire).saturating_sub(1);
+        Ok(allocated.max(self.page_file.page_count()?))
     }
 
     fn read_page_bytes_unchecked(&self, page_id: PageId) -> Result<Vec<u8>> {

@@ -1,14 +1,18 @@
-//! WS-C3 round 2: page-range parallel heap scan for `PageBackedHeap`.
+//! WS-C3: heap scans for `PageBackedHeap` split across worker threads.
 //!
-//! Round-1 (R1-D) shipped `ConcurrentHeap::parallel_scan` on the lane-vector
-//! dev heap. The production SQL path reads from `PageBackedHeap`, which is
-//! page-paginated and buffer-pool-backed, so the dev-heap API never reached
-//! production callers. This module ports the worker-partitioning shape to
-//! `PageBackedHeap`: each worker takes a disjoint slice of the requested
-//! [`std::ops::Range<PageId>`], pins pages through the shared buffer pool
-//! (which is shard-safe per `crates/kernel/src/storage/buffer.rs`), decodes
-//! their tuples, applies snapshot visibility, and sends `HeapScanRow`
-//! records back to the caller on a bounded `mpsc::sync_channel`.
+//! An UPDATE or DELETE appends a new tuple and leaves the older one on its
+//! page as it was. The row directory names each row's newest tuple, and
+//! the older versions are reached through the undo chain, so most tuples on
+//! a page can be superseded versions that still look live on their own.
+//! These scans therefore start from a snapshot of the row directory, not
+//! from the page contents. They group the rows' newest tuples by page; each
+//! worker pins its share of those pages through the shared buffer pool
+//! (shard-safe per `crates/kernel/src/storage/buffer.rs`), decodes the
+//! newest tuples there, and resolves each row as `get_for_relation` does:
+//! the tuple itself when the snapshot sees it, nothing for a delete it sees,
+//! otherwise the first visible version down the undo chain. A row comes
+//! back at most once, from the page its newest tuple is on, and pages only
+//! in the buffer pool are read like pages in the file.
 //!
 //! The `rayon` dep is intentionally NOT pulled into kernel; the SQL-side
 //! gate is expected to wrap the call with `pool.install(|| ...)` so the
@@ -20,13 +24,14 @@
 //! the same page are emitted in slot order. Callers that need a
 //! deterministic order must sort the returned vector.
 
+use std::collections::BTreeMap;
 use std::sync::mpsc;
 use std::thread;
 
-use crate::engine::page_heap::{ConcurrentVisibility, PageBackedHeap};
+use crate::engine::page_heap::PageBackedHeap;
 use crate::engine::tx::ConcurrentTxStatus;
-use crate::format::{PageId, PageKind, RelId, RowId, TupleVersion, TxId};
-use crate::txn::{Snapshot, TupleVisibility};
+use crate::format::{PageId, RelId, RowId, TuplePtr, TupleVersion, TxId};
+use crate::txn::Snapshot;
 use crate::{Error, Result};
 
 /// One row materialised by [`PageBackedHeap::parallel_scan_page_range`].
@@ -45,9 +50,14 @@ pub struct HeapScanRow {
 /// telemetry without snapshotting the buffer-pool stats.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub struct ParallelScanDiagnostics {
+    /// Pages pinned: those holding the newest tuple of at least one row.
     pub pages_visited: usize,
+    /// Pinned pages reused since the directory snapshot. Their rows were
+    /// read again through the live row directory.
     pub heap_pages_skipped: usize,
+    /// Rows resolved, one per directory entry in the scanned pages.
     pub tuples_seen: usize,
+    /// Rows returned.
     pub tuples_visible: usize,
     pub worker_count: usize,
 }
@@ -59,23 +69,42 @@ pub fn parallel_scan_diagnostics() -> ParallelScanDiagnostics {
     ParallelScanDiagnostics::default()
 }
 
+/// A row named by the directory snapshot, located by its newest tuple.
+#[derive(Clone, Copy, Debug)]
+struct HeadRef {
+    rel_id: RelId,
+    row_id: RowId,
+    ptr: TuplePtr,
+}
+
+/// The rows whose newest tuple is on `page_id`, in slot order.
+#[derive(Debug)]
+struct PageHeads {
+    page_id: PageId,
+    heads: Vec<HeadRef>,
+}
+
 impl PageBackedHeap {
-    /// WS-C3 R2: scan a disjoint page range in parallel, returning every
-    /// row visible to `snapshot` whose relation matches `rel_filter`
-    /// (or every relation when `rel_filter` is `None`).
+    /// WS-C3 R2: every row visible to `snapshot` whose newest tuple is on a
+    /// page in `page_range`, restricted to `rel_filter` (every relation
+    /// when `None`), read by `workers` threads.
     ///
     /// `page_range` is a half-open `[start, end)` interval of `PageId`s.
-    /// `workers` is clamped to `[1, page_range.len()]`. The caller is
-    /// expected to source the upper bound from `Self::page_count()` and
-    /// to gate the dispatch on a rayon pool's presence — that's the
-    /// SQL-side responsibility. When `workers == 1` we fall through to
-    /// the serial path so the kernel test can assert set-equality.
+    /// Rows are placed by the page their newest tuple is on, so disjoint
+    /// ranges return disjoint rows, and ranges covering
+    /// `1..=allocated_page_count()` return each visible row once. A
+    /// concurrent UPDATE can move a row's newest tuple to a page allocated
+    /// after the caller chose its range; [`Self::parallel_scan_relation`]
+    /// takes no range and cannot miss such a row. `workers` is clamped to
+    /// the number of pages to read; with one worker the scan runs on the
+    /// calling thread.
     ///
     /// Each worker pins one page at a time, drops the guard before
-    /// touching the next page, and forwards visible rows on a bounded
+    /// resolving the page's rows, and forwards them on a bounded
     /// `mpsc::sync_channel` so memory stays bounded even when the
     /// consumer is slower than the producers. The drain happens on the
     /// dispatcher thread (the still-serial SQL executor mainline).
+    #[allow(clippy::too_many_arguments)]
     pub fn parallel_scan_page_range(
         &self,
         tx_status: &ConcurrentTxStatus,
@@ -86,28 +115,140 @@ impl PageBackedHeap {
         workers: usize,
         diagnostics: Option<&mut ParallelScanDiagnostics>,
     ) -> Result<Vec<HeapScanRow>> {
-        let start = page_range.start.0;
-        let end = page_range.end.0;
-        if start >= end {
+        let pages = self.head_pages(rel_filter, Some(page_range))?;
+        self.scan_head_pages(tx_status, snapshot, owner, &pages, workers, diagnostics)
+    }
+
+    /// Every row of `rel_filter` (every relation when `None`) visible to
+    /// `snapshot`, read by `workers` threads that split the pages holding
+    /// the rows' newest tuples between them. Each visible row comes back
+    /// once, with the payload `get_for_relation` returns for it.
+    pub fn parallel_scan_relation(
+        &self,
+        tx_status: &ConcurrentTxStatus,
+        snapshot: &Snapshot,
+        owner: Option<TxId>,
+        rel_filter: Option<RelId>,
+        workers: usize,
+        diagnostics: Option<&mut ParallelScanDiagnostics>,
+    ) -> Result<Vec<HeapScanRow>> {
+        let pages = self.head_pages(rel_filter, None)?;
+        self.scan_head_pages(tx_status, snapshot, owner, &pages, workers, diagnostics)
+    }
+
+    /// Serial reference scan over a page range: the rows
+    /// [`Self::parallel_scan_page_range`] returns, read on the calling
+    /// thread in page and slot order.
+    pub fn serial_scan_page_range(
+        &self,
+        tx_status: &ConcurrentTxStatus,
+        snapshot: &Snapshot,
+        owner: Option<TxId>,
+        page_range: std::ops::Range<PageId>,
+        rel_filter: Option<RelId>,
+        diagnostics: Option<&mut ParallelScanDiagnostics>,
+    ) -> Result<Vec<HeapScanRow>> {
+        let pages = self.head_pages(rel_filter, Some(page_range))?;
+        self.scan_head_pages(tx_status, snapshot, owner, &pages, 1, diagnostics)
+    }
+
+    /// Snapshot the row directory for `rel_filter` and group the rows by the
+    /// page their newest tuple is on, keeping pages inside `page_range`.
+    fn head_pages(
+        &self,
+        rel_filter: Option<RelId>,
+        page_range: Option<std::ops::Range<PageId>>,
+    ) -> Result<Vec<PageHeads>> {
+        let heads: Vec<HeadRef> = match rel_filter {
+            Some(rel_id) => self
+                .relation_entries(rel_id)?
+                .into_iter()
+                .map(|(row_id, ptr)| HeadRef {
+                    rel_id,
+                    row_id,
+                    ptr,
+                })
+                .collect(),
+            None => self
+                .all_relation_entries()?
+                .into_iter()
+                .map(|(rel_id, row_id, ptr)| HeadRef {
+                    rel_id,
+                    row_id,
+                    ptr,
+                })
+                .collect(),
+        };
+        let mut by_page: BTreeMap<PageId, Vec<HeadRef>> = BTreeMap::new();
+        for head in heads {
+            if head.ptr.is_null() {
+                return Err(Error::CorruptPage("null tuple pointer"));
+            }
+            let page = head.ptr.page_id.0;
+            if let Some(range) = &page_range
+                && (page < range.start.0 || page >= range.end.0)
+            {
+                continue;
+            }
+            by_page.entry(head.ptr.page_id).or_default().push(head);
+        }
+        Ok(by_page
+            .into_iter()
+            .map(|(page_id, mut heads)| {
+                heads.sort_unstable_by_key(|head| head.ptr.slot);
+                PageHeads { page_id, heads }
+            })
+            .collect())
+    }
+
+    /// Resolve the rows of `pages`, split across `workers` threads that take
+    /// every `workers`-th page each.
+    fn scan_head_pages(
+        &self,
+        tx_status: &ConcurrentTxStatus,
+        snapshot: &Snapshot,
+        owner: Option<TxId>,
+        pages: &[PageHeads],
+        workers: usize,
+        diagnostics: Option<&mut ParallelScanDiagnostics>,
+    ) -> Result<Vec<HeapScanRow>> {
+        if pages.is_empty() {
             if let Some(d) = diagnostics {
-                d.worker_count = 0;
+                *d = ParallelScanDiagnostics::default();
             }
             return Ok(Vec::new());
         }
-        let total_pages = (end - start) as usize;
-        let workers = workers.max(1).min(total_pages);
-
-        if workers == 1 {
-            return self.serial_scan_page_range(
-                tx_status,
-                snapshot,
-                owner,
-                page_range,
-                rel_filter,
-                diagnostics,
-            );
+        let workers = workers.max(1).min(pages.len());
+        let (rows, totals) = if workers == 1 {
+            let mut rows = Vec::new();
+            let mut totals = WorkerDiag::default();
+            for page in pages {
+                self.collect_page_heads(tx_status, snapshot, owner, page, &mut totals, |row| {
+                    rows.push(row)
+                })?;
+            }
+            (rows, totals)
+        } else {
+            self.scan_head_pages_threaded(tx_status, snapshot, owner, pages, workers)?
+        };
+        if let Some(d) = diagnostics {
+            d.worker_count = workers;
+            d.pages_visited = totals.pages_visited;
+            d.heap_pages_skipped = totals.heap_pages_skipped;
+            d.tuples_seen = totals.tuples_seen;
+            d.tuples_visible = rows.len();
         }
+        Ok(rows)
+    }
 
+    fn scan_head_pages_threaded(
+        &self,
+        tx_status: &ConcurrentTxStatus,
+        snapshot: &Snapshot,
+        owner: Option<TxId>,
+        pages: &[PageHeads],
+        workers: usize,
+    ) -> Result<(Vec<HeapScanRow>, WorkerDiag)> {
         // Bounded sync channel so producers throttle when the consumer
         // is slower. Capacity tuned to keep ~16 rows of head-room per
         // worker in flight; the upper bound is intentionally modest so
@@ -115,8 +256,9 @@ impl PageBackedHeap {
         let channel_cap = (workers * 16).max(64);
         let (tx, rx) = mpsc::sync_channel::<HeapScanRow>(channel_cap);
         let (diag_tx, diag_rx) = mpsc::channel::<WorkerDiag>();
+        let expected_rows: usize = pages.iter().map(|page| page.heads.len()).sum();
 
-        let (rows, totals) = thread::scope(|scope| -> Result<(Vec<HeapScanRow>, WorkerDiag)> {
+        thread::scope(|scope| -> Result<(Vec<HeapScanRow>, WorkerDiag)> {
             let mut handles = Vec::with_capacity(workers);
             for worker_idx in 0..workers {
                 let heap = &*self;
@@ -124,14 +266,12 @@ impl PageBackedHeap {
                 let diag_tx = diag_tx.clone();
                 let handle = scope.spawn(move || -> Result<()> {
                     let mut diag = WorkerDiag::default();
-                    let mut page_no = start.saturating_add(worker_idx as u64);
-                    while page_no < end {
-                        match heap.collect_heap_page(
+                    for page in pages.iter().skip(worker_idx).step_by(workers) {
+                        let collected = heap.collect_page_heads(
                             tx_status,
                             snapshot,
                             owner,
-                            PageId(page_no),
-                            rel_filter,
+                            page,
                             &mut diag,
                             |row| {
                                 // Best-effort send: a closed channel
@@ -140,14 +280,11 @@ impl PageBackedHeap {
                                 // stop signal rather than an error.
                                 tx.send(row).ok();
                             },
-                        ) {
-                            Ok(_) => {}
-                            Err(err) => {
-                                let _ = diag_tx.send(diag);
-                                return Err(err);
-                            }
+                        );
+                        if let Err(err) = collected {
+                            let _ = diag_tx.send(diag);
+                            return Err(err);
                         }
-                        page_no = page_no.saturating_add(workers as u64);
                     }
                     let _ = diag_tx.send(diag);
                     Ok(())
@@ -162,7 +299,7 @@ impl PageBackedHeap {
             // Consumer mainline: drain the channel while workers are
             // still feeding it. This is the "still-serial executor
             // mainline" referenced in the WS-C3 R2 brief.
-            let mut rows = Vec::with_capacity(total_pages * 8);
+            let mut rows = Vec::with_capacity(expected_rows);
             while let Ok(row) = rx.recv() {
                 rows.push(row);
             }
@@ -184,117 +321,73 @@ impl PageBackedHeap {
             }
 
             Ok((rows, totals))
-        })?;
-
-        if let Some(d) = diagnostics {
-            d.worker_count = workers;
-            d.pages_visited = totals.pages_visited;
-            d.heap_pages_skipped = totals.heap_pages_skipped;
-            d.tuples_seen = totals.tuples_seen;
-            d.tuples_visible = rows.len();
-        }
-        Ok(rows)
+        })
     }
 
-    /// Serial reference scan over a page range. Used by
-    /// `parallel_scan_page_range` when `workers == 1` and by the
-    /// kernel test that asserts set-equality between the two paths.
-    pub fn serial_scan_page_range(
+    /// Pin one page, decode the newest tuple of each of its rows, release
+    /// the page, then forward the version `snapshot` sees of each row to
+    /// `sink`. Resolving happens after the release because reaching an
+    /// older version pins undo pages. Errors short-circuit.
+    fn collect_page_heads<F>(
         &self,
         tx_status: &ConcurrentTxStatus,
         snapshot: &Snapshot,
         owner: Option<TxId>,
-        page_range: std::ops::Range<PageId>,
-        rel_filter: Option<RelId>,
-        diagnostics: Option<&mut ParallelScanDiagnostics>,
-    ) -> Result<Vec<HeapScanRow>> {
-        let mut rows = Vec::new();
-        let mut totals = WorkerDiag::default();
-        let mut page_no = page_range.start.0;
-        let end = page_range.end.0;
-        while page_no < end {
-            self.collect_heap_page(
-                tx_status,
-                snapshot,
-                owner,
-                PageId(page_no),
-                rel_filter,
-                &mut totals,
-                |row| rows.push(row),
-            )?;
-            page_no = page_no.saturating_add(1);
-        }
-        if let Some(d) = diagnostics {
-            d.worker_count = 1;
-            d.pages_visited = totals.pages_visited;
-            d.heap_pages_skipped = totals.heap_pages_skipped;
-            d.tuples_seen = totals.tuples_seen;
-            d.tuples_visible = rows.len();
-        }
-        Ok(rows)
-    }
-
-    /// Pin a single heap page, walk its slots, and forward every visible
-    /// tuple to `sink`. Returns silently when the page is not a heap
-    /// page or when no frame is allocated. Errors short-circuit.
-    fn collect_heap_page<F>(
-        &self,
-        tx_status: &ConcurrentTxStatus,
-        snapshot: &Snapshot,
-        owner: Option<TxId>,
-        page_id: PageId,
-        rel_filter: Option<RelId>,
+        page: &PageHeads,
         diag: &mut WorkerDiag,
         mut sink: F,
     ) -> Result<()>
     where
         F: FnMut(HeapScanRow),
     {
-        let guard = match self.buffer_ref().pin(page_id) {
-            Ok(guard) => guard,
-            // Lazily-grown heap files can contain pages that have never
-            // been allocated; treat them as empty rather than aborting.
-            Err(Error::InvalidMagic { actual: 0, .. }) => return Ok(()),
-            Err(err) => return Err(err),
-        };
+        let guard = self.buffer_ref().pin(page.page_id)?;
         diag.pages_visited += 1;
-        guard.with_page(|page| {
-            let header = page.header()?;
-            if header.kind != PageKind::Heap {
-                diag.heap_pages_skipped += 1;
-                return Ok(());
-            }
-            let slot_count = page.slot_count()?;
-            for slot in 0..slot_count {
-                diag.tuples_seen += 1;
-                let bytes = page.cell(slot)?;
-                let tuple = match TupleVersion::decode(bytes) {
-                    Ok(t) => t,
-                    Err(_) => continue,
-                };
-                let effective_rel = if tuple.rel_id == RelId::ZERO {
-                    header.rel_id
+        let mut newest: Vec<(HeadRef, TupleVersion)> = Vec::with_capacity(page.heads.len());
+        let mut moved: Vec<HeadRef> = Vec::new();
+        guard.with_page(|contents| {
+            let generation = contents.header()?.generation;
+            for head in &page.heads {
+                if head.ptr.generation == generation {
+                    newest.push((*head, TupleVersion::decode(contents.cell(head.ptr.slot)?)?));
                 } else {
-                    tuple.rel_id
-                };
-                if let Some(filter) = rel_filter
-                    && filter != effective_rel
-                {
-                    continue;
-                }
-                match tuple.visibility_concurrent(tx_status, snapshot, owner) {
-                    TupleVisibility::Visible => {
-                        sink(HeapScanRow {
-                            rel_id: effective_rel,
-                            row_id: tuple.row_id,
-                            payload: tuple.payload,
-                        });
-                    }
-                    TupleVisibility::Deleted | TupleVisibility::Invisible => {}
+                    moved.push(*head);
                 }
             }
             Ok(())
-        })
+        })?;
+        drop(guard);
+
+        for (head, tuple) in newest {
+            diag.tuples_seen += 1;
+            if let Some(payload) =
+                self.visible_payload_for_relation(tx_status, snapshot, owner, head.rel_id, tuple)?
+            {
+                sink(HeapScanRow {
+                    rel_id: head.rel_id,
+                    row_id: head.row_id,
+                    payload,
+                });
+            }
+        }
+        if !moved.is_empty() {
+            diag.heap_pages_skipped += 1;
+        }
+        // The page was reused after the directory snapshot, so these rows
+        // were vacuumed or have moved. Read each through the live directory,
+        // as the serial read does.
+        for head in moved {
+            diag.tuples_seen += 1;
+            if let Some(payload) =
+                self.get_for_relation(tx_status, snapshot, owner, head.rel_id, head.row_id)?
+            {
+                sink(HeapScanRow {
+                    rel_id: head.rel_id,
+                    row_id: head.row_id,
+                    payload,
+                });
+            }
+        }
+        Ok(())
     }
 }
 
