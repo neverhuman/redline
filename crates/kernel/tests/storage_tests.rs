@@ -413,6 +413,7 @@ fn control_file_round_trips_and_validates_checksum() {
         checkpoint_lsn: Lsn(1234),
         page_count: 44,
         heap_redo_lsn: Lsn(1300),
+        complete_cut: true,
     };
 
     let mut encoded = control.encode().unwrap();

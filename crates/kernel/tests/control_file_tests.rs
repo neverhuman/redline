@@ -49,12 +49,13 @@ fn control_store_refuses_a_heap_redo_lsn_below_the_checkpoint_lsn() {
 #[test]
 fn version_one_control_file_starts_heap_redo_at_its_checkpoint_lsn() {
     // A file written before the heap redo LSN existed: version 1, bytes 40
-    // and up zero.
+    // and up zero. Its checkpoint did not promise a complete cut.
     let control = ControlFile {
         generation: 4,
         checkpoint_lsn: Lsn(1234),
         page_count: 9,
         heap_redo_lsn: Lsn(1234),
+        complete_cut: false,
     };
     let mut bytes = control.encode().unwrap();
     assert_eq!(CONTROL_VERSION, 2);
@@ -72,6 +73,7 @@ fn control_file_with_heap_redo_below_its_checkpoint_is_corrupt() {
         checkpoint_lsn: Lsn(1234),
         page_count: 9,
         heap_redo_lsn: Lsn(1234),
+        complete_cut: true,
     };
     let mut bytes = control.encode().unwrap();
     bytes[40..48].copy_from_slice(&1000_u64.to_le_bytes());

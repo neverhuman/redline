@@ -34,6 +34,11 @@ pub struct ControlFile {
     /// the page it changed, so replaying a heap record the page file already
     /// holds would leave a second copy of the row.
     pub heap_redo_lsn: Lsn,
+    /// A version-2 checkpoint wrote every dirty page, so a heap page past
+    /// `page_count` holds nothing below `heap_redo_lsn`. A version-1 file
+    /// (v4.1.0) makes no such promise: its checkpoint could skip dirty
+    /// pages that eviction wrote later.
+    pub complete_cut: bool,
 }
 
 #[derive(Debug)]
@@ -102,6 +107,13 @@ impl ControlStore {
                 Ok(Some(control)) => valid.push(control),
                 Ok(None) => {}
                 Err(Error::Io(err)) => return Err(Error::Io(err)),
+                // A slot with this magic and a version this build does not
+                // know was written by a newer build, not damaged. Recovering
+                // past it, from the other slot or from the WAL alone, would
+                // replay heap records the newer build's page file holds.
+                Err(Error::UnsupportedVersion(version)) => {
+                    return Err(Error::UnsupportedVersion(version));
+                }
                 Err(error) => selection
                     .corrupt_slots
                     .push(CorruptControlSlot { name, error }),
@@ -141,6 +153,7 @@ impl ControlStore {
             checkpoint_lsn,
             page_count,
             heap_redo_lsn,
+            complete_cut: true,
         };
         let name = if next.generation.is_multiple_of(2) {
             CONTROL_B
@@ -234,6 +247,7 @@ impl ControlFile {
             checkpoint_lsn,
             page_count: read_u64(bytes, 32)?,
             heap_redo_lsn,
+            complete_cut: version != CONTROL_VERSION_V1,
         })
     }
 }

@@ -568,3 +568,14 @@ Draft lines for the v5.0.0 CHANGELOG. The integrator owns `CHANGELOG.md`.
   `CorruptWal`. Recovery now skips the marker on such a delete record, and
   refuses any other record naming `u64::MAX - 1` or `u64::MAX`, so the
   marker can never be handed out as a transaction id.
+- A control file whose version this build does not know (written by a
+  newer build) now fails the open with `UnsupportedVersion`, in either
+  slot. It used to count as a corrupt slot: with both slots from a newer
+  build recovery replayed the WAL from LSN 0 over that build's page file,
+  and beside a known slot it silently recovered from the older one.
+- Recovery empties heap pages past the checkpoint's page count only when
+  that checkpoint is version 2 (a complete cut). A version-1 checkpoint
+  from v4.1.0 could leave committed rows it already covered on such pages,
+  and emptying them lost those rows on the first open with this build.
+  Those pages now stay, with the duplicate-row risk v4.1.0 already had
+  there, until the first checkpoint this build takes.

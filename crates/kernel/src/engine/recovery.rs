@@ -208,9 +208,11 @@ impl Engine {
             .map_err(|_| Error::CorruptPage("create control store failed"))?;
         let tx_status_store = TxStatusStore::new(path.as_ref())
             .map_err(|_| Error::CorruptPage("create tx status store failed"))?;
-        let selection = control
-            .load_selection()
-            .map_err(|_| Error::CorruptPage("load control file failed"))?;
+        let selection = control.load_selection().map_err(|err| match err {
+            // A newer build's control file: say so rather than "corrupt".
+            Error::UnsupportedVersion(version) => Error::UnsupportedVersion(version),
+            _ => Error::CorruptPage("load control file failed"),
+        })?;
         // Everything up to the first write below only reads: the generation,
         // its transaction status, the WAL it needs and the catalog are all
         // checked first, so a check that fails leaves the files as they were
@@ -349,14 +351,19 @@ impl Engine {
         // heap redo LSN and none above it.
         let heap_replay_from = choice.plan.heap_replay_from;
         // Heap redo writes each row once; the page file must not already
-        // hold a copy that an earlier, interrupted recovery wrote.
-        replayed_pages::clear_heap_pages_past_checkpoint(
-            &page_file,
-            &buffer,
-            &heap,
-            config.rel_id,
-            choice.plan.heap_page_count,
-        )?;
+        // hold a copy that an earlier, interrupted recovery wrote. A
+        // version-1 checkpoint (v4.1.0) may have left committed rows it
+        // already covered on pages past its page count, so those pages stay,
+        // with the duplicate-row risk that build already had.
+        if choice.plan.clear_heap_past_count {
+            replayed_pages::clear_heap_pages_past_checkpoint(
+                &page_file,
+                &buffer,
+                &heap,
+                config.rel_id,
+                choice.plan.heap_page_count,
+            )?;
+        }
         reserve_ids_named_in_wal(&scan_report.records, &txs, &heap)?;
         recover_index_page_images(&scan_report.records, replay_from_lsn, &filter, &buffer)?;
         let metrics = recover_heap(&scan_report.records, heap_replay_from, &filter, &txs, &heap)?;

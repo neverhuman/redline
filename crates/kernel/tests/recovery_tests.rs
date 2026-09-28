@@ -1347,3 +1347,6 @@ mod torn_tail;
 
 #[path = "recovery_tests/pitr.rs"]
 mod pitr;
+
+#[path = "recovery_tests/control_versions.rs"]
+mod control_versions;

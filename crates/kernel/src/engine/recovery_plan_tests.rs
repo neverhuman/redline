@@ -46,6 +46,7 @@ fn checkpoint(checkpoint_lsn: u64, heap_redo_lsn: u64) -> ControlFile {
         checkpoint_lsn: Lsn(checkpoint_lsn),
         page_count: 1,
         heap_redo_lsn: Lsn(heap_redo_lsn),
+        complete_cut: true,
     }
 }
 
@@ -55,6 +56,7 @@ fn from_start() -> RecoveryPlan {
         replay_from_lsn: Lsn::ZERO,
         heap_replay_from: Lsn::ZERO,
         heap_page_count: 0,
+        clear_heap_past_count: true,
     }
 }
 
@@ -64,6 +66,7 @@ fn plan(from: u64, heap: u64) -> RecoveryPlan {
         replay_from_lsn: Lsn(from),
         heap_replay_from: Lsn(heap),
         heap_page_count: 1,
+        clear_heap_past_count: true,
     }
 }
 

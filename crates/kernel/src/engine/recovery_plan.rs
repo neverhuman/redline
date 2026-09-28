@@ -42,6 +42,10 @@ pub(super) struct RecoveryPlan {
     /// Heap pages up to here hold every heap record below
     /// `heap_replay_from`; pages above it hold only what replay rewrites.
     pub(super) heap_page_count: u64,
+    /// Whether heap pages past `heap_page_count` may be emptied before heap
+    /// redo. Only a complete-cut (version 2) checkpoint, or none at all,
+    /// promises they hold nothing replay will not write again.
+    pub(super) clear_heap_past_count: bool,
 }
 
 /// The generation recovery starts from, with what it loaded to choose it.
@@ -129,6 +133,7 @@ pub(super) fn validate_recovery_plan(
         replay_from_lsn: checkpoint.map_or(Lsn::ZERO, |checkpoint| checkpoint.checkpoint_lsn),
         heap_replay_from: checkpoint.map_or(Lsn::ZERO, redo_end),
         heap_page_count: checkpoint.map_or(0, |checkpoint| checkpoint.page_count),
+        clear_heap_past_count: checkpoint.is_none_or(|checkpoint| checkpoint.complete_cut),
     })
 }
 
@@ -214,6 +219,7 @@ pub(super) fn select_recoverable_generation(
         // status and the WAL after it.
         plan.heap_replay_from = plan.heap_replay_from.max(redo_end(&newest));
         plan.heap_page_count = newest.page_count;
+        plan.clear_heap_past_count = newest.complete_cut;
         warnings.push(format!(
             "checkpoint generation {} is unusable ({newest_err}); recovered from generation {} \
              with the heap of generation {}",
