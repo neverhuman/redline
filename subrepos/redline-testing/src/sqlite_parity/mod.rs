@@ -10,6 +10,8 @@ mod known_failures;
 mod memory;
 mod normalize;
 mod order;
+#[cfg(test)]
+mod record_schema_tests;
 mod record_sink;
 #[cfg(test)]
 mod reference_contract_tests;
