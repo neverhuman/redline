@@ -387,7 +387,6 @@ pub(crate) fn build_plan(
             simple_node(PhysicalKind::Constant, "ALTER TABLE".to_owned())
         }
         PreparedKind::ShowVariable { .. } => simple_node(PhysicalKind::Constant, "SHOW".to_owned()),
-        PreparedKind::Notify => simple_node(PhysicalKind::Constant, "NOTIFY".to_owned()),
         PreparedKind::Listen { .. } => simple_node(PhysicalKind::Constant, "LISTEN".to_owned()),
         PreparedKind::Unlisten { .. } => simple_node(PhysicalKind::Constant, "UNLISTEN".to_owned()),
         PreparedKind::CreateMatView { .. } => simple_node(

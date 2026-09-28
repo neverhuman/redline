@@ -10,6 +10,7 @@ mod listen;
 mod matview;
 mod numeric;
 mod parser;
+mod pg_advisory;
 mod pg_alter;
 mod pg_fn;
 mod pg_pl;

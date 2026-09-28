@@ -1709,6 +1709,13 @@ fn is_pure_scalar_expr(expr: &Expr) -> bool {
             if is_aggregate_function_name(func) {
                 return false;
             }
+            // `txid_current()` reads the statement's transaction, which
+            // this fast path never begins (PG-01).
+            if let [sqlparser::ast::ObjectNamePart::Identifier(ident)] = func.name.0.as_slice()
+                && crate::exec::expr::scalar::pg_session::reads_transaction(&ident.value)
+            {
+                return false;
+            }
             // Function with simple positional args of pure scalars is OK.
             match &func.args {
                 FunctionArguments::None => true,

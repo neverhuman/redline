@@ -67,8 +67,14 @@ fn listen_tracks_channels_and_rolls_back() {
 
     conn.execute("BEGIN").expect("begin");
     conn.execute("LISTEN beyond_ch_tx").expect("listen tx");
-    conn.execute("NOTIFY beyond_ch_tx, 'discarded'")
-        .expect("notify");
+    // NOTIFY is refused (PG-01); the refusal does not end the transaction.
+    let err = conn
+        .execute("NOTIFY beyond_ch_tx, 'discarded'")
+        .expect_err("notify");
+    assert!(
+        err.to_string().contains("unsupported capability: NOTIFY"),
+        "{err}"
+    );
     conn.execute("ROLLBACK").expect("rollback");
     assert_eq!(
         texts(

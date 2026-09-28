@@ -100,9 +100,24 @@ pub struct Connection {
     /// `crate::exec::attach::apply_attach_plan` when the executor runs
     /// `PreparedKind::Attach`.
     pub(super) attach_map: crate::exec::attach::AttachMap,
+    /// This connection's identity as a Postgres advisory-lock holder.
+    pub(super) advisory_owner: u64,
+}
+
+impl Drop for Connection {
+    /// A Postgres session's advisory locks end with the session.
+    fn drop(&mut self) {
+        self.db.advisory_locks.unlock_all(self.advisory_owner);
+    }
 }
 
 impl Connection {
+    /// The Postgres advisory locks of this connection's database, and this
+    /// connection's owner id in them.
+    pub(crate) fn advisory_locks(&self) -> (&crate::pg_advisory::AdvisoryLocks, u64) {
+        (&self.db.advisory_locks, self.advisory_owner)
+    }
+
     pub(crate) fn committed_sqlite_sequences(&self) -> std::collections::BTreeMap<String, i64> {
         self.db.sqlite_sequence_snapshot()
     }

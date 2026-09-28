@@ -1,7 +1,7 @@
 {
   "schema_version": "redline-postgres-regression-v2",
   "previous_source_commit": "4e742765a75fe94dff26ef02c33b323c1b718345",
-  "reason": "Every corpus case agrees with the pinned PostgreSQL reference: row matches, plus the declared_rejections below, each with its error text verified. No case is declared unsupported and no open failures remain.",
+  "reason": "Every other corpus case agrees with the pinned PostgreSQL reference: row matches, plus the declared_rejections below, each with its error text verified. The declared_unsupported cases succeed on PostgreSQL and are refused by RedlineDB with unsupported capability: pg_current_wal_lsn, pg_export_snapshot, pg_notify and NOTIFY used to answer with success-shaped stand-ins that did not do the work. No open failures remain.",
   "corpus_sha256": "b240a7204eeb46893ea1f06e715a144f6cd962efe8f41041582e52ca975cd5be",
   "reference_settings": "160015|C|C|UTC",
   "image_digest": "sha256:efdf07c2f9d4df592783dcc8ea5f6db02efbf5f6452b527225ff5e58364570e9",
@@ -20,6 +20,18 @@
     "BEYOND-CASE-20429",
     "BEYOND-CASE-20438"
   ],
-  "declared_unsupported": [],
+  "declared_unsupported": [
+    "BEYOND-CASE-20416",
+    "BEYOND-CASE-20417",
+    "BEYOND-CASE-20423",
+    "BEYOND-CASE-20431",
+    "BEYOND-CASE-20432",
+    "BEYOND-CASE-20435",
+    "BEYOND-CASE-20437",
+    "BEYOND-CASE-20441",
+    "BEYOND-CASE-20442",
+    "BEYOND-CASE-20443",
+    "BEYOND-CASE-20444"
+  ],
   "failed_cases": []
 }

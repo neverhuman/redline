@@ -169,7 +169,12 @@ pub(crate) fn bind_statement(
         }
         SqlStatement::Set(set) => bind_set_statement(sql, schema_epoch, set),
         SqlStatement::ShowVariable { variable } => bind_show_variable(sql, schema_epoch, variable),
-        SqlStatement::NOTIFY { .. } => Ok(template(sql, schema_epoch, false, PreparedKind::Notify)),
+        // PG-01: nothing delivers a notification, so NOTIFY is refused
+        // rather than accepted as a no-op.
+        SqlStatement::NOTIFY { .. } => Err(Error::UnsupportedCapability {
+            feature: "NOTIFY",
+            detail: "notifications are not delivered to listening sessions".to_owned(),
+        }),
         SqlStatement::LISTEN { channel } => {
             let channel = crate::listen::channel_from_ident(&channel)?;
             Ok(template(

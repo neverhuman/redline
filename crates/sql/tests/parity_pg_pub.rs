@@ -1,4 +1,4 @@
-//! Row-lock clauses, LOCK TABLE, snapshot export, and publications.
+//! Row-lock clauses, LOCK TABLE, refused snapshot export, and publications.
 
 use redlinedb_sql::{Connection, Database, DbOptions, SqlValue, Step};
 use std::sync::Arc;
@@ -75,8 +75,19 @@ fn publication_lock_and_snapshot() {
     assert_eq!(rows(&conn, "SELECT count(*) FROM bm_lk"), "0");
     exec(&conn, "COMMIT");
     exec(&conn, "BEGIN TRANSACTION ISOLATION LEVEL REPEATABLE READ");
-    assert_eq!(rows(&conn, "SELECT length(pg_export_snapshot()) > 0"), "t");
-    exec(&conn, "COMMIT");
+    // PG-01: no session can import a snapshot, so exporting one is refused
+    // instead of answered with a constant name.
+    let mut export = conn
+        .prepare("SELECT length(pg_export_snapshot()) > 0")
+        .expect("prepare");
+    let err = export.step().expect_err("pg_export_snapshot");
+    assert!(
+        err.to_string()
+            .contains("unsupported capability: pg_export_snapshot"),
+        "{err}"
+    );
+    drop(export);
+    exec(&conn, "ROLLBACK");
     exec(&conn, "CREATE PUBLICATION beyond_pub_all FOR ALL TABLES");
     assert_eq!(
         rows(

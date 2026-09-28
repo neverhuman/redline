@@ -296,11 +296,39 @@ fn a_policy_whose_declared_rejections_differ_from_the_corpus_fails() {
 }
 
 #[test]
-fn the_committed_policy_accepts_an_agreeing_run() {
+fn the_committed_policy_accepts_a_run_that_refuses_only_its_declared_unsupported_cases() {
     let committed = Path::new(env!("CARGO_MANIFEST_DIR"))
         .join("../../metadata/beyond_sqlite/postgres-regression.json");
-    let dir = bundle();
+    let policy: Value = serde_json::from_slice(&fs::read(&committed).unwrap()).unwrap();
+    let unsupported: Vec<String> = policy["declared_unsupported"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|id| id.as_str().unwrap().to_owned())
+        .collect();
+    let stderr = "Error: 1002: unsupported capability: pg_notify: no delivery\n";
+    let dir = bundle_with(|id, row| {
+        if unsupported.iter().any(|listed| listed == id) {
+            row["status"] = "failed".into();
+            row["target_exit_code"] = 3.into();
+            row["target_stderr"] = stderr.into();
+            row["target_stderr_sha256"] = format!("{:x}", Sha256::digest(stderr)).into();
+        }
+    });
     check(&raw_path(&dir), Some(&committed), None, &release()).unwrap();
+    assert_eq!(
+        report(&dir)["declared_unsupported"],
+        serde_json::json!(unsupported)
+    );
+    // Were every listed case to agree again, the ratchet would demand the
+    // policy drop them.
+    if !unsupported.is_empty() {
+        let agreeing = bundle();
+        let err = check(&raw_path(&agreeing), Some(&committed), None, &release())
+            .unwrap_err()
+            .to_string();
+        assert!(err.contains("now pass"), "{err}");
+    }
 }
 
 /// Rewrites one provenance field of a bundle.

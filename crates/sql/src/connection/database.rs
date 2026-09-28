@@ -17,6 +17,7 @@ use redlinedb_kernel::engine::{
 use redlinedb_kernel::error::Error as KernelError;
 
 use crate::error::{Error, Result};
+use crate::pg_advisory::AdvisoryLocks;
 use crate::session::{SessionState, UniqueLockTable};
 
 use super::cache::StatementCache;
@@ -30,6 +31,8 @@ pub struct Database {
     pub(super) path: Arc<PathBuf>,
     pub(super) engine: Arc<Engine>,
     pub(super) unique_locks: Arc<UniqueLockTable>,
+    /// Postgres advisory locks, owned by the connections of this database.
+    pub(super) advisory_locks: AdvisoryLocks,
     pub(super) stmt_cache: StatementCache,
     pub(super) optimizer_hash: u64,
     pub(super) stats_store: StatsStore,
@@ -192,6 +195,7 @@ impl Database {
             path: Arc::new(base.to_path_buf()),
             engine,
             unique_locks: UniqueLockTable::new(opts.unique_lock_shards, opts.busy_timeout),
+            advisory_locks: AdvisoryLocks::new(opts.busy_timeout),
             stmt_cache: StatementCache::with_capacity(opts.statement_cache_capacity),
             optimizer_hash,
             stats_store,
@@ -227,6 +231,7 @@ impl Database {
             path: Arc::new(base.to_path_buf()),
             engine,
             unique_locks: UniqueLockTable::new(opts.unique_lock_shards, opts.busy_timeout),
+            advisory_locks: AdvisoryLocks::new(opts.busy_timeout),
             stmt_cache: StatementCache::with_capacity(opts.statement_cache_capacity),
             optimizer_hash,
             stats_store,
@@ -264,6 +269,7 @@ impl Database {
             path: Arc::new(base.to_path_buf()),
             engine,
             unique_locks: UniqueLockTable::new(opts.unique_lock_shards, opts.busy_timeout),
+            advisory_locks: AdvisoryLocks::new(opts.busy_timeout),
             stmt_cache: StatementCache::with_capacity(opts.statement_cache_capacity),
             optimizer_hash,
             stats_store,
@@ -304,6 +310,7 @@ impl Database {
             local_cache: StatementCache::with_capacity(self.stmt_cache.capacity()),
             rql_stats: Default::default(),
             attach_map: crate::exec::attach::AttachMap::new(),
+            advisory_owner: crate::pg_advisory::next_owner(),
         })
     }
 
@@ -354,6 +361,7 @@ impl Database {
     pub fn set_busy_timeout(&self, timeout: Duration) {
         self.engine.set_busy_timeout(timeout);
         self.unique_locks.set_timeout(timeout);
+        self.advisory_locks.set_timeout(timeout);
     }
 
     pub(crate) fn query_memory(&self) -> &QueryMemoryConfig {

@@ -56,6 +56,21 @@ fn script(conn: &Arc<Connection>, sql: &str) {
     exec(conn, sql);
 }
 
+/// The error preparing or stepping `sql` raises; panics if it succeeds.
+fn error_of(conn: &Arc<Connection>, sql: &str) -> String {
+    let mut stmt = match conn.prepare(sql) {
+        Ok(stmt) => stmt,
+        Err(err) => return err.to_string(),
+    };
+    loop {
+        match stmt.step() {
+            Ok(Step::Row) => continue,
+            Ok(Step::Done) => panic!("{sql} succeeded"),
+            Err(err) => return err.to_string(),
+        }
+    }
+}
+
 #[test]
 fn plpgsql_corpus_shapes() {
     unsafe { std::env::set_var("REDLINEDB_RESULT_DIALECT", "postgres") };
@@ -256,20 +271,27 @@ $$",
         "1|1\n2|4\n3|9"
     );
 
+    // PG-01: nothing delivers a notification, so `PERFORM pg_notify` fails
+    // the function, and the trigger that runs it, instead of doing nothing.
     script(
         &conn,
         "CREATE FUNCTION beyond_notif_fn() RETURNS int AS $$ BEGIN PERFORM pg_notify('beyond_no_listener', 'from-fn'); RETURN 7; END; $$ LANGUAGE plpgsql",
     );
-    assert_eq!(rows(&conn, "SELECT beyond_notif_fn()"), "7");
+    let err = error_of(&conn, "SELECT beyond_notif_fn()");
+    assert!(err.contains("unsupported capability: pg_notify"), "{err}");
 
-    script(
+    exec(&conn, "CREATE TABLE beyond_trig_t(id int)");
+    exec(
         &conn,
-        "CREATE TABLE beyond_trig_t(id int);
-CREATE FUNCTION beyond_trig_fn() RETURNS trigger AS $$ BEGIN PERFORM pg_notify('beyond_no_listener', 'trig'); RETURN NEW; END; $$ LANGUAGE plpgsql;
-CREATE TRIGGER beyond_trig_trg AFTER INSERT ON beyond_trig_t FOR EACH ROW EXECUTE FUNCTION beyond_trig_fn()",
+        "CREATE FUNCTION beyond_trig_fn() RETURNS trigger AS $$ BEGIN PERFORM pg_notify('beyond_no_listener', 'trig'); RETURN NEW; END; $$ LANGUAGE plpgsql",
     );
-    exec(&conn, "INSERT INTO beyond_trig_t VALUES (1)");
-    assert_eq!(rows(&conn, "SELECT count(*) FROM beyond_trig_t"), "1");
+    exec(
+        &conn,
+        "CREATE TRIGGER beyond_trig_trg AFTER INSERT ON beyond_trig_t FOR EACH ROW EXECUTE FUNCTION beyond_trig_fn()",
+    );
+    let err = error_of(&conn, "INSERT INTO beyond_trig_t VALUES (1)");
+    assert!(err.contains("unsupported capability: pg_notify"), "{err}");
+    assert_eq!(rows(&conn, "SELECT count(*) FROM beyond_trig_t"), "0");
 }
 
 #[test]

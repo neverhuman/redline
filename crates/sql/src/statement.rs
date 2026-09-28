@@ -225,9 +225,6 @@ pub enum PreparedKind {
     ShowVariable {
         name: Arc<str>,
     },
-    /// `NOTIFY channel [, payload]`. No listener is attached, so this is a
-    /// successful no-op. `pg_notify` still returns a non-null value.
-    Notify,
     /// `LISTEN channel`. Adds `channel` to the session set.
     Listen {
         channel: Arc<str>,

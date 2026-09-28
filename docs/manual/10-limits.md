@@ -18,14 +18,15 @@ The C ABI uses `sqlite3_*` names for the calls it implements. A symbol existing 
 
 ## Postgres
 
-The shell comparison has 265 cases. The regression policy's failure list is empty. A local gate recorded 265 agreeing and 0 failed. 12 of those are expected rejections, listed in [Postgres coverage](05-postgres-coverage.md): a bad enum label, a failing domain check, `MERGE ... WHEN NOT MATCHED BY SOURCE`, a `DISTINCT ON` order mismatch, two explicit values in `GENERATED ALWAYS AS IDENTITY` columns, a NULL after `ALTER COLUMN ... SET NOT NULL`, `RAISE EXCEPTION`, `CREATE EXTENSION vector`, logical decoding while `wal_level` is `replica` (two cases), and `LISTEN ALL`. Agreement is normalized SQL-shell transcript agreement, not the PostgreSQL wire protocol, TLS, roles, or SQLSTATE; the [capability matrix](../beyond-postgres-skips.md#capability-matrix) lists those as unsupported.
+The shell comparison has 265 cases. The regression policy's failure list is empty. Its declared-unsupported list names the 11 cases RedlineDB refuses with `unsupported capability:` while PostgreSQL succeeds: they call `pg_current_wal_lsn`, `pg_export_snapshot`, `pg_notify` or `NOTIFY`. A local gate recorded 254 agreeing, 11 declared unsupported and 0 mismatches. 12 of the agreeing cases are expected rejections, listed in [Postgres coverage](05-postgres-coverage.md): a bad enum label, a failing domain check, `MERGE ... WHEN NOT MATCHED BY SOURCE`, a `DISTINCT ON` order mismatch, two explicit values in `GENERATED ALWAYS AS IDENTITY` columns, a NULL after `ALTER COLUMN ... SET NOT NULL`, `RAISE EXCEPTION`, `CREATE EXTENSION vector`, logical decoding while `wal_level` is `replica` (two cases), and `LISTEN ALL`. Agreement is normalized SQL-shell transcript agreement, not the PostgreSQL wire protocol, TLS, roles, or SQLSTATE; the [capability matrix](../beyond-postgres-skips.md#capability-matrix) lists those as unsupported.
 
 Still outside the corpus, in plain language:
 
 - plpgsql outside the shapes that run (assignment, `IF`, loops, `RETURN NEXT`, `RETURN QUERY`, `CALL`, `STRICT`, one `VARIADIC int[]`)
 - the `vector` extension
-- logical decoding and cross-session `NOTIFY` (`pg_notify` inside a corpus function returns a row and delivers nothing)
-- advisory locks, transaction ids, WAL LSNs and snapshot export, which are answered by stand-ins that do not do the work
+- logical decoding and `NOTIFY`: nothing delivers a notification, so `NOTIFY` and `pg_notify` fail with `unsupported capability:`
+- WAL LSNs and snapshot export: `pg_current_wal_lsn` and `pg_export_snapshot` fail with `unsupported capability:`
+- advisory locks between processes, and the shared and transaction-level advisory locks; session-level advisory locks work between the connections of one process
 
 `LISTEN` on this connection works, and it rolls back with the transaction. It does not fan out to other processes.
 

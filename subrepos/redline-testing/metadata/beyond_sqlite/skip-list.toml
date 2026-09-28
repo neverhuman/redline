@@ -13,12 +13,17 @@
 #                    exists and what would be required to implement
 #   target_release — "deferred" (no plan to revisit), "closed" (the case now
 #                    passes; the entry stays for its rationale and history but
-#                    leaves the deferred set), or a specific version
+#                    leaves the deferred set), "unsupported" (RedlineDB refuses
+#                    the case with `unsupported capability:`; the case id is
+#                    in declared_unsupported of postgres-regression.json), or a
+#                    specific version
 #
 # Historical triage (233 failures) is in docs/beyond-postgres-skips.md.
-# As of d5d1c57bb the execution gate runs all 265 corpus cases and
-# failed_cases is empty. Every entry is target_release = "closed":
-# the corpus script passes. That is not a PostgreSQL wire-protocol claim.
+# The execution gate runs every corpus case and failed_cases is empty. A
+# "closed" entry's corpus script passes. That is not a PostgreSQL
+# wire-protocol claim. The "unsupported" entries used to pass only because
+# pg_current_wal_lsn, pg_export_snapshot, pg_notify and NOTIFY answered with
+# stand-ins that did no work; they are refused now (PG-01).
 
 # =============================================================================
 # BEYOND_LISTEN_NOTIFY (14)
@@ -39,14 +44,14 @@ case_id        = "20431"
 name           = "NOTIFY_NO_PAYLOAD"
 category       = "BEYOND_LISTEN_NOTIFY"
 rationale      = "Same surface as LISTEN: NOTIFY without payload still requires the pub/sub IPC queue and per-session subscription tracking. Deliberate scope cut: redlinedb does not aim to provide cross-session signaling primitives."
-target_release = "closed"
+target_release = "unsupported"
 
 [[skip]]
 case_id        = "20432"
 name           = "NOTIFY_WITH_PAYLOAD"
 category       = "BEYOND_LISTEN_NOTIFY"
 rationale      = "NOTIFY-with-payload requires the same pub/sub IPC surface as LISTEN; deliberate scope cut."
-target_release = "closed"
+target_release = "unsupported"
 
 [[skip]]
 case_id        = "20433"
@@ -67,7 +72,7 @@ case_id        = "20435"
 name           = "PG_NOTIFY_FUNCTION_FORM"
 category       = "BEYOND_LISTEN_NOTIFY"
 rationale      = "pg_notify() is the functional form of NOTIFY; same IPC scope cut."
-target_release = "closed"
+target_release = "unsupported"
 
 [[skip]]
 case_id        = "20436"
@@ -80,8 +85,8 @@ target_release = "closed"
 case_id        = "20437"
 name           = "LISTEN_AND_NOTIFY_ROLLBACK"
 category       = "BEYOND_LISTEN_NOTIFY"
-rationale      = "Tests NOTIFY rollback semantics via the LISTEN queue; requires the full pub/sub surface that is out of scope. The corpus script passes; this is not a wire-protocol claim."
-target_release = "closed"
+rationale      = "Tests NOTIFY rollback semantics via the LISTEN queue; requires the full pub/sub surface that is out of scope. NOTIFY is refused with unsupported capability."
+target_release = "unsupported"
 
 [[skip]]
 case_id        = "20439"
@@ -101,29 +106,29 @@ target_release = "closed"
 case_id        = "20441"
 name           = "NOTIFY_INSIDE_FUNCTION"
 category       = "BEYOND_LISTEN_NOTIFY"
-rationale      = "NOTIFY inside a PL/pgSQL function depends on BOTH stored procedures and the NOTIFY queue surface; redlinedb has neither and both are deliberately deferred. The corpus script passes; this is not a wire-protocol claim."
-target_release = "closed"
+rationale      = "NOTIFY inside a PL/pgSQL function depends on BOTH stored procedures and the NOTIFY queue surface; there is no NOTIFY queue, so PERFORM pg_notify is refused with unsupported capability."
+target_release = "unsupported"
 
 [[skip]]
 case_id        = "20442"
 name           = "NOTIFY_INSIDE_TRIGGER"
 category       = "BEYOND_LISTEN_NOTIFY"
-rationale      = "NOTIFY inside a trigger depends on triggers calling stored procedures plus the NOTIFY queue; same compound deferral. The corpus script passes; this is not a wire-protocol claim."
-target_release = "closed"
+rationale      = "NOTIFY inside a trigger depends on triggers calling stored procedures plus the NOTIFY queue; there is no NOTIFY queue, so the trigger's PERFORM pg_notify is refused with unsupported capability."
+target_release = "unsupported"
 
 [[skip]]
 case_id        = "20443"
 name           = "NOTIFY_EMPTY_PAYLOAD"
 category       = "BEYOND_LISTEN_NOTIFY"
 rationale      = "NOTIFY empty-payload variant exercises the same IPC surface as the other LISTEN/NOTIFY cases."
-target_release = "closed"
+target_release = "unsupported"
 
 [[skip]]
 case_id        = "20444"
 name           = "NOTIFY_LONG_PAYLOAD_100"
 category       = "BEYOND_LISTEN_NOTIFY"
 rationale      = "NOTIFY long-payload variant exercises the same IPC surface as the other LISTEN/NOTIFY cases."
-target_release = "closed"
+target_release = "unsupported"
 
 # =============================================================================
 # BEYOND_STORED_PROCEDURES (19)
@@ -285,15 +290,15 @@ target_release = "closed"
 case_id        = "20416"
 name           = "PG_WAL_LSN_DIFF_SELF"
 category       = "BEYOND_REPLICATION_CDC"
-rationale      = "pg_wal_lsn_diff + pg_current_wal_lsn() require Postgres WAL LSN infrastructure; redlinedb does not expose an LSN to compare. Out of scope."
-target_release = "closed"
+rationale      = "pg_wal_lsn_diff + pg_current_wal_lsn() require Postgres WAL LSN infrastructure; redlinedb does not expose an LSN to compare, so pg_current_wal_lsn is refused with unsupported capability. pg_wal_lsn_diff of two literal LSNs works."
+target_release = "unsupported"
 
 [[skip]]
 case_id        = "20417"
 name           = "PG_CURRENT_WAL_LSN_NONEMPTY"
 category       = "BEYOND_REPLICATION_CDC"
-rationale      = "pg_current_wal_lsn() requires a WAL LSN concept that redlinedb does not expose."
-target_release = "closed"
+rationale      = "pg_current_wal_lsn() requires a WAL LSN concept that redlinedb does not expose; it is refused with unsupported capability."
+target_release = "unsupported"
 
 [[skip]]
 case_id        = "20419"
@@ -327,8 +332,8 @@ target_release = "closed"
 case_id        = "20423"
 name           = "PG_EXPORT_SNAPSHOT_SHAPE"
 category       = "BEYOND_REPLICATION_CDC"
-rationale      = "pg_export_snapshot is a Postgres MVCC-snapshot export primitive used by parallel restore and replication; redlinedb has a different transactional model with no exportable snapshot handle. The corpus script passes; this is not a wire-protocol claim."
-target_release = "closed"
+rationale      = "pg_export_snapshot is a Postgres MVCC-snapshot export primitive used by parallel restore and replication; redlinedb has a different transactional model with no exportable snapshot handle. pg_export_snapshot is refused with unsupported capability."
+target_release = "unsupported"
 
 [[skip]]
 case_id        = "20424"

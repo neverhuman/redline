@@ -357,7 +357,6 @@ fn capability_matrix_covers_wire_tls_roles_sqlstate() {
         "roles",
         "sqlstate",
         "notify_delivery",
-        "advisory_locks",
         "wal_lsn",
         "snapshot_export",
         "logical_replication",
@@ -371,6 +370,9 @@ fn capability_matrix_covers_wire_tls_roles_sqlstate() {
         );
     }
     assert_eq!(status("citext"), "partial");
+    // PG-01 made them real within one process; the shared and
+    // transaction-level variants and cross-process locks are still missing.
+    assert_eq!(status("advisory_locks"), "partial");
 }
 
 #[test]

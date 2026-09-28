@@ -98,6 +98,7 @@ pub(crate) fn is_pragma_sql(sql: &str) -> bool {
 }
 
 pub fn parse_prepared_template(conn: &Connection, sql: &str) -> Result<PreparedTemplate> {
+    let _preparing = crate::exec::expr::scalar::pg_session::PrepareScope::enter();
     match catch_unwind(AssertUnwindSafe(|| parse_prepared_template_impl(conn, sql))) {
         Ok(result) => result,
         Err(payload) => Err(Error::Parse(format!(

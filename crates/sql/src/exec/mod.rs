@@ -912,10 +912,6 @@ pub fn execute_prepared(
         }
         // Track J: SHOW <name>. Returns a single-row result with the recalled
         // session value for `transaction_isolation`; other names yield "".
-        PreparedKind::Notify => Ok(ExecutionResult {
-            runtime: RuntimeState::Done,
-            affected_rows: 0,
-        }),
         PreparedKind::Listen { channel } => {
             with_session_reentrant(conn, |session| {
                 crate::listen::listen(session, channel);
@@ -1200,7 +1196,6 @@ fn template_writes(kind: &PreparedKind) -> bool {
         | PreparedKind::SetPgCitext { .. }
         | PreparedKind::PgAlter { .. }
         | PreparedKind::ShowVariable { .. }
-        | PreparedKind::Notify
         | PreparedKind::Listen { .. }
         | PreparedKind::Unlisten { .. } => false,
         PreparedKind::CreateMatView { .. }

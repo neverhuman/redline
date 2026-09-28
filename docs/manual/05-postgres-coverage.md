@@ -19,11 +19,13 @@ Leave it unset for SQLite work. The official SQLite lane does not set it.
 | Image the gate accepts | `sha256:efdf07c2f9d4df592783dcc8ea5f6db02efbf5f6452b527225ff5e58364570e9` |
 | Open failures in the policy on this commit | 0 |
 | Policy file | `metadata/beyond_sqlite/postgres-regression.json` |
-| Policy reason | every case agrees: row matches plus the declared rejections; nothing declared unsupported; no open failures |
+| Policy reason | every other case agrees: row matches plus the declared rejections; the declared-unsupported cases are refused; no open failures |
 
-The policy's `failed_cases` array lists the mismatches the gate allows, and its `declared_unsupported` array lists the cases where RedlineDB may refuse with `unsupported capability:` while PostgreSQL succeeds. A refusal is a failure, not a pass. On this branch both arrays are empty. The policy's `declared_rejections` array must equal the set the corpus declares, so the count below cannot drift. A local gate recorded 265 agreeing, 0 failed, 0 skipped, and the regression check passed. The README block between `POSTGRES_PARITY_START` and `POSTGRES_PARITY_END` is written by that gate.
+The policy's `failed_cases` array lists the mismatches the gate allows, and its `declared_unsupported` array lists the cases where RedlineDB may refuse with `unsupported capability:` while PostgreSQL succeeds. A refusal is a failure, not a pass. On this branch `failed_cases` is empty and `declared_unsupported` names the 11 cases below. The policy's `declared_rejections` array must equal the set the corpus declares, so the count below cannot drift. A local gate recorded 254 agreeing, 11 declared unsupported, 0 mismatches, 0 skipped, and the regression check passed. The README block between `POSTGRES_PARITY_START` and `POSTGRES_PARITY_END` is written by that gate.
 
-12 of the 265 agreeing cases are expected rejections, listed below. Both engines exit 3, stdout matches, and the case declares `expected_target_stderr_contains`. The gate re-checks each one from the raw record: the declared text is in the target's recorded stderr, and the case's setup ran on its own. Those statements still fail. The other 253 are row matches.
+12 of the 254 agreeing cases are expected rejections, listed below. Both engines exit 3, stdout matches, and the case declares `expected_target_stderr_contains`. The gate re-checks each one from the raw record: the declared text is in the target's recorded stderr, and the case's setup ran on its own. Those statements still fail. The other 242 are row matches.
+
+The 11 declared-unsupported cases succeed on PostgreSQL and fail on RedlineDB with `unsupported capability:`. They used to agree only because the functions they call answered with success-shaped stand-ins. `pg_current_wal_lsn` (20416, 20417): the WAL position is not exposed to SQL. `pg_export_snapshot` (20423): no other session can import a snapshot. `NOTIFY` (20431, 20432, 20437, 20443) and `pg_notify` (20435, 20441, 20442, 20444): nothing delivers a notification.
 
 The corpus is a SQL-shell comparison. The [capability matrix](../beyond-postgres-skips.md#capability-matrix) gives the surfaces it cannot establish — wire protocol, TLS, roles, SQLSTATE, NOTIFY delivery, replication, extensions, and behaviour across sessions — a status of their own. None of them is implemented.
 
@@ -48,7 +50,7 @@ These are in the engine on this commit, and the corpus cases that cover them are
 
 **SQL functions.** `LANGUAGE SQL` functions run. `LATERAL` is accepted on the forms the corpus covers. `DEFAULT nextval(...)` together with `ALTER SEQUENCE ... OWNED BY` inserts sequence values.
 
-**Session state.** `LISTEN` and `UNLISTEN` record channels on this connection. A listen that has not committed is gone after rollback. `pg_listening_channels()` reads that set. `NOTIFY` and `pg_notify` are accepted and deliver nothing to any session; the corpus cases that use them agree only because no session listens. `LISTEN ALL` is a syntax error on both engines. The advisory-lock, `txid_current`, WAL-LSN and snapshot-export functions are stand-ins that return fixed or success-shaped values; the capability matrix lists them as unsupported.
+**Session state.** `LISTEN` and `UNLISTEN` record channels on this connection. A listen that has not committed is gone after rollback. `pg_listening_channels()` reads that set. `NOTIFY` and `pg_notify` fail with `unsupported capability:`, because nothing would deliver the notification. `LISTEN ALL` is a syntax error on both engines. `txid_current()` and `pg_current_xact_id()` return the id of the statement's transaction. The advisory locks are real session-level locks between the connections of one process: `pg_try_advisory_lock` answers `f` while another connection holds the key, `pg_advisory_unlock` answers `t` only for a key this connection holds, and dropping the connection releases its locks. `pg_wal_lsn_diff` subtracts two LSN literals; `pg_current_wal_lsn` and `pg_export_snapshot` fail with `unsupported capability:`. These functions, `repeat`, `pg_backend_pid` and `current_user` exist only in the Postgres dialect. The capability matrix has the details.
 
 **Table flags.** `ALTER TABLE ... INHERIT` makes a later read of the parent return the parent rows and the child rows. `NO INHERIT` drops the child from that read. `SET UNLOGGED` then `SET LOGGED` reports `relpersistence` as `u` then `p`. `SET STATISTICS 250` reads back `250`. `SET STORAGE EXTERNAL` reads back `e`. `array_to_string(reloptions, ',')` reads back `autovacuum_enabled=true` after `SET (autovacuum_enabled = true)`. `OWNER TO CURRENT_USER` reports `tableowner` as `redlinedb`. `SET WITHOUT CLUSTER` leaves the clustered-index count at `0`.
 
@@ -73,7 +75,7 @@ These 12 statements fail on both engines. The corpus records the RedlineDB text,
 | 20429 | the same logical-decoding error from `pg_logical_slot_peek_changes` |
 | 20438 | `syntax error at or near "ALL"` for `LISTEN ALL` |
 
-The corpus plpgsql bodies run: assignment, `IF`, loops, `RETURN NEXT`, `RETURN QUERY`, `CALL`, `STRICT`, `VARIADIC int[]`, and `PERFORM pg_notify` from a function or an `AFTER INSERT` trigger. `RAISE EXCEPTION` aborts with the message above. A plpgsql program outside those shapes is still unsupported.
+The corpus plpgsql bodies run: assignment, `IF`, loops, `RETURN NEXT`, `RETURN QUERY`, `CALL`, `STRICT`, `VARIADIC int[]`, and `AFTER INSERT` triggers. `PERFORM pg_notify` in a function or trigger fails the calling statement with `unsupported capability: pg_notify`. `RAISE EXCEPTION` aborts with the message above. A plpgsql program outside those shapes is still unsupported.
 
 `USING gin` and `USING gist` in the passing index cases become ordinary indexes. Point distance works. A passing overlap query is not a different access plan.
 

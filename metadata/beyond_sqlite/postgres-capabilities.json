@@ -28,7 +28,7 @@
       "surface": "Roles and authorization: CREATE ROLE, GRANT, REVOKE, ownership checks, row security",
       "status": "unsupported",
       "cases": ["BEYOND-CASE-20219", "BEYOND-CASE-20254"],
-      "note": "There is one implicit role, redlinedb. current_user, OWNER TO CURRENT_USER and CREATE SCHEMA ... AUTHORIZATION CURRENT_USER report it (the cited cases). CREATE ROLE and GRANT fail as unsupported SQL, and no statement is authorization-checked."
+      "note": "There is one implicit role, redlinedb. current_user, OWNER TO CURRENT_USER and CREATE SCHEMA ... AUTHORIZATION CURRENT_USER report it (the cited cases); current_user, session_user, current_role and pg_get_userbyid exist only in the Postgres dialect. CREATE ROLE and GRANT fail as unsupported SQL, and no statement is authorization-checked."
     },
     {
       "capability": "sqlstate",
@@ -51,35 +51,35 @@
         "BEYOND-CASE-20443",
         "BEYOND-CASE-20444"
       ],
-      "note": "NOTIFY is accepted and does nothing, and pg_notify returns without delivering a payload. The cited cases match the transcript only because no session listens. LISTEN and UNLISTEN bookkeeping on one connection works (cases 20430, 20433, 20434, 20439, 20440). The stand-ins also answer in the default SQLite dialect (PG-01)."
+      "note": "NOTIFY is refused when it is prepared, and pg_notify when it is called, with unsupported capability: nothing delivers a notification, so the cited cases are declared unsupported (PG-01). Before, NOTIFY was a no-op and pg_notify returned without delivering anything, and both answered in the default SQLite dialect too. LISTEN and UNLISTEN keep a channel set per connection (cases 20430, 20433, 20434, 20439, 20440), and pg_notification_queue_usage() is 0 because nothing can be queued (case 20436)."
     },
     {
       "capability": "advisory_locks",
-      "surface": "pg_advisory_lock, pg_try_advisory_lock, pg_advisory_unlock",
-      "status": "unsupported",
+      "surface": "pg_advisory_lock, pg_try_advisory_lock, pg_advisory_unlock, pg_advisory_unlock_all",
+      "status": "partial",
       "cases": ["BEYOND-CASE-20410", "BEYOND-CASE-20411"],
-      "note": "Success-shaped stand-ins that take no lock: pg_try_advisory_lock always returns t, and pg_advisory_unlock of a key that was never locked returns t where PostgreSQL returns f. The cited cases match the transcript only (PG-01)."
+      "note": "Session-level exclusive locks shared by the connections of one open database in one process and owned by the connection that took them (PG-01): pg_try_advisory_lock answers f while another connection holds the key, pg_advisory_lock waits up to the busy timeout and then fails with lock timeout, pg_advisory_unlock answers t only for a key this connection holds, locks nest, and pg_advisory_unlock_all or dropping the connection releases them. The bigint and (int, int) keys are separate key spaces; the void result prints as an empty cell. Not provided: the shared and transaction-level variants, locks between processes, and the WARNING PostgreSQL prints for an unheld key. Two-connection tests are in crates/sql/tests/pg_behavior_two_sessions.rs; the cited cases run in one session."
     },
     {
       "capability": "transaction_ids",
       "surface": "txid_current, pg_current_xact_id",
-      "status": "unsupported",
+      "status": "partial",
       "cases": ["BEYOND-CASE-20406", "BEYOND-CASE-20407"],
-      "note": "Both return the constant 1; the cited cases only check that the value is positive (PG-01)."
+      "note": "Both return the id of the statement's transaction (PG-01): the same value throughout BEGIN ... COMMIT, a different one in every transaction, including concurrent ones and each autocommit statement, and never reused. Differences from PostgreSQL: every transaction has an id from its start, read-only ones included; the ids are RedlineDB's own transaction counter, not 32-bit xids with an epoch; and pg_current_xact_id returns a bigint, not xid8. The cited cases check only that the value is a positive integer."
     },
     {
       "capability": "wal_lsn",
       "surface": "pg_current_wal_lsn, pg_wal_lsn_diff",
       "status": "unsupported",
       "cases": ["BEYOND-CASE-20416", "BEYOND-CASE-20417"],
-      "note": "pg_current_wal_lsn returns the constant 0/1, and pg_wal_lsn_diff returns 0 for equal inputs and 1 for any others. The cited cases only check a non-empty LSN and a zero self-difference (PG-01)."
+      "note": "pg_current_wal_lsn is refused with unsupported capability: the WAL position is not exposed to SQL, so cases 20416 and 20417 are declared unsupported (PG-01). pg_wal_lsn_diff is arithmetic on two LSN literals: the signed byte distance ('0/10' minus '0/0' is 16, the reverse -16), invalid input syntax for type pg_lsn for a malformed LSN, and unsupported capability for a distance outside the bigint range. With no LSN source, that arithmetic is all it offers."
     },
     {
       "capability": "snapshot_export",
       "surface": "pg_export_snapshot and SET TRANSACTION SNAPSHOT",
       "status": "unsupported",
       "cases": ["BEYOND-CASE-20423"],
-      "note": "pg_export_snapshot returns the constant 00000001-1; no snapshot can be imported by another session. The cited case only checks a non-empty result (PG-01)."
+      "note": "pg_export_snapshot is refused with unsupported capability: no other session can import a snapshot, so case 20423 is declared unsupported (PG-01). SET TRANSACTION SNAPSHOT is not supported."
     },
     {
       "capability": "logical_replication",
@@ -118,7 +118,7 @@
       "surface": "Behaviour across sessions: locks, notifications, snapshots and catalog visibility between connections",
       "status": "unverified",
       "cases": [],
-      "note": "Every corpus case runs in one fresh process on :memory:, so no case observes a second session (PG-08)."
+      "note": "Every corpus case runs in one fresh process on :memory:, so no corpus case observes a second session, and no lane compares two sessions with PostgreSQL. Native two-connection tests (crates/sql/tests/pg_behavior_two_sessions.rs, PG-08) check that advisory locks contend and are released when a connection drops, LISTEN channel sets are per connection, NOTIFY is refused, concurrent transactions have distinct txid_current values, tables, indexes and views one connection creates are in the other's pg_class, and a refreshed materialized view is refreshed for both. Known gap, pinned by that file: sequences and the pg_matviews catalog are kept per connection, so a second connection cannot call nextval on a sequence the first one created."
     }
   ]
 }
