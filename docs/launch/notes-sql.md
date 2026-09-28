@@ -204,10 +204,18 @@ index-format epoch below), so such an index is rebuilt at the first open.
   predicates. `WHERE x = '5'` on an INTEGER column now finds 5 (it found
   nothing), `WHERE y = 5` on a TEXT column finds '5', and a column without
   a type still does not match across types, as in SQLite.
+- A comparison with an aggregate on one side (`HAVING g = count(*)`,
+  `SELECT g, sum(v) = g ... GROUP BY g`, `sum(v) BETWEEN g AND g`,
+  `g IN (count(*), ...)`) applies the same affinity: the aggregate has none
+  and a GROUP BY column keeps its own, so over a TEXT column `'2' =
+  count(*)` is true. The grouped evaluator compared the raw values and
+  found nothing. `x NOT IN (NULL, x)` in a grouped expression is false, not
+  NULL.
 - Index probes convert the constant by the indexed column's affinity, so an
   index and a scan give the same rows. A join probe uses the other table's
-  index only when the comparison converts the probe the way the index does
-  (`sqlite3IndexAffinityOk`); otherwise it compares row by row.
+  index when SQLite's `sqlite3IndexAffinityOk` allows it; a TEXT = TEXT
+  equijoin (which converts nothing) was wrongly refused and compared every
+  pair of rows.
 - `WHERE rowid = '5'` (and `id = '5'` on an INTEGER PRIMARY KEY, or a bound
   TEXT parameter) finds rowid 5. It used to fail with `comparing a rowid
   with numeric text needs comparison affinity`.

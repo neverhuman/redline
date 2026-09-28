@@ -371,3 +371,41 @@ fn equijoin_through_an_index_keeps_the_comparison_affinity() {
         lab.assert_same(sql, false);
     }
 }
+
+/// A comparison in HAVING or in a grouped SELECT list with an aggregate on
+/// one side: the aggregate has no affinity and a GROUP BY column keeps its
+/// own, so `g = count(*)` over a TEXT column compares as TEXT (`'2' =
+/// 2`). The grouped evaluator compared the raw values, so these found
+/// nothing.
+#[test]
+fn comparison_affinity_against_aggregates() {
+    let lab = Lab::new();
+    lab.exec_both(
+        "CREATE TABLE ga(g TEXT, v INTEGER, w); \
+         INSERT INTO ga VALUES ('1', 1, 5), ('2', 2, 5), ('2', 3, '5'), ('10', 4, 6), ('10', 6, 6); \
+         CREATE TABLE gb(a INTEGER, b TEXT); \
+         INSERT INTO gb VALUES (1, '1'), (2, '3'), (3, '3'), (3, '2');",
+    );
+    for sql in [
+        "SELECT g FROM ga GROUP BY g HAVING g = count(*)",
+        "SELECT g, g = count(*), count(*) = g FROM ga GROUP BY g",
+        "SELECT g FROM ga GROUP BY g HAVING sum(v) = g",
+        "SELECT g, sum(v) = g, sum(v) < g, sum(v) >= g, sum(v) <> g FROM ga GROUP BY g",
+        "SELECT g FROM ga GROUP BY g HAVING sum(v) BETWEEN g AND g",
+        "SELECT g, count(*) BETWEEN g AND 5 FROM ga GROUP BY g",
+        "SELECT g FROM ga GROUP BY g HAVING g IN (count(*), sum(v))",
+        "SELECT g, g NOT IN (count(*), 99) FROM ga GROUP BY g",
+        "SELECT a FROM gb GROUP BY a HAVING a = max(b)",
+        "SELECT a, a = max(b), a < min(b) FROM gb GROUP BY a",
+        "SELECT w, count(*) = w FROM ga GROUP BY w",
+        "SELECT g, CAST(sum(v) AS TEXT) = g FROM ga GROUP BY g",
+        "SELECT g, count(*) IN ('1', '2') FROM ga GROUP BY g",
+        "SELECT g, NULL IN (count(*)), count(*) NOT IN (NULL, count(*)) FROM ga GROUP BY g",
+    ] {
+        lab.assert_same(sql, false);
+    }
+    lab.assert_rows(
+        "SELECT g FROM ga GROUP BY g HAVING sum(v) = g ORDER BY g",
+        &[vec![text("1")], vec![text("10")]],
+    );
+}

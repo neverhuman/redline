@@ -141,6 +141,11 @@ pub(super) fn eval_group_scalar_with_ctx(
                 let left_value = eval_group_scalar_with_ctx(left, group, first_context, bindings)?;
                 let right_value =
                     eval_group_scalar_with_ctx(right, group, first_context, bindings)?;
+                let (left_value, right_value) = if is_comparison(op) {
+                    group_compared(left, right, first_context, left_value, right_value)
+                } else {
+                    (left_value, right_value)
+                };
                 Ok(match op {
                     BinaryOperator::And => {
                         match (truthy_opt(&left_value), truthy_opt(&right_value)) {
@@ -240,16 +245,22 @@ pub(super) fn eval_group_scalar_with_ctx(
                 high,
             } => {
                 let value = eval_group_scalar_with_ctx(expr, group, first_context, bindings)?;
-                let low = eval_group_scalar_with_ctx(low, group, first_context, bindings)?;
-                let high = eval_group_scalar_with_ctx(high, group, first_context, bindings)?;
+                let low_value = eval_group_scalar_with_ctx(low, group, first_context, bindings)?;
+                let high_value = eval_group_scalar_with_ctx(high, group, first_context, bindings)?;
                 if matches!(value, SqlValue::Null)
-                    || matches!(low, SqlValue::Null)
-                    || matches!(high, SqlValue::Null)
+                    || matches!(low_value, SqlValue::Null)
+                    || matches!(high_value, SqlValue::Null)
                 {
                     Ok(SqlValue::Null)
                 } else {
-                    let mut ok = compare_values(&value, &low) != Ordering::Less
-                        && compare_values(&value, &high) != Ordering::Greater;
+                    // `x BETWEEN a AND b` is `x >= a AND x <= b`, each with
+                    // its own comparison affinity.
+                    let (v_low, low_value) =
+                        group_compared(expr, low, first_context, value.clone(), low_value);
+                    let (v_high, high_value) =
+                        group_compared(expr, high, first_context, value, high_value);
+                    let mut ok = compare_values(&v_low, &low_value) != Ordering::Less
+                        && compare_values(&v_high, &high_value) != Ordering::Greater;
                     if *negated {
                         ok = !ok;
                     }
@@ -265,29 +276,42 @@ pub(super) fn eval_group_scalar_with_ctx(
                 if matches!(value, SqlValue::Null) {
                     Ok(SqlValue::Null)
                 } else {
+                    // SQLite compares `x IN (list)` with the affinity of `x`
+                    // alone.
+                    let affinity = first_context.map_or(
+                        crate::exec::expr::affinity::CmpAffinity::None,
+                        |row| {
+                            crate::exec::expr::affinity::CmpAffinity::of_optional(
+                                crate::exec::expr::affinity::expr_affinity(row, expr),
+                            )
+                        },
+                    );
                     let mut found = false;
                     let mut saw_null = false;
                     for item in list {
                         let candidate =
                             eval_group_scalar_with_ctx(item, group, first_context, bindings)?;
-                        match candidate {
-                            SqlValue::Null => saw_null = true,
-                            _ if compare_values(&value, &candidate) == Ordering::Equal => {
-                                found = true;
-                                break;
-                            }
-                            _ => {}
+                        if matches!(candidate, SqlValue::Null) {
+                            saw_null = true;
+                            continue;
+                        }
+                        let (left, right) = crate::exec::expr::affinity::apply_pair(
+                            value.clone(),
+                            candidate,
+                            affinity,
+                        );
+                        if compare_values(&left, &right) == Ordering::Equal {
+                            found = true;
+                            break;
                         }
                     }
-                    let mut ok = found;
-                    if *negated {
-                        ok = !ok;
-                    }
-                    if !ok && saw_null {
-                        Ok(SqlValue::Null)
-                    } else {
-                        Ok(SqlValue::Integer(if ok { 1 } else { 0 }))
-                    }
+                    // A match decides the answer; otherwise a NULL in the
+                    // list makes it unknown.
+                    Ok(match (found, saw_null) {
+                        (true, _) => SqlValue::Integer(i64::from(!*negated)),
+                        (false, true) => SqlValue::Null,
+                        (false, false) => SqlValue::Integer(i64::from(*negated)),
+                    })
                 }
             }
             Expr::IsNull(expr) => Ok(SqlValue::Integer(
@@ -1106,5 +1130,40 @@ fn numeric_aggregate_value(value: SqlValue) -> Result<f64> {
             .trim()
             .parse::<f64>()
             .map_err(|_| Error::DatatypeMismatch),
+    }
+}
+
+fn is_comparison(op: &BinaryOperator) -> bool {
+    matches!(
+        op,
+        BinaryOperator::Eq
+            | BinaryOperator::NotEq
+            | BinaryOperator::Spaceship
+            | BinaryOperator::Gt
+            | BinaryOperator::GtEq
+            | BinaryOperator::Lt
+            | BinaryOperator::LtEq
+    )
+}
+
+/// SQLite comparison affinity for two operands of a comparison in a grouped
+/// expression. An aggregate call has no affinity; a GROUP BY column keeps
+/// its column's, read through the group's first row.
+fn group_compared(
+    left: &Expr,
+    right: &Expr,
+    first_context: Option<&RowContext<'_>>,
+    left_value: SqlValue,
+    right_value: SqlValue,
+) -> (SqlValue, SqlValue) {
+    match first_context {
+        Some(row) => crate::exec::expr::coerce::with_comparison_affinity(
+            left,
+            right,
+            row,
+            left_value,
+            right_value,
+        ),
+        None => (left_value, right_value),
     }
 }
