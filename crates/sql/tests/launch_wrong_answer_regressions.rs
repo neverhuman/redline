@@ -41,3 +41,5 @@ mod q5_05_text_ops;
 mod reindex;
 #[path = "launch_wrong_answer/sum_overflow.rs"]
 mod sum_overflow;
+#[path = "launch_wrong_answer/window_frames.rs"]
+mod window_frames;

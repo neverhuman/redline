@@ -137,9 +137,12 @@ pub(super) fn frame_bounds(
     peer_ranges: &[(usize, usize)],
     total: usize,
 ) -> (usize, usize) {
+    if matches!(frame.units, WindowFrameUnits::Groups) {
+        return group_frame_bounds(frame, sorted_pos, peer_ids, peer_ranges, total);
+    }
     let s = match &frame.start {
         ResolvedBound::UnboundedPreceding => 0i64,
-        ResolvedBound::Preceding(n) => sorted_pos as i64 - *n,
+        ResolvedBound::Preceding(n) => (sorted_pos as i64).saturating_sub(*n),
         ResolvedBound::CurrentRow => match frame.units {
             WindowFrameUnits::Range | WindowFrameUnits::Groups => {
                 let target = peer_ids[sorted_pos];
@@ -150,12 +153,12 @@ pub(super) fn frame_bounds(
             }
             WindowFrameUnits::Rows => sorted_pos as i64,
         },
-        ResolvedBound::Following(n) => sorted_pos as i64 + *n,
+        ResolvedBound::Following(n) => (sorted_pos as i64).saturating_add(*n),
         ResolvedBound::UnboundedFollowing => total as i64,
     };
     let e = match &frame.end {
         ResolvedBound::UnboundedPreceding => -1i64,
-        ResolvedBound::Preceding(n) => sorted_pos as i64 - *n,
+        ResolvedBound::Preceding(n) => (sorted_pos as i64).saturating_sub(*n),
         ResolvedBound::CurrentRow => match frame.units {
             WindowFrameUnits::Range | WindowFrameUnits::Groups => {
                 let target = peer_ids[sorted_pos];
@@ -166,7 +169,7 @@ pub(super) fn frame_bounds(
             }
             WindowFrameUnits::Rows => sorted_pos as i64,
         },
-        ResolvedBound::Following(n) => sorted_pos as i64 + *n,
+        ResolvedBound::Following(n) => (sorted_pos as i64).saturating_add(*n),
         ResolvedBound::UnboundedFollowing => total as i64 - 1,
     };
     let s = s.max(0) as usize;
@@ -177,4 +180,59 @@ pub(super) fn frame_bounds(
     }
     let e = (e as usize).min(total.saturating_sub(1));
     (s, e)
+}
+
+/// GROUPS frames count their offsets in peer groups: `n PRECEDING` starts
+/// at the first row of the group `n` groups before the current row's, and
+/// `n FOLLOWING` ends at the last row of the group `n` groups after it. They
+/// were counted in rows, so `GROUPS 1 PRECEDING` over peers reached back one
+/// row instead of one group.
+fn group_frame_bounds(
+    frame: &ResolvedFrame,
+    sorted_pos: usize,
+    peer_ids: &[usize],
+    peer_ranges: &[(usize, usize)],
+    total: usize,
+) -> (usize, usize) {
+    let groups = peer_ranges.len() as i64;
+    let current = peer_ids.get(sorted_pos).copied().unwrap_or(0) as i64;
+    // First row of group `g`, or past the partition when there is none.
+    let first_row = |g: i64| -> i64 {
+        if g < 0 {
+            0
+        } else if g >= groups {
+            total as i64
+        } else {
+            peer_ranges[g as usize].0 as i64
+        }
+    };
+    // Last row of group `g`, or before the partition when there is none.
+    let last_row = |g: i64| -> i64 {
+        if g < 0 {
+            -1
+        } else if g >= groups {
+            total as i64 - 1
+        } else {
+            peer_ranges[g as usize].1 as i64
+        }
+    };
+    let s = match &frame.start {
+        ResolvedBound::UnboundedPreceding => 0,
+        ResolvedBound::Preceding(n) => first_row(current.saturating_sub(*n)),
+        ResolvedBound::CurrentRow => first_row(current),
+        ResolvedBound::Following(n) => first_row(current.saturating_add(*n)),
+        ResolvedBound::UnboundedFollowing => total as i64,
+    };
+    let e = match &frame.end {
+        ResolvedBound::UnboundedPreceding => -1,
+        ResolvedBound::Preceding(n) => last_row(current.saturating_sub(*n)),
+        ResolvedBound::CurrentRow => last_row(current),
+        ResolvedBound::Following(n) => last_row(current.saturating_add(*n)),
+        ResolvedBound::UnboundedFollowing => total as i64 - 1,
+    };
+    let s = s.max(0) as usize;
+    if e < 0 {
+        return (s.max(1), 0);
+    }
+    (s, (e as usize).min(total.saturating_sub(1)))
 }

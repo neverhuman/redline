@@ -48,6 +48,21 @@ index-format epoch below), so such an index is rebuilt at the first open.
 - A window frame that ends before the partition starts (`ROWS BETWEEN 1
   PRECEDING AND 1 PRECEDING` on the first row) is empty; it used to read
   row 0.
+- A frame offset near 2^63 answers at once. The sliding `sum()` / `total()`
+  / `avg()` schedules looped once per row of the FOLLOWING offset, so
+  `ROWS BETWEEN CURRENT ROW AND 9223372036854775807 FOLLOWING` spun for
+  about 2^63 iterations, and `k + offset` overflowed (a panic in debug
+  builds); every frame offset is now added with saturation.
+- GROUPS frames count their offsets in peer groups: `GROUPS 1 PRECEDING`
+  over peer rows reached back one row instead of one group, for every
+  window function. Sliding GROUPS sums step, return and remove whole groups
+  in SQLite's order, and a RANGE frame whose bounds are both PRECEDING or
+  both FOLLOWING adds rows before it removes them, so `integer overflow`
+  shows where SQLite reports it.
+- Not yet: a RANGE frame with a numeric offset (`RANGE BETWEEN 1 PRECEDING
+  AND CURRENT ROW`) still spans that many rows, not the ORDER BY values
+  within the offset, so it answers like SQLite only when the ORDER BY values
+  are consecutive integers.
 
 ## One numeric index key space, index-format epoch 3, and REINDEX (IDX-EPOCH)
 
