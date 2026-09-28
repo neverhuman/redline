@@ -8,7 +8,6 @@
 use std::ffi::{CStr, CString};
 use std::os::raw::{c_char, c_int, c_void};
 use std::ptr;
-use std::sync::Arc;
 use std::sync::atomic::{AtomicU64, Ordering};
 
 use redlinedb::sqlite3_api::hooks_fire::{
@@ -356,6 +355,4 @@ fn exec_walk_invokes_trace_profile_commit_hooks() {
     // Commit hook may fire when the COMMIT keyword is detected.
     let _ = COMMIT_COUNT.load(Ordering::Relaxed);
     unsafe { rldb_close(db) };
-    // Silence unused imports under cfg.
-    let _ = (Arc::new(0u8), CStr::from_bytes_with_nul(b"\0").ok());
 }

@@ -13,6 +13,10 @@ use redlinedb_sql::value::SqlValue;
 
 use crate::types::*;
 
+// Each value is boxed so its address stays fixed while the Vec grows: those
+// addresses are the `sqlite3_value*` pointers handed to C, and
+// sqlite3_value_free finds a value by that address.
+#[allow(clippy::vec_box)]
 static DUP_VALUES: Mutex<Vec<Box<RldbValue>>> = Mutex::new(Vec::new());
 
 /// Opaque value type backing the C `sqlite3_value*` opaque pointer.
@@ -232,13 +236,12 @@ pub unsafe extern "C" fn sqlite3_value_free(value: *mut RldbValue) {
         return;
     }
     let target = value as usize;
-    if let Ok(mut values) = DUP_VALUES.lock() {
-        if let Some(index) = values
+    if let Ok(mut values) = DUP_VALUES.lock()
+        && let Some(index) = values
             .iter()
             .position(|stored| stored.as_ref() as *const RldbValue as usize == target)
-        {
-            values.swap_remove(index);
-        }
+    {
+        values.swap_remove(index);
     }
 }
 

@@ -78,9 +78,12 @@ fn validate_db(db: *mut rldb) -> Option<&'static rldb> {
     Some(unsafe { &*(db as *const rldb) })
 }
 
+/// One hook slot: the callback and its `user_data` address.
+type HookSlot<F> = Mutex<Option<(F, usize)>>;
+
 fn swap_slot<F: Copy>(
     db: *mut rldb,
-    pick: fn(&HookSlots) -> &Mutex<Option<(F, usize)>>,
+    pick: fn(&HookSlots) -> &HookSlot<F>,
     cb: Option<F>,
     user_data: *mut c_void,
 ) -> *mut c_void {

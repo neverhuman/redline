@@ -60,12 +60,11 @@ pub(crate) enum UdfEntry {
 
 /// Registry: (db_addr, lowercased_name, narg) -> entry.
 /// `narg = -1` matches any arity.
-static REGISTRY: Mutex<Option<std::collections::HashMap<(usize, String, i32), UdfEntry>>> =
-    Mutex::new(None);
+type RegistryMap = std::collections::HashMap<(usize, String, i32), UdfEntry>;
 
-fn registry()
--> std::sync::MutexGuard<'static, Option<std::collections::HashMap<(usize, String, i32), UdfEntry>>>
-{
+static REGISTRY: Mutex<Option<RegistryMap>> = Mutex::new(None);
+
+fn registry() -> std::sync::MutexGuard<'static, Option<RegistryMap>> {
     let mut guard = REGISTRY.lock().expect("udf registry poisoned");
     if guard.is_none() {
         *guard = Some(std::collections::HashMap::new());
@@ -135,7 +134,7 @@ fn aggregate_run_from_sql(
         // RldbValue pointers; the corresponding Box::from_raw block below
         // reclaims every allocation we hand to the callback; ledgered at
         // .jankurai/unsafe-ledger.toml
-        // (file=crates/ffi/src/sqlite3_api/udf.rs, line=153,
+        // (file=crates/ffi/src/sqlite3_api/udf.rs, line=278,
         // detector=rust.unsafe.extern-fn).
         unsafe {
             // SAFETY: see the documented FFI-ABI invariant directly above.
@@ -147,7 +146,7 @@ fn aggregate_run_from_sql(
             // sqlite3_value* never transfers ownership to the callback
             // (read-only inspection only); ledgered at
             // .jankurai/unsafe-ledger.toml
-            // (file=crates/ffi/src/sqlite3_api/udf.rs, line=153,
+            // (file=crates/ffi/src/sqlite3_api/udf.rs, line=278,
             // detector=rust.unsafe.raw-parts).
             let _ = unsafe { reclaim_box(ptr) }; // SAFETY: reclaim the Box::into_raw RldbValue allocation; read-only ABI, no ownership transfer (see invariant above).
         }
@@ -155,7 +154,7 @@ fn aggregate_run_from_sql(
         // (Box::into_raw above); short-lived borrow used only for the
         // error check between rows; matched by Box::from_raw at the end
         // of this function; ledgered at .jankurai/unsafe-ledger.toml
-        // (file=crates/ffi/src/sqlite3_api/udf.rs, line=153,
+        // (file=crates/ffi/src/sqlite3_api/udf.rs, line=278,
         // detector=rust.unsafe.raw-parts).
         let ctx_ref = unsafe { &*ctx_ptr }; // SAFETY: short-lived read-only borrow of the Box::into_raw context (see invariant above).
         if let Some(err) = ctx_ref.take_error() {
@@ -163,7 +162,7 @@ fn aggregate_run_from_sql(
             // originates from Box::into_raw above; we reclaim it here so
             // the Box drops before we return; ledgered at
             // .jankurai/unsafe-ledger.toml
-            // (file=crates/ffi/src/sqlite3_api/udf.rs, line=153,
+            // (file=crates/ffi/src/sqlite3_api/udf.rs, line=278,
             // detector=rust.unsafe.raw-parts).
             let _ = unsafe { reclaim_box(ctx_ptr) }; // SAFETY: reclaim the Box::into_raw context allocation (see invariant above).
             return Some(Err(err));
@@ -172,7 +171,7 @@ fn aggregate_run_from_sql(
     // SAFETY: callback signature matches the FFI ABI for an aggregate
     // final; ctx_ptr is the Box::into_raw allocation we made above;
     // ledgered at .jankurai/unsafe-ledger.toml
-    // (file=crates/ffi/src/sqlite3_api/udf.rs, line=153,
+    // (file=crates/ffi/src/sqlite3_api/udf.rs, line=278,
     // detector=rust.unsafe.extern-fn).
     unsafe {
         // SAFETY: see the documented FFI-ABI invariant directly above.
@@ -183,7 +182,7 @@ fn aggregate_run_from_sql(
     // sqlite3_context* never transfers ownership to the callback (the
     // SQLite docs bound context lifetime to the UDF invocation);
     // ledgered at .jankurai/unsafe-ledger.toml
-    // (file=crates/ffi/src/sqlite3_api/udf.rs, line=153,
+    // (file=crates/ffi/src/sqlite3_api/udf.rs, line=278,
     // detector=rust.unsafe.raw-parts).
     let ctx_box = unsafe { reclaim_box(ctx_ptr) }; // SAFETY: reclaim the Box::into_raw context allocation (see invariant above).
     if let Some(err) = ctx_box.take_error() {
@@ -205,13 +204,7 @@ fn dispatch_from_sql(
     // Lookup precedence: exact arity wins over the wildcard registration so
     // a UDF registered with explicit narg always beats a -1 (any-arity)
     // registration of the same name.
-    let entry = if let Some(e) = map.get(&key_exact) {
-        e
-    } else if let Some(e) = map.get(&key_any) {
-        e
-    } else {
-        return None;
-    };
+    let entry = map.get(&key_exact).or_else(|| map.get(&key_any))?;
     let UdfEntry::Scalar(entry) = entry else {
         return Some(Err(format!(
             "aggregate UDF {name} cannot be invoked as scalar"
@@ -232,7 +225,7 @@ fn dispatch_from_sql(
     // names the argv buffer of Box::into_raw RldbValue pointers; we reclaim
     // every allocation in the matching Box::from_raw block directly below;
     // ledgered at .jankurai/unsafe-ledger.toml
-    // (file=crates/ffi/src/sqlite3_api/udf.rs, line=153,
+    // (file=crates/ffi/src/sqlite3_api/udf.rs, line=278,
     // detector=rust.unsafe.extern-fn).
     unsafe {
         // SAFETY: see the documented FFI-ABI invariant directly above.
@@ -243,7 +236,7 @@ fn dispatch_from_sql(
     // sqlite3_context* never transfers ownership to the callback (the
     // SQLite docs bound context lifetime to the UDF invocation); ledgered
     // at .jankurai/unsafe-ledger.toml (file=crates/ffi/src/sqlite3_api/udf.rs,
-    // line=153, detector=rust.unsafe.raw-parts).
+    // line=278, detector=rust.unsafe.raw-parts).
     let ctx_box = unsafe { reclaim_box(ctx_ptr) }; // SAFETY: reclaim the Box::into_raw context allocation (see invariant above).
     for ptr in boxed {
         // SAFETY: matching constructor/destructor pair — each `ptr`
@@ -251,7 +244,7 @@ fn dispatch_from_sql(
         // ownership invariant: the FFI ABI for sqlite3_value* never
         // transfers ownership to the callback (read-only inspection
         // only); ledgered at .jankurai/unsafe-ledger.toml
-        // (file=crates/ffi/src/sqlite3_api/udf.rs, line=153,
+        // (file=crates/ffi/src/sqlite3_api/udf.rs, line=278,
         // detector=rust.unsafe.raw-parts).
         let _ = unsafe { reclaim_box(ptr) }; // SAFETY: reclaim the Box::into_raw RldbValue allocation; read-only ABI, no ownership transfer (see invariant above).
     }
@@ -295,7 +288,7 @@ pub unsafe extern "C" fn sqlite3_create_function(
     // SAFETY: delegates to the v2 variant whose # Safety contract this
     // call inherits unchanged; all argument checks happen there; ledgered
     // at .jankurai/unsafe-ledger.toml (file=crates/ffi/src/sqlite3_api/udf.rs,
-    // line=153, detector=rust.unsafe.extern-fn).
+    // line=278, detector=rust.unsafe.extern-fn).
     unsafe {
         // SAFETY: see the documented FFI-ABI invariant directly above.
         sqlite3_create_function_v2(db, name, narg, 0, user_data, func, step, final_func, None)
@@ -325,7 +318,7 @@ pub unsafe extern "C" fn sqlite3_create_function_v2(
     // SAFETY: caller obligation — name is a NUL-terminated C string per
     // the documented # Safety contract of this function; name_to_string
     // reads only until the first NUL; ledgered at .jankurai/unsafe-ledger.toml
-    // (file=crates/ffi/src/sqlite3_api/udf.rs, line=153,
+    // (file=crates/ffi/src/sqlite3_api/udf.rs, line=278,
     // detector=rust.unsafe.extern-fn).
     let name = match unsafe { name_to_string(name) } {
         // SAFETY: `name` is a NUL-terminated C string per the # Safety contract (see above).
@@ -435,7 +428,7 @@ pub unsafe extern "C" fn sqlite3_create_function16(
     // SAFETY: delegates to the v2 variant whose # Safety contract this
     // call inherits; cstring lives for the call duration; ledgered at
     // .jankurai/unsafe-ledger.toml (file=crates/ffi/src/sqlite3_api/udf.rs,
-    // line=153, detector=rust.unsafe.extern-fn).
+    // line=278, detector=rust.unsafe.extern-fn).
     unsafe {
         // SAFETY: see the documented FFI-ABI invariant directly above.
         sqlite3_create_function_v2(
