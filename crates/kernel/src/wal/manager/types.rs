@@ -107,6 +107,30 @@ pub(crate) struct WalOpenScanSummary {
     pub(crate) last_record_lsn: Lsn,
 }
 
+impl WalOpenScanSummary {
+    /// Resume a WAL that holds no records at `floor`, rounded up to the next
+    /// segment boundary unless it already sits on one.
+    ///
+    /// Opening mid-segment would extend the new segment with zeros up to the
+    /// offset, and the next scan reads those zeros as a torn record. No record
+    /// precedes the first new one, so its previous LSN is zero; the scan
+    /// accepts any previous LSN on the first record.
+    pub(crate) fn at_floor(floor: Lsn, segment_bytes: u64) -> Result<Self> {
+        if segment_bytes == 0 {
+            return Err(Error::CorruptWal("wal segment size too small"));
+        }
+        let start = floor
+            .0
+            .div_ceil(segment_bytes)
+            .checked_mul(segment_bytes)
+            .ok_or(Error::CorruptWal("lsn overflow"))?;
+        Ok(Self {
+            valid_end_lsn: Lsn(start),
+            last_record_lsn: Lsn::ZERO,
+        })
+    }
+}
+
 impl WalScanReport {
     pub(crate) fn open_summary(&self) -> WalOpenScanSummary {
         WalOpenScanSummary {
@@ -178,6 +202,29 @@ pub(super) fn segment_numbers_on_disk(dir: &Path) -> Result<Vec<u64>> {
     }
     segments.sort_unstable();
     Ok(segments)
+}
+
+/// Segment numbers on disk, in order, each with whether its file holds any
+/// bytes.
+pub(crate) fn segments_on_disk_with_bytes(dir: &Path) -> Result<Vec<(u64, bool)>> {
+    segment_numbers_on_disk(dir)?
+        .into_iter()
+        .map(|segment| {
+            let len = std::fs::metadata(segment_path(dir, segment))?.len();
+            Ok((segment, len > 0))
+        })
+        .collect()
+}
+
+/// Truncate a segment whose bytes a scan read as a torn tail, durably.
+/// Recovery calls this only for a segment the WAL resumes past.
+pub(crate) fn empty_torn_segment(dir: &Path, segment: u64) -> Result<()> {
+    let file = std::fs::OpenOptions::new()
+        .write(true)
+        .open(segment_path(dir, segment))?;
+    file.set_len(0)?;
+    file.sync_all()?;
+    Ok(())
 }
 
 pub(super) fn parse_segment_name(name: &str) -> Option<u64> {

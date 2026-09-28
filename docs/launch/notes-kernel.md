@@ -121,3 +121,38 @@ Draft lines for the v5.0.0 CHANGELOG. The integrator owns `CHANGELOG.md`.
   engine. Removing old segments after a checkpoint does not fsync the
   directory either, so after a crash a removed segment can reappear. This
   change does not test how recovery handles one.
+
+## Transaction ids and the WAL position across restarts
+
+- A rolled-back or abandoned transaction logs no abort, so its changes stay
+  in the WAL under its id. Recovery now moves the next transaction id past
+  every id the scanned WAL names, in record headers and in heap, index and
+  commit payloads, whatever the replay start or recovery target. In v4.1.0,
+  `INSERT`, `ROLLBACK`, a clean close and a reopen could hand the
+  rolled-back id to the next transaction; once that transaction committed,
+  even with no writes, the following reopen replayed the rolled-back rows
+  as committed. No crash was needed. An earlier kernel fix in this release
+  already reserved the ids in record headers; this adds the payload ids,
+  the overflow check below and regression tests for rollback, abandoned
+  inserts, updates and deletes, and a checkpoint in between.
+- A WAL that names the last transaction id (`u64::MAX`) now fails the open
+  with `CorruptWal` instead of wrapping the counter back to zero.
+- The WAL no longer restarts below the checkpoint recovery replays from.
+  When no WAL record survives (the `wal` directory was removed, or a
+  checkpoint that ended exactly on a segment boundary pruned the segment
+  before it), the log resumes at the next segment boundary at or past the
+  checkpoint LSN, the highest page LSN in the page file and the start of
+  the highest segment on disk. Before, it restarted at LSN 0; recovery then
+  skipped every record written after that reopen, so those commits were
+  lost at the next restart. Reading the page LSNs costs one pass over the
+  page file, and only on this path.
+- A WAL whose records end below the checkpoint while the segment that held
+  them is still on disk (truncated or emptied) now fails the open with
+  `CorruptWal("wal ends before checkpoint redo lsn")` instead of silently
+  restarting below the checkpoint.
+- When the log resumes past a highest segment that holds only a torn
+  record, that segment is truncated first. Otherwise the torn bytes would
+  sit in a segment that is no longer the last, and the next open would
+  reject the WAL.
+- Not changed: a WAL that reaches the checkpoint is trusted to reach every
+  page LSN too; page LSNs are read only when no record survives.

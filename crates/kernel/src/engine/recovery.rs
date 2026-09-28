@@ -13,8 +13,13 @@ use crate::format::{Csn, Lsn, Page, RelId};
 use crate::io::{StdFileSystem, create_dir_all_durable};
 use crate::storage::{BufferPool, ControlStore, PageFile, TxStatusStore};
 use crate::telemetry::Phase11Counters;
-use crate::wal::{WalCoordinator, WalPayload, WalReader, WalRecord, WalRecordKind};
+use crate::wal::{
+    WalCoordinator, WalPayload, WalReader, WalRecord, WalRecordKind, empty_torn_segment,
+    segments_on_disk_with_bytes,
+};
 use crate::{Error, Result};
+
+use self::wal_floor::wal_resume_position;
 
 use super::{
     CommitDurability, ConcurrentTxStatus, Engine, EngineConfig, RecoveryMetrics, RecoveryReport,
@@ -187,7 +192,6 @@ impl Engine {
         let wal_dir = path.as_ref().join("wal");
         let mut reader = WalReader::new(&wal_dir, config.wal.clone());
         let scan_report = reader.scan_report()?;
-        let wal_open_summary = scan_report.open_summary();
         let txs = ConcurrentTxStatus::new();
         create_dir_all_durable(&StdFileSystem, path.as_ref())
             .map_err(|_| Error::CorruptPage("create engine directory failed"))?;
@@ -211,6 +215,19 @@ impl Engine {
                 .map_err(|_| Error::CorruptPage("sync page file directory failed"))?;
             Arc::new(created)
         };
+        // Never append below the checkpoint recovery replays from, nor below
+        // a page LSN, even when the WAL that reached them is gone.
+        let resume = wal_resume_position(
+            &scan_report,
+            checkpoint.map_or(Lsn::ZERO, |checkpoint| checkpoint.checkpoint_lsn),
+            &segments_on_disk_with_bytes(&wal_dir)?,
+            config.wal.segment_bytes,
+            || page_file.max_page_lsn(),
+        )?;
+        if let Some(segment) = resume.torn_segment_to_empty {
+            empty_torn_segment(&wal_dir, segment)?;
+        }
+        let wal_open_summary = resume.summary;
         let buffer = Arc::new(
             BufferPool::new(page_file, config.buffer_pool_pages)
                 .map_err(|_| Error::CorruptPage("create buffer pool failed"))?,
@@ -364,24 +381,39 @@ fn commit_durability_initial_u8(durability: CommitDurability) -> u8 {
     }
 }
 
-/// Eviction can write a page holding tuples of a transaction that never
-/// committed, and a checkpoint need not have recorded that transaction's id.
-/// Replay skips uncommitted work, so without this a new transaction could
-/// take the same id, and its commit would make those tuples visible. A new
-/// row could likewise take a row id the orphaned tuples still carry. A page
+/// Move the next transaction id past every id the scanned WAL names, and
+/// the next row id past every heap row id it names, committed or not.
+///
+/// Rollback and abandonment log nothing, so a rolled-back transaction's
+/// records stay in the WAL under its id. If a transaction after the reopen
+/// took that id and committed, even with no writes, its commit record would
+/// make the next recovery replay the old records as committed. Eviction can
+/// also write a page holding tuples of a transaction that never committed,
+/// and a checkpoint need not have recorded that transaction's id. A page
 /// reaches the file only after the WAL records behind it are durable, so the
-/// scanned WAL names every such id.
+/// scanned WAL names every such id. A new row could likewise take a row id
+/// the orphaned tuples still carry.
+///
+/// This walks every record, whatever the replay start and recovery target:
+/// an id is spent once it is logged, even where replay does not apply it.
 fn reserve_ids_named_in_wal(
     records: &[WalRecord],
     txs: &ConcurrentTxStatus,
     heap: &PageBackedHeap,
 ) -> Result<()> {
     for record in records {
-        txs.reserve_recovered_tx_id(record.tx_id);
-        if record.kind != WalRecordKind::PageDelta {
+        txs.advance_next_tx_past(record.tx_id)?;
+        if !matches!(
+            record.kind,
+            WalRecordKind::PageDelta | WalRecordKind::Commit
+        ) {
             continue;
         }
-        match WalPayload::decode(&record.payload)? {
+        // Replay trusts the transaction id inside these payloads, not the
+        // header's, so reserve that one as well.
+        let payload = WalPayload::decode(&record.payload)?;
+        txs.advance_next_tx_past(payload.tx_id())?;
+        match payload {
             WalPayload::HeapInsert { row_id, .. }
             | WalPayload::HeapUpdate { row_id, .. }
             | WalPayload::HeapDelete { row_id, .. } => heap.reserve_recovered_row_id(row_id),
@@ -687,6 +719,9 @@ fn sync_page_file_directory(path: &Path) -> Result<()> {
     }
     crate::storage::sync_parent_dir(parent)
 }
+
+#[path = "recovery_wal_floor.rs"]
+mod wal_floor;
 
 #[cfg(test)]
 #[path = "recovery_dir_sync_tests.rs"]

@@ -1,7 +1,7 @@
 use std::path::Path;
 use std::sync::Mutex;
 
-use crate::format::{Page, PageId};
+use crate::format::{Lsn, Page, PageId};
 use crate::io::{FileHandle, FileSystem, StdFileSystem};
 use crate::{Error, Result};
 
@@ -94,6 +94,23 @@ impl<Fs: FileSystem> PageFile<Fs> {
         let offset = self.offset(page_id)?;
         let mut file = self.lock_file()?;
         file.write_all_at(offset, page.as_bytes())
+    }
+
+    /// The highest page LSN in the file, over the pages that read back whole.
+    ///
+    /// A page that fails to decode is skipped: a torn write carries no LSN
+    /// worth trusting, and pinning that page reports it. I/O errors fail.
+    /// This reads every page, so only a rare recovery path calls it.
+    pub(crate) fn max_page_lsn(&self) -> Result<Lsn> {
+        let mut max = Lsn::ZERO;
+        for page_id in 1..=self.page_count()? {
+            match self.read_page(PageId(page_id)) {
+                Ok(page) => max = max.max(page.header()?.page_lsn),
+                Err(Error::Io(err)) => return Err(Error::Io(err)),
+                Err(_) => {}
+            }
+        }
+        Ok(max)
     }
 
     fn lock_file(&self) -> Result<std::sync::MutexGuard<'_, Fs::File>> {

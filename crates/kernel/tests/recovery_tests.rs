@@ -1,8 +1,9 @@
 use redlinedb_kernel::Error;
-use redlinedb_kernel::engine::{CommitOutcome, Engine, EngineConfig};
-use redlinedb_kernel::format::{Csn, RelId, RowId};
+use redlinedb_kernel::engine::{CommitOutcome, Engine, EngineConfig, Txn};
+use redlinedb_kernel::format::{Csn, Lsn, PageId, RelId, RowId, TxId};
+use redlinedb_kernel::storage::PageFile;
 use redlinedb_kernel::txn::Isolation;
-use redlinedb_kernel::wal::{WalConfig, WalPayload};
+use redlinedb_kernel::wal::{WalConfig, WalManager, WalPayload, WalReader, WalRecordKind};
 use std::fs::OpenOptions;
 use std::io::{Read, Seek, SeekFrom, Write};
 use std::sync::{Arc, Barrier};
@@ -996,4 +997,335 @@ fn next_record_len(file: &mut std::fs::File, offset: u64) -> u64 {
     let mut len = [0_u8; 4];
     file.read_exact(&mut len).unwrap();
     48 + u32::from_le_bytes(len) as u64
+}
+
+// Workplan R3: a transaction id handed out before a restart, committed or
+// not, is never handed out again, and the WAL never restarts below the
+// checkpoint that recovery replays from.
+
+/// Commit one row, leave a second transaction's `change` uncommitted, close,
+/// and reopen. The first transaction after the reopen must take a new id,
+/// and committing it with no writes must not make the abandoned change
+/// visible on the next reopen.
+fn assert_abandoned_change_stays_invisible(
+    change: impl FnOnce(&Engine, &mut Txn, RowId) -> Option<RowId>,
+    finish: impl FnOnce(&Engine, Txn),
+    checkpoint_first: bool,
+) {
+    let temp = TempDir::new().unwrap();
+    let engine = Engine::create(temp.path(), config()).unwrap();
+    let mut tx = engine.begin(Isolation::Snapshot).unwrap();
+    let row = engine.insert(&mut tx, b"committed".to_vec()).unwrap();
+    engine.commit(tx).unwrap();
+    if checkpoint_first {
+        engine.checkpoint().unwrap();
+    }
+
+    let mut abandoned = engine.begin(Isolation::Snapshot).unwrap();
+    let abandoned_id = abandoned.id();
+    let ghost = change(&engine, &mut abandoned, row);
+    finish(&engine, abandoned);
+    drop(engine);
+
+    let reopened = Engine::open(temp.path(), config()).unwrap();
+    let next = reopened.begin(Isolation::Snapshot).unwrap();
+    assert!(
+        next.id() > abandoned_id,
+        "transaction id {:?} reused the abandoned {:?}",
+        next.id(),
+        abandoned_id
+    );
+    reopened.commit(next).unwrap();
+    drop(reopened);
+
+    let reopened = Engine::open(temp.path(), config()).unwrap();
+    let mut tx = reopened.begin(Isolation::Snapshot).unwrap();
+    assert_eq!(
+        reopened.get(&mut tx, row).unwrap(),
+        Some(b"committed".to_vec()),
+        "the abandoned change to the committed row became visible"
+    );
+    if let Some(ghost) = ghost {
+        assert_eq!(
+            reopened.get(&mut tx, ghost).unwrap(),
+            None,
+            "the abandoned insert became visible"
+        );
+    }
+}
+
+fn insert_ghost(engine: &Engine, tx: &mut Txn, _row: RowId) -> Option<RowId> {
+    Some(engine.insert(tx, b"ghost".to_vec()).unwrap())
+}
+
+#[test]
+fn abandoned_tx_id_never_reused_after_restart() {
+    assert_abandoned_change_stays_invisible(insert_ghost, |_, tx| drop(tx), false);
+}
+
+#[test]
+fn rolled_back_tx_id_never_reused() {
+    assert_abandoned_change_stays_invisible(
+        insert_ghost,
+        |engine, tx| engine.rollback(tx).unwrap(),
+        false,
+    );
+}
+
+#[test]
+fn abandoned_update_tx_id_never_reused() {
+    assert_abandoned_change_stays_invisible(
+        |engine, tx, row| {
+            engine.update(tx, row, b"ghost".to_vec()).unwrap();
+            None
+        },
+        |_, tx| drop(tx),
+        false,
+    );
+}
+
+#[test]
+fn abandoned_delete_tx_id_never_reused() {
+    assert_abandoned_change_stays_invisible(
+        |engine, tx, row| {
+            engine.delete(tx, row).unwrap();
+            None
+        },
+        |_, tx| drop(tx),
+        false,
+    );
+}
+
+#[test]
+fn post_checkpoint_abandoned_tx_not_resurrected() {
+    assert_abandoned_change_stays_invisible(insert_ghost, |_, tx| drop(tx), true);
+}
+
+#[test]
+fn wal_tx_id_with_no_successor_fails_open() {
+    let temp = TempDir::new().unwrap();
+    let engine = Engine::create(temp.path(), config()).unwrap();
+    let mut tx = engine.begin(Isolation::Snapshot).unwrap();
+    engine.insert(&mut tx, b"base".to_vec()).unwrap();
+    engine.commit(tx).unwrap();
+    drop(engine);
+
+    // A record naming the last transaction id leaves no id to hand out
+    // next. Recovery must refuse it rather than wrap the counter to zero.
+    let mut wal = WalManager::open(temp.path().join("wal"), config().wal).unwrap();
+    let last = TxId(u64::MAX);
+    let payload = WalPayload::HeapInsert {
+        tx_id: last,
+        rel_id: RelId(1),
+        row_id: RowId(99),
+        payload: b"never committed".to_vec(),
+    }
+    .encode()
+    .unwrap();
+    wal.append(WalRecordKind::PageDelta, last, payload).unwrap();
+    wal.flush().unwrap();
+    drop(wal);
+
+    let err = Engine::open(temp.path(), config()).unwrap_err();
+    assert!(matches!(err, Error::CorruptWal(_)), "unexpected {err:?}");
+}
+
+#[test]
+fn writes_after_missing_wal_checkpoint_survive_second_restart() {
+    let temp = TempDir::new().unwrap();
+    let engine = Engine::create(temp.path(), config()).unwrap();
+    let mut tx = engine.begin(Isolation::Snapshot).unwrap();
+    let row = engine.insert(&mut tx, b"wal-pruned".to_vec()).unwrap();
+    engine.commit(tx).unwrap();
+    let checkpoint = engine.checkpoint().unwrap();
+    drop(engine);
+
+    std::fs::remove_dir_all(temp.path().join("wal")).unwrap();
+
+    let reopened = Engine::open(temp.path(), config()).unwrap();
+    let mut tx = reopened.begin(Isolation::Snapshot).unwrap();
+    let after = reopened.insert(&mut tx, b"after-reopen".to_vec()).unwrap();
+    reopened.commit(tx).unwrap();
+    drop(reopened);
+
+    // The new WAL starts past the checkpoint recovery replays from.
+    let records = WalReader::new(temp.path().join("wal"), config().wal)
+        .scan()
+        .unwrap();
+    assert!(!records.is_empty());
+    assert!(
+        records
+            .iter()
+            .all(|record| record.lsn >= checkpoint.checkpoint_lsn),
+        "a record after the reopen sits below checkpoint {:?}",
+        checkpoint.checkpoint_lsn
+    );
+
+    let reopened = Engine::open(temp.path(), config()).unwrap();
+    let mut tx = reopened.begin(Isolation::Snapshot).unwrap();
+    assert_eq!(
+        reopened.get(&mut tx, row).unwrap(),
+        Some(b"wal-pruned".to_vec())
+    );
+    assert_eq!(
+        reopened.get(&mut tx, after).unwrap(),
+        Some(b"after-reopen".to_vec())
+    );
+}
+
+#[test]
+fn wal_restarts_above_the_newest_page_lsn() {
+    let temp = TempDir::new().unwrap();
+    let engine = Engine::create(temp.path(), config()).unwrap();
+    let mut tx = engine.begin(Isolation::Snapshot).unwrap();
+    let row = engine.insert(&mut tx, b"checkpointed".to_vec()).unwrap();
+    engine.commit(tx).unwrap();
+    let checkpoint = engine.checkpoint().unwrap();
+    drop(engine);
+
+    // A page written after the checkpoint carries an LSN past it. Once the
+    // WAL is gone, only the page says how far the log had reached.
+    let page_file = PageFile::open(temp.path().join("data.redline"), config().page_size).unwrap();
+    let mut page = page_file.read_page(PageId(1)).unwrap();
+    let page_lsn = Lsn(checkpoint.checkpoint_lsn.0 + 3 * config().wal.segment_bytes + 17);
+    page.set_page_lsn(page_lsn).unwrap();
+    page_file.write_page(&page).unwrap();
+    page_file.sync_data().unwrap();
+    drop(page_file);
+    std::fs::remove_dir_all(temp.path().join("wal")).unwrap();
+
+    let reopened = Engine::open(temp.path(), config()).unwrap();
+    let mut tx = reopened.begin(Isolation::Snapshot).unwrap();
+    let after = reopened.insert(&mut tx, b"after-reopen".to_vec()).unwrap();
+    reopened.commit(tx).unwrap();
+    drop(reopened);
+
+    let records = WalReader::new(temp.path().join("wal"), config().wal)
+        .scan()
+        .unwrap();
+    let first = records.first().expect("records after the reopen").lsn;
+    assert!(
+        first >= page_lsn,
+        "WAL restarted at {first:?}, below page {page_lsn:?}"
+    );
+    // It starts on a segment boundary, so no zero-filled prefix precedes it.
+    assert_eq!(first.0 % config().wal.segment_bytes, 0);
+
+    let reopened = Engine::open(temp.path(), config()).unwrap();
+    let mut tx = reopened.begin(Isolation::Snapshot).unwrap();
+    assert_eq!(
+        reopened.get(&mut tx, row).unwrap(),
+        Some(b"checkpointed".to_vec())
+    );
+    assert_eq!(
+        reopened.get(&mut tx, after).unwrap(),
+        Some(b"after-reopen".to_vec())
+    );
+}
+
+#[test]
+fn wal_truncated_below_checkpoint_fails_closed() {
+    let temp = TempDir::new().unwrap();
+    let engine = Engine::create(temp.path(), config()).unwrap();
+    for idx in 0..3 {
+        let mut tx = engine.begin(Isolation::Snapshot).unwrap();
+        engine
+            .insert(&mut tx, format!("row-{idx}").into_bytes())
+            .unwrap();
+        engine.commit(tx).unwrap();
+    }
+    let checkpoint = engine.checkpoint().unwrap();
+    drop(engine);
+
+    // Keep the first record whole and cut into the second, so the scan
+    // ends at a torn tail below the checkpoint.
+    let wal_path = temp.path().join("wal").join("00000000000000000001.wal");
+    let mut file = OpenOptions::new()
+        .read(true)
+        .write(true)
+        .open(&wal_path)
+        .unwrap();
+    let first_len = next_record_len(&mut file, 0);
+    assert!(first_len + 5 < checkpoint.checkpoint_lsn.0);
+    file.set_len(first_len + 5).unwrap();
+    drop(file);
+
+    let err = Engine::open(temp.path(), config()).unwrap_err();
+    assert_eq!(
+        err,
+        Error::CorruptWal("wal ends before checkpoint redo lsn")
+    );
+}
+
+#[test]
+fn emptied_wal_segment_below_checkpoint_fails_closed() {
+    let temp = TempDir::new().unwrap();
+    let engine = Engine::create(temp.path(), config()).unwrap();
+    let mut tx = engine.begin(Isolation::Snapshot).unwrap();
+    engine.insert(&mut tx, b"row".to_vec()).unwrap();
+    engine.commit(tx).unwrap();
+    engine.checkpoint().unwrap();
+    drop(engine);
+
+    // The segment that held the records up to the checkpoint is still
+    // there but empty: those records were lost, not pruned.
+    let wal_path = temp.path().join("wal").join("00000000000000000001.wal");
+    OpenOptions::new()
+        .write(true)
+        .open(&wal_path)
+        .unwrap()
+        .set_len(0)
+        .unwrap();
+
+    let err = Engine::open(temp.path(), config()).unwrap_err();
+    assert_eq!(
+        err,
+        Error::CorruptWal("wal ends before checkpoint redo lsn")
+    );
+}
+
+#[test]
+fn torn_segment_below_a_resumed_wal_does_not_fail_the_next_open() {
+    let temp = TempDir::new().unwrap();
+    let engine = Engine::create(temp.path(), config()).unwrap();
+    let mut tx = engine.begin(Isolation::Snapshot).unwrap();
+    let row = engine.insert(&mut tx, b"checkpointed".to_vec()).unwrap();
+    engine.commit(tx).unwrap();
+    let checkpoint = engine.checkpoint().unwrap();
+    drop(engine);
+
+    // The WAL past the checkpoint holds only the torn start of a record in
+    // the next segment, while a page already carries an LSN beyond that
+    // segment. The log must resume past the page, and the torn bytes must
+    // not be left in a segment that is no longer the last.
+    let segment_bytes = config().wal.segment_bytes;
+    assert!(checkpoint.checkpoint_lsn.0 < segment_bytes);
+    let page_file = PageFile::open(temp.path().join("data.redline"), config().page_size).unwrap();
+    let mut page = page_file.read_page(PageId(1)).unwrap();
+    let page_lsn = Lsn(3 * segment_bytes + 17);
+    page.set_page_lsn(page_lsn).unwrap();
+    page_file.write_page(&page).unwrap();
+    page_file.sync_data().unwrap();
+    drop(page_file);
+    let wal_dir = temp.path().join("wal");
+    std::fs::remove_dir_all(&wal_dir).unwrap();
+    std::fs::create_dir(&wal_dir).unwrap();
+    std::fs::write(wal_dir.join("00000000000000000002.wal"), [7_u8; 11]).unwrap();
+
+    let reopened = Engine::open(temp.path(), config()).unwrap();
+    let mut tx = reopened.begin(Isolation::Snapshot).unwrap();
+    let after = reopened.insert(&mut tx, b"after-reopen".to_vec()).unwrap();
+    reopened.commit(tx).unwrap();
+    drop(reopened);
+
+    let reopened = Engine::open(temp.path(), config()).unwrap();
+    let mut tx = reopened.begin(Isolation::Snapshot).unwrap();
+    assert_eq!(
+        reopened.get(&mut tx, row).unwrap(),
+        Some(b"checkpointed".to_vec())
+    );
+    assert_eq!(
+        reopened.get(&mut tx, after).unwrap(),
+        Some(b"after-reopen".to_vec())
+    );
 }

@@ -4,6 +4,7 @@ use std::sync::{Arc, Mutex, RwLock};
 
 use crate::format::{Csn, TxId};
 use crate::txn::{Isolation, Snapshot, TxState};
+use crate::{Error, Result};
 
 use super::{Txn, TxnLifecycle};
 
@@ -125,9 +126,18 @@ impl ConcurrentTxStatus {
     }
 
     /// Keep `tx` from being handed out again. Recovery calls this for every
-    /// transaction the WAL names, committed or not.
-    pub(crate) fn reserve_recovered_tx_id(&self, tx: TxId) {
-        advance_atomic_past(&self.inner.next_tx, tx.0);
+    /// transaction the WAL names, committed, rolled back or abandoned: none
+    /// of them logs an abort, so a reused id that later commits would make
+    /// the old transaction's logged changes and page tuples committed too.
+    ///
+    /// The last id has no successor to hand out next. Wrapping the counter
+    /// would reissue every id from zero, so that fails as corrupt WAL.
+    pub(crate) fn advance_next_tx_past(&self, tx: TxId) -> Result<()> {
+        let next = tx.0.checked_add(1).ok_or(Error::CorruptWal(
+            "wal names a transaction id with no successor",
+        ))?;
+        advance_atomic_to_at_least(&self.inner.next_tx, next);
+        Ok(())
     }
 
     pub fn restore_frontier(&self, next_tx: TxId, next_csn: Csn, published_csn: Csn) {
@@ -324,5 +334,30 @@ fn advance_atomic_to_at_least(value: &AtomicU64, target: u64) {
 impl Default for ConcurrentTxStatus {
     fn default() -> Self {
         Self::new()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::ConcurrentTxStatus;
+    use crate::Error;
+    use crate::format::TxId;
+
+    #[test]
+    fn advancing_past_a_tx_id_never_lowers_or_wraps_the_next_id() {
+        let txs = ConcurrentTxStatus::new();
+        txs.advance_next_tx_past(TxId(41)).unwrap();
+        assert_eq!(txs.next_tx(), TxId(42));
+        txs.advance_next_tx_past(TxId(7)).unwrap();
+        assert_eq!(txs.next_tx(), TxId(42));
+        txs.advance_next_tx_past(TxId(u64::MAX - 1)).unwrap();
+        assert_eq!(txs.next_tx(), TxId(u64::MAX));
+        assert_eq!(
+            txs.advance_next_tx_past(TxId(u64::MAX)),
+            Err(Error::CorruptWal(
+                "wal names a transaction id with no successor"
+            ))
+        );
+        assert_eq!(txs.next_tx(), TxId(u64::MAX));
     }
 }

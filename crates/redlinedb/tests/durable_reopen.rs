@@ -83,3 +83,52 @@ fn committed_transaction_survives_rollback_checkpoint_and_reopen() {
         .expect("read durable row");
     assert_eq!(version, 2);
 }
+
+/// Workplan R3: a rolled-back transaction's id must not be handed out again
+/// after a clean close. Otherwise the next transaction that writes commits
+/// under that id, and the following reopen replays the rolled-back rows as
+/// committed.
+#[test]
+fn rollback_then_reopen_commit_does_not_resurrect_rows() {
+    let root = tempfile::tempdir().expect("database root");
+    let path = root.path().join("rollback.redline");
+
+    {
+        let database = Database::create(&path).expect("create database");
+        let mut connection = database.connect().expect("connect");
+        connection
+            .execute("CREATE TABLE ghosts(id INTEGER PRIMARY KEY, note TEXT)", ())
+            .expect("create ghosts");
+        connection
+            .execute("CREATE TABLE audit(id INTEGER PRIMARY KEY, note TEXT)", ())
+            .expect("create audit");
+        connection.execute("BEGIN IMMEDIATE", ()).expect("begin");
+        connection
+            .execute("INSERT INTO ghosts VALUES (1, 'rolled back')", ())
+            .expect("insert ghost");
+        connection.execute("ROLLBACK", ()).expect("rollback");
+        let ghosts: i64 = connection
+            .query_row("SELECT count(*) FROM ghosts", ())
+            .expect("count ghosts before close");
+        assert_eq!(ghosts, 0);
+    }
+
+    {
+        let database = Database::open(&path).expect("first reopen");
+        let mut connection = database.connect().expect("connect after first reopen");
+        connection
+            .execute("INSERT INTO audit VALUES (1, 'after reopen')", ())
+            .expect("write after reopen");
+    }
+
+    let reopened = Database::open(&path).expect("second reopen");
+    let mut connection = reopened.connect().expect("connect after second reopen");
+    let ghosts: i64 = connection
+        .query_row("SELECT count(*) FROM ghosts", ())
+        .expect("count ghosts after second reopen");
+    assert_eq!(ghosts, 0, "the rolled-back insert came back as committed");
+    let audit: i64 = connection
+        .query_row("SELECT count(*) FROM audit", ())
+        .expect("count audit rows");
+    assert_eq!(audit, 1);
+}
