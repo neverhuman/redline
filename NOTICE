@@ -1,0 +1,26 @@
+RedlineDB
+Copyright 2026 The RedlineDB Contributors
+
+This product includes software developed by The RedlineDB Contributors
+(https://github.com/neverhuman/redline), licensed under the Apache License,
+Version 2.0 (see LICENSE).
+
+SQLite
+------
+contracts/c-abi/redlinedb.h (installed as include/redlinedb.h, with the
+include/sqlite3.h shim that includes it) declares a C interface that reuses
+the names, constants and function signatures of SQLite's public API so that
+programs written for SQLite can build against RedlineDB.
+contracts/c-abi/upstream/sqlite-3.53.1/sqlite3.h is an unmodified copy of
+SQLite 3.53.1's sqlite3.h, used only by compatibility tests and never
+installed. The redline-web server links the SQLite library, built from the
+amalgamation bundled in the libsqlite3-sys crate. The SQLite authors have
+dedicated SQLite to the public domain (https://sqlite.org/copyright.html);
+this attribution is a courtesy, not a licence requirement.
+
+Third-party dependencies
+------------------------
+Release archives contain third-party Rust crates and, in redline-web, npm
+packages, each under its own licence. share/redlinedb/DEPENDENCIES.tsv lists
+every one with its declared licence, and share/redlinedb/licenses/ holds the
+licence and notice files they ship.

@@ -63,11 +63,23 @@ x86_64/ARM64 (glibc 2.35+) and macOS Intel/Apple Silicon (macOS 15+).
 - `redline-web-TAG-PLATFORM.tar.gz`: web server with embedded frontend assets.
 - `redline-testing-TAG-PLATFORM.tar.gz`: conformance runner, corpus and client smoke tool.
 
-Each archive has a `.sha256` sidecar and contains dependency notices, licenses,
-a CycloneDX SBOM and `share/redlinedb/build-provenance.json` recording its parent
-commit, tag, platform and compiler. The web archive includes a frontend SBOM;
-the testing SBOM includes the bundled client. GitHub release attestations bind
-the uploaded archive bytes to the workflow identity and source commit.
+Each archive has a `.sha256` sidecar and contains a CycloneDX SBOM and
+`share/redlinedb/build-provenance.json` recording its parent commit, tag,
+platform and compiler. The web archive includes a frontend SBOM; the testing
+SBOM includes the bundled client. GitHub release attestations bind the uploaded
+archive bytes to the workflow identity and source commit.
+
+Licences: `share/redlinedb/LICENSE` is the Apache-2.0 text and
+`share/redlinedb/NOTICE` the project notice. `scripts/release/collect-licenses.sh`
+walks the non-dev Cargo dependency graph of the archive's own binaries and
+libraries on the build platform (and, for redline-web, the npm production
+dependencies) and copies each third-party package's licence, notice and
+`license-file` texts into `share/redlinedb/licenses/` (`licenses/npm/` for npm).
+`share/redlinedb/DEPENDENCIES.tsv` lists every package in that graph with its
+declared licence and where its texts are. Packaging fails if a dependency ships
+no licence text, unless `ops/release/license-waivers.toml` waives that exact
+version with a reason. `scripts/test-package-licenses.sh` checks the archives
+and a fixture of the collector.
 
 The shared library carries the C ABI major (`RLDB_ABI_MAJOR` in
 `contracts/c-abi/redlinedb.h`) in its name and load identity:

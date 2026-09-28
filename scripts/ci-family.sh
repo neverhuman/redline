@@ -34,6 +34,7 @@ case "${1:-all}" in
     export OUTPUT_DIR
     trap 'rm -rf "$OUTPUT_DIR"' EXIT
     TAG=${TAG:-v4.1.0-rc.2} bash scripts/package-release.sh
+    bash scripts/test-package-licenses.sh "$OUTPUT_DIR"
     bash scripts/test-package-ffi.sh
     bash scripts/test-installer.sh
     bash scripts/test-packages.sh "$OUTPUT_DIR"

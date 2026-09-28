@@ -1,0 +1,18 @@
+# Licence-text waivers for release archives.
+#
+# scripts/release/collect-licenses.sh copies every shipped dependency's own
+# licence text into share/redlinedb/licenses/ and fails the packaging run for
+# any dependency that has none, unless it is waived here. A waiver names one
+# exact ecosystem ("cargo" or "npm"), package and version, so a dependency
+# update has to be reviewed again. Only [[waiver]] tables of key = "string"
+# pairs are accepted; every key below is required.
+#
+# Prefer fixing the gap upstream. Nested licence files of a waived package
+# (bundled or vendored code) are still collected.
+
+[[waiver]]
+ecosystem = "npm"
+package = "victory-vendor"
+version = "36.9.2"
+license = "MIT AND ISC"
+reason = "Pulled in by recharts. The npm package ships no top-level licence file; its README states that Victory's own code is MIT (text: https://github.com/FormidableLabs/victory/blob/main/LICENSE.txt). The ISC texts of the d3 packages it vendors ship in lib-vendor/*/LICENSE and are collected."

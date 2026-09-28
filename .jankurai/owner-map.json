@@ -21,6 +21,7 @@
     "GROK_GAPS.md": "agent",
     "GEMINI.md": "agent",
     "LICENSE": "workspace",
+    "NOTICE": "workspace",
     "README-jankurai-scaffold.md": "agent",
     "README.md": "workspace",
     "SECURITY.md": "workspace",

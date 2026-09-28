@@ -101,3 +101,24 @@ against the v5 headers. There is no v4 compatibility alias.
   upstream libsqlite3 is the control for the 15 upstream cases.
 - `scripts/test-package-ffi.sh` runs that probe on the extracted archive, and
   checks regular-files-only entries and the soname / install name.
+
+## Licensing
+
+- `LICENSE` is now the complete Apache License 2.0 text (it held only the
+  short application notice, so GitHub could not identify the licence), and a
+  `NOTICE` file names the project and its SQLite attribution. Both ship in
+  every release archive under `share/redlinedb/`.
+- Release archives now carry the licence texts of the third-party code they
+  contain. `scripts/release/collect-licenses.sh` follows the non-dev
+  dependency graph of each archive's own binaries and libraries on the build
+  platform (before: every package in the lockfile, including dev and bench
+  dependencies and other platforms' crates, with empty licence folders for
+  48 of the 318 in the core archive), honours each crate's `license-file`,
+  also copies licence files of bundled C sources and vendored code, and adds
+  the npm production dependencies of the web console under
+  `share/redlinedb/licenses/npm/`. Packaging fails when a dependency has no
+  licence text unless `ops/release/license-waivers.toml` waives that exact
+  version with a reason (one waiver today: npm `victory-vendor` 36.9.2).
+- `share/redlinedb/DEPENDENCIES.tsv` now has a header row and four more
+  columns: `ecosystem`, `source`, `license_texts` and `waiver`.
+  `sbom.cdx.json` lists the same shipped graph instead of the whole lockfile.

@@ -5,6 +5,7 @@ cd "$root"
 case "${1:?package lane required}" in
   build) exec bash scripts/package-release.sh ;;
   smoke)
+    bash scripts/test-package-licenses.sh
     bash scripts/test-binaries.sh
     exec bash scripts/test-package-ffi.sh
     ;;

@@ -193,6 +193,10 @@
       "command": "just score",
       "purpose": "verify license file stays routed and unchanged accidentally"
     },
+    "NOTICE": {
+      "command": "just score",
+      "purpose": "verify the attribution notice stays routed and unchanged accidentally"
+    },
     "README.md": {
       "command": "just score",
       "purpose": "verify root README stays routed and reflects the standard"

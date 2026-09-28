@@ -85,6 +85,10 @@
       "command": "rtk bash scripts/ci-local.sh required",
       "purpose": "verify licensing through the canonical host-required lane"
     },
+    "NOTICE": {
+      "command": "rtk bash scripts/ci-local.sh required",
+      "purpose": "verify the attribution notice through the canonical host-required lane"
+    },
     "README-jankurai-scaffold.md": {
       "command": "rtk bash scripts/ci-local.sh required",
       "purpose": "verify proof documentation through the canonical host-required lane"

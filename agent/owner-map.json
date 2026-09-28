@@ -22,6 +22,7 @@
     "GROK_GAPS.md": "control-plane",
     "GEMINI.md": "control-plane",
     "LICENSE": "workspace",
+    "NOTICE": "workspace",
     "README-jankurai-scaffold.md": "control-plane",
     "README.md": "workspace",
     "SECURITY.md": "ops",

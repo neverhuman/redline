@@ -18,8 +18,8 @@ output=$(cd "$output" && pwd)
 stage=$(mktemp -d)
 trap 'rm -rf "$stage"' EXIT
 for package in redlinedb redline-web redline-testing; do
-  mkdir -p "$stage/$package/bin" "$stage/$package/share/redlinedb/licenses"
-  cp LICENSE "$stage/$package/share/redlinedb/LICENSE"
+  mkdir -p "$stage/$package/bin" "$stage/$package/share/redlinedb"
+  cp LICENSE NOTICE "$stage/$package/share/redlinedb/"
   printf '%s\n' "$TAG" > "$stage/$package/share/redlinedb/VERSION"
 done
 REDLINEDB_DEV_LINKS=0 PREFIX="$stage/redlinedb" ./scripts/install-from-source.sh
@@ -28,26 +28,35 @@ install -m 755 "$CARGO_TARGET_DIR/release/redline-web" "$stage/redline-web/bin/"
 install -m 755 "$CARGO_TARGET_DIR/release/redline-testing" "$CARGO_TARGET_DIR/release/redlinedb-client-smoke" "$stage/redline-testing/bin/"
 cp -R subrepos/redline-testing/{corpus,metadata,schemas,templates} "$stage/redline-testing/share/redlinedb/"
 commit=$(git rev-parse HEAD)
+# Licence collection follows the dependency graph of this build's platform.
+host=$(rustc -vV | sed -n 's/^host: //p')
 for package in redlinedb redline-web redline-testing; do
   case "$package" in
     redlinedb) manifest=Cargo.toml ;;
     *) manifest=subrepos/$package/Cargo.toml ;;
   esac
-  cargo metadata --locked --format-version 1 --manifest-path "$manifest" > "$stage/metadata.json"
+  cargo metadata --locked --format-version 1 --filter-platform "$host" --manifest-path "$manifest" > "$stage/metadata.json"
   if [[ $package == redline-testing ]]; then
-    cargo metadata --locked --format-version 1 --manifest-path subrepos/redline-central/Cargo.toml > "$stage/client-metadata.json"
-    jq -s '{packages: ([.[].packages[]] | unique_by(.id))}' "$stage/metadata.json" "$stage/client-metadata.json" > "$stage/combined-metadata.json"
+    cargo metadata --locked --format-version 1 --filter-platform "$host" --manifest-path subrepos/redline-central/Cargo.toml > "$stage/client-metadata.json"
+    jq -s '{packages: ([.[].packages[]] | unique_by(.id)),
+      resolve: {nodes: ([.[].resolve.nodes[]] | group_by(.id) | map({id: .[0].id, deps: [.[].deps[]]}))}}' \
+      "$stage/metadata.json" "$stage/client-metadata.json" > "$stage/combined-metadata.json"
     mv "$stage/combined-metadata.json" "$stage/metadata.json"
   fi
-  jq '{bomFormat:"CycloneDX",specVersion:"1.5",version:1,components:[.packages[]|{type:"library",name,version,purl:("pkg:cargo/"+.name+"@"+.version),licenses:(if .license then [{expression:.license}] else [] end)}]}' "$stage/metadata.json" > "$stage/$package/share/redlinedb/sbom.cdx.json"
-  jq -r '.packages[]|[.name,.version,(.license // "UNKNOWN"),(.repository // "")]|@tsv' "$stage/metadata.json" > "$stage/$package/share/redlinedb/DEPENDENCIES.tsv"
-  while IFS=$'\t' read -r name manifest_path; do
-    directory=${manifest_path%/Cargo.toml}
-    mkdir -p "$stage/$package/share/redlinedb/licenses/$name"
-    for license in "$directory"/LICENSE* "$directory"/COPYING* "$directory"/NOTICE*; do
-      [[ ! -f $license ]] || cp "$license" "$stage/$package/share/redlinedb/licenses/$name/"
-    done
-  done < <(jq -r '.packages[]|[ (.name+"-"+.version),.manifest_path]|@tsv' "$stage/metadata.json")
+  # The graph's roots are the artifacts actually staged: every bin/ file and
+  # each lib/lib<name>.* library.
+  roots=()
+  for file in "$stage/$package"/bin/* "$stage/$package"/lib/lib*; do
+    [[ -f $file ]] || continue
+    case $file in
+      */bin/*) roots+=(--bin "${file##*/}") ;;
+      *) name=${file##*/lib}; roots+=(--lib "${name%%.*}") ;;
+    esac
+  done
+  npm_project=()
+  [[ $package != redline-web ]] || npm_project=(--npm-project subrepos/redline-web/apps/web)
+  bash scripts/release/collect-licenses.sh --metadata "$stage/metadata.json" --share "$stage/$package/share/redlinedb" \
+    "${roots[@]}" ${npm_project[@]+"${npm_project[@]}"}
   jq -n --arg commit "$commit" --arg tag "$TAG" --arg platform "$platform" --arg package "$package" --arg rust "$(rustc --version)" '{schema:"redline.release-build/v1",repository:"https://github.com/neverhuman/RedlineDB",commit:$commit,tag:$tag,platform:$platform,package:$package,rust:$rust}' > "$stage/$package/share/redlinedb/build-provenance.json"
   if [[ $package == redline-web ]]; then
     npm --prefix subrepos/redline-web/apps/web sbom --sbom-format cyclonedx > "$stage/$package/share/redlinedb/frontend-sbom.cdx.json"
