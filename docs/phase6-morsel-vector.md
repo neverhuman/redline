@@ -2,7 +2,7 @@
 
 Status: design draft (Phase 6, post v5.0.0 tag). No Rust source changes proposed here; this document fixes the shape that the M1–M8 sub-WS will implement.
 
-Source plan: `/home/ubuntu/.claude/plans/please-make-sure-you-typed-stallman.md` lines 165–175 and 429–438.
+Source plan: an internal planning note that is not part of this repository.
 Sibling perf spec: `tips/performance/helper/redlinedb_theoretical_limit_engineering_spec.md` waves 4 and 6.
 
 ## 1. Executive summary
@@ -143,7 +143,7 @@ If AccessPath IR slips out of the window, M7 degrades gracefully to gating on ex
 
 ## 9. Verification harness
 
-The single source of truth is the `redline-testing` parity corpus (`/home/ubuntu/redline-testing/`), invoked exactly as Phase 5 invoked it (`just perf-full`). M1 introduces `crates/sql/tests/differential_morsel_vs_tuple.rs`:
+The single source of truth is the `redline-testing` parity corpus (`subrepos/redline-testing/`), invoked exactly as Phase 5 invoked it (`just perf-full`). M1 introduces `crates/sql/tests/differential_morsel_vs_tuple.rs`:
 
 - Loads every parity case from the external corpus.
 - For each case, builds a Connection with `PRAGMA morsel_executor = OFF` and another with the default, runs the case on both, asserts byte-identical result sets via the row equality helper from `crates/sql/tests/parity_coverage.rs`.
