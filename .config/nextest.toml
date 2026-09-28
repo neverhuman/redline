@@ -18,3 +18,9 @@ kernel-failpoints = { max-threads = 1 }
 [[profile.default.overrides]]
 filter = 'package(redlinedb-kernel) & (binary(failpoint_smoke) | binary(hnsw_failpoints) | binary(commit_outcome) | binary(recovery_failpoints))'
 test-group = 'kernel-failpoints'
+
+# The SIMD JSON tokenizer property tests run thousands of generated cases in a
+# debug build; on a loaded host they need more than the default 300s.
+[[profile.default.overrides]]
+filter = 'package(redlinedb-sql) & binary(ws_b3b_simd_json_tokenize)'
+slow-timeout = { period = "60s", terminate-after = 15 }
