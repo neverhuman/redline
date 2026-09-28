@@ -7,12 +7,12 @@
 - Target stack ID: `rust-ts-vite-react-postgres-bounded-python`
 - Target stack: `Rust core + TypeScript/React/Vite + PostgreSQL + generated contracts + exception-only Python AI/data service`
 - Repo: `.`
-- Run ID: `1790251625`
-- Started at: `1790251625`
-- Elapsed: `22858` ms
+- Run ID: `1790637102`
+- Started at: `1790637102`
+- Elapsed: `27211` ms
 - Scope: `full`
-- Raw score: `86`
-- Final score: `86`
+- Raw score: `85`
+- Final score: `85`
 - Decision: `advisory`
 - Minimum score: `85`
 - Caps applied: `none`
@@ -70,68 +70,68 @@
 
 ## Copy-Code Redundancy
 
-- Status: `review` hard=`0` warning=`179` files=`474`
+- Status: `review` hard=`0` warning=`200` files=`538`
 - Policy: min-lines=`10` min-tokens=`100` max-findings=`50` include-tests=`false` strict=`false`
-- Duplicate volume: lines=`398` tokens=`1242` bytes=`11528`
+- Duplicate volume: lines=`432` tokens=`1352` bytes=`12337`
 
 - Notes:
   - hard classes are limited to exact active-source file matches and substantial exact same-name units
   - warning classes include same-body different-name units and token/block duplication
   - tests, fixtures, stories, config, Docker, and migrations are omitted unless --include-tests is set
-  - showing the top 50 classes and omitting 129 lower-ranked classes
+  - showing the top 50 classes and omitting 150 lower-ranked classes
 
 | Kind | Severity | Language | Lines | Tokens | Instances | Reason |
 | --- | --- | --- | ---: | ---: | --- | --- |
 | `ExactUnitSameName` | `Warning` | `rust` | 5 | 9 | `crates/sql/src/exec/json_tv.rs:228-233, crates/sql/src/exec/json_tv.rs:283-288, crates/sql/src/exec/json_tv.rs:399-404, crates/sql/src/exec/json_tv.rs:433-438, crates/sql/src/exec/json_tv.rs:467-472, crates/sql/src/exec/json_tv.rs:504-509, crates/sql/src/exec/json_tv.rs:541-546, crates/sql/src/exec/json_tv.rs:578-583, crates/sql/src/exec/json_tv.rs:616-621, crates/sql/src/exec/pragma_tv.rs:220-225, crates/sql/src/exec/pragma_tv.rs:243-248, crates/sql/src/exec/pragma_tv.rs:282-287, crates/sql/src/exec/pragma_tv.rs:370-375` | `same-name semantic unit copied across multiple files` |
-| `ExactUnitSameName` | `Warning` | `rust` | 13 | 42 | `crates/sql/src/exec/cross_db.rs:203-216, crates/sql/src/exec/cte.rs:181-194, crates/sql/src/exec/view.rs:180-193` | `same-name semantic unit copied across multiple files` |
-| `ExactUnitSameName` | `Warning` | `rust` | 24 | 84 | `crates/sql/src/parser/pg_fn_stmt.rs:246-270, crates/sql/src/pg_pl.rs:1293-1317` | `same-name semantic unit copied across multiple files` |
-| `ExactUnitDifferentName` | `Warning` | `rust` | 1 | 2 | `crates/bench/src/score_policy.rs:180-181, crates/bench/src/score_policy.rs:188-189, crates/kernel/src/catalog/record.rs:152-153, crates/kernel/src/catalog/stats/wire.rs:162-163, crates/kernel/src/catalog/stats/wire.rs:173-174, crates/kernel/src/catalog/store.rs:1029-1030, crates/kernel/src/catalog/store.rs:1039-1040, crates/kernel/src/catalog/store.rs:1049-1050, crates/kernel/src/catalog/store.rs:1059-1060, crates/kernel/src/catalog/store.rs:1069-1070, crates/kernel/src/catalog/store.rs:1092-1093, crates/redlinedb-sqlx/src/bridge/runtime.rs:390-391, crates/redlinedb-sqlx/src/bridge/runtime.rs:487-488, crates/redlinedb/src/value_conv.rs:261-262, crates/sql/src/exec/expr/coerce/binary.rs:511-512, crates/sql/src/exec/expr/coerce/binary.rs:518-519, crates/sql/src/exec/expr/coerce/binary.rs:627-628, crates/sql/src/exec/expr/json_dispatch.rs:813-814, crates/sql/src/exec/index_access.rs:1094-1095, crates/sql/src/exec/json_tv.rs:241-242, crates/sql/src/json/scalar.rs:134-135, crates/sql/src/json/scalar.rs:151-152, crates/sql/src/json/scalar.rs:181-182, crates/sql/src/json/scalar.rs:643-644` | `same body appears under different names across files` |
-| `ExactUnitSameName` | `Warning` | `rust` | 11 | 42 | `crates/sql/src/parser/pg_fn_stmt.rs:272-283, crates/sql/src/pg_pl.rs:1341-1352, crates/sql/src/pg_pub.rs:205-216` | `same-name semantic unit copied across multiple files` |
+| `ExactUnitSameName` | `Warning` | `rust` | 13 | 42 | `crates/sql/src/exec/cross_db.rs:201-214, crates/sql/src/exec/cte.rs:203-216, crates/sql/src/exec/view.rs:202-215` | `same-name semantic unit copied across multiple files` |
+| `ExactUnitSameName` | `Warning` | `rust` | 24 | 84 | `crates/sql/src/parser/pg_fn_stmt.rs:246-270, crates/sql/src/pg_pl.rs:1434-1458` | `same-name semantic unit copied across multiple files` |
+| `ExactUnitSameName` | `Warning` | `rust` | 11 | 42 | `crates/sql/src/parser/pg_fn_stmt.rs:272-283, crates/sql/src/pg_pl.rs:1482-1493, crates/sql/src/pg_pub.rs:205-216` | `same-name semantic unit copied across multiple files` |
+| `ExactUnitDifferentName` | `Warning` | `rust` | 1 | 2 | `crates/bench/src/score_policy.rs:180-181, crates/bench/src/score_policy.rs:188-189, crates/kernel/src/catalog/record.rs:152-153, crates/kernel/src/catalog/stats/wire.rs:162-163, crates/kernel/src/catalog/stats/wire.rs:173-174, crates/kernel/src/catalog/store.rs:1172-1173, crates/kernel/src/catalog/store.rs:1182-1183, crates/kernel/src/catalog/store.rs:1192-1193, crates/kernel/src/catalog/store.rs:1202-1203, crates/kernel/src/catalog/store.rs:1212-1213, crates/kernel/src/catalog/store.rs:1235-1236, crates/redlinedb-sqlx/src/bridge/runtime.rs:390-391, crates/redlinedb-sqlx/src/bridge/runtime.rs:487-488, crates/redlinedb/src/value_conv.rs:261-262, crates/sql/src/exec/expr/json_dispatch.rs:819-820, crates/sql/src/exec/expr/scalar/pg_session.rs:183-184, crates/sql/src/exec/expr/scalar/pg_session.rs:294-295, crates/sql/src/exec/index_access.rs:1193-1194, crates/sql/src/exec/json_tv.rs:241-242, crates/sql/src/json/scalar.rs:134-135, crates/sql/src/json/scalar.rs:151-152, crates/sql/src/json/scalar.rs:181-182, crates/sql/src/json/scalar.rs:643-644` | `same body appears under different names across files` |
 | `ExactUnitDifferentName` | `Warning` | `rust` | 7 | 16 | `crates/cli/src/render.rs:472-479, crates/cli/src/render.rs:591-598, crates/cli/src/render.rs:652-659, crates/cli/src/render.rs:726-733` | `same body appears under different names across files` |
 | `ExactUnitSameName` | `Warning` | `rust` | 5 | 9 | `crates/sql/src/exec/pragma_tv.rs:76-81, crates/sql/src/exec/pragma_tv.rs:108-113, crates/sql/src/exec/pragma_tv.rs:134-139, crates/sql/src/exec/pragma_tv.rs:429-434, crates/sql/src/exec/pragma_tv.rs:463-468` | `same-name semantic unit copied across multiple files` |
 | `ExactUnitSameName` | `Warning` | `rust` | 16 | 51 | `crates/sql/src/matview.rs:322-338, crates/sql/src/parser/rewrite/pg_empty.rs:44-60` | `same-name semantic unit copied across multiple files` |
-| `ExactUnitDifferentName` | `Warning` | `rust` | 2 | 5 | `crates/kernel/src/json/path_bytecode.rs:138-140, crates/sql/src/json/jsonb.rs:1062-1064, crates/sql/src/listen.rs:146-148, crates/sql/src/matview.rs:340-342, crates/sql/src/parser/rewrite/pg_ddl.rs:342-344, crates/sql/src/parser/rewrite/pg_ddl.rs:1347-1349, crates/sql/src/parser/rewrite/pg_empty.rs:62-64, crates/sql/src/pg_fn.rs:217-219, crates/sql/src/pg_pub.rs:201-203` | `same body appears under different names across files` |
 | `ExactUnitSameName` | `Warning` | `rust` | 16 | 37 | `crates/sql/src/exec/agg/select.rs:85-101, crates/sql/src/planner/access/projection.rs:153-169` | `same-name semantic unit copied across multiple files` |
-| `ExactUnitSameName` | `Warning` | `rust` | 13 | 36 | `crates/sql/src/pg_fn.rs:165-178, crates/sql/src/pg_pl.rs:1209-1222` | `same-name semantic unit copied across multiple files` |
-| `ExactUnitDifferentName` | `Warning` | `rust` | 2 | 3 | `crates/cli/src/dot/control.rs:112-114, crates/cli/src/dot/control.rs:116-118, crates/cli/src/dot/control.rs:120-122, crates/cli/src/dot/control.rs:124-126, crates/cli/src/dot/control.rs:137-139, crates/cli/src/dot/control.rs:291-293, crates/cli/src/dot/control.rs:374-376` | `same body appears under different names across files` |
+| `ExactUnitDifferentName` | `Warning` | `rust` | 2 | 5 | `crates/kernel/src/json/path_bytecode.rs:138-140, crates/sql/src/json/jsonb.rs:1062-1064, crates/sql/src/matview.rs:340-342, crates/sql/src/parser/rewrite/pg_ddl.rs:349-351, crates/sql/src/parser/rewrite/pg_ddl.rs:1368-1370, crates/sql/src/parser/rewrite/pg_empty.rs:62-64, crates/sql/src/pg_fn.rs:220-222, crates/sql/src/pg_pub.rs:201-203` | `same body appears under different names across files` |
+| `ExactUnitSameName` | `Warning` | `rust` | 13 | 36 | `crates/sql/src/pg_fn.rs:168-181, crates/sql/src/pg_pl.rs:1350-1363` | `same-name semantic unit copied across multiple files` |
+| `ExactUnitDifferentName` | `Warning` | `rust` | 1 | 2 | `crates/bench/src/config.rs:438-439, crates/bench/src/config.rs:459-460, crates/bench/src/durability_evidence/receipt.rs:66-67, crates/redlinedb/src/value.rs:43-44, crates/redlinedb/src/value.rs:57-58, crates/redlinedb/src/value.rs:64-65, crates/redlinedb/src/value.rs:71-72, crates/redlinedb/src/value.rs:78-79, crates/sql/src/exec/expr/scalar/row/model.rs:69-70, crates/sql/src/exec/expr/scalar/row/model.rs:83-84, crates/sql/src/exec/expr/scalar/row/model.rs:94-95, crates/sql/src/statement.rs:496-497, crates/sql/src/statement.rs:797-798` | `same body appears under different names across files` |
+| `ExactUnitDifferentName` | `Warning` | `rust` | 2 | 3 | `crates/cli/src/dot/control.rs:107-109, crates/cli/src/dot/control.rs:111-113, crates/cli/src/dot/control.rs:115-117, crates/cli/src/dot/control.rs:119-121, crates/cli/src/dot/control.rs:132-134, crates/cli/src/dot/control.rs:286-288, crates/cli/src/dot/control.rs:369-371` | `same body appears under different names across files` |
 | `ExactUnitSameName` | `Warning` | `rust` | 11 | 57 | `crates/sql/src/datetime/format.rs:75-86, crates/sql/src/datetime/modifiers.rs:193-204` | `same-name semantic unit copied across multiple files` |
-| `ExactUnitDifferentName` | `Warning` | `rust` | 1 | 2 | `crates/bench/src/config.rs:413-414, crates/bench/src/config.rs:434-435, crates/redlinedb/src/value.rs:43-44, crates/redlinedb/src/value.rs:57-58, crates/redlinedb/src/value.rs:64-65, crates/redlinedb/src/value.rs:71-72, crates/redlinedb/src/value.rs:78-79, crates/sql/src/exec/expr/scalar/row/model.rs:67-68, crates/sql/src/exec/expr/scalar/row/model.rs:81-82, crates/sql/src/exec/expr/scalar/row/model.rs:92-93, crates/sql/src/statement.rs:490-491, crates/sql/src/statement.rs:787-788` | `same body appears under different names across files` |
-| `ExactUnitDifferentName` | `Warning` | `rust` | 10 | 24 | `crates/sql/src/exec/expr/predicate.rs:336-346, crates/sql/src/parser/rewrite/pg_ddl.rs:300-310` | `same body appears under different names across files` |
 | `ExactUnitSameName` | `Warning` | `rust` | 5 | 9 | `crates/sql/src/exec/pragma_tv.rs:170-175, crates/sql/src/exec/table_valued.rs:77-82, crates/sql/src/exec/table_valued.rs:141-146` | `same-name semantic unit copied across multiple files` |
-| `ExactUnitDifferentName` | `Warning` | `rust` | 1 | 4 | `crates/sql/src/parser/matview_stmt.rs:169-170, crates/sql/src/parser/matview_stmt.rs:202-203, crates/sql/src/parser/pg_fn_stmt.rs:285-286, crates/sql/src/pg_pl.rs:1354-1355, crates/sql/src/pg_pub.rs:218-219, crates/sql/src/pg_search.rs:322-323, crates/sql/src/pg_search.rs:338-339, crates/sql/src/virtual_module.rs:185-186, crates/sql/src/virtual_module.rs:198-199` | `same body appears under different names across files` |
-| `ExactUnitSameName` | `Warning` | `rust` | 2 | 5 | `crates/sql/src/listen.rs:146-148, crates/sql/src/matview.rs:340-342, crates/sql/src/parser/rewrite/pg_empty.rs:62-64, crates/sql/src/pg_fn.rs:217-219, crates/sql/src/pg_pub.rs:201-203` | `same-name semantic unit copied across multiple files` |
-| `ExactUnitSameName` | `Warning` | `rust` | 7 | 25 | `crates/sql/src/pg_pl.rs:1251-1258, crates/sql/src/pg_pub.rs:192-199` | `same-name semantic unit copied across multiple files` |
-| `ExactUnitSameName` | `Warning` | `rust` | 7 | 15 | `crates/sql/src/parser/select.rs:1664-1671, crates/sql/src/parser/select.rs:1735-1742` | `same-name semantic unit copied across multiple files` |
+| `ExactUnitDifferentName` | `Warning` | `rust` | 1 | 4 | `crates/sql/src/parser/matview_stmt.rs:169-170, crates/sql/src/parser/matview_stmt.rs:202-203, crates/sql/src/parser/pg_fn_stmt.rs:285-286, crates/sql/src/pg_pl.rs:1495-1496, crates/sql/src/pg_pub.rs:218-219, crates/sql/src/pg_search.rs:322-323, crates/sql/src/pg_search.rs:338-339, crates/sql/src/virtual_module.rs:198-199, crates/sql/src/virtual_module.rs:211-212` | `same body appears under different names across files` |
+| `ExactUnitDifferentName` | `Warning` | `rust` | 8 | 17 | `crates/kernel/src/catalog/key.rs:191-199, crates/kernel/src/catalog/key_epoch.rs:78-86` | `same body appears under different names across files` |
+| `ExactUnitSameName` | `Warning` | `rust` | 8 | 17 | `crates/sql/src/numeric.rs:115-123, crates/sql/src/numeric/text_number.rs:171-179` | `same-name semantic unit copied across multiple files` |
+| `ExactUnitDifferentName` | `Warning` | `rust` | 2 | 1 | `crates/kernel/src/failpoints/mod.rs:65-67, crates/kernel/src/failpoints/mod.rs:109-111, crates/kernel/src/failpoints/mod.rs:133-135, crates/kernel/src/storage/numa.rs:59-61, crates/kernel/src/storage/numa.rs:64-66` | `same body appears under different names across files` |
+| `ExactUnitSameName` | `Warning` | `rust` | 7 | 25 | `crates/sql/src/pg_pl.rs:1392-1399, crates/sql/src/pg_pub.rs:192-199` | `same-name semantic unit copied across multiple files` |
 | `ExactUnitSameName` | `Warning` | `rust` | 7 | 12 | `crates/kernel/src/engine/page_heap/policy.rs:78-85, crates/kernel/src/engine/page_heap/policy.rs:108-115` | `same-name semantic unit copied across multiple files` |
-| `ExactUnitDifferentName` | `Warning` | `rust` | 1 | 0 | `crates/kernel/src/catalog/ddl.rs:315-315, crates/kernel/src/failpoints/mod.rs:41-42, crates/kernel/src/integrity/equivalence.rs:214-214, crates/kernel/src/integrity/page_csum.rs:107-107, crates/redlinedb-sqlx/src/bridge/options.rs:253-254, crates/redlinedb-sqlx/src/bridge/runtime.rs:127-128, crates/sql/src/connection/session.rs:1290-1290, crates/sql/src/exec/merge.rs:278-278` | `same body appears under different names across files` |
+| `ExactUnitDifferentName` | `Warning` | `rust` | 1 | 0 | `crates/kernel/src/catalog/ddl.rs:315-315, crates/kernel/src/failpoints/mod.rs:41-42, crates/kernel/src/integrity/equivalence.rs:218-218, crates/kernel/src/integrity/page_csum.rs:107-107, crates/redlinedb-sqlx/src/bridge/options.rs:253-254, crates/redlinedb-sqlx/src/bridge/runtime.rs:127-128, crates/sql/src/connection/session.rs:1418-1418, crates/sql/src/exec/merge.rs:285-285` | `same body appears under different names across files` |
 | `ExactUnitDifferentName` | `Warning` | `rust` | 1 | 6 | `crates/redlinedb-sqlx/src/bridge/options.rs:223-224, crates/redlinedb-sqlx/src/bridge/runtime.rs:52-53, crates/redlinedb-sqlx/src/bridge/runtime.rs:57-58, crates/redlinedb-sqlx/src/bridge/runtime.rs:81-82, crates/redlinedb-sqlx/src/bridge/runtime.rs:96-97, crates/redlinedb-sqlx/src/bridge/runtime.rs:111-112, crates/redlinedb-sqlx/src/bridge/runtime.rs:201-202` | `same body appears under different names across files` |
-| `ExactUnitSameName` | `Warning` | `rust` | 6 | 21 | `crates/cli/src/shellzero.rs:217-223, crates/redlinedb-lite/src/shellzero.rs:216-222` | `same-name semantic unit copied across multiple files` |
+| `ExactUnitSameName` | `Warning` | `rust` | 6 | 21 | `crates/cli/src/shellzero.rs:215-221, crates/redlinedb-lite/src/shellzero.rs:216-222` | `same-name semantic unit copied across multiple files` |
 | `ExactUnitSameName` | `Warning` | `rust` | 6 | 20 | `crates/sql/src/exec/agg/select.rs:9-15, crates/sql/src/planner/access/projection.rs:94-100` | `same-name semantic unit copied across multiple files` |
+| `ExactUnitSameName` | `Warning` | `rust` | 6 | 15 | `crates/bench/src/durability_evidence/readback.rs:319-325, crates/bench/src/recover/observe.rs:207-213` | `same-name semantic unit copied across multiple files` |
+| `ExactUnitSameName` | `Warning` | `rust` | 2 | 5 | `crates/sql/src/matview.rs:340-342, crates/sql/src/parser/rewrite/pg_empty.rs:62-64, crates/sql/src/pg_fn.rs:220-222, crates/sql/src/pg_pub.rs:201-203` | `same-name semantic unit copied across multiple files` |
 | `ExactUnitSameName` | `Warning` | `rust` | 6 | 12 | `crates/sql/src/exec/policy.rs:32-38, crates/sql/src/exec/policy.rs:57-63` | `same-name semantic unit copied across multiple files` |
-| `ExactUnitDifferentName` | `Warning` | `rust` | 2 | 1 | `crates/kernel/src/failpoints/mod.rs:65-67, crates/kernel/src/failpoints/mod.rs:109-111, crates/kernel/src/storage/numa.rs:59-61, crates/kernel/src/storage/numa.rs:64-66` | `same body appears under different names across files` |
-| `ExactUnitDifferentName` | `Warning` | `rust` | 1 | 4 | `crates/kernel/src/catalog/store.rs:557-558, crates/sql/src/parser/rewrite/sqlite_shape.rs:1192-1193, crates/sql/src/parser/rewrite/sqlite_shape.rs:1297-1298, crates/sql/src/parser/rewrite/sqlite_shape.rs:1396-1397, crates/sql/src/parser/split.rs:33-34, crates/sql/src/parser/split.rs:209-210` | `same body appears under different names across files` |
-| `ExactUnitSameName` | `Warning` | `rust` | 1 | 4 | `crates/sql/src/parser/matview_stmt.rs:169-170, crates/sql/src/parser/pg_fn_stmt.rs:285-286, crates/sql/src/pg_pl.rs:1354-1355, crates/sql/src/pg_pub.rs:218-219, crates/sql/src/pg_search.rs:322-323, crates/sql/src/virtual_module.rs:198-199` | `same-name semantic unit copied across multiple files` |
-| `ExactUnitDifferentName` | `Warning` | `rust` | 5 | 15 | `crates/sql/src/exec/mod.rs:1775-1780, crates/sql/src/exec/mod.rs:1790-1795` | `same body appears under different names across files` |
+| `ExactUnitSameName` | `Warning` | `rust` | 5 | 24 | `crates/bench/src/durability_evidence/readback.rs:312-317, crates/bench/src/recover/observe.rs:215-220` | `same-name semantic unit copied across multiple files` |
+| `ExactUnitDifferentName` | `Warning` | `rust` | 1 | 4 | `crates/kernel/src/catalog/collation.rs:210-211, crates/kernel/src/catalog/store.rs:700-701, crates/sql/src/parser/rewrite/sqlite_shape.rs:1262-1263, crates/sql/src/parser/rewrite/sqlite_shape.rs:1361-1362, crates/sql/src/parser/split.rs:33-34, crates/sql/src/parser/split.rs:209-210` | `same body appears under different names across files` |
+| `ExactUnitSameName` | `Warning` | `rust` | 1 | 4 | `crates/sql/src/parser/matview_stmt.rs:169-170, crates/sql/src/parser/pg_fn_stmt.rs:285-286, crates/sql/src/pg_pl.rs:1495-1496, crates/sql/src/pg_pub.rs:218-219, crates/sql/src/pg_search.rs:322-323, crates/sql/src/virtual_module.rs:211-212` | `same-name semantic unit copied across multiple files` |
+| `ExactUnitDifferentName` | `Warning` | `rust` | 1 | 3 | `crates/sql/src/exec/expr/json_dispatch.rs:714-715, crates/sql/src/exec/expr/json_dispatch.rs:743-744, crates/sql/src/exec/expr/json_dispatch.rs:773-774, crates/sql/src/exec/expr/json_dispatch.rs:1014-1015, crates/sql/src/exec/expr/json_dispatch.rs:1027-1028, crates/sql/src/exec/expr/json_dispatch.rs:1041-1042` | `same body appears under different names across files` |
+| `ExactUnitDifferentName` | `Warning` | `rust` | 5 | 15 | `crates/sql/src/exec/mod.rs:1768-1773, crates/sql/src/exec/mod.rs:1783-1788` | `same body appears under different names across files` |
 | `ExactUnitSameName` | `Warning` | `rust` | 5 | 13 | `crates/sql/src/exec/agg/select.rs:103-108, crates/sql/src/planner/access/projection.rs:171-176` | `same-name semantic unit copied across multiple files` |
 | `ExactUnitDifferentName` | `Warning` | `rust` | 5 | 12 | `crates/cli/src/render.rs:979-984, crates/cli/src/render.rs:1003-1008` | `same body appears under different names across files` |
+| `ExactUnitDifferentName` | `Warning` | `rust` | 5 | 10 | `crates/sql/src/exec/join_probe.rs:123-128, crates/sql/src/planner/helpers.rs:185-190` | `same body appears under different names across files` |
 | `ExactUnitDifferentName` | `Warning` | `rust` | 5 | 10 | `crates/cli/src/render.rs:459-464, crates/cli/src/render.rs:549-554` | `same body appears under different names across files` |
-| `ExactUnitSameName` | `Warning` | `rust` | 5 | 6 | `crates/sql/src/pg_pl.rs:204-209, crates/sql/src/pg_pub.rs:181-186` | `same-name semantic unit copied across multiple files` |
-| `ExactUnitSameName` | `Warning` | `rust` | 4 | 13 | `crates/kernel/src/index/locks.rs:200-204, crates/sql/src/session.rs:632-636` | `same-name semantic unit copied across multiple files` |
-| `ExactUnitDifferentName` | `Warning` | `rust` | 4 | 12 | `crates/sql/src/exec/expr/json_dispatch.rs:62-66, crates/sql/src/exec/expr/json_dispatch.rs:870-874` | `same body appears under different names across files` |
+| `ExactUnitSameName` | `Warning` | `rust` | 5 | 8 | `crates/sql/src/exec/expr/affinity.rs:47-52, crates/sql/src/exec/fk_affinity.rs:27-32` | `same-name semantic unit copied across multiple files` |
+| `ExactUnitSameName` | `Warning` | `rust` | 5 | 6 | `crates/sql/src/pg_pl.rs:205-210, crates/sql/src/pg_pub.rs:181-186` | `same-name semantic unit copied across multiple files` |
+| `ExactUnitDifferentName` | `Warning` | `rust` | 1 | 1 | `crates/bench/src/sqlite_parity/engine.rs:172-173, crates/redlinedb-sqlx/src/driver.rs:216-217, crates/redlinedb/src/iter.rs:93-94, crates/sql/src/exec/expr/predicate.rs:268-269, crates/sql/src/exec/expr/program.rs:380-381, crates/sql/src/exec/morsel/hash_agg.rs:227-228` | `same body appears under different names across files` |
+| `ExactUnitDifferentName` | `Warning` | `rust` | 1 | 4 | `crates/sql/src/exec/morsel/arena.rs:77-78, crates/sql/src/exec/morsel/arena.rs:103-104, crates/sql/src/exec/morsel/builder.rs:160-161, crates/sql/src/exec/morsel/column.rs:74-75, crates/sql/src/exec/morsel/scan.rs:144-145` | `same body appears under different names across files` |
+| `ExactUnitSameName` | `Warning` | `rust` | 4 | 13 | `crates/kernel/src/index/locks.rs:200-204, crates/sql/src/session.rs:641-645` | `same-name semantic unit copied across multiple files` |
+| `ExactUnitDifferentName` | `Warning` | `rust` | 4 | 12 | `crates/sql/src/exec/expr/json_dispatch.rs:62-66, crates/sql/src/exec/expr/json_dispatch.rs:876-880` | `same body appears under different names across files` |
 | `ExactUnitDifferentName` | `Warning` | `rust` | 2 | 5 | `crates/kernel/src/format/bytes.rs:44-46, crates/kernel/src/format/bytes.rs:49-51, crates/kernel/src/format/bytes.rs:54-56` | `same body appears under different names across files` |
 | `ExactUnitDifferentName` | `Warning` | `rust` | 4 | 9 | `crates/sql/src/exec/expr/scalar/row/lookup.rs:68-72, crates/sql/src/exec/expr/scalar/row/lookup.rs:137-141` | `same body appears under different names across files` |
-| `ExactUnitDifferentName` | `Warning` | `rust` | 1 | 2 | `crates/sql/src/exec/expr/program.rs:970-971, crates/sql/src/exec/expr/program.rs:1027-1028, crates/sql/src/exec/expr/program.rs:1042-1043, crates/sql/src/exec/expr/program.rs:1096-1097, crates/sql/src/json/scalar.rs:539-540` | `same body appears under different names across files` |
-| `ExactUnitDifferentName` | `Warning` | `rust` | 2 | 3 | `crates/kernel/src/format/page.rs:102-104, crates/kernel/src/storage/control.rs:156-158, crates/kernel/src/storage/tx_status_checkpoint.rs:156-158` | `same body appears under different names across files` |
-| `ExactUnitDifferentName` | `Warning` | `rust` | 4 | 5 | `crates/redlinedb/src/connection.rs:172-176, crates/redlinedb/src/connection.rs:187-191` | `same body appears under different names across files` |
-| `ExactUnitDifferentName` | `Warning` | `rust` | 1 | 1 | `crates/bench/src/sqlite_parity/engine.rs:172-173, crates/redlinedb-sqlx/src/driver.rs:216-217, crates/redlinedb/src/iter.rs:93-94, crates/sql/src/exec/expr/program.rs:372-373, crates/sql/src/exec/morsel/hash_agg.rs:301-302` | `same body appears under different names across files` |
+| `ExactUnitDifferentName` | `Warning` | `rust` | 1 | 2 | `crates/sql/src/exec/expr/coerce/collation_scope.rs:125-126, crates/sql/src/exec/expr/predicate.rs:250-251, crates/sql/src/parser/order_by.rs:197-198, crates/sql/src/parser/order_by.rs:209-210, crates/sql/src/parser/order_by.rs:226-227` | `same body appears under different names across files` |
+| `ExactUnitDifferentName` | `Warning` | `rust` | 2 | 3 | `crates/kernel/src/format/page.rs:102-104, crates/kernel/src/storage/control.rs:255-257, crates/kernel/src/storage/tx_status_checkpoint.rs:190-192` | `same body appears under different names across files` |
+| `ExactUnitDifferentName` | `Warning` | `rust` | 4 | 5 | `crates/redlinedb/src/connection.rs:181-185, crates/redlinedb/src/connection.rs:196-200` | `same body appears under different names across files` |
 | `ExactUnitDifferentName` | `Warning` | `rust` | 3 | 16 | `crates/sql/src/exec/expr/scalar/value.rs:556-559, crates/sql/src/exec/expr/scalar/value.rs:715-718` | `same body appears under different names across files` |
-| `ExactUnitDifferentName` | `Warning` | `rust` | 1 | 5 | `crates/kernel/src/catalog/ops.rs:1488-1489, crates/sql/src/parser/rewrite/sqlite_shape.rs:1016-1017, crates/sql/src/parser/split.rs:171-172, crates/sql/src/pg_alter.rs:441-442` | `same body appears under different names across files` |
-| `ExactUnitDifferentName` | `Warning` | `rust` | 1 | 4 | `crates/sql/src/statement.rs:1088-1089, crates/sql/src/statement.rs:1096-1097, crates/sql/src/statement.rs:1104-1105, crates/sql/src/statement.rs:1111-1112` | `same body appears under different names across files` |
-| `ExactUnitDifferentName` | `Warning` | `rust` | 1 | 4 | `crates/kernel/src/vector/diskann/sectors.rs:419-420, crates/redlinedb/src/value_conv.rs:336-337, crates/redlinedb/src/value_conv.rs:357-358, crates/redlinedb/src/value_conv.rs:378-379` | `same body appears under different names across files` |
-| `ExactUnitDifferentName` | `Warning` | `rust` | 3 | 10 | `crates/sql/src/exec/index_batch.rs:530-533, crates/sql/src/exec/index_batch.rs:538-541` | `same body appears under different names across files` |
-| `ExactUnitDifferentName` | `Warning` | `rust` | 1 | 3 | `crates/sql/src/rql.rs:1334-1335, crates/sql/src/rql.rs:1419-1420, crates/sql/src/rql.rs:1558-1559, crates/sql/src/rql.rs:1582-1583` | `same body appears under different names across files` |
-| `ExactUnitDifferentName` | `Warning` | `rust` | 3 | 7 | `crates/sql/src/exec/expr/scalar/value.rs:321-324, crates/sql/src/exec/expr/scalar/value.rs:369-372` | `same body appears under different names across files` |
-| `ExactUnitDifferentName` | `Warning` | `rust` | 3 | 6 | `crates/sql/src/parser.rs:377-380, crates/sql/src/parser.rs:398-401` | `same body appears under different names across files` |
+| `ExactUnitDifferentName` | `Warning` | `rust` | 1 | 5 | `crates/kernel/src/catalog/ops.rs:1543-1544, crates/sql/src/parser/rewrite/sqlite_shape.rs:1012-1013, crates/sql/src/parser/split.rs:171-172, crates/sql/src/pg_alter.rs:441-442` | `same body appears under different names across files` |
 
 ## Dimensions
 
@@ -141,7 +141,7 @@
 | Contract and boundary integrity | 13 | 98 | 12.74 | contract surface found; generated contract artifacts found |
 | Proof lanes and test routing | 12 | 100 | 12.00 | one-command setup/validation lane found; deterministic fast lane found |
 | Security and supply-chain posture | 12 | 70 | 8.40 | lockfile present; secret or dependency scan tooling found |
-| Code shape and semantic surface | 12 | 45 | 5.40 | largest authored code file: crates/sql/src/exec/mod.rs (1972 LOC); code file exceeds 500 LOC |
+| Code shape and semantic surface | 12 | 35 | 4.20 | largest authored code file: crates/sql/src/exec/mod.rs (1978 LOC); code file exceeds 500 LOC |
 | Data truth and workflow safety | 8 | 100 | 8.00 | database surface present; structured db boundary manifest present |
 | Observability and repair evidence | 8 | 98 | 7.84 | observability libraries or patterns found; diagnostic shaping hints found |
 | Context economy and agent instructions | 7 | 100 | 7.00 | root `AGENTS.md` present; root `AGENTS.md` stays short |
@@ -223,11 +223,11 @@ No audited runtime boundary reclassifications declared.
    Check: `HLT-001-DEAD-MARKER:shape` `soft` confidence `0.76`
    Route: TLR `Entropy`, lane `fast`, owner `tools`
    Docs: `docs/audit-rubric.md#future-hostile-language-rule`
-   Reason: `Code shape and semantic surface` scored 45 below the standard floor of 85
+   Reason: `Code shape and semantic surface` scored 35 below the standard floor of 85
    Fix: split large or ambiguous authored code into smaller semantic modules with focused tests
    Rerun: `just fast`
-   Fingerprint: `sha256:361ea01bc8add4188c596b87ce72755189ce67764fc3741459b64d8b2d985b05`
-   Evidence: largest authored code file: crates/sql/src/exec/mod.rs (1972 LOC), code file exceeds 500 LOC, code file exceeds 1000 LOC, most code files stay under 300 LOC
+   Fingerprint: `sha256:37c1bb1277f2c7f5641f4bd7820ffea623fff1c277f5592a99ab897cba50b635`
+   Evidence: largest authored code file: crates/sql/src/exec/mod.rs (1978 LOC), code file exceeds 500 LOC, code file exceeds 1000 LOC, copy-code advisory classes found: 200 (advisory only, no score impact)
 2. `medium` `security` `.github/workflows/jankurai.yml`
    Rule: `HLT-016-SUPPLY-CHAIN-DRIFT`
    Check: `HLT-016-SUPPLY-CHAIN-DRIFT:security` `soft` confidence `0.76`
@@ -248,7 +248,17 @@ No audited runtime boundary reclassifications declared.
    Rerun: `just fast`
    Fingerprint: `sha256:a256a7390d4b91a5b0a95d6f092e524c8f4080f27fe2b62e28cf0801343d0fef`
    Evidence: build acceleration markers found, targeted test/build commands found, locked dependency graph present, CI cache hint found
-4. `medium` `copy-code` `crates/bench/src/fuzz/normalize.rs:19`
+4. `high` `generated` `agent/generated-zones.toml:1`
+   Rule: `HLT-002-GENERATED-MUTATION`
+   Check: `HLT-002-GENERATED-MUTATION:generated` `hard` confidence `0.95`
+   Route: TLR `Contracts/data`, lane `contract`, owner `control-plane`
+   Docs: `agent/JANKURAI_STANDARD.md#generated-zones`
+   Reason: generated zone file `benchmark-results/sqlite-parity/releases/` is missing
+   Fix: regenerate `benchmark-results/sqlite-parity/releases/` using the declared command, or remove the zone entry if the file was deleted intentionally
+   Rerun: `just fast`
+   Fingerprint: `sha256:de33880f2237b3289335fd02b4e772750cd54442b9e27156c55d2ff399728657`
+   Evidence: generated zone integrity violation
+5. `medium` `copy-code` `crates/bench/src/fuzz/normalize.rs:19`
    Rule: `HLT-046-UNNECESSARY-VARIETY`
    Check: `HLT-046-UNNECESSARY-VARIETY:copy-code` `soft` confidence `0.88`
    Route: TLR `Maintainability entropy`, lane `copy-code`, owner `tools`
@@ -259,7 +269,7 @@ No audited runtime boundary reclassifications declared.
    Rerun: `cargo run -p jankurai -- copy-code . --json target/jankurai/copy-code.json --md target/jankurai/copy-code.md`
    Fingerprint: `sha256:06abf3e40a8c91cd5bd3a90c2801aa5769be3e9a2c1e83dba0430881ddec8173`
    Evidence: enum `Cell` is defined with diverging shapes in 2 modules (crates/bench/src/fuzz/normalize.rs:19, crates/cli/src/render.rs:10)
-5. `medium` `copy-code` `crates/kernel/src/error.rs:21`
+6. `medium` `copy-code` `crates/kernel/src/error.rs:21`
    Rule: `HLT-046-UNNECESSARY-VARIETY`
    Check: `HLT-046-UNNECESSARY-VARIETY:copy-code` `soft` confidence `0.88`
    Route: TLR `Maintainability entropy`, lane `copy-code`, owner `tools`
@@ -270,7 +280,7 @@ No audited runtime boundary reclassifications declared.
    Rerun: `cargo run -p jankurai -- copy-code . --json target/jankurai/copy-code.json --md target/jankurai/copy-code.md`
    Fingerprint: `sha256:0c9d695968a4c3656809617dc18f78a9c390dfb8bf704adb486db7cd6f8a193f`
    Evidence: enum `Error` is defined with diverging shapes in 2 modules (crates/kernel/src/error.rs:21, crates/sql/src/error.rs:5)
-6. `medium` `copy-code` `crates/kernel/src/json/path_bytecode.rs:27`
+7. `medium` `copy-code` `crates/kernel/src/json/path_bytecode.rs:27`
    Rule: `HLT-046-UNNECESSARY-VARIETY`
    Check: `HLT-046-UNNECESSARY-VARIETY:copy-code` `soft` confidence `0.88`
    Route: TLR `Maintainability entropy`, lane `copy-code`, owner `tools`
@@ -279,9 +289,9 @@ No audited runtime boundary reclassifications declared.
    Reason: enum `Op` has 2 divergent definitions across modules where one consistent definition is expected
    Fix: define `Op` once in a shared module and import it everywhere, or reconcile the diverging definitions so one canonical shape is used; redundant variety lets the copies drift apart
    Rerun: `cargo run -p jankurai -- copy-code . --json target/jankurai/copy-code.json --md target/jankurai/copy-code.md`
-   Fingerprint: `sha256:b3bb182f6967fe53e8a9863ef4ed7ac2446a6997b89e3e61cae7832373f73b23`
-   Evidence: enum `Op` is defined with diverging shapes in 2 modules (crates/kernel/src/json/path_bytecode.rs:27, crates/sql/src/exec/expr/program.rs:305)
-7. `medium` `copy-code` `crates/redlinedb/src/iter.rs:13`
+   Fingerprint: `sha256:e2e551967fd04b434513fb5ea4df0e967f24fefc1ec196da23480ead865c63ba`
+   Evidence: enum `Op` is defined with diverging shapes in 2 modules (crates/kernel/src/json/path_bytecode.rs:27, crates/sql/src/exec/expr/program.rs:313)
+8. `medium` `copy-code` `crates/redlinedb/src/iter.rs:13`
    Rule: `HLT-046-UNNECESSARY-VARIETY`
    Check: `HLT-046-UNNECESSARY-VARIETY:copy-code` `soft` confidence `0.88`
    Route: TLR `Maintainability entropy`, lane `copy-code`, owner `tools`
@@ -290,9 +300,9 @@ No audited runtime boundary reclassifications declared.
    Reason: enum `Step` has 2 divergent definitions across modules where one consistent definition is expected
    Fix: define `Step` once in a shared module and import it everywhere, or reconcile the diverging definitions so one canonical shape is used; redundant variety lets the copies drift apart
    Rerun: `cargo run -p jankurai -- copy-code . --json target/jankurai/copy-code.json --md target/jankurai/copy-code.md`
-   Fingerprint: `sha256:4ae7e536d954d302d2575f0987733fa5a648b6cb3c9b69826f66e8e08a45b21f`
-   Evidence: enum `Step` is defined with diverging shapes in 2 modules (crates/redlinedb/src/iter.rs:13, crates/sql/src/statement.rs:871)
-8. `medium` `copy-code` `crates/sql/src/exec/morsel/hash_agg.rs:43`
+   Fingerprint: `sha256:e297ba16da13c28db635cdc0fb6c48ce85369732c19dfae28233d697f9921556`
+   Evidence: enum `Step` is defined with diverging shapes in 2 modules (crates/redlinedb/src/iter.rs:13, crates/sql/src/statement.rs:893)
+9. `medium` `copy-code` `crates/sql/src/exec/morsel/hash_agg.rs:44`
    Rule: `HLT-046-UNNECESSARY-VARIETY`
    Check: `HLT-046-UNNECESSARY-VARIETY:copy-code` `soft` confidence `0.88`
    Route: TLR `Maintainability entropy`, lane `copy-code`, owner `tools`
@@ -301,9 +311,9 @@ No audited runtime boundary reclassifications declared.
    Reason: enum `AggKind` has 2 divergent definitions across modules where one consistent definition is expected
    Fix: define `AggKind` once in a shared module and import it everywhere, or reconcile the diverging definitions so one canonical shape is used; redundant variety lets the copies drift apart
    Rerun: `cargo run -p jankurai -- copy-code . --json target/jankurai/copy-code.json --md target/jankurai/copy-code.md`
-   Fingerprint: `sha256:1792bb4ccf76315d0f67831b6b9614a39d3305eda161b9a07cf4b4a21f986665`
-   Evidence: enum `AggKind` is defined with diverging shapes in 2 modules (crates/sql/src/exec/morsel/hash_agg.rs:43, crates/sql/src/exec/vec/hash_agg.rs:23)
-9. `medium` `copy-code` `crates/sql/src/planner.rs:113`
+   Fingerprint: `sha256:f2af4a546b835a99095683cec5bb87eee646d8fbd2a7adeae90d751ec24e79a7`
+   Evidence: enum `AggKind` is defined with diverging shapes in 2 modules (crates/sql/src/exec/morsel/hash_agg.rs:44, crates/sql/src/exec/vec/hash_agg.rs:23)
+10. `medium` `copy-code` `crates/sql/src/planner.rs:113`
    Rule: `HLT-046-UNNECESSARY-VARIETY`
    Check: `HLT-046-UNNECESSARY-VARIETY:copy-code` `soft` confidence `0.88`
    Route: TLR `Maintainability entropy`, lane `copy-code`, owner `tools`
@@ -312,9 +322,9 @@ No audited runtime boundary reclassifications declared.
    Reason: enum `JoinKind` has 2 divergent definitions across modules where one consistent definition is expected
    Fix: define `JoinKind` once in a shared module and import it everywhere, or reconcile the diverging definitions so one canonical shape is used; redundant variety lets the copies drift apart
    Rerun: `cargo run -p jankurai -- copy-code . --json target/jankurai/copy-code.json --md target/jankurai/copy-code.md`
-   Fingerprint: `sha256:c3e0c9b7afcb206c9644249a1ded3ce37152a4beab44ee533f4a0ba5f29fc5fe`
-   Evidence: enum `JoinKind` is defined with diverging shapes in 2 modules (crates/sql/src/planner.rs:113, crates/sql/src/statement.rs:617)
-10. `medium` `copy-code` `crates/sql/src/planner.rs:121`
+   Fingerprint: `sha256:4ffc8e6085d9d03576302f828516f68b55da913519dd57efc8e67d9c2b9bf817`
+   Evidence: enum `JoinKind` is defined with diverging shapes in 2 modules (crates/sql/src/planner.rs:113, crates/sql/src/statement.rs:627)
+11. `medium` `copy-code` `crates/sql/src/planner.rs:121`
    Rule: `HLT-046-UNNECESSARY-VARIETY`
    Check: `HLT-046-UNNECESSARY-VARIETY:copy-code` `soft` confidence `0.88`
    Route: TLR `Maintainability entropy`, lane `copy-code`, owner `tools`
@@ -323,8 +333,8 @@ No audited runtime boundary reclassifications declared.
    Reason: enum `AccessPath` has 2 divergent definitions across modules where one consistent definition is expected
    Fix: define `AccessPath` once in a shared module and import it everywhere, or reconcile the diverging definitions so one canonical shape is used; redundant variety lets the copies drift apart
    Rerun: `cargo run -p jankurai -- copy-code . --json target/jankurai/copy-code.json --md target/jankurai/copy-code.md`
-   Fingerprint: `sha256:1d2df57702312ed0db60cbea557e9e0b0fed4b41a92170f55d8adcf2919e24ae`
-   Evidence: enum `AccessPath` is defined with diverging shapes in 2 modules (crates/sql/src/planner.rs:121, crates/sql/src/planner/access_path.rs:104)
+   Fingerprint: `sha256:5a9766da6340b50c0c0c4141bb6f40b8414c7f581b21145ee2eefa32b88aec03`
+   Evidence: enum `AccessPath` is defined with diverging shapes in 2 modules (crates/sql/src/planner.rs:121, crates/sql/src/planner/access_path.rs:105)
 
 ## Policy
 
@@ -334,23 +344,25 @@ No audited runtime boundary reclassifications declared.
 
 ## Agent Fix Queue
 
-1. `medium` `HLT-018-PERF-CONCURRENCY-DRIFT` `Justfile` - add fast deterministic build/test targets, caches, and narrow proof lanes for agent iteration
+1. `high` `HLT-002-GENERATED-MUTATION` `agent/generated-zones.toml` - regenerate `benchmark-results/sqlite-parity/releases/` using the declared command, or remove the zone entry if the file was deleted intentionally
+   Route: `Contracts/data`/`contract`
+2. `medium` `HLT-018-PERF-CONCURRENCY-DRIFT` `Justfile` - add fast deterministic build/test targets, caches, and narrow proof lanes for agent iteration
    Route: `Verification`/`fast`
-2. `medium` `HLT-001-DEAD-MARKER` `.` - split large or ambiguous authored code into smaller semantic modules with focused tests
+3. `medium` `HLT-001-DEAD-MARKER` `.` - split large or ambiguous authored code into smaller semantic modules with focused tests
    Route: `Entropy`/`fast`
-3. `medium` `HLT-016-SUPPLY-CHAIN-DRIFT` `.github/workflows/jankurai.yml` - wire secret, dependency, provenance, and workflow scans into an operational CI lane
+4. `medium` `HLT-016-SUPPLY-CHAIN-DRIFT` `.github/workflows/jankurai.yml` - wire secret, dependency, provenance, and workflow scans into an operational CI lane
    Route: `Security, secrets, agency`/`security`
-4. `medium` `HLT-046-UNNECESSARY-VARIETY` `crates/bench/src/fuzz/normalize.rs` - define `Cell` once in a shared module and import it everywhere, or reconcile the diverging definitions so one canonical shape is used; redundant variety lets the copies drift apart
+5. `medium` `HLT-046-UNNECESSARY-VARIETY` `crates/bench/src/fuzz/normalize.rs` - define `Cell` once in a shared module and import it everywhere, or reconcile the diverging definitions so one canonical shape is used; redundant variety lets the copies drift apart
    Route: `Maintainability entropy`/`copy-code`
-5. `medium` `HLT-046-UNNECESSARY-VARIETY` `crates/kernel/src/error.rs` - define `Error` once in a shared module and import it everywhere, or reconcile the diverging definitions so one canonical shape is used; redundant variety lets the copies drift apart
+6. `medium` `HLT-046-UNNECESSARY-VARIETY` `crates/kernel/src/error.rs` - define `Error` once in a shared module and import it everywhere, or reconcile the diverging definitions so one canonical shape is used; redundant variety lets the copies drift apart
    Route: `Maintainability entropy`/`copy-code`
-6. `medium` `HLT-046-UNNECESSARY-VARIETY` `crates/kernel/src/json/path_bytecode.rs` - define `Op` once in a shared module and import it everywhere, or reconcile the diverging definitions so one canonical shape is used; redundant variety lets the copies drift apart
+7. `medium` `HLT-046-UNNECESSARY-VARIETY` `crates/kernel/src/json/path_bytecode.rs` - define `Op` once in a shared module and import it everywhere, or reconcile the diverging definitions so one canonical shape is used; redundant variety lets the copies drift apart
    Route: `Maintainability entropy`/`copy-code`
-7. `medium` `HLT-046-UNNECESSARY-VARIETY` `crates/redlinedb/src/iter.rs` - define `Step` once in a shared module and import it everywhere, or reconcile the diverging definitions so one canonical shape is used; redundant variety lets the copies drift apart
+8. `medium` `HLT-046-UNNECESSARY-VARIETY` `crates/redlinedb/src/iter.rs` - define `Step` once in a shared module and import it everywhere, or reconcile the diverging definitions so one canonical shape is used; redundant variety lets the copies drift apart
    Route: `Maintainability entropy`/`copy-code`
-8. `medium` `HLT-046-UNNECESSARY-VARIETY` `crates/sql/src/exec/morsel/hash_agg.rs` - define `AggKind` once in a shared module and import it everywhere, or reconcile the diverging definitions so one canonical shape is used; redundant variety lets the copies drift apart
+9. `medium` `HLT-046-UNNECESSARY-VARIETY` `crates/sql/src/exec/morsel/hash_agg.rs` - define `AggKind` once in a shared module and import it everywhere, or reconcile the diverging definitions so one canonical shape is used; redundant variety lets the copies drift apart
    Route: `Maintainability entropy`/`copy-code`
-9. `medium` `HLT-046-UNNECESSARY-VARIETY` `crates/sql/src/planner.rs` - define `JoinKind` once in a shared module and import it everywhere, or reconcile the diverging definitions so one canonical shape is used; redundant variety lets the copies drift apart
+10. `medium` `HLT-046-UNNECESSARY-VARIETY` `crates/sql/src/planner.rs` - define `JoinKind` once in a shared module and import it everywhere, or reconcile the diverging definitions so one canonical shape is used; redundant variety lets the copies drift apart
    Route: `Maintainability entropy`/`copy-code`
-10. `medium` `HLT-046-UNNECESSARY-VARIETY` `crates/sql/src/planner.rs` - define `AccessPath` once in a shared module and import it everywhere, or reconcile the diverging definitions so one canonical shape is used; redundant variety lets the copies drift apart
+11. `medium` `HLT-046-UNNECESSARY-VARIETY` `crates/sql/src/planner.rs` - define `AccessPath` once in a shared module and import it everywhere, or reconcile the diverging definitions so one canonical shape is used; redundant variety lets the copies drift apart
    Route: `Maintainability entropy`/`copy-code`

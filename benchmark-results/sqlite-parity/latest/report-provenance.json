@@ -1,35 +1,43 @@
 {
   "schema_version": "redline-testing-report-provenance-v1",
   "suite": "sqlite_parity",
-  "mode": "historical",
-  "note": "historical run: it predates run provenance, so its source tree, source inputs, corpus hash, assertion policy and oracle build stamp were not recorded; the run provenance file the evidence names was not retained. Measured identities come from the processed official evidence.",
+  "mode": "official",
+  "note": null,
   "measurement": {
     "runner": {
-      "path": "/home/ubuntu/actions-runners/xbabe2-2/_work/RedlineDB/RedlineDB/target/release/redline-testing",
-      "sha256": "b28c41d40009bfe7c98832abda695c3b9d2624871c4c886991601718d8e70a78",
+      "path": "/home/ubuntu/redlineDB/.agent/sandbox/evidence/target/release/redline-testing",
+      "sha256": "3b80deab9435b8eb11705d8bc2533eca3ca013ec7f04929222c66013155cf547",
       "version": "redline-testing 1.0.1"
     },
     "target": {
-      "path": "/home/ubuntu/actions-runners/xbabe2-2/_work/RedlineDB/RedlineDB/target/release/redlinedb",
-      "sha256": "be49779bace1d97c1d9a78f697f3a7b2bd27c6c4c6a5dccefd29304dfaa55b78",
-      "version": "redlinedb v4.1.0 (SQLite 3.45.1 compatibility)"
+      "path": "/home/ubuntu/redlineDB/.agent/sandbox/evidence/target/release/redlinedb",
+      "sha256": "0c803caa8e0ef29c4633b660da45fe48a7b237be1816506fbcd9b10d325d23b8",
+      "version": "redlinedb v5.0.0 (tested against SQLite 3.53.1)"
     },
     "sqlite": {
-      "path": "/home/ubuntu/actions-runners/xbabe2-2/_work/RedlineDB/RedlineDB/target/sqlite-reference/3.53.1/bin/sqlite3",
-      "sha256": "e99d817b62f1ad9ead02b8d4e410fea9d736ee82c35b9a7daa6644d4d3e5ae3a",
+      "path": "/home/ubuntu/redlineDB/.agent/sandbox/evidence/target/sqlite-reference/3.53.1/bin/sqlite3",
+      "sha256": "fd3bdd25217a849f8f4fa295fb78199cfd69b0c4d47ba8d8c32a1aa328bd147e",
       "version": "3.53.1 2026-05-05 10:34:17 c88b22011a54b4f6fbd149e9f8e4de77658ce58143a1af0e3785e4e6475127e9 (64-bit)"
     },
-    "run": null,
-    "elapsed_ns": null
+    "run": {
+      "source_commit": "55637d0887935e8be0202ed699ffb47e10a5eef2",
+      "source_tree": "c1ea9c92e57e606850218df2732155570bff325f",
+      "source_inputs_sha256": "1a8563b6f9c86121eeb3642e3709fa451017ce330eb18fc5721c7de5ae641351",
+      "source_dirty": false,
+      "corpus_sha256": "542cf3afd9c5322b50fd0673b035eeaa91c64400363c384adfef6dbdaa7537c3",
+      "assertion_policy_sha256": "537c7df9f5d1090c0cb75d1f4ef8d87c25c835b8c4cd3756376abc9a671b259e",
+      "oracle_build_stamp": "36ca143645cf76997d07b66e9244c636b8ccdec64a1d50558259c4e415e6558b\n-O2 -DSQLITE_ENABLE_BYTECODE_VTAB -DSQLITE_ENABLE_COLUMN_METADATA -DSQLITE_ENABLE_DBPAGE_VTAB -DSQLITE_ENABLE_DBSTAT_VTAB -DSQLITE_ENABLE_DESERIALIZE -DSQLITE_ENABLE_EXPLAIN_COMMENTS -DSQLITE_ENABLE_FTS5 -DSQLITE_ENABLE_MATH_FUNCTIONS -DSQLITE_ENABLE_OFFSET_SQL_FUNC -DSQLITE_ENABLE_PERCENTILE -DSQLITE_ENABLE_PREUPDATE_HOOK -DSQLITE_ENABLE_RTREE -DSQLITE_ENABLE_VFSTRACE -DSQLITE_ENABLE_SESSION -DSQLITE_ENABLE_STMT_SCANSTATUS -DSQLITE_ENABLE_UPDATE_DELETE_LIMIT -DSQLITE_ENABLE_UNKNOWN_SQL_FUNCTION -DSQLITE_HAVE_ZLIB=1"
+    },
+    "elapsed_ns": 13301157020
   },
   "parent_run_provenance": {
-    "path": null,
-    "sha256": "8de6a848353680fa72cb7d07b06dd230042dbe1fa08db04517587b651c2f8895",
-    "retained": false
+    "path": "benchmark-results/sqlite-parity/latest/run-provenance.json",
+    "sha256": "b604817532549b2078e155a0a15fc9ca4606c51ad540c51bcc005f6ab4f8e47f",
+    "retained": true
   },
-  "run_evidence_sha256": "daac7524c76944c99fdaf6ac397034c9aa5634906f035771ba83d7fd10e54ccc",
-  "processed_evidence_sha256": "44148fe725b57cc8c84bf2970012cc3c8a0d39b5130747d61d2074bc74f98fb5",
-  "raw_sha256": "9a9974fe1f8e130faa81b99065fc4ed15616ae89b110874bfac224cfc7d64421",
+  "run_evidence_sha256": "5f6c42e912bc288c48328a0a674e1b7e30839b927bcb5c773b88814d1fcab216",
+  "processed_evidence_sha256": "ea805fc5836a10edbf7be1b8299c523ed79949fcfcd3769b7b0cd070f1b218c0",
+  "raw_sha256": "14cf1d3025fe805ff81af1c4c0d46fcc2812c3c8f6d90478175eb4fbdfdf21ef",
   "renderer": {
     "version": "redline-testing 1.0.1",
     "binary_sha256": "dccf62c12a46973ea95148b1cef2943bdab2f2a58aa51a331968439cc4ff1f70"
@@ -54,22 +62,23 @@
     "--jankurai-score",
     ".jankurai/repo-score.json",
     "--updated-date",
-    "2026-09-24",
+    "2026-09-28",
     "--expected-repetitions",
     "3",
     "--expected-warmup",
     "1",
     "--official-evidence",
     "benchmark-results/sqlite-parity/latest/official-evidence.processed.json",
-    "--historical-run"
+    "--run-provenance",
+    "benchmark-results/sqlite-parity/latest/run-provenance.json"
   ],
-  "updated_date": "2026-09-24",
+  "updated_date": "2026-09-28",
   "output_file_hashes": {
-    "README.md#sqlite-parity-badge": "8398567eb24f8197bc71d4f09d3c4e99aacd29b46b82c555b365a9b46bae6726",
-    "README.md#sqlite-parity-report": "bc8108381adbf1458f98375380c7d54946949854d189f0a9c70c81f7e0b5978c",
-    "manifest.json": "9776cc065e041d7d0a89dba3acb2d89c54307f079bd6025f97e4080751dc7f5b",
-    "ranked.csv": "2cd8600cdaa39c0cfd6ebb1e602645786e7b5c4373395b989c75e9c0d5b62161",
-    "raw.jsonl": "9a9974fe1f8e130faa81b99065fc4ed15616ae89b110874bfac224cfc7d64421",
-    "summary.json": "3ff7f495c67cb0b60d046db15dec84df3b23f92d34768164cb00f8f63f5aebd6"
+    "README.md#sqlite-parity-badge": "5027b8d5c33c38e0a79d6e762ab18be45de9e327d2bb61e7a5f2ea2dba8a7d71",
+    "README.md#sqlite-parity-report": "52858d217d80cb2c308ac3796f49f07247142804d6b8e0ec9db292f47c480170",
+    "manifest.json": "398ec969e11fd6053d247eb93534eabcc9382e471d11b4829db3fc3a223e7fbe",
+    "ranked.csv": "32cfaa64cff70500dca7e24fbe83fa365336430f3ae15f08e58e85e9716f2202",
+    "raw.jsonl": "14cf1d3025fe805ff81af1c4c0d46fcc2812c3c8f6d90478175eb4fbdfdf21ef",
+    "summary.json": "239d347200320affc8b6152c86f4e23bf99253277f11d546342f17b9c62aa34e"
   }
 }

@@ -21,14 +21,15 @@
     "--jankurai-score",
     ".jankurai/repo-score.json",
     "--updated-date",
-    "2026-09-24",
+    "2026-09-28",
     "--expected-repetitions",
     "3",
     "--expected-warmup",
     "1",
     "--official-evidence",
     "benchmark-results/sqlite-parity/latest/official-evidence.processed.json",
-    "--historical-run"
+    "--run-provenance",
+    "benchmark-results/sqlite-parity/latest/run-provenance.json"
   ],
   "repetitions": 3,
   "warmup": 1,
@@ -36,6 +37,7 @@
     "ranked": "benchmark-results/sqlite-parity/latest/ranked.csv",
     "raw": "benchmark-results/sqlite-parity/latest/raw.jsonl",
     "report_provenance": "benchmark-results/sqlite-parity/latest/report-provenance.json",
+    "run_provenance": "benchmark-results/sqlite-parity/latest/run-provenance.json",
     "summary": "benchmark-results/sqlite-parity/latest/summary.json"
   }
 }
