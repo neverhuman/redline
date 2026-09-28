@@ -19,7 +19,7 @@
 //! page holds. A page that does not read back whole (a torn write) is left
 //! as it was, because its kind cannot be told.
 
-use crate::format::{Page, PageId, PageKind, PageState, RelId};
+use crate::format::{PageId, PageKind, PageState, RelId};
 use crate::storage::{BufferPool, PageFile};
 use crate::{Error, Result};
 
