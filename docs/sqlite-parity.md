@@ -72,7 +72,9 @@ Status values are deliberately narrow:
 Each case's declared expectations (`expected_exit`, `expected_stdout` and the
 `expected_*_contains` fragments) describe the pinned shell. `xtask generate`
 and `xtask ship-gate` in `subrepos/redline-testing` default to it and refuse
-any shell without its build stamp; `ship-gate` checks the pinned manifest as
+any shell whose build stamp is missing or differs from the one
+`scripts/sqlite/build-reference.sh` writes now (its archive SHA3-256 and
+compile flags); `ship-gate` checks the pinned manifest as
 well as the shards. Before 2026-09-27 both ran the `sqlite3` on `PATH`
 (Ubuntu's 3.45.1), so 141 cases declared 3.45.1 behaviour: 127 shard cases and
 14 manifest cases. The generated `gen_*` shards were regenerated. Hand-written

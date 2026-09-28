@@ -272,7 +272,8 @@ just release-local
 # Validate every corpus case against the pinned sqlite3 3.53.1 reference
 # (ship-gate). Both xtask commands default --sqlite-bin to the shell
 # `bash scripts/sqlite/build-reference.sh` builds in the RedlineDB checkout,
-# and refuse any shell without its build stamp or of another release.
+# and refuse any shell of another release, or whose build stamp is missing or
+# differs from the one build-reference.sh writes now.
 cargo run -p xtask --release -- ship-gate
 
 # Detect drift in matrix-generated shards
