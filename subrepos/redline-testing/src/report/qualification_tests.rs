@@ -13,13 +13,13 @@ use super::test_fixtures as fixture;
 use super::types::ReportOptions;
 use super::utils::sha256_hex;
 
-const README: &str = "# Report\n\n<p align=\"center\">\n  <!-- sqlite-parity-badge:begin -->\n  old badge<!-- sqlite-parity-badge:end -->\n</p>\n\n<a id=\"sqlite-parity-status\"></a>\n<!-- sqlite-parity-report:begin -->\n<!-- sqlite-parity-report:end -->\n";
+pub(super) const README: &str = "# Report\n\n<p align=\"center\">\n  <!-- sqlite-parity-badge:begin -->\n  old badge<!-- sqlite-parity-badge:end -->\n</p>\n\n<a id=\"sqlite-parity-status\"></a>\n<!-- sqlite-parity-report:begin -->\n<!-- sqlite-parity-report:end -->\n";
 
 const RUNNER_SHA256: &str = "b28c41d40009bfe7c98832abda695c3b9d2624871c4c886991601718d8e70a78";
 const ORACLE_SHA256: &str = "e99d817b62f1ad9ead02b8d4e410fea9d736ee82c35b9a7daa6644d4d3e5ae3a";
 const SOURCE_SHA256: &str = "daac7524c76944c99fdaf6ac397034c9aa5634906f035771ba83d7fd10e54ccc";
 
-fn record(
+pub(super) fn record(
     case_id: &str,
     name: &str,
     role: &str,
@@ -46,7 +46,7 @@ fn record(
     format!("{value}\n")
 }
 
-fn passed(case_id: &str, name: &str) -> String {
+pub(super) fn passed(case_id: &str, name: &str) -> String {
     (1..=3usize)
         .map(|rep| {
             record(
@@ -62,7 +62,7 @@ fn passed(case_id: &str, name: &str) -> String {
 
 /// A case whose three measured samples all failed. (It used to have one
 /// sample only, which the per-case sample check now rejects.)
-fn failed(case_id: &str, name: &str) -> String {
+pub(super) fn failed(case_id: &str, name: &str) -> String {
     (1..=3usize)
         .map(|rep| {
             record(
@@ -76,12 +76,12 @@ fn failed(case_id: &str, name: &str) -> String {
         .collect()
 }
 
-fn skipped(case_id: &str, name: &str) -> String {
+pub(super) fn skipped(case_id: &str, name: &str) -> String {
     record(case_id, name, "skipped", None, "skipped")
 }
 
 /// Three cases whose ids are declared deviations (fts5, highlight, rtree).
-fn three_passed() -> String {
+pub(super) fn three_passed() -> String {
     [
         passed("00093", "CREATE_VIRTUAL_TABLE_FTS5_OPTIONAL"),
         passed("00094", "FTS5_HIGHLIGHT_OPTIONAL"),
@@ -92,7 +92,7 @@ fn three_passed() -> String {
 
 /// Processed official evidence bound to `raw_text`, recording `counts` as
 /// (total, passed, failed, skipped) for sqlite_parity and run `status`.
-fn evidence(raw_text: &str, status: &str, counts: [usize; 4]) -> serde_json::Value {
+pub(super) fn evidence(raw_text: &str, status: &str, counts: [usize; 4]) -> serde_json::Value {
     let [total, passed, failed, skipped] = counts;
     serde_json::json!({
         "schema_version": "redline-testing-official-evidence-processed-v1",
@@ -131,7 +131,7 @@ fn evidence(raw_text: &str, status: &str, counts: [usize; 4]) -> serde_json::Val
     })
 }
 
-fn options(root: &Path, evidence: Option<PathBuf>, raw_text: &str) -> ReportOptions {
+pub(super) fn options(root: &Path, evidence: Option<PathBuf>, raw_text: &str) -> ReportOptions {
     ReportOptions {
         suite: "sqlite_parity".to_owned(),
         input: root.join("raw.jsonl"),
@@ -155,7 +155,7 @@ fn options(root: &Path, evidence: Option<PathBuf>, raw_text: &str) -> ReportOpti
 }
 
 /// Render `raw_text` into `readme` and return the README afterwards.
-fn render(raw_text: &str, evidence: Option<serde_json::Value>, readme: &str) -> String {
+pub(super) fn render(raw_text: &str, evidence: Option<serde_json::Value>, readme: &str) -> String {
     let root = tempfile::Builder::new()
         .prefix("redline-testing-qualification-")
         .tempdir()
@@ -171,7 +171,7 @@ fn render(raw_text: &str, evidence: Option<serde_json::Value>, readme: &str) -> 
     fs::read_to_string(root.path().join("README.md")).expect("rendered README")
 }
 
-fn badge(readme: &str) -> &str {
+pub(super) fn badge(readme: &str) -> &str {
     let begin = "<!-- sqlite-parity-badge:begin -->\n";
     let start = readme.find(begin).expect("badge begin") + begin.len();
     let end = readme
@@ -180,7 +180,7 @@ fn badge(readme: &str) -> &str {
     &readme[start..end]
 }
 
-fn report_block(readme: &str) -> &str {
+pub(super) fn report_block(readme: &str) -> &str {
     let begin = "<!-- sqlite-parity-report:begin -->\n";
     let start = readme.find(begin).expect("report begin") + begin.len();
     let end = readme
@@ -330,7 +330,7 @@ fn retired_metric_blocks_are_removed_not_appended() {
     let with_retired = format!(
         "{README}\n## Engine Metrics\n\n<!-- sqlite-parity-metrics:begin -->\n![placeholder](assets/sqlite-parity-ksloc.svg)\n<!-- sqlite-parity-metrics:end -->\n\n## Jankurai Breakdown\n\n<!-- sqlite-jankurai-breakdown:begin -->\n{{\"sqlite_score\": 22}}\n<!-- sqlite-jankurai-breakdown:end -->\n\n## Architecture\n"
     );
-    for readme in [README.to_owned(), with_retired] {
+    for readme in [README.to_owned(), with_retired.clone()] {
         let rendered = render(&raw, Some(evidence(&raw, "passed", [3, 3, 0, 0])), &readme);
         for marker in [
             "sqlite-parity-metrics:",
@@ -340,6 +340,27 @@ fn retired_metric_blocks_are_removed_not_appended() {
         ] {
             assert!(!rendered.contains(marker), "{marker} survived:\n{rendered}");
         }
+        // Only the retired blocks go: the badge, the report block and the
+        // text around and after them stay, byte for byte.
+        assert!(
+            rendered.starts_with(
+                "# Report\n\n<p align=\"center\">\n  <!-- sqlite-parity-badge:begin -->\n  <a href="
+            ),
+            "{rendered}"
+        );
+        assert!(
+            rendered.contains("<!-- sqlite-parity-badge:end -->\n</p>\n\n<a id=\"sqlite-parity-status\"></a>\n<!-- sqlite-parity-report:begin -->\n**SQLite SQL/CLI corpus**"),
+            "{rendered}"
+        );
+        let tail = if readme == with_retired {
+            "<!-- sqlite-parity-report:end -->\n\n## Engine Metrics\n\n\n## Jankurai Breakdown\n\n\n## Architecture\n"
+        } else {
+            "<!-- sqlite-parity-report:end -->\n"
+        };
+        assert!(
+            rendered.ends_with(tail),
+            "tail is not {tail:?}:\n{rendered}"
+        );
     }
 }
 

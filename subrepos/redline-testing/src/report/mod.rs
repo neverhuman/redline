@@ -15,6 +15,8 @@ mod latency_tests;
 #[cfg(test)]
 mod provenance_tests;
 #[cfg(test)]
+mod qualification_gate_tests;
+#[cfg(test)]
 mod qualification_tests;
 #[cfg(test)]
 mod test_fixtures;
