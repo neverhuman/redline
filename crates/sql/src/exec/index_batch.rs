@@ -42,7 +42,7 @@ pub(super) fn execute_index_range_scan_streaming(
     end: &[u8],
     limit: Option<usize>,
 ) -> Result<Vec<RowId>> {
-    let Some(handle) = open_handle(engine, index) else {
+    let Some(handle) = open_handle(engine, tx, index) else {
         return Ok(Vec::new());
     };
     let counters = engine.phase11_counters();
@@ -111,7 +111,7 @@ pub(super) fn execute_index_range_scan_ordered(
     end: &[u8],
     limit: usize,
 ) -> Result<Vec<RowId>> {
-    let Some(handle) = open_handle(engine, index) else {
+    let Some(handle) = open_handle(engine, tx, index) else {
         return Ok(Vec::new());
     };
     let counters = engine.phase11_counters();
@@ -169,7 +169,7 @@ pub(super) fn execute_index_range_scan_ordered_desc(
     end: &[u8],
     limit: usize,
 ) -> Result<Vec<RowId>> {
-    let Some(handle) = open_handle(engine, index) else {
+    let Some(handle) = open_handle(engine, tx, index) else {
         return Ok(Vec::new());
     };
     let counters = engine.phase11_counters();
@@ -265,7 +265,7 @@ pub(super) fn execute_index_count_range(
     start: &[u8],
     end: &[u8],
 ) -> Result<i64> {
-    let Some(handle) = open_handle(engine, index) else {
+    let Some(handle) = open_handle(engine, tx, index) else {
         return Ok(0);
     };
     let counters = engine.phase11_counters();
@@ -290,7 +290,7 @@ pub(super) fn execute_index_covering_range(
     out_columns: &[OutputColumnSource],
     limit: Option<usize>,
 ) -> Result<Vec<Vec<SqlValue>>> {
-    let Some(handle) = open_handle(engine, index) else {
+    let Some(handle) = open_handle(engine, tx, index) else {
         return Ok(Vec::new());
     };
     let counters = engine.phase11_counters();

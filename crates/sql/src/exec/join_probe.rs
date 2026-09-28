@@ -55,7 +55,7 @@ pub(crate) fn probe_inner_equijoin(
     else {
         return Ok(None);
     };
-    if index_access::open_handle(engine, &matched.index).is_none() {
+    if index_access::open_handle(engine, tx, &matched.index).is_none() {
         return Ok(None);
     }
     let rowids = execute_index_probe(

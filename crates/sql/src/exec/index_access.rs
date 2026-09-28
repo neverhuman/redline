@@ -140,7 +140,8 @@ pub(crate) fn has_unique_point_probe(
         && matched.index.predicate_sql.is_none()
         && matched.consumed_full_predicate()
         && matches!(matched.probe, IndexProbe::Point { .. })
-        && open_handle(engine, &matched.index).is_some()
+        && matched.index.meta_page_id.is_some()
+        && engine.index_handle(matched.index.index_id).is_some()
 }
 
 /// Try to plan an index-driven access path for `(table, selection)`.
@@ -523,7 +524,7 @@ pub(crate) fn execute_index_point_lookup(
     index: &IndexDef,
     key: &[u8],
 ) -> Result<Vec<RowId>> {
-    let Some(handle) = open_handle(engine, index) else {
+    let Some(handle) = open_handle(engine, tx, index) else {
         // Defensive: if the planner advertised an index that the kernel
         // does not have a physical handle for, we must not crash —
         // instead the caller falls back to a TableScan. The planner is
@@ -690,12 +691,16 @@ pub(crate) fn execute_index_covering_range(
 
 // ------------------------------ helpers ------------------------------
 
+/// The B-tree `tx` reads index `index` through: a REINDEX or CREATE INDEX
+/// earlier in the same transaction installs its new B-tree only at COMMIT,
+/// and the transaction's own writes maintain that one.
 pub(crate) fn open_handle(
     engine: &Engine,
+    tx: &Txn,
     index: &IndexDef,
 ) -> Option<Arc<redlinedb_kernel::index::BtreeIndex>> {
     index.meta_page_id?;
-    engine.index_handle(index.index_id)
+    engine.index_handle_for_tx(tx, index.index_id)
 }
 
 pub(super) fn visible_in_relation(

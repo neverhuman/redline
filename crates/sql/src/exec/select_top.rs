@@ -162,7 +162,9 @@ fn build_select_runtime(
             plan.table_hint.as_ref(),
         )
         && let index_access::IndexProbe::Range { start, end } = &matched.probe
-        && index_access::open_handle(conn.engine(), &matched.index).is_some()
+        && tx
+            .as_mut()
+            .is_some_and(|tx| index_access::open_handle(conn.engine(), tx, &matched.index).is_some())
         // Phase 5 WS-A1: the count fast path skips per-row predicate
         // recheck, so any residual conjunct would be silently dropped
         // (e.g. WHERE k BETWEEN ? AND ? AND status='active' would
@@ -199,7 +201,9 @@ fn build_select_runtime(
             plan.table_hint.as_ref(),
         )
         && let index_access::IndexProbe::Range { start, end } = &matched.probe
-        && index_access::open_handle(conn.engine(), &matched.index).is_some()
+        && tx
+            .as_mut()
+            .is_some_and(|tx| index_access::open_handle(conn.engine(), tx, &matched.index).is_some())
         && let Some(out_columns) =
             covering_projection_for_index(table, &matched.index, &plan.projection)
         && order_satisfied_by_index_with_prefix(&matched, table, &plan.order_by)
@@ -451,7 +455,7 @@ fn build_select_runtime(
                         // IndexPointLookup/IndexRangeScan when the
                         // executor can satisfy them, but a lagging
                         // schema snapshot can still exist.
-                        if index_access::open_handle(conn.engine(), &matched.index).is_some() {
+                        if index_access::open_handle(conn.engine(), tx, &matched.index).is_some() {
                             let rowids = index_access::execute_index_probe(
                                 conn.engine(),
                                 tx,
@@ -869,7 +873,7 @@ fn table_rows_for_select(
 
     if let Some(matched) =
         index_access::try_match_index_access(conn.engine(), table, selection, bindings)
-        && index_access::open_handle(conn.engine(), &matched.index).is_some()
+        && index_access::open_handle(conn.engine(), tx, &matched.index).is_some()
     {
         let rowids = index_access::execute_index_probe(
             conn.engine(),
@@ -1502,7 +1506,7 @@ fn try_ordered_index_limit_path(
         && order_by_rowid_alias(table, &plan.order_by)
         && matches!(matched.probe, index_access::IndexProbe::Point { .. })
     {
-        if index_access::open_handle(conn.engine(), &matched.index).is_none() {
+        if index_access::open_handle(conn.engine(), tx, &matched.index).is_none() {
             return Ok(None);
         }
         let take = limit.saturating_add(offset);
@@ -1525,7 +1529,7 @@ fn try_ordered_index_limit_path(
     if !order_asc && !order_desc {
         return Ok(None);
     }
-    if index_access::open_handle(conn.engine(), &matched.index).is_none() {
+    if index_access::open_handle(conn.engine(), tx, &matched.index).is_none() {
         return Ok(None);
     }
     let take = limit.saturating_add(offset);

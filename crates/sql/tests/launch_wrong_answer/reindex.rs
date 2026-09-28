@@ -171,3 +171,45 @@ fn reindex_reaches_temp_tables() {
         );
     }
 }
+
+/// Reads between REINDEX and COMMIT go through the rebuilt B-tree, the one
+/// the same transaction's writes maintain. They read the old B-tree, so rows
+/// written after the REINDEX were missing from indexed reads until COMMIT.
+#[test]
+fn reindex_reads_its_own_writes_before_commit() {
+    let lab = Lab::new();
+    lab.exec_both(SETUP);
+    let reads = [
+        ("SELECT y FROM t INDEXED BY t_x WHERE x = 5", false),
+        ("SELECT y FROM t INDEXED BY t_x WHERE x = 7", false),
+        ("SELECT y FROM t INDEXED BY t_x WHERE x = 3", false),
+        (
+            "SELECT x FROM t INDEXED BY t_x WHERE x > 0 ORDER BY x, y",
+            true,
+        ),
+        ("SELECT count(*) FROM t INDEXED BY t_x WHERE x > 0", true),
+        (
+            "SELECT y FROM t INDEXED BY t_xy WHERE x = 7 AND y > ''",
+            false,
+        ),
+        ("SELECT y FROM t INDEXED BY t_expr WHERE x * 2 = 14", false),
+        (
+            "SELECT y FROM t INDEXED BY t_part WHERE x > 1 AND y > ''",
+            false,
+        ),
+        ("SELECT y FROM t INDEXED BY t_y WHERE y = 'NEW'", false),
+    ];
+    lab.exec_both("BEGIN");
+    lab.exec_both("REINDEX t");
+    lab.exec_both("INSERT INTO t VALUES (5, 'new')");
+    lab.exec_both("UPDATE t SET x = 7 WHERE y = 'a'");
+    lab.exec_both("DELETE FROM t WHERE y = 'c'");
+    for (sql, ordered) in reads {
+        lab.assert_same(sql, ordered);
+    }
+    lab.exec_both("COMMIT");
+    for (sql, ordered) in reads {
+        lab.assert_same(sql, ordered);
+    }
+    check(&lab);
+}

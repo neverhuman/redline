@@ -18,7 +18,7 @@ pub(crate) fn dml_target_rows(
 
     if let Some(matched) =
         crate::exec::index_access::try_match_index_access(conn.engine(), table, selection, bindings)
-        && crate::exec::index_access::open_handle(conn.engine(), &matched.index).is_some()
+        && crate::exec::index_access::open_handle(conn.engine(), tx, &matched.index).is_some()
     {
         let rowids = crate::exec::index_access::execute_index_probe(
             conn.engine(),
