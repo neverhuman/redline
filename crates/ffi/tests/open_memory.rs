@@ -1,5 +1,6 @@
-//! `sqlite3_open(":memory:")` must open a private, ephemeral database and
-//! must not create anything named `:memory:` in the working directory.
+//! `sqlite3_open(":memory:")` and `sqlite3_open("")` must each open a
+//! private, ephemeral database and must not create anything in the working
+//! directory.
 //!
 //! This binary holds a single test because it changes the process working
 //! directory; keeping it alone avoids racing other tests on that global.
@@ -130,6 +131,50 @@ fn sqlite3_open_memory_creates_no_file() {
     );
     assert_eq!(exec(flagged, "CREATE TABLE t(x)"), SQLITE_OK);
     assert_eq!(unsafe { sqlite3_close(flagged) }, SQLITE_OK);
+
+    // An empty name opens a private temporary database, as in SQLite: it
+    // works, is not shared with another "" open, needs no
+    // SQLITE_OPEN_CREATE, reports an empty filename and creates nothing in
+    // the working directory.
+    let empty = c"";
+    let mut first: *mut sqlite3 = ptr::null_mut();
+    let mut second: *mut sqlite3 = ptr::null_mut();
+    assert_eq!(
+        unsafe { sqlite3_open(empty.as_ptr(), &mut first) },
+        SQLITE_OK
+    );
+    assert_eq!(
+        unsafe {
+            sqlite3_open_v2(
+                empty.as_ptr(),
+                &mut second,
+                SQLITE_OPEN_READWRITE,
+                ptr::null(),
+            )
+        },
+        SQLITE_OK
+    );
+    assert_eq!(
+        exec(first, "CREATE TABLE t(x); INSERT INTO t VALUES (3)"),
+        SQLITE_OK
+    );
+    assert_eq!(count(first, "SELECT x FROM t"), Some(3));
+    assert_eq!(
+        count(second, "SELECT x FROM t"),
+        None,
+        "\"\" opens are private"
+    );
+    assert_eq!(filename(first), "");
+    assert_eq!(unsafe { sqlite3_close(first) }, SQLITE_OK);
+    assert_eq!(unsafe { sqlite3_close(second) }, SQLITE_OK);
+    let mut native = ptr::null_mut();
+    assert_eq!(unsafe { rldb_open(empty.as_ptr(), &mut native) }, SQLITE_OK);
+    assert_eq!(unsafe { rldb_close(native) }, SQLITE_OK);
+    assert_eq!(
+        entries(cwd.path()),
+        Vec::<String>::new(),
+        "opening \"\" must not create files in the working directory"
+    );
 
     // URI filenames are not interpreted. With SQLITE_OPEN_URI a "file:" name
     // is refused rather than opened as a literal path.

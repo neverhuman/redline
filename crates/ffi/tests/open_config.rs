@@ -365,3 +365,31 @@ fn header_durability_values_match() {
     assert_eq!(value("RLDB_DURABILITY_STRICT"), RLDB_DURABILITY_STRICT);
     assert_eq!(value("RLDB_DURABILITY_NORMAL"), RLDB_DURABILITY_NORMAL);
 }
+
+#[test]
+fn open_v2_tiny_query_memory_is_applied() {
+    // Non-zero work_mem_bytes and max_spill_bytes reach the query memory
+    // budget: one byte of each is too little for this sort. The rows are
+    // written under the default budget first.
+    let dir = tempfile::tempdir().expect("tempdir");
+    let path = db_path(dir.path());
+    let (rc, db) = open_with(&path, &full_config());
+    assert_eq!(rc, RLDB_OK);
+    assert_eq!(sort_needing_work_mem(db), Ok(2000));
+    close(db);
+    let config = rldb_config {
+        work_mem_bytes: 1,
+        max_spill_bytes: 1,
+        ..full_config()
+    };
+    let (rc, db) = open_with(&path, &config);
+    assert_eq!(rc, RLDB_OK);
+    assert_eq!(query_i64(db, "SELECT a FROM t ORDER BY b DESC"), Err(19));
+    // SAFETY: `db` is live; the message is owned by the connection.
+    let message = unsafe { std::ffi::CStr::from_ptr(redlinedb::rldb_errmsg(db)) };
+    assert_eq!(
+        message.to_str(),
+        Ok("constraint violation: query spill limit exceeded during sort")
+    );
+    close(db);
+}

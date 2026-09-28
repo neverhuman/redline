@@ -118,13 +118,16 @@ pub unsafe extern "C" fn rldb_column_blob(stmt: *mut rldb_stmt, index: c_int) ->
         return ptr::null();
     }
     // SAFETY: `stmt` non-null (checked); per redlinedb.h:120 from
-    // rldb_prepare_v2; blob pointer owned by column slot, valid until
-    // next rldb_step/reset/finalize per C ABI contract.
-    unsafe {
-        match (*stmt).stmt.column_blob(index as usize) {
-            Ok(blob) => blob.as_ptr() as *const c_void,
-            Err(_) => ptr::null(),
-        }
+    // rldb_prepare_v2 and not yet finalized; single-thread ownership per the
+    // C ABI.
+    let stmt = unsafe { &mut *stmt };
+    // As upstream: the value's bytes, with INTEGER and REAL converted to
+    // text, so the pointer is readable for rldb_column_bytes bytes. NULL
+    // for SQL NULL and for a zero-length value. The pointer is into
+    // rldb_stmt.text_cache, valid until the next rldb_step/reset/finalize.
+    match cached_text(stmt, index) {
+        Some(bytes) if bytes.len() > 1 => bytes.as_ptr() as *const c_void,
+        _ => ptr::null(),
     }
 }
 
@@ -170,7 +173,7 @@ fn current_value(stmt: &rldb_stmt, index: c_int) -> Option<&SqlValue> {
 /// The `sqlite3_column_text` form of a value, with a trailing NUL. INTEGER
 /// and REAL use the text `CAST(x AS TEXT)` produces; TEXT and BLOB are their
 /// bytes unchanged, interior NULs included; NULL has no text.
-fn text_form(value: &SqlValue) -> Option<Box<[u8]>> {
+pub(crate) fn text_form(value: &SqlValue) -> Option<Box<[u8]>> {
     let mut bytes = match value {
         SqlValue::Null => return None,
         SqlValue::Integer(v) => v.to_string().into_bytes(),

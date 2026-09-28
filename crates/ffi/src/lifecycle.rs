@@ -89,7 +89,7 @@ pub unsafe extern "C" fn rldb_close(db: *mut rldb) -> c_int {
         crate::sqlite3_api::udf::purge_connection(db as usize);
         crate::sqlite3_api::collation::purge_connection(db as usize);
         // SAFETY: matching constructor/destructor pair — `db` originates from
-        // Box::into_raw(handle) at open_handle (crates/ffi/src/util.rs:134);
+        // Box::into_raw(handle) at open_handle (crates/ffi/src/util.rs:135);
         // ownership invariant: only rldb_close / rldb_close_v2 consume it
         // (caller never frees directly per redlinedb.h:87); exclusive access
         // upheld by the active_statements==0 check above; double-close guarded

@@ -214,7 +214,9 @@ fn aggregate_udf_sum_squares_invoked_per_group() {
 
 use std::sync::atomic::AtomicUsize;
 
-use redlinedb::sqlite3_api::udf::{__test_function_flags, sqlite3_create_window_function};
+use redlinedb::sqlite3_api::udf::{
+    __test_function_flags, FinalFn, StepFn, sqlite3_create_window_function,
+};
 use redlinedb::{
     rldb_column_int64, rldb_errmsg, rldb_finalize, rldb_prepare_v2, rldb_step,
     sqlite3_create_function,
@@ -696,23 +698,40 @@ fn window_callbacks_rejected_and_destroyed() {
     let (_dir, db) = open_db();
     let refused = counter();
     let name = CString::new("win_fn").unwrap();
-    let rc = unsafe {
-        sqlite3_create_window_function(
-            db,
-            name.as_ptr(),
-            1,
-            SQLITE_UTF8,
-            user_data(&refused),
-            Some(sum_sq_step),
-            Some(sum_sq_final),
-            Some(window_value),
-            Some(window_inverse),
-            Some(count_destroy),
-        )
-    };
-    assert_eq!(rc, SQLITE_ERROR);
-    assert!(errmsg(db).contains("xValue"), "{}", errmsg(db));
-    assert_eq!(count(&refused), 1);
+    // Either callback alone is refused too: registering it as an aggregate
+    // would silently ignore it.
+    let window_callbacks = [
+        (Some(window_value as FinalFn), None),
+        (None, Some(window_inverse as StepFn)),
+        (
+            Some(window_value as FinalFn),
+            Some(window_inverse as StepFn),
+        ),
+    ];
+    for (attempt, (value, inverse)) in window_callbacks.into_iter().enumerate() {
+        let rc = unsafe {
+            sqlite3_create_window_function(
+                db,
+                name.as_ptr(),
+                1,
+                SQLITE_UTF8,
+                user_data(&refused),
+                Some(sum_sq_step),
+                Some(sum_sq_final),
+                value,
+                inverse,
+                Some(count_destroy),
+            )
+        };
+        assert_eq!(rc, SQLITE_ERROR, "attempt {attempt}");
+        assert!(errmsg(db).contains("xValue"), "{}", errmsg(db));
+        assert_eq!(count(&refused), attempt + 1, "attempt {attempt}: destroyed");
+        assert_ne!(
+            try_exec(db, "SELECT win_fn(1)"),
+            0,
+            "attempt {attempt}: nothing was registered"
+        );
+    }
 
     // Without xValue/xInverse the window entry point registers an aggregate.
     let aggregate = counter();
@@ -732,5 +751,5 @@ fn window_callbacks_rejected_and_destroyed() {
     };
     assert_eq!(rc, SQLITE_OK);
     close(db);
-    assert_eq!((count(&refused), count(&aggregate)), (1, 1));
+    assert_eq!((count(&refused), count(&aggregate)), (3, 1));
 }

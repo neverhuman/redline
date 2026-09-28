@@ -15,8 +15,8 @@ use redlinedb::sqlite3_api::result::{
 };
 use redlinedb::sqlite3_api::value::{
     RldbValue, sqlite3_value_blob, sqlite3_value_bytes, sqlite3_value_double, sqlite3_value_dup,
-    sqlite3_value_free, sqlite3_value_int, sqlite3_value_int64, sqlite3_value_text,
-    sqlite3_value_type,
+    sqlite3_value_free, sqlite3_value_int, sqlite3_value_int64, sqlite3_value_numeric_type,
+    sqlite3_value_text, sqlite3_value_type,
 };
 use redlinedb::types::rldb;
 use redlinedb_sql::value::SqlValue;
@@ -40,6 +40,7 @@ fn null_value_reports_null_type_and_zero_accessors() {
     let v = make_value(SqlValue::Null);
     unsafe {
         assert_eq!(sqlite3_value_type(v), 5); // SQLITE_NULL
+        assert_eq!(sqlite3_value_numeric_type(v), 5); // SQLITE_NULL
         assert_eq!(sqlite3_value_int(v), 0);
         assert_eq!(sqlite3_value_int64(v), 0);
         assert_eq!(sqlite3_value_double(v), 0.0);
@@ -159,6 +160,7 @@ fn null_pointers_to_value_accessors_are_safe() {
     unsafe {
         let null: *mut RldbValue = ptr::null_mut();
         assert_eq!(sqlite3_value_type(null), 5); // SQLITE_NULL
+        assert_eq!(sqlite3_value_numeric_type(null), 5); // SQLITE_NULL
         assert_eq!(sqlite3_value_int(null), 0);
         assert_eq!(sqlite3_value_int64(null), 0);
         assert_eq!(sqlite3_value_double(null), 0.0);
@@ -188,4 +190,50 @@ fn null_pointers_to_result_setters_are_no_op() {
 
 fn unused_silencer(x: c_int) -> c_int {
     x
+}
+
+#[test]
+fn value_text_pointer_stays_valid_for_the_life_of_the_value() {
+    // A second sqlite3_value_text call must not free or move the text the
+    // first call returned: the pointers are equal and the first still reads
+    // the right bytes.
+    let cases: [(SqlValue, &[u8]); 3] = [
+        (SqlValue::Integer(-12), b"-12"),
+        (SqlValue::Real(2.5), b"2.5"),
+        (SqlValue::Text("stable".into()), b"stable"),
+    ];
+    for (value, want) in cases {
+        let v = make_value(value);
+        // SAFETY: `v` is a live value from make_value; text pointers are
+        // owned by it and read while it is alive.
+        unsafe {
+            let first = sqlite3_value_text(v);
+            let second = sqlite3_value_text(v);
+            assert!(!first.is_null());
+            assert_eq!(first, second, "{want:?}: repeated calls return one pointer");
+            let bytes = CStr::from_ptr(first.cast()).to_bytes();
+            assert_eq!(bytes, want);
+            assert_eq!(sqlite3_value_bytes(v) as usize, want.len());
+        }
+        free_value(v);
+    }
+}
+
+#[test]
+fn value_numeric_type_reports_sqlite_classes() {
+    let cases = [
+        (SqlValue::Integer(7), 1),
+        (SqlValue::Real(1.5), 2),
+        (SqlValue::Text("12".into()), 1),
+        (SqlValue::Text("1.5".into()), 2),
+        (SqlValue::Text("abc".into()), 3),
+        (SqlValue::Blob(vec![1u8].into()), 4),
+        (SqlValue::Null, 5),
+    ];
+    for (value, want) in cases {
+        let v = make_value(value);
+        // SAFETY: `v` is a live value from make_value.
+        assert_eq!(unsafe { sqlite3_value_numeric_type(v) }, want);
+        free_value(v);
+    }
 }

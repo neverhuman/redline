@@ -170,18 +170,21 @@ fn invoke_exec_callback(
     errmsg: *mut *mut c_char,
 ) -> Result<(), c_int> {
     let column_count = stmt.column_count();
-    let mut value_strings: Vec<Option<CString>> = Vec::with_capacity(column_count);
+    let mut value_strings: Vec<Option<Box<[u8]>>> = Vec::with_capacity(column_count);
     let mut name_strings: Vec<CString> = Vec::with_capacity(column_count);
     for index in 0..column_count {
-        name_strings.push(CString::new(stmt.column_name(index)).map_err(|_| RLDB_MISMATCH)?);
-        value_strings.push(exec_value(stmt, index)?);
+        // A C string ends at its first NUL, as in rldb_column_name.
+        let name = stmt.column_name(index);
+        let name = name.split('\0').next().unwrap_or_default();
+        name_strings.push(CString::new(name).map_err(|_| RLDB_MISMATCH)?);
+        value_strings.push(exec_value(stmt, index));
     }
     let mut argv: Vec<*mut c_char> = value_strings
         .iter_mut()
         .map(|value| {
             value
                 .as_mut()
-                .map(|s| s.as_ptr() as *mut c_char)
+                .map(|bytes| bytes.as_mut_ptr() as *mut c_char)
                 .unwrap_or(ptr::null_mut())
         })
         .collect();

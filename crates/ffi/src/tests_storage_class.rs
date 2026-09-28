@@ -193,27 +193,105 @@ fn sqlite3_column_accessors_out_of_range_report_null_and_range() {
         assert_eq!(sqlite3_column_bytes(stmt, 0), 0);
         assert_eq!(sqlite3_step(stmt), RLDB_ROW);
     }
+    // Record OK on the connection so each accessor's RANGE is its own, not
+    // one left over from an earlier call.
+    let clear = || {
+        let probe = prepare(db, "SELECT 1");
+        // SAFETY: `probe` is live and finalized exactly once; `db` is live.
+        unsafe {
+            assert_eq!(sqlite3_finalize(probe), RLDB_OK);
+            assert_eq!(sqlite3_errcode(db), RLDB_OK);
+        }
+    };
     for index in [-1, 1, 99] {
+        clear();
         // SAFETY: `stmt` and `db` are live.
         let (tag, code) = unsafe { (sqlite3_column_type(stmt, index), sqlite3_errcode(db)) };
         assert_eq!(tag, SQLITE_NULL_TAG, "index {index}");
-        assert_eq!(code, RLDB_RANGE, "index {index}");
+        assert_eq!(code, RLDB_RANGE, "column_type index {index}");
         // SAFETY: errmsg pointer is owned by the open connection.
         let message = unsafe { CStr::from_ptr(sqlite3_errmsg(db) as *const c_char) };
         assert_eq!(message.to_str().expect("utf8"), "column index out of range");
-        // SAFETY: `stmt` is live.
-        let (text, len) = unsafe {
-            (
-                sqlite3_column_text(stmt, index),
-                sqlite3_column_bytes(stmt, index),
-            )
-        };
+        clear();
+        // SAFETY: `stmt` and `db` are live.
+        let (text, code) = unsafe { (sqlite3_column_text(stmt, index), sqlite3_errcode(db)) };
         assert!(text.is_null(), "index {index}");
+        assert_eq!(code, RLDB_RANGE, "column_text index {index}");
+        clear();
+        // SAFETY: `stmt` and `db` are live.
+        let (len, code) = unsafe { (sqlite3_column_bytes(stmt, index), sqlite3_errcode(db)) };
         assert_eq!(len, 0, "index {index}");
+        assert_eq!(code, RLDB_RANGE, "column_bytes index {index}");
     }
     // SAFETY: NULL is accepted; `stmt` and `db` are live and released once.
     unsafe {
         assert_eq!(sqlite3_column_type(ptr::null_mut(), 0), SQLITE_NULL_TAG);
+        assert_eq!(sqlite3_finalize(stmt), RLDB_OK);
+        assert_eq!(sqlite3_close(db), RLDB_OK);
+    }
+}
+
+#[test]
+fn sqlite3_column_blob_is_readable_for_column_bytes_in_every_class() {
+    let (_dir, db) = open();
+    let stmt = prepare(
+        db,
+        "SELECT 42, 0.1, 'xyz', x'00ff', NULL, '', x'', char(97, 0, 98)",
+    );
+    let expected: [&[u8]; 8] = [b"42", b"0.1", b"xyz", b"\x00\xff", b"", b"", b"", b"a\0b"];
+    for blob_first in [true, false] {
+        // SAFETY: `stmt` is live until the finalize at the end of the test.
+        unsafe {
+            assert_eq!(sqlite3_reset(stmt), RLDB_OK);
+            assert_eq!(sqlite3_step(stmt), RLDB_ROW);
+        }
+        for (index, want) in expected.iter().enumerate() {
+            let index = index as c_int;
+            // SAFETY: `stmt` is live and positioned on a row.
+            let (blob, len) = unsafe {
+                if blob_first {
+                    let blob = sqlite3_column_blob(stmt, index);
+                    (blob, sqlite3_column_bytes(stmt, index))
+                } else {
+                    let len = sqlite3_column_bytes(stmt, index);
+                    (sqlite3_column_blob(stmt, index), len)
+                }
+            };
+            assert_eq!(len as usize, want.len(), "column {index} bytes");
+            if want.is_empty() {
+                // Upstream returns NULL for SQL NULL and zero-length values.
+                assert!(blob.is_null(), "column {index} blob is NULL");
+            } else {
+                // memcpy(dst, column_blob, column_bytes) reads the value's
+                // bytes (numbers converted to text), never a NULL pointer.
+                assert!(!blob.is_null(), "column {index} blob is not NULL");
+                assert_eq!(
+                    read_bytes(blob as *const u8, len as usize),
+                    *want,
+                    "column {index} blob bytes"
+                );
+            }
+            // The same through sqlite3_value_blob / sqlite3_value_bytes.
+            // SAFETY: statement-owned value, valid until the next step.
+            let (value_blob, value_len) = unsafe {
+                let value = sqlite3_column_value(stmt, index);
+                (sqlite3_value_blob(value), sqlite3_value_bytes(value))
+            };
+            assert_eq!(value_len as usize, want.len(), "value {index} bytes");
+            if want.is_empty() {
+                assert!(value_blob.is_null(), "value {index} blob is NULL");
+            } else {
+                assert!(!value_blob.is_null(), "value {index} blob is not NULL");
+                assert_eq!(
+                    read_bytes(value_blob as *const u8, value_len as usize),
+                    *want,
+                    "value {index} blob bytes"
+                );
+            }
+        }
+    }
+    // SAFETY: `stmt` and `db` are live; each is released exactly once, last.
+    unsafe {
         assert_eq!(sqlite3_finalize(stmt), RLDB_OK);
         assert_eq!(sqlite3_close(db), RLDB_OK);
     }

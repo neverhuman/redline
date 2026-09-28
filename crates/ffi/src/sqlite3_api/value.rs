@@ -183,10 +183,18 @@ pub unsafe extern "C" fn sqlite3_value_blob(value: *mut RldbValue) -> *const c_v
     }
     // SAFETY: caller obligation; non-null checked above.
     let v = unsafe { &*value };
+    // As upstream: the bytes sqlite3_value_bytes counts (numbers as their
+    // text), NULL for SQL NULL and for a zero-length value.
     match &v.inner {
+        RldbValueInner::Null => ptr::null(),
+        RldbValueInner::Blob(b) if b.is_empty() => ptr::null(),
+        RldbValueInner::Text(t) if t.is_empty() => ptr::null(),
         RldbValueInner::Blob(b) => b.as_ptr() as *const c_void,
         RldbValueInner::Text(t) => t.as_ptr() as *const c_void,
-        _ => ptr::null(),
+        // SAFETY: `value` is non-null and valid per this function's contract.
+        RldbValueInner::Integer(_) | RldbValueInner::Real(_) => unsafe {
+            sqlite3_value_text(value) as *const c_void
+        },
     }
 }
 

@@ -128,7 +128,11 @@ fn options_from_fields(bytes: &[u8; KNOWN_SIZE]) -> Result<DbOptions, c_int> {
     }
     let busy_timeout_ms = read_u32(bytes, offset_of!(rldb_config, busy_timeout_ms));
     if busy_timeout_ms != 0 {
-        options.busy_timeout = Duration::from_millis(u64::from(busy_timeout_ms));
+        // Both lock waits, as rldb_busy_timeout sets them: the unique-key
+        // lock table and the engine's row locks.
+        let timeout = Duration::from_millis(u64::from(busy_timeout_ms));
+        options.busy_timeout = timeout;
+        options.engine.busy_timeout = timeout;
     }
     Ok(options)
 }
@@ -148,3 +152,7 @@ fn read_u64(bytes: &[u8; KNOWN_SIZE], offset: usize) -> u64 {
 fn saturating_usize(value: u64) -> usize {
     usize::try_from(value).unwrap_or(usize::MAX)
 }
+
+#[cfg(test)]
+#[path = "open_options_tests.rs"]
+mod tests;

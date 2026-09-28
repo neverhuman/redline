@@ -87,11 +87,12 @@ pub(crate) const MEMORY_DB_NAME: &str = ":memory:";
 
 /// Open (or create) the database for a new connection handle.
 ///
-/// `:memory:`, or `in_memory` (SQLITE_OPEN_MEMORY), opens a private
-/// ephemeral database: each open is a separate database, it needs no
-/// SQLITE_OPEN_CREATE, and its backing directory is a private temporary one
-/// removed when the handle closes. Nothing is created at the given name. As
-/// in SQLite its filename is reported as "".
+/// `:memory:`, `in_memory` (SQLITE_OPEN_MEMORY), or an empty name (SQLite's
+/// private temporary database) opens a private ephemeral database: each open
+/// is a separate database, it needs no SQLITE_OPEN_CREATE, and its backing
+/// directory is a private temporary one removed when the handle closes.
+/// Nothing is created at the given name or in the working directory. As in
+/// SQLite its filename is reported as "".
 pub(crate) fn open_handle(
     path: &CStr,
     options: Option<DbOptions>,
@@ -105,7 +106,7 @@ pub(crate) fn open_handle(
     let path = path.to_str().map_err(|_| RLDB_MISMATCH)?;
     let options = options.unwrap_or_default();
     let durability = options.engine.commit_durability;
-    let (db, db_path, path_text) = if in_memory || path == MEMORY_DB_NAME {
+    let (db, db_path, path_text) = if in_memory || path == MEMORY_DB_NAME || path.is_empty() {
         let db = sql_result(redlinedb_sql::Database::create_in_memory(options))?;
         let root = db.path().to_path_buf();
         (db, root, CString::default())
@@ -223,36 +224,14 @@ pub(crate) unsafe fn reclaim_cstring(ptr: *mut c_char) {
 
 // ---- Statement helpers ------------------------------------------------------
 
-pub(crate) fn to_hex(bytes: &[u8]) -> CString {
-    const HEX: &[u8; 16] = b"0123456789abcdef";
-    let mut out = Vec::with_capacity(bytes.len() * 2);
-    for byte in bytes {
-        out.push(HEX[(*byte >> 4) as usize]);
-        out.push(HEX[(*byte & 0x0f) as usize]);
-    }
-    match CString::new(out) {
-        Ok(s) => s,
-        // hex-encoded buffer cannot contain NUL bytes; fall through to a
-        // fixed literal only as a typed last-resort sentinel.
-        Err(_) => CString::new("blob").expect("static literal contains no NUL"),
-    }
-}
-
-pub(crate) fn exec_value(
-    stmt: &redlinedb_sql::Statement,
-    index: usize,
-) -> Result<Option<CString>, c_int> {
-    if let Ok(text) = stmt.column_text(index) {
-        Ok(Some(CString::new(text).map_err(|_| RLDB_MISMATCH)?))
-    } else if let Ok(blob) = stmt.column_blob(index) {
-        Ok(Some(to_hex(blob)))
-    } else if let Ok(v) = stmt.column_i64(index) {
-        Ok(Some(CString::new(v.to_string()).unwrap()))
-    } else if let Ok(v) = stmt.column_f64(index) {
-        Ok(Some(CString::new(v.to_string()).unwrap()))
-    } else {
-        Ok(Some(CString::new("").unwrap()))
-    }
+/// The `sqlite3_exec` callback argument for column `index` of the current
+/// row: the `sqlite3_column_text` form (bytes plus a trailing NUL, interior
+/// NULs kept, so C sees the text up to the first NUL), or `None` for SQL
+/// NULL, which reaches the callback as a NULL pointer.
+pub(crate) fn exec_value(stmt: &redlinedb_sql::Statement, index: usize) -> Option<Box<[u8]>> {
+    stmt.column_value(index)
+        .ok()
+        .and_then(crate::column::text_form)
 }
 
 pub(crate) fn recursive_copy(src: &Path, dst: &Path) -> std::io::Result<()> {

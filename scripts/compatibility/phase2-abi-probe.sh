@@ -12,21 +12,26 @@
 #   --control PATH|none    upstream libsqlite3 for the control run (default:
 #                          target/sqlite-reference/3.53.1/lib/libsqlite3.so if
 #                          present; otherwise the control is reported skipped)
+#   --require-control      a missing control is an infrastructure failure, not
+#                          a skip (also REDLINE_ABI_REQUIRE_CONTROL=1); build
+#                          it with scripts/sqlite/build-reference.sh
 #   --out DIR              receipts and logs (default: target/compatibility/abi)
 # Exit status: 0 all cases passed, 1 a RedlineDB case failed, 2 infrastructure
-# (bad header hash, compiler error, or a failing control).
+# (bad header hash, compiler error, a failing or required-but-missing control).
 set -euo pipefail
 root=$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)
 header_dir=$root/contracts/c-abi/upstream/sqlite-3.53.1
 source=$root/contracts/c-abi/probe/phase2_abi_probe.c
 library='' archive='' control='' out=$root/target/compatibility/abi
+require_control=${REDLINE_ABI_REQUIRE_CONTROL:-0}
 while (($#)); do
   case $1 in
     --library) library=$2; shift 2 ;;
     --static-archive) archive=$2; shift 2 ;;
     --control) control=$2; shift 2 ;;
+    --require-control) require_control=1; shift ;;
     --out) out=$2; shift 2 ;;
-    *) sed -n '2,19p' "${BASH_SOURCE[0]}" >&2; exit 64 ;;
+    *) sed -n '2,20p' "${BASH_SOURCE[0]}" >&2; exit 64 ;;
   esac
 done
 
@@ -49,6 +54,8 @@ if [[ -z $control ]]; then
   control=$root/target/sqlite-reference/3.53.1/lib/libsqlite3.$dylib_ext
   [[ -f $control ]] || control=none
 fi
+[[ $control != none || $require_control != 1 ]] ||
+  infrastructure "no upstream libsqlite3 control and --require-control is set (build it with scripts/sqlite/build-reference.sh)"
 [[ -f $library ]] || infrastructure "missing library $library"
 [[ -z $archive || -f $archive ]] || infrastructure "missing archive $archive"
 
@@ -67,7 +74,7 @@ fi
 # rldb_column_type, and faults on early-nul-guard's over-long bound.
 upstream_cases=(v3-zero v3-persistent v3-normalize bounded-guard zero-guard negative-guard
   empty-tail embedded-nul error-output v3-error-output v2-tail repeat-tail type-tags
-  text-conversions memory-open)
+  text-conversions memory-open exec-callback)
 redline_cases=(unsupported-flags native-tags early-nul-guard)
 
 receipt=$out/receipt.tsv

@@ -358,7 +358,7 @@ fn bind_then_reset_then_rebind_does_not_panic() {
 /// failure AND surface a non-OK code. D1's
 /// `oversize_sql_is_rejected_gracefully` calls `rldb_prepare_v2` (no
 /// errmsg slot); this test goes through `rldb_exec` with errmsg so the
-/// `set_errmsg` SAFETY contract in `crates/ffi/src/util.rs:334` is
+/// `set_errmsg` SAFETY contract in `crates/ffi/src/util.rs:377` is
 /// exercised on the parser-error path.
 #[test]
 fn oversize_sql_via_exec_populates_errmsg() {
@@ -381,7 +381,7 @@ fn oversize_sql_via_exec_populates_errmsg() {
     // errmsg may or may not be populated depending on the parser path;
     // when populated, the caller MUST be able to free it via rldb_free.
     if !errmsg.is_null() {
-        // HLT-029: proves crates/ffi/src/util.rs:334 set_errmsg ownership
+        // HLT-029: proves crates/ffi/src/util.rs:377 set_errmsg ownership
         // transfer; the from_raw pair lives in rldb_free.
         let msg = unsafe { CStr::from_ptr(errmsg) }.to_str().expect("utf8");
         assert!(!msg.is_empty(), "errmsg populated but empty");

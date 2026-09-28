@@ -345,7 +345,7 @@ proof_lane = "rtk cargo test -p redlinedb-ffi --quiet --locked"
 
 [[entries]]
 file = "crates/ffi/src/column.rs"
-line = 142
+line = 145
 owner = "c-abi"
 invariant = "stmt non-null *mut rldb_stmt from rldb_prepare_v2 not yet finalized"
 proof_lane = "rtk cargo test -p redlinedb-ffi --quiet --locked"
@@ -390,11 +390,11 @@ file = "crates/ffi/src/error.rs"
 line = 52
 owner = "c-abi"
 detector = "rust.unsafe.raw-parts"
-invariant = "ptr confirmed non-null; CString::from_raw pairs with prior CString::into_raw from this library (rldb_stats_json via crates/ffi/src/util.rs:380 errmsg_to_c_string and crates/ffi/src/util.rs:398 set_errmsg); caller must not double-free per C ABI in redlinedb.h:128"
-waiver_reason = "Matches the CString constructor at crates/ffi/src/util.rs:380 (errmsg_to_c_string returns CString::new(...).into_raw()); this library is the sole producer of pointers handed to rldb_free per redlinedb.h:128; double-free guarded by the caller's obligation to NULL the handle after rldb_free (redlinedb.h:128); proof in crates/ffi/tests/safety_invariants.rs::rldb_free_null_is_noop and ::exec_callback_failure_round_trips_errmsg_ownership."
+invariant = "ptr confirmed non-null; CString::from_raw pairs with prior CString::into_raw from this library (rldb_stats_json via crates/ffi/src/util.rs:359 errmsg_to_c_string and crates/ffi/src/util.rs:377 set_errmsg); caller must not double-free per C ABI in redlinedb.h:128"
+waiver_reason = "Matches the CString constructor at crates/ffi/src/util.rs:359 (errmsg_to_c_string returns CString::new(...).into_raw()); this library is the sole producer of pointers handed to rldb_free per redlinedb.h:128; double-free guarded by the caller's obligation to NULL the handle after rldb_free (redlinedb.h:128); proof in crates/ffi/tests/safety_invariants.rs::rldb_free_null_is_noop and ::exec_callback_failure_round_trips_errmsg_ownership."
 proof = "crates/ffi/tests/safety_invariants.rs::rldb_free_null_is_noop and ::exec_callback_failure_round_trips_errmsg_ownership"
 proof_lane = "rtk cargo test -p redlinedb-ffi --quiet --locked"
-matched_constructor = "crates/ffi/src/util.rs:380"
+matched_constructor = "crates/ffi/src/util.rs:359"
 proof_test = "redlinedb-ffi::tests::safety_invariants::rldb_free_null_is_noop and ::exec_callback_failure_round_trips_errmsg_ownership"
 reviewed_by = "ops"
 reviewed_on = "2026-05-16"
@@ -443,7 +443,7 @@ proof_lane = "rtk cargo test -p redlinedb-ffi --quiet --locked"
 
 [[entries]]
 file = "crates/ffi/src/exec.rs"
-line = 202
+line = 205
 owner = "c-abi"
 invariant = "set_errmsg internal null-check (invoke_exec_callback helper, callback returned non-zero); ownership of returned CString transfers to caller (paired with rldb_free)"
 proof_lane = "rtk cargo test -p redlinedb-ffi --quiet --locked"
@@ -495,11 +495,11 @@ file = "crates/ffi/src/lifecycle.rs"
 line = 100
 owner = "c-abi"
 detector = "rust.unsafe.raw-parts"
-invariant = "Matching constructor/destructor pair: Box::from_raw pairs with Box::into_raw from open_handle in util.rs:133; ownership invariant: only rldb_close / rldb_close_v2 consume it (caller never frees directly per redlinedb.h:87); exclusive access upheld by active_statements==0 check above; double-close guarded by null check above (caller must NULL handle after close per C ABI contract in redlinedb.h:87)"
-waiver_reason = "Matches the Box constructor at crates/ffi/src/util.rs:134 (open_handle returns Box::into_raw(handle)); only rldb_close / rldb_close_v2 consume it (caller never frees directly per redlinedb.h:87); double-close guarded by the null check above (caller must NULL the handle after close); proof in crates/ffi/tests/safety_invariants.rs::double_close_via_null_after_close_is_safe."
+invariant = "Matching constructor/destructor pair: Box::from_raw pairs with Box::into_raw from open_handle in util.rs:135; ownership invariant: only rldb_close / rldb_close_v2 consume it (caller never frees directly per redlinedb.h:87); exclusive access upheld by active_statements==0 check above; double-close guarded by null check above (caller must NULL handle after close per C ABI contract in redlinedb.h:87)"
+waiver_reason = "Matches the Box constructor at crates/ffi/src/util.rs:135 (open_handle returns Box::into_raw(handle)); only rldb_close / rldb_close_v2 consume it (caller never frees directly per redlinedb.h:87); double-close guarded by the null check above (caller must NULL the handle after close); proof in crates/ffi/tests/safety_invariants.rs::double_close_via_null_after_close_is_safe."
 proof = "crates/ffi/tests/safety_invariants.rs::double_close_via_null_after_close_is_safe"
 proof_lane = "rtk cargo test -p redlinedb-ffi --quiet --locked"
-matched_constructor = "crates/ffi/src/util.rs:134"
+matched_constructor = "crates/ffi/src/util.rs:135"
 proof_test = "redlinedb-ffi::tests::safety_invariants::double_close_via_null_after_close_is_safe"
 reviewed_by = "ops"
 reviewed_on = "2026-05-16"
@@ -669,84 +669,84 @@ proof_lane = "rtk cargo test -p redlinedb-ffi --quiet --locked"
 
 [[entries]]
 file = "crates/ffi/src/stmt.rs"
-line = 229
+line = 238
 owner = "c-abi"
 invariant = "read_bounded_sql: sql non-null (checked by rldb_prepare_v2); reads one byte at a time and stops at the first NUL or at the non-negative nbytes bound, so no read or slice extends past the caller's readable input and nbytes==0 reads nothing; proof crates/ffi/tests/bounded_prepare.rs (guard-page cases)"
 proof_lane = "rtk cargo test -p redlinedb-ffi --test bounded_prepare --quiet --locked"
 
 [[entries]]
 file = "crates/ffi/src/stmt.rs"
-line = 65
+line = 74
 owner = "c-abi"
 invariant = "tail may be NULL; when non-null, caller guarantees a writable *const c_char; consumed_bytes never exceeds the bytes scanned from sql, so tail stays within (or one past) the caller's input"
 proof_lane = "rtk cargo test -p redlinedb-ffi --quiet --locked"
 
 [[entries]]
 file = "crates/ffi/src/stmt.rs"
-line = 101
+line = 110
 owner = "c-abi"
 invariant = "out_stmt confirmed non-null; Box::into_raw transfers ownership to C caller (paired with rldb_finalize)"
 proof_lane = "rtk cargo test -p redlinedb-ffi --quiet --locked"
 
 [[entries]]
 file = "crates/ffi/src/stmt.rs"
-line = 119
+line = 128
 owner = "c-abi"
 invariant = "stmt confirmed non-null above; single-thread ownership per C ABI"
 proof_lane = "rtk cargo test -p redlinedb-ffi --quiet --locked"
 
 [[entries]]
 file = "crates/ffi/src/stmt.rs"
-line = 124
+line = 133
 owner = "c-abi"
 invariant = "stmt_ref.db recorded at prepare time and lives at least as long as the statement (active_statements gates close)"
 proof_lane = "rtk cargo test -p redlinedb-ffi --quiet --locked"
 
 [[entries]]
 file = "crates/ffi/src/stmt.rs"
-line = 159
+line = 168
 owner = "c-abi"
 invariant = "stmt confirmed non-null above; single-thread ownership per C ABI"
 proof_lane = "rtk cargo test -p redlinedb-ffi --quiet --locked"
 
 [[entries]]
 file = "crates/ffi/src/stmt.rs"
-line = 187
+line = 196
 owner = "c-abi"
 detector = "rust.unsafe.raw-parts"
-invariant = "Matching constructor/destructor pair: Box::from_raw pairs with Box::into_raw from rldb_prepare_v2 at crates/ffi/src/stmt.rs:102; ownership invariant: rldb_stmt is documented as single-thread-owned in redlinedb.h:99 so exclusive access is upheld; double-finalize guarded by null check above (caller must NULL stmt after finalize per C ABI in redlinedb.h:99)"
-waiver_reason = "Matches the Box constructor at crates/ffi/src/stmt.rs:102 (rldb_prepare_v2 returns Box::into_raw(boxed)); the C caller may not free this pointer directly per redlinedb.h:99; double-finalize guarded by the null check above (caller must NULL stmt after rldb_finalize); proof in crates/ffi/tests/safety_invariants.rs::oversize_sql_is_rejected_gracefully and ::parameter_index_out_of_range_returns_range."
+invariant = "Matching constructor/destructor pair: Box::from_raw pairs with Box::into_raw from rldb_prepare_v2 at crates/ffi/src/stmt.rs:111; ownership invariant: rldb_stmt is documented as single-thread-owned in redlinedb.h:99 so exclusive access is upheld; double-finalize guarded by null check above (caller must NULL stmt after finalize per C ABI in redlinedb.h:99)"
+waiver_reason = "Matches the Box constructor at crates/ffi/src/stmt.rs:111 (rldb_prepare_v2 returns Box::into_raw(boxed)); the C caller may not free this pointer directly per redlinedb.h:99; double-finalize guarded by the null check above (caller must NULL stmt after rldb_finalize); proof in crates/ffi/tests/safety_invariants.rs::oversize_sql_is_rejected_gracefully and ::parameter_index_out_of_range_returns_range."
 proof = "crates/ffi/tests/safety_invariants.rs::oversize_sql_is_rejected_gracefully and ::parameter_index_out_of_range_returns_range"
 proof_lane = "rtk cargo test -p redlinedb-ffi --quiet --locked"
-matched_constructor = "crates/ffi/src/stmt.rs:102"
+matched_constructor = "crates/ffi/src/stmt.rs:111"
 proof_test = "redlinedb-ffi::tests::safety_invariants::oversize_sql_is_rejected_gracefully and ::parameter_index_out_of_range_returns_range"
 reviewed_by = "ops"
 reviewed_on = "2026-05-16"
 
 [[entries]]
 file = "crates/ffi/src/stmt.rs"
-line = 191
+line = 200
 owner = "c-abi"
 invariant = "boxed.db recorded at prepare time; rldb_close waits for active_statements==0 so parent db is alive here"
 proof_lane = "rtk cargo test -p redlinedb-ffi --quiet --locked"
 
 [[entries]]
 file = "crates/ffi/src/stmt.rs"
-line = 211
+line = 220
 owner = "c-abi"
 invariant = "stmt confirmed non-null above; single-thread ownership per C ABI"
 proof_lane = "rtk cargo test -p redlinedb-ffi --quiet --locked"
 
 [[entries]]
 file = "crates/ffi/src/util.rs"
-line = 144
+line = 145
 owner = "c-abi"
 invariant = "db confirmed non-null above; shared borrow scoped to f() which runs synchronously"
 proof_lane = "rtk cargo test -p redlinedb-ffi --quiet --locked"
 
 [[entries]]
 file = "crates/ffi/src/util.rs"
-line = 170
+line = 171
 owner = "c-abi"
 detector = "rust.unsafe.raw-parts"
 invariant = "caller_buffer: pub(crate) unsafe fn with documented # Safety contract for explicit-length caller-owned byte buffers crossing the C ABI (callers: rldb_bind_text nbytes>=0, rldb_bind_blob; rldb_prepare_v2 no longer uses it because a positive bound may run past an early NUL). Returned slice is consumed via .to_vec()/from_utf8 within the same call so the borrow never outlives the caller's allocation. Matching constructor/destructor pair: the caller's allocation outlives the borrow which is destroyed by .to_vec()/from_utf8."
@@ -760,14 +760,14 @@ reviewed_on = "2026-05-16"
 
 [[entries]]
 file = "crates/ffi/src/util.rs"
-line = 398
+line = 377
 owner = "c-abi"
 invariant = "set_errmsg: pub(crate) unsafe fn with documented # Safety contract (errmsg null-check, ownership transfer to caller via rldb_free)"
 proof_lane = "rtk cargo test -p redlinedb-ffi --quiet --locked"
 
 [[entries]]
 file = "crates/ffi/src/util.rs"
-line = 405
+line = 384
 owner = "c-abi"
 invariant = "errmsg confirmed non-null; writing CString::into_raw whose ownership transfers to caller (paired with rldb_free)"
 proof_lane = "rtk cargo test -p redlinedb-ffi --quiet --locked"
@@ -806,7 +806,7 @@ proof_lane = "rtk cargo test -p redlinedb-ffi --test value_result --quiet --lock
 
 [[entries]]
 file = "crates/ffi/src/sqlite3_api/udf.rs"
-line = 363
+line = 368
 owner = "c-abi"
 detector = "rust.unsafe.extern-fn"
 invariant = "sqlite3_create_function* family: caller MUST pass NUL-terminated name and a valid (db, callback, user_data, destroy) set per the SQLite ABI; we null-check db/name and store the callback in a global Mutex-guarded registry keyed by (connection_id, name, arity). user_data is owned through Arc<UserData> (crates/ffi/src/sqlite3_api/user_data.rs): destroy runs once, after the registry lock is released and after any in-flight callback returns, on failure, replace, delete and rldb_close (purge_connection). Validated by crates/ffi/tests/udf_register.rs."

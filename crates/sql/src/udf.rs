@@ -197,6 +197,14 @@ pub fn authorize_table_access(action: i32, table: &str) -> AuthorizerDecision {
     fire_authorizer(action, Some(table), None, Some("main"))
 }
 
+/// Ask the authorizer about assigning `column` of `table` in an UPDATE. As
+/// SQLite does, `SQLITE_UPDATE` is asked once per assigned column, with the
+/// table in `arg3`, the column name in `arg4` (never NULL) and the database
+/// name fifth.
+pub fn authorize_update_column(table: &str, column: &str) -> AuthorizerDecision {
+    fire_authorizer(AUTH_UPDATE, Some(table), Some(column), Some("main"))
+}
+
 /// Current connection address. Set per-statement by the FFI prepare path so
 /// the dispatchers can scope lookups. Defaults to `0` when no FFI caller is
 /// active (pure-Rust use).

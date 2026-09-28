@@ -17,6 +17,7 @@
 #ifndef PROBE_STATIC
 #include <dlfcn.h>
 #endif
+#include <dirent.h>
 #include <limits.h>
 #include <stdint.h>
 #include <stdio.h>
@@ -30,7 +31,8 @@
     X(sqlite3_step) X(sqlite3_finalize) X(sqlite3_column_type) X(sqlite3_column_int64) \
     X(sqlite3_column_text) X(sqlite3_column_bytes) X(sqlite3_column_value)           \
     X(sqlite3_value_type) X(sqlite3_db_filename) X(sqlite3_libversion)               \
-    X(sqlite3_sourceid)
+    X(sqlite3_sourceid) X(sqlite3_exec) X(sqlite3_column_blob) X(sqlite3_reset)       \
+    X(sqlite3_value_numeric_type)
 #define DECLARE(name) static __typeof__(name) *p_##name;
 API_LIST(DECLARE)
 
@@ -99,6 +101,38 @@ static int run_one(sqlite3 *db, const char *sql, sqlite3_int64 *first) {
     if (rc == SQLITE_ROW && first) *first = p_sqlite3_column_int64(stmt, 0);
     if (p_sqlite3_finalize(stmt) != SQLITE_OK) return -1;
     return rc;
+}
+
+/* Number of entries in a directory, or -1. */
+static int count_entries(const char *dir) {
+    DIR *handle = opendir(dir);
+    if (!handle) return -1;
+    int count = 0;
+    struct dirent *entry;
+    while ((entry = readdir(handle)))
+        if (strcmp(entry->d_name, ".") && strcmp(entry->d_name, "..")) ++count;
+    closedir(handle);
+    return count;
+}
+
+/* One sqlite3_exec row: each argv entry as C sees it (up to its first NUL),
+ * whether it was a NULL pointer, and each column name. */
+#define EXEC_COLUMNS 5
+struct exec_row {
+    int calls, argc, is_null[EXEC_COLUMNS];
+    char text[EXEC_COLUMNS][16], names[EXEC_COLUMNS][16];
+};
+
+static int exec_collect(void *context, int argc, char **argv, char **names) {
+    struct exec_row *row = context;
+    row->calls++;
+    row->argc = argc;
+    for (int i = 0; i < argc && i < EXEC_COLUMNS; ++i) {
+        row->is_null[i] = argv[i] == NULL;
+        snprintf(row->text[i], sizeof row->text[i], "%s", argv[i] ? argv[i] : "");
+        snprintf(row->names[i], sizeof row->names[i], "%s", names[i] ? names[i] : "(null)");
+    }
+    return 0;
 }
 
 static int run_case(const char *test, sqlite3 *db, const char *db_path) {
@@ -214,6 +248,7 @@ static int run_case(const char *test, sqlite3 *db, const char *db_path) {
             printf("column=%d actual=%d expected=%d\n", i, actual, expected[i]);
             mismatch |= actual != expected[i];
             CHECK(p_sqlite3_value_type(p_sqlite3_column_value(stmt, i)) == expected[i]);
+            CHECK(p_sqlite3_value_numeric_type(p_sqlite3_column_value(stmt, i)) == expected[i]);
         }
         CHECK(!mismatch);
     } else if (!strcmp(test, "text-conversions")) {
@@ -224,17 +259,22 @@ static int run_case(const char *test, sqlite3 *db, const char *db_path) {
         } want[] = {
             {SQLITE_INTEGER, "7", 1}, {SQLITE_FLOAT, "1.5", 3}, {SQLITE_NULL, NULL, 0},
             {SQLITE_TEXT, "x", 1},    {SQLITE_BLOB, "a\0b", 3}, {SQLITE_TEXT, "a\0b", 3},
-            {SQLITE_FLOAT, "1.0", 3},
+            {SQLITE_FLOAT, "1.0", 3}, {SQLITE_TEXT, "", 0},     {SQLITE_BLOB, "", 0},
+            {SQLITE_FLOAT, "0.1", 3},
         };
-        CHECK(p_sqlite3_prepare_v2(db, "SELECT 7, 1.5, NULL, 'x', x'610062', char(97, 0, 98), 1.0", -1,
-                                   &stmt, NULL) == SQLITE_OK);
+        const int columns = (int)(sizeof(want) / sizeof(want[0]));
+        CHECK(p_sqlite3_prepare_v2(db,
+                                   "SELECT 7, 1.5, NULL, 'x', x'610062', char(97, 0, 98), 1.0, '', x'', 0.1",
+                                   -1, &stmt, NULL) == SQLITE_OK);
         CHECK(p_sqlite3_step(stmt) == SQLITE_ROW);
-        for (int i = 0; i < (int)(sizeof(want) / sizeof(want[0])); ++i) {
+        for (int i = 0; i < columns; ++i) {
             /* Read the class first: upstream may change it after a conversion. */
             int type = p_sqlite3_column_type(stmt, i);
             const unsigned char *text = p_sqlite3_column_text(stmt, i);
             int bytes = p_sqlite3_column_bytes(stmt, i);
-            printf("column=%d type=%d bytes=%d text_null=%d\n", i, type, bytes, text == NULL);
+            const void *blob = p_sqlite3_column_blob(stmt, i);
+            printf("column=%d type=%d bytes=%d text_null=%d blob_null=%d\n", i, type, bytes, text == NULL,
+                   blob == NULL);
             CHECK(type == want[i].type);
             CHECK(bytes == want[i].bytes);
             if (!want[i].text) {
@@ -242,7 +282,43 @@ static int run_case(const char *test, sqlite3 *db, const char *db_path) {
             } else {
                 CHECK(text && !memcmp(text, want[i].text, (size_t)bytes) && text[bytes] == 0);
             }
+            /* memcpy(dst, column_blob, column_bytes) must be sound: the
+             * blob form is the same bytes, NULL only when there are none. */
+            if (!bytes) {
+                CHECK(blob == NULL);
+            } else {
+                CHECK(blob && !memcmp(blob, want[i].text, (size_t)bytes));
+            }
         }
+        /* The same idiom on a fresh row, calling column_blob first. */
+        CHECK(p_sqlite3_reset(stmt) == SQLITE_OK && p_sqlite3_step(stmt) == SQLITE_ROW);
+        for (int i = 0; i < columns; ++i) {
+            int type = p_sqlite3_column_type(stmt, i);
+            const void *blob = p_sqlite3_column_blob(stmt, i);
+            int bytes = p_sqlite3_column_bytes(stmt, i);
+            printf("blob-first column=%d bytes=%d blob_null=%d\n", i, bytes, blob == NULL);
+            CHECK(type == want[i].type && bytes == want[i].bytes);
+            CHECK(bytes ? blob && !memcmp(blob, want[i].text, (size_t)bytes) : blob == NULL);
+        }
+    } else if (!strcmp(test, "exec-callback")) {
+        /* sqlite3_exec hands each value to the callback as sqlite3_column_text
+         * would: REAL keeps its fraction, NULL is a NULL pointer, a BLOB is
+         * its bytes, and an interior NUL just ends the C string. */
+        struct exec_row row = {0};
+        char *error = (char *)&row;
+        rc = p_sqlite3_exec(db, "SELECT 1.5 AS r, NULL AS n, x'41' AS b, 7 AS i, char(97, 0, 98) AS t",
+                            exec_collect, &row, &error);
+        printf("rc=%d error_null=%d calls=%d argc=%d\n", rc, error == NULL, row.calls, row.argc);
+        for (int i = 0; i < row.argc && i < EXEC_COLUMNS; ++i)
+            printf("name=%s null=%d text=%s\n", row.names[i], row.is_null[i], row.text[i]);
+        CHECK(rc == SQLITE_OK && error == NULL && row.calls == 1 && row.argc == EXEC_COLUMNS);
+        static const char *const names[EXEC_COLUMNS] = {"r", "n", "b", "i", "t"};
+        static const char *const texts[EXEC_COLUMNS] = {"1.5", NULL, "A", "7", "a"};
+        for (int i = 0; i < EXEC_COLUMNS; ++i) {
+            CHECK(!strcmp(row.names[i], names[i]));
+            CHECK(texts[i] ? !row.is_null[i] && !strcmp(row.text[i], texts[i]) : row.is_null[i]);
+        }
+        stmt = NULL;
     } else if (!strcmp(test, "memory-open")) {
         /* Work in the database's directory so a stray ":memory:" file is
          * visible, then prove the in-memory database works and left none. */
@@ -263,6 +339,24 @@ static int run_case(const char *test, sqlite3 *db, const char *db_path) {
         CHECK(run_one(memory, "SELECT x FROM t", &value) == SQLITE_ROW && value == 42);
         CHECK(p_sqlite3_close(memory) == SQLITE_OK);
         CHECK(access(":memory:", F_OK) != 0);
+        /* An empty name opens a private temporary database: it works, is
+         * not shared, and leaves nothing in the working directory. */
+        int before = count_entries(".");
+        CHECK(before >= 0);
+        sqlite3 *temporary = NULL, *other = NULL;
+        CHECK(p_sqlite3_open("", &temporary) == SQLITE_OK && temporary);
+        CHECK(p_sqlite3_open("", &other) == SQLITE_OK && other);
+        name = p_sqlite3_db_filename(temporary, "main");
+        CHECK(name != NULL && name[0] == 0);
+        value = 0;
+        CHECK(run_one(temporary, "CREATE TABLE t(x)", NULL) == SQLITE_DONE);
+        CHECK(run_one(temporary, "INSERT INTO t VALUES (43)", NULL) == SQLITE_DONE);
+        CHECK(run_one(temporary, "SELECT x FROM t", &value) == SQLITE_ROW && value == 43);
+        CHECK(run_one(other, "SELECT x FROM t", NULL) == -1);
+        CHECK(p_sqlite3_close(other) == SQLITE_OK);
+        CHECK(p_sqlite3_close(temporary) == SQLITE_OK);
+        printf("entries before=%d after=%d\n", before, count_entries("."));
+        CHECK(count_entries(".") == before);
         stmt = NULL;
     } else {
         return 125;

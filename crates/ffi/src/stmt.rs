@@ -49,7 +49,16 @@ pub unsafe extern "C" fn rldb_prepare_v2(
         // `sql`, set `tail` to the byte after that statement (or to the NUL
         // terminator if it was the last). We route through
         // Connection::prepare_v2 which returns the unconsumed remainder.
-        let (stmt_opt, remainder) = match db_ref.conn.clone().prepare_v2(&sql_text) {
+        //
+        // Binding can already read tables (a CTE body is materialized while
+        // the statement is prepared), so run it scoped to this connection,
+        // as rldb_step and rldb_exec do: otherwise the authorizer, UDFs and
+        // collations it reaches see no connection and the authorizer allows
+        // everything.
+        crate::sqlite3_api::hooks_fire::reset_authorizer_malfunction(db);
+        let prepared =
+            redlinedb_sql::udf::with_db(db as usize, || db_ref.conn.clone().prepare_v2(&sql_text));
+        let (stmt_opt, remainder) = match prepared {
             Ok(pair) => pair,
             Err(err) => {
                 let (code, msg) = statement_error(db, err);
@@ -175,13 +184,13 @@ pub unsafe extern "C" fn rldb_finalize(stmt: *mut rldb_stmt) -> c_int {
             return Err(RLDB_MISUSE);
         }
         // SAFETY: matching constructor/destructor pair — `stmt` originates from
-        // Box::into_raw(boxed) at rldb_prepare_v2 (crates/ffi/src/stmt.rs:102);
+        // Box::into_raw(boxed) at rldb_prepare_v2 (crates/ffi/src/stmt.rs:111);
         // ownership invariant: the C caller may not free this pointer directly
         // per redlinedb.h:99; exclusive access because rldb_stmt is documented
         // as single-thread-owned in redlinedb.h:99; double-finalize guarded by
         // the null check above (caller must NULL stmt after rldb_finalize per
         // redlinedb.h:99); ledgered at .jankurai/unsafe-ledger.toml
-        // (file=crates/ffi/src/stmt.rs, line=187, detector=rust.unsafe.raw-parts);
+        // (file=crates/ffi/src/stmt.rs, line=196, detector=rust.unsafe.raw-parts);
         // proof: crates/ffi/tests/safety_invariants.rs::oversize_sql_is_rejected_gracefully
         // and ::parameter_index_out_of_range_returns_range.
         let boxed = unsafe { reclaim_box(stmt) }; // SAFETY: reclaim the leaked Box; matching destructor for the Box::into_raw at prepare (see invariant above).

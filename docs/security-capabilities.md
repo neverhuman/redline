@@ -28,19 +28,27 @@ nothing.
   `user_data`. A destructor never runs while a registry lock is held, and never
   while another thread is still inside a callback using that `user_data`.
 - **Authorizer decisions.** `sqlite3_set_authorizer` is consulted when a
-  statement steps:
+  statement steps, and for a CTE body when the statement is prepared (the
+  engine reads a CTE body while it prepares the statement, so
+  `sqlite3_prepare*` itself fails with `SQLITE_AUTH` there). This holds for
+  `sqlite3_exec` and for `sqlite3_prepare*` with `sqlite3_step`:
   - `SQLITE_SELECT` (21) once for each base table a SELECT reads, including
     tables reached through views, subqueries, CTEs and compound SELECTs, with
     the table name in `arg3`. Upstream passes NULL there and asks `SQLITE_READ`
     per column instead (see "Not implemented yet").
-  - `SQLITE_INSERT` (18), `SQLITE_UPDATE` (23) and `SQLITE_DELETE` (9) for the
-    target table of each DML statement, including statements in trigger
-    bodies, with the table in `arg3` and NULL in `arg4`.
+  - `SQLITE_INSERT` (18) and `SQLITE_DELETE` (9) for the target table of each
+    DML statement, including statements in trigger bodies, with the table in
+    `arg3` and NULL in `arg4`.
+  - `SQLITE_UPDATE` (23) once for each assigned column, in `SET` order, with
+    the table in `arg3` and the column name in `arg4`, as upstream does.
   - `arg5` is the database name, `"main"`. `arg6` is always NULL.
 
   `SQLITE_DENY` fails the statement with `SQLITE_AUTH` ("not authorized").
-  `SQLITE_IGNORE` makes a SELECT return no rows and makes INSERT, UPDATE or
-  DELETE change nothing. Any other
+  `SQLITE_IGNORE` makes a SELECT return no rows and makes INSERT or DELETE
+  change nothing. For `SQLITE_UPDATE` it leaves that one column unchanged
+  while the other assigned columns update, as upstream does; when every
+  assigned column is ignored the UPDATE changes nothing and reports no
+  changed rows (upstream still counts the rows it visited). Any other
   return value fails the statement with `SQLITE_ERROR` and the message
   "authorizer malfunction", as upstream does; before v5 it was treated as
   `SQLITE_OK`.
@@ -49,7 +57,7 @@ nothing.
   and changes nothing.
 
 Proof: `cargo test -p redlinedb-ffi --locked --test udf_register --test
-collation_register --test hooks --test blob_io`.
+collation_register --test hooks --test authorizer_paths --test blob_io`.
 
 ## Refused
 
@@ -85,8 +93,9 @@ An application must not rely on any of these for access control.
   never consulted for it; deny `SQLITE_SELECT` on the table instead.
 - The authorizer is never asked about DDL (`CREATE`, `DROP`, `ALTER`),
   `PRAGMA`, `ATTACH`/`DETACH`, transactions and savepoints, function calls,
-  `ANALYZE`, `REINDEX` or recursive CTEs, and it is consulted when a statement
-  steps, not when it is prepared.
+  `ANALYZE`, `REINDEX` or recursive CTEs. Apart from CTE bodies it is
+  consulted when a statement steps, not when it is prepared as upstream does,
+  so an authorizer set between prepare and step still applies to the step.
 - `SQLITE_DIRECTONLY` is refused rather than enforced; enforcing it needs the
   call's origin (view, trigger, schema expression) carried through view and
   trigger expansion.

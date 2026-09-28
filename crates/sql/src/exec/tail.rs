@@ -98,22 +98,62 @@ fn lower_rowid_allocator_after_delete(
     Ok(())
 }
 
+/// Ask the authorizer about each assigned column, in SET order, as SQLite
+/// does. A DENY fails the statement. An IGNORE drops that column's
+/// assignment, so the column keeps its value while the others update.
+/// Returns `None` when every assignment is allowed (the plan runs as is),
+/// otherwise the plan with the ignored assignments removed.
+fn authorize_update_assignments(
+    plan: &crate::statement::UpdatePlan,
+) -> Result<Option<crate::statement::UpdatePlan>> {
+    let mut ignored = Vec::new();
+    for (position, (ordinal, _)) in plan.assignments.iter().enumerate() {
+        let column = plan
+            .table
+            .columns
+            .get(*ordinal)
+            .map_or("ROWID", |column| &*column.name);
+        match crate::udf::authorize_update_column(&plan.table.name, column) {
+            crate::udf::AuthorizerDecision::Allow => {}
+            crate::udf::AuthorizerDecision::Deny => return Err(Error::NotAuthorized),
+            crate::udf::AuthorizerDecision::Ignore => ignored.push(position),
+        }
+    }
+    if ignored.is_empty() {
+        return Ok(None);
+    }
+    let mut kept = plan.clone();
+    kept.assignments = plan
+        .assignments
+        .iter()
+        .enumerate()
+        .filter(|(position, _)| !ignored.contains(position))
+        .map(|(_, assignment)| assignment.clone())
+        .collect();
+    Ok(Some(kept))
+}
+
 pub(crate) fn execute_update(
     conn: &Connection,
     plan: &crate::statement::UpdatePlan,
     bindings: &[Option<SqlValue>],
 ) -> Result<ExecutionResult> {
-    match crate::udf::authorize_table_access(crate::udf::AUTH_UPDATE, &plan.table.name) {
-        crate::udf::AuthorizerDecision::Allow => {}
-        crate::udf::AuthorizerDecision::Deny => return Err(Error::NotAuthorized),
-        crate::udf::AuthorizerDecision::Ignore => {
+    let authorized;
+    let plan = match authorize_update_assignments(plan)? {
+        None => plan,
+        Some(kept) if kept.assignments.is_empty() => {
+            // Every assigned column was ignored: nothing changes.
             return Ok(build_dml_execution_result(
                 0,
                 Vec::new(),
                 plan.returning.is_some(),
             ));
         }
-    }
+        Some(kept) => {
+            authorized = kept;
+            &authorized
+        }
+    };
     // Phase 5 WS-A6 fast path: pre-classify the SET clause so we can
     // skip the per-row `eval_scalar` walk when every assignment is a
     // pure literal/binding replacement or an integer-delta of the
