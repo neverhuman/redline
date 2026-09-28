@@ -14,20 +14,20 @@ use super::utils::sha256_hex;
 const README: &str =
     "# Report\n\n<!-- sqlite-parity-report:begin -->\n<!-- sqlite-parity-report:end -->\n";
 
-struct Rendered {
-    root: tempfile::TempDir,
+pub(super) struct Rendered {
+    pub(super) root: tempfile::TempDir,
 }
 
 impl Rendered {
-    fn out(&self, name: &str) -> String {
+    pub(super) fn out(&self, name: &str) -> String {
         fs::read_to_string(self.root.path().join("out").join(name)).expect("report output")
     }
 
-    fn report_provenance(&self) -> Value {
+    pub(super) fn report_provenance(&self) -> Value {
         serde_json::from_str(&self.out("report-provenance.json")).expect("report provenance")
     }
 
-    fn readme(&self) -> String {
+    pub(super) fn readme(&self) -> String {
         fs::read_to_string(self.root.path().join("README.md")).expect("readme")
     }
 }
@@ -61,7 +61,7 @@ fn options(
 
 /// Writes one run (raw, evidence and, when given, run provenance) into a
 /// fresh directory and returns it with the report options for it.
-fn setup(
+pub(super) fn setup(
     raw_text: &str,
     evidence: &Value,
     run_provenance: Option<&str>,
@@ -84,7 +84,7 @@ fn setup(
 }
 
 /// Renders a historical run (official evidence, no run provenance).
-fn render(raw_text: &str, evidence: &Value) -> anyhow::Result<Rendered> {
+pub(super) fn render(raw_text: &str, evidence: &Value) -> anyhow::Result<Rendered> {
     let (root, options) = setup(raw_text, evidence, None);
     generate(options)?;
     Ok(Rendered { root })
@@ -93,7 +93,7 @@ fn render(raw_text: &str, evidence: &Value) -> anyhow::Result<Rendered> {
 /// Renders a run with run provenance; `edit` may alter the run provenance
 /// and evidence first. `rebind` re-records the edited run provenance's hash
 /// in the evidence, as a consistent forgery would.
-fn render_official(
+pub(super) fn render_official(
     edit: impl FnOnce(&mut Value, &mut Value),
     rebind: bool,
 ) -> anyhow::Result<Rendered> {
@@ -112,7 +112,7 @@ fn render_official(
     Ok(Rendered { root })
 }
 
-fn official_error(edit: impl FnOnce(&mut Value, &mut Value), rebind: bool) -> String {
+pub(super) fn official_error(edit: impl FnOnce(&mut Value, &mut Value), rebind: bool) -> String {
     match render_official(edit, rebind) {
         Ok(_) => panic!("rendered an official report from inconsistent provenance"),
         Err(err) => format!("{err:#}"),
