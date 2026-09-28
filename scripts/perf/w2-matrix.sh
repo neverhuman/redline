@@ -224,12 +224,15 @@ build_variant() {
   printf '==> built %s (%s/%s) -> %s\n' "$label" "$profile" "$allocator" "$out_bin"
 }
 
+# The perf lane writes into its own run directory and names it in
+# $OUT_DIR/<label>.run-dir; a lane that fails stops the matrix.
 run_perf_lane() {
   local bin="$1" label="$2"
   if [ "$SUITE" = "none" ]; then
     return
   fi
-  run_cmd bash "scripts/perf/${SUITE}.sh" "$bin" "$label"
+  run_cmd env PERF_RUN_DIR_OUT="$OUT_DIR/${label}.run-dir" \
+    bash "scripts/perf/${SUITE}.sh" "$bin" "$label"
 }
 
 if [ "$DRY_RUN" = "1" ]; then
@@ -250,13 +253,13 @@ for profile in "${PROFILE_LIST[@]}"; do
   for allocator in "${ALLOCATOR_LIST[@]}"; do
     label="$(variant_label "$profile" "$allocator")"
     out_bin="$BIN_DIR/redlinedb-${profile}-${allocator}"
-    perf_jsonl=""
-    if [ "$SUITE" != "none" ]; then
-      perf_jsonl="${PERF_ROOT:-target/perf}/${label}.jsonl"
-    fi
     printf '\n==> W2 variant: %s\n' "$label"
     build_variant "$profile" "$allocator" "$label" "$out_bin"
     run_perf_lane "$out_bin" "$label"
+    perf_jsonl=""
+    if [ "$SUITE" != "none" ] && [ "$DRY_RUN" = "0" ]; then
+      perf_jsonl="$(cat "$OUT_DIR/${label}.run-dir")/sqlite_parity.jsonl"
+    fi
     write_manifest_entry "$profile" "$allocator" "$label" "$out_bin" "$perf_jsonl"
   done
 done

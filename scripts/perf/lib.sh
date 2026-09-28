@@ -17,6 +17,11 @@
 #   PERF_WORKERS            override workers (default 1 for low variance)
 #   PERF_TASKSET_CPUS       CPU list passed to taskset (default 2-5)
 #   PERF_TASKSET_DISABLE    set non-empty to skip CPU pinning
+#   PERF_ORDER              which engine runs first in each sample:
+#                           alternate (default), sqlite-first, target-first
+#   PERF_KNOWN_FAILURES     known-failures baseline the perf lanes tolerate
+#                           (default metadata/sqlite_parity/known-failures.json)
+#   PERF_EVIDENCE_BIN       a built perf_evidence binary (default: cargo run)
 #   CI_REDLINE_TESTING_BIN  CI-resolved binary path (takes precedence)
 
 set -euo pipefail
@@ -31,6 +36,7 @@ REDLINE_TESTING_BIN="${REDLINE_TESTING_BIN:-$REDLINE_TESTING_BIN_DEFAULT}"
 
 SQLITE_REF_BIN_DEFAULT="${SQLITE_REF_BIN_DEFAULT:-${REDLINE_CORE_ROOT}/target/sqlite-reference/3.53.1/bin/sqlite3}"
 SQLITE_REF_BIN="${SQLITE_REF_BIN:-$SQLITE_REF_BIN_DEFAULT}"
+PERF_KNOWN_FAILURES="${PERF_KNOWN_FAILURES:-${REDLINE_CORE_ROOT}/metadata/sqlite_parity/known-failures.json}"
 
 # CI overrides everything (ops/ci/lib.sh::ci_resolve_redline_testing_release
 # sets CI_REDLINE_TESTING_BIN after SHA-256-verifying a pinned release).
@@ -39,6 +45,10 @@ if [ -n "${CI_REDLINE_TESTING_BIN:-}" ]; then
 fi
 
 perf_evidence() {
+  if [ -n "${PERF_EVIDENCE_BIN:-}" ]; then
+    "$PERF_EVIDENCE_BIN" "$@"
+    return
+  fi
   cargo run --quiet --locked --manifest-path "$REDLINE_CORE_ROOT/Cargo.toml" \
     -p redlinedb-bench --bin perf_evidence -- "$@"
 }
@@ -109,6 +119,7 @@ perf_run_jsonl() {
       --tmp-root     "$tmp" \
       --repetitions  "$reps" \
       --warmup       "$warmup" \
+      --order        "${PERF_ORDER:-alternate}" \
       --output       "$out"
 }
 

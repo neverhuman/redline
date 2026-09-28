@@ -3,7 +3,7 @@ use std::{path::PathBuf, process};
 use anyhow::Result;
 use clap::{Parser, Subcommand};
 use redlinedb_bench::perf_evidence::{
-    self, SummaryOptions, W2ManifestInput, capture_w2_runtime_metadata,
+    self, RunPlan, SummaryOptions, W2ManifestInput, capture_w2_runtime_metadata,
 };
 
 #[derive(Debug, Parser)]
@@ -26,6 +26,23 @@ enum Command {
         /// Print the summary as JSON instead of text.
         #[arg(long)]
         json: bool,
+        input: PathBuf,
+    },
+    /// Refuses a runner raw file that is not exactly the requested run:
+    /// every case of the plan (and of --case-manifest, the runner's
+    /// `list --suite sqlite_parity --format json` output) once, each
+    /// executed case with exactly --warmup warmups and measured
+    /// repetitions 1..=--reps, each sample once, and the runner's
+    /// completion marker certifying the file.
+    ValidateRun {
+        #[arg(long)]
+        expected_cases: usize,
+        #[arg(long, alias = "repetitions")]
+        reps: usize,
+        #[arg(long)]
+        warmup: usize,
+        #[arg(long)]
+        case_manifest: Option<PathBuf>,
         input: PathBuf,
     },
     AssertDistinctBinaries {
@@ -74,6 +91,27 @@ fn run(cli: Cli) -> Result<()> {
             } else {
                 print!("{}", summary.render());
             }
+        }
+        Command::ValidateRun {
+            expected_cases,
+            reps,
+            warmup,
+            case_manifest,
+            input,
+        } => {
+            let plan = RunPlan {
+                expected_cases,
+                repetitions: reps,
+                warmup,
+                case_manifest: case_manifest
+                    .as_deref()
+                    .map(perf_evidence::read_case_manifest)
+                    .transpose()?,
+            };
+            print!(
+                "{}",
+                perf_evidence::validate_run_path(&input, &plan)?.render(&plan)
+            );
         }
         Command::AssertDistinctBinaries { target, reference } => {
             perf_evidence::assert_distinct_binaries(&target, &reference)?;

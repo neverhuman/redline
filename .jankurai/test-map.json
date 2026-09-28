@@ -267,6 +267,26 @@
       "purpose": "verify performance JSONL statistics delegate to Rust and preserve the frozen exclusive-decile p90 contract",
       "proof_lane": "fast"
     },
+    "scripts/perf/full.sh": {
+      "command": "rtk bash -n scripts/perf/full.sh && rtk cargo test -p redlinedb-bench --test perf_full_fail_closed --locked",
+      "purpose": "verify the full-corpus perf lane fails closed: unique run directories, validate-run completeness, known-failures tolerance on the run's own file, runner exits propagated",
+      "proof_lane": "fast"
+    },
+    "scripts/perf/tests/": {
+      "command": "rtk cargo test -p redlinedb-bench --test perf_full_fail_closed --locked",
+      "purpose": "stub-runner fixtures for the full-corpus perf lane: interrupted, empty, {}, truncated, incomplete, duplicate, tampered, unexplained-exit, unlisted-failure and stale all.jsonl runs are rejected",
+      "proof_lane": "fast"
+    },
+    "scripts/parity-tolerate-known-optional.sh": {
+      "command": "rtk bash -n scripts/parity-tolerate-known-optional.sh && rtk cargo test -p redlinedb-bench --test perf_full_fail_closed --locked",
+      "purpose": "verify the known-failures filter reads only the explicit raw file and baseline and tolerates only listed cases at their listed stage",
+      "proof_lane": "fast"
+    },
+    "crates/bench/tests/perf_full_fail_closed.rs": {
+      "command": "rtk cargo test -p redlinedb-bench --test perf_full_fail_closed --locked",
+      "purpose": "run the full.sh fail-closed fixture harness under the Rust test runner",
+      "proof_lane": "fast"
+    },
     "scripts/perf/w2-matrix.sh": {
       "command": "rtk bash -n scripts/perf/w2-matrix.sh && rtk bash scripts/perf/w2-matrix.sh --dry-run --suite none --profiles release --allocators mimalloc",
       "purpose": "verify the workload wrapper validates matrix inputs while Rust owns manifest and artifact metadata generation",

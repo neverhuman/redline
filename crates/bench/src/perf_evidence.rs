@@ -2,6 +2,7 @@
 
 mod records;
 mod summary;
+mod validate_run;
 
 use std::{
     fs::{self, File, OpenOptions},
@@ -16,6 +17,9 @@ use sha2::{Digest, Sha256};
 
 pub use summary::{
     ESTIMATOR, JsonlSummary, SUMMARY_SCHEMA, SummaryOptions, summarize_jsonl, summarize_jsonl_with,
+};
+pub use validate_run::{
+    RunPlan, RunValidation, completion_marker_path, read_case_manifest, validate_run_path,
 };
 
 pub fn summarize_jsonl_path(path: &Path, options: SummaryOptions) -> Result<JsonlSummary> {
