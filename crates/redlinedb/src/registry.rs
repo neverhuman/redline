@@ -128,6 +128,15 @@ pub(crate) struct DatabaseEntry {
     pub rayon_pool: Option<Arc<rayon::ThreadPool>>,
 }
 
+impl std::fmt::Debug for DatabaseEntry {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("DatabaseEntry")
+            .field("path", &self.path)
+            .field("owner_lock", &self._owner_lock.is_some())
+            .finish_non_exhaustive()
+    }
+}
+
 #[derive(Default)]
 struct Registry {
     entries: HashMap<PathBuf, Weak<DatabaseEntry>>,
@@ -499,6 +508,18 @@ fn holds_no_image(dir: &Path) -> Result<bool> {
         }
     }
     Ok(true)
+}
+
+/// Take `dir/owner.lock` (creating `dir` if needed) and then empty `dir`
+/// of everything else, for a caller that replaces the database there. An
+/// owner in this or another process makes this fail with `Busy` before
+/// anything is removed. The returned lock must be held until the new
+/// database is in place.
+pub(crate) fn take_directory_for_replacement(dir: &Path) -> Result<File> {
+    fs::create_dir_all(dir)?;
+    let lock = acquire_owner_lock(dir)?;
+    clear_stale_session(dir)?;
+    Ok(lock)
 }
 
 /// Remove everything a dead session left in `dir` except `owner.lock`,

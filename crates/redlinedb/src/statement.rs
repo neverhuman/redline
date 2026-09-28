@@ -53,6 +53,9 @@ pub struct OwnedStatement {
     pub(crate) inner: redlinedb_sql::Statement,
     pub(crate) interrupted: Arc<AtomicBool>,
     pub(crate) _marker: Rc<()>,
+    /// Keeps `owner.lock` and the registry entry for as long as this
+    /// statement can use the engine (see `Connection::_entry`).
+    pub(crate) _entry: Arc<crate::registry::DatabaseEntry>,
 }
 
 /// Borrowed prepared statement tied to one live [`Connection`].

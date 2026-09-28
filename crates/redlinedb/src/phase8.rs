@@ -259,10 +259,11 @@ pub fn restore_from_backup(
     if hash_tree(src, &manifest_file_list(src, &manifest)?)? != manifest.tree_hash {
         return Err(Error::new(ErrorCode::Corrupt, "backup tree hash mismatch"));
     }
-    if dst.exists() {
-        fs::remove_dir_all(dst)?;
-    }
-    fs::create_dir_all(dst)?;
+    // Own the destination before anything in it is removed: a database
+    // open there (here or in another process) makes the restore `Busy`
+    // and leaves its files alone. The lock is held until the restored
+    // database is complete.
+    let _owner_lock = crate::registry::take_directory_for_replacement(dst)?;
 
     let mut bytes_copied = 0_u64;
     for rel in &manifest.files {

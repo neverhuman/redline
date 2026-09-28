@@ -595,3 +595,25 @@ Draft lines for the v5.0.0 CHANGELOG. The integrator owns `CHANGELOG.md`.
   backup mixed two generations (a restore then returned rows twice), or
   pruning a listed WAL segment so the copy failed. A writer that needs a
   pressure checkpoint during a backup now waits for the copy.
+- `owner.lock` is now held until the last `Connection` or `OwnedStatement`
+  of a database drops, not only its last `Database` handle. A connection
+  that outlived its handle kept the engine running after the lock was
+  released: another process could open the directory and run recovery
+  (which truncates the WAL tail) under it, and a second open in this
+  process started a second engine on the same files. `Pool` and the sqlx
+  bridge, which drop their `Database` before their connections, hit this
+  on every close. A reopen while such a connection lives now shares its
+  engine.
+- `Database::restore_from_backup` takes the destination's `owner.lock`
+  before it removes anything there. It used to delete the directory of a
+  live database and recover a new image in its place; now it fails with
+  `Busy` and leaves the files alone.
+- Not changed (review finding, R1 scope): SQL `ATTACH` of a database
+  directory and the C API (`sqlite3_open*`, `rldb_open`) still open an
+  engine without `owner.lock` and run recovery, as do the shell's
+  `-readonly` flag and the sqlx `mode=ro` URL (whose test treats attaching
+  to a live owner as supported). Taking the lock there would make two
+  `sqlite3_open` calls on one path, or an `ATTACH` of the main database,
+  fail with `Busy`; closing this needs one engine per directory per
+  process across the facade, the SQL crate and the FFI. Chapter 09 now
+  lists these paths.

@@ -106,6 +106,7 @@ impl Database {
             busy_timeout,
             interrupted: Arc::clone(&self.inner.interrupt),
             _sync_marker: Cell::new(()),
+            _entry: Arc::clone(&self.inner),
         })
     }
 

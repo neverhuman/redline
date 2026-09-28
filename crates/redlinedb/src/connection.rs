@@ -13,6 +13,7 @@ use crate::error::{Error, ErrorCode, Result};
 use crate::iter::{FromRow, OwnedStep, Step};
 use crate::options::{CommitStats, ConnectionStats, ExecuteSummary, FunctionArity, FunctionFlags};
 use crate::params::Params;
+use crate::registry::DatabaseEntry;
 use crate::statement::{OwnedStatement, Rows, Statement};
 use crate::value::{Value, ValueRef};
 
@@ -27,6 +28,11 @@ pub struct Connection {
     pub(crate) busy_timeout: Duration,
     pub(crate) interrupted: Arc<AtomicBool>,
     pub(crate) _sync_marker: Cell<()>,
+    /// The open database this connection's engine belongs to. It holds
+    /// `owner.lock` and the registry entry, so they last as long as this
+    /// connection can use the engine, not only as long as a `Database`
+    /// handle. Last, so the engine's own references drop first.
+    pub(crate) _entry: Arc<DatabaseEntry>,
 }
 
 /// Scoped transaction wrapper that auto-rolls-back on drop.
@@ -59,6 +65,7 @@ impl Connection {
             inner: stmt,
             interrupted: Arc::clone(&self.interrupted),
             _marker: Rc::new(()),
+            _entry: Arc::clone(&self._entry),
         })
     }
 
@@ -85,6 +92,7 @@ impl Connection {
             inner: stmt,
             interrupted: Arc::clone(&self.interrupted),
             _marker: Rc::new(()),
+            _entry: Arc::clone(&self._entry),
         })
     }
 
@@ -105,6 +113,7 @@ impl Connection {
                 inner: stmt,
                 interrupted: Arc::clone(&self.interrupted),
                 _marker: Rc::new(()),
+                _entry: Arc::clone(&self._entry),
             }),
             tail,
         ))
