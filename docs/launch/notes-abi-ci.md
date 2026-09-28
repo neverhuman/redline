@@ -102,7 +102,7 @@ against the v5 headers. There is no v4 compatibility alias.
 - `scripts/test-package-ffi.sh` runs that probe on the extracted archive, and
   checks regular-files-only entries and the soname / install name.
 
-## Licensing
+## Licensing and security reporting
 
 - `LICENSE` is now the complete Apache License 2.0 text (it held only the
   short application notice, so GitHub could not identify the licence), and a
@@ -122,3 +122,14 @@ against the v5 headers. There is no v4 compatibility alias.
 - `share/redlinedb/DEPENDENCIES.tsv` now has a header row and four more
   columns: `ecosystem`, `source`, `license_texts` and `waiver`.
   `sbom.cdx.json` lists the same shipped graph instead of the whole lockfile.
+- `SECURITY.md` names a working private route: GitHub private vulnerability
+  reporting at https://github.com/neverhuman/redline/security/advisories/new.
+  It adds supported versions (5.0.x; 4.x unsupported from 5.0.0), scope,
+  response targets (acknowledgement in 3 business days, triage in 10,
+  90-day default disclosure) and safe-harbor terms. The new-issue page links
+  the same form.
+- Maintainer step before launch (not a release-note line): enable private
+  vulnerability reporting with
+  `gh api -X PUT repos/neverhuman/redline/private-vulnerability-reporting`
+  and confirm `gh api repos/neverhuman/redline/private-vulnerability-reporting --jq .enabled`
+  prints `true`; until then the advisory form refuses reports.

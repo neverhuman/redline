@@ -4,6 +4,7 @@ root=$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)
 cd "$root"
 # shellcheck source=ops/ci/lib.sh
 source ops/ci/lib.sh
+bash scripts/check-security-policy.sh
 CI_GITLEAKS_INSTALL_DIR="$root/target/ci/tools" ci_install_gitleaks
 snapshot=$(mktemp -d)
 trap 'rm -rf "$snapshot"' EXIT
