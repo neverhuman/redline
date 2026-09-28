@@ -86,6 +86,11 @@ pub(crate) struct RawRow {
     pub(crate) sample: SampleKey,
     /// Present on every warmup and measured row.
     pub(crate) timing: Option<Timing>,
+    /// The row's `target_executable_sha256` and `reference_executable_sha256`
+    /// (the binaries the runner timed); `None` when absent or empty, as on
+    /// the placeholder of a case that did not run.
+    pub(crate) target_sha256: Option<String>,
+    pub(crate) reference_sha256: Option<String>,
 }
 
 /// Parses every line of `reader`; the first line that is not a known
@@ -166,6 +171,8 @@ fn parse_row(line: &str, number: usize) -> Result<RawRow> {
         status,
         sample,
         timing,
+        target_sha256: optional_digest(&row, "target_executable_sha256")?,
+        reference_sha256: optional_digest(&row, "reference_executable_sha256")?,
     })
 }
 
@@ -194,5 +201,15 @@ fn duration_field(row: &Map<String, Value>, name: &str) -> Result<u64> {
             .as_u64()
             .ok_or_else(|| anyhow!("{name} {value} is not a non-negative integer")),
         None => bail!("missing {name}"),
+    }
+}
+
+/// A digest field that may be absent or empty, but is a string when set.
+fn optional_digest(row: &Map<String, Value>, name: &str) -> Result<Option<String>> {
+    match row.get(name) {
+        None | Some(Value::Null) => Ok(None),
+        Some(Value::String(value)) if value.is_empty() => Ok(None),
+        Some(Value::String(value)) => Ok(Some(value.clone())),
+        Some(other) => bail!("{name} {other} is not a string"),
     }
 }

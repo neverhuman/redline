@@ -1,6 +1,8 @@
 //! Performance JSONL statistics and W2 manifest generation.
 
 mod build_contract;
+mod bundle;
+mod bundle_stats;
 mod records;
 mod summary;
 mod validate_run;
@@ -19,6 +21,12 @@ use sha2::{Digest, Sha256};
 pub use build_contract::{
     BUILD_CONTRACT_SCHEMA, BuildContract, BuildContractInput, DeclaredBuild, write_build_contract,
 };
+pub use bundle::{
+    BUNDLE_ESTIMATOR, BUNDLE_SCHEMA, BUNDLE_SUMMARY_SCHEMA, BundleSummary, HOST_SCHEMA,
+    MIN_PUBLISHABLE_RUNS, NOISE_RULE, VERSION_BUILD_SCHEMA, parse_case_list, render_bundle_summary,
+    summarize_bundle, write_bundle_summary,
+};
+pub use bundle_stats::{CohortStats, Delta, NoiseVerdict, Spread};
 pub use summary::{
     ESTIMATOR, JsonlSummary, SUMMARY_SCHEMA, SummaryOptions, summarize_jsonl, summarize_jsonl_with,
 };

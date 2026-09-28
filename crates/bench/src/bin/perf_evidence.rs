@@ -1,6 +1,6 @@
 use std::{path::PathBuf, process};
 
-use anyhow::Result;
+use anyhow::{Context, Result};
 use clap::{Parser, Subcommand};
 use redlinedb_bench::perf_evidence::{
     self, BuildContractInput, DeclaredBuild, RunPlan, SummaryOptions, W2ManifestInput,
@@ -70,6 +70,23 @@ enum Command {
         rustflags: Option<String>,
         #[arg(long)]
         pgo_training_corpus: Option<String>,
+    },
+    /// Writes a release bench bundle's summary.json (L-05) from the
+    /// bundle's own files: every run complete and accepted, one reference
+    /// and one runner, and per label the corpus pass count, the common pass
+    /// set and the latency-ratio median and p95 with their spread across
+    /// runs. With --check, fails unless summary.json already holds exactly
+    /// that.
+    SummarizeBundle {
+        #[arg(long)]
+        bundle: PathBuf,
+        #[arg(long)]
+        check: bool,
+    },
+    /// Prints a case list's ids (one numeric id per line, `#` comments
+    /// allowed) as five-digit display ids, one per line.
+    CaseListIds {
+        input: PathBuf,
     },
     AssertDistinctBinaries {
         target: PathBuf,
@@ -165,6 +182,31 @@ fn run(cli: Cli) -> Result<()> {
                 pgo_training_corpus,
             })?;
             println!("wrote {}", output.display());
+        }
+        Command::SummarizeBundle { bundle, check } => {
+            let summary = perf_evidence::write_bundle_summary(&bundle, check)?;
+            println!(
+                "{} {}: {} labels x {} runs, common pass set {} of {} cases, publishable {}",
+                if check { "checked" } else { "wrote" },
+                bundle.join("summary.json").display(),
+                summary.labels.len(),
+                summary.runs_per_label,
+                summary.common_pass_set.cases,
+                summary.corpus.cases,
+                summary.publishable
+            );
+            for blocker in &summary.publication_blockers {
+                println!("  not publishable: {blocker}");
+            }
+        }
+        Command::CaseListIds { input } => {
+            let text = std::fs::read_to_string(&input)
+                .with_context(|| format!("read case list {}", input.display()))?;
+            for id in perf_evidence::parse_case_list(&text)
+                .with_context(|| format!("case list {}", input.display()))?
+            {
+                println!("{id}");
+            }
         }
         Command::AssertDistinctBinaries { target, reference } => {
             perf_evidence::assert_distinct_binaries(&target, &reference)?;

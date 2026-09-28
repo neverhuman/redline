@@ -509,12 +509,17 @@
     },
     "crates/bench/src/perf_evidence/": {
       "command": "rtk cargo test -p redlinedb-bench --locked --lib perf_evidence",
-      "purpose": "prove strict raw-row parsing and case-level latency statistics: malformed and duplicate rows fail, cases are the unit, publish mode enforces repetitions",
+      "purpose": "prove strict raw-row parsing and case-level latency statistics: malformed and duplicate rows fail, cases are the unit, publish mode enforces repetitions; release bench bundles summarize only complete, accepted runs of the declared binaries on the common pass set",
       "proof_lane": "fast"
     },
     "crates/bench/src/bin/perf_evidence.rs": {
-      "command": "rtk cargo test -p redlinedb-bench --test automation_tools --locked",
+      "command": "rtk cargo test -p redlinedb-bench --test automation_tools --test perf_bundle_cli --locked",
       "purpose": "prove performance evidence CLI output matches golden fixtures",
+      "proof_lane": "fast"
+    },
+    "crates/bench/tests/perf_bundle_cli.rs": {
+      "command": "rtk cargo test -p redlinedb-bench --test perf_bundle_cli --locked",
+      "purpose": "prove case-list-ids prints five-digit ids and summarize-bundle refuses a directory that is not a bundle",
       "proof_lane": "fast"
     },
     "crates/bench/tests/automation_tools.rs": {

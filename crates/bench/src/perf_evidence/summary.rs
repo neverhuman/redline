@@ -135,7 +135,48 @@ struct CaseRows<'a> {
     invalid_rows: usize,
 }
 
-pub(crate) fn summarize_rows(rows: &[RawRow], options: SummaryOptions) -> Result<JsonlSummary> {
+/// What one case of a run amounts to under this module's rules.
+#[derive(Clone, Debug, PartialEq)]
+pub(crate) enum CaseOutcome {
+    /// Every row passed, with measured repetitions `1..=k` and usable
+    /// durations: the case contributes a ratio.
+    Eligible(EligibleCase),
+    /// Some row failed, a failed warmup and a failed selection included.
+    Failed,
+    Skipped,
+    /// Executed and not failed, but without a complete, usable set of
+    /// measured repetitions.
+    Incomplete,
+}
+
+/// The measured samples of an eligible case.
+#[derive(Clone, Debug, PartialEq)]
+pub(crate) struct EligibleCase {
+    pub(crate) timings: Vec<Timing>,
+}
+
+impl EligibleCase {
+    /// The case's ratio of medians: the median RedlineDB duration over the
+    /// median SQLite duration across its measured repetitions.
+    pub(crate) fn ratio(&self) -> f64 {
+        let reference = median_u64(self.timings.iter().map(|timing| timing.reference_ns));
+        let target = median_u64(self.timings.iter().map(|timing| timing.target_ns));
+        target / reference
+    }
+}
+
+/// Every case of a run with its outcome, and the passed measured rows
+/// whose durations cannot form a ratio.
+#[derive(Clone, Debug, PartialEq)]
+pub(crate) struct CaseTable {
+    pub(crate) cases: BTreeMap<String, CaseOutcome>,
+    pub(crate) invalid_rows: usize,
+}
+
+/// Groups `rows` by case and decides each case's outcome. A sample that
+/// occurs twice in its case is an error; in publish mode so are an
+/// unusable duration and an executed case without exactly `1..=R`.
+pub(crate) fn classify_cases(rows: &[RawRow], options: SummaryOptions) -> Result<CaseTable> {
     let mut cases = BTreeMap::<&str, CaseRows<'_>>::new();
     for row in rows {
         let case = cases.entry(row.case_id.as_str()).or_default();
@@ -167,28 +208,12 @@ pub(crate) fn summarize_rows(rows: &[RawRow], options: SummaryOptions) -> Result
         }
     }
 
-    let mut summary = JsonlSummary {
-        schema_version: SUMMARY_SCHEMA,
-        estimator: ESTIMATOR,
-        expected_repetitions: options.expected_repetitions,
-        cases: cases.len(),
-        eligible_cases: 0,
-        failed_cases: 0,
-        skipped_cases: 0,
-        incomplete_cases: 0,
+    let mut table = CaseTable {
+        cases: BTreeMap::new(),
         invalid_rows: 0,
-        faster_cases: 0,
-        case_ratio_median: None,
-        case_ratio_p95: None,
-        measured_samples: 0,
-        faster_samples: 0,
-        pooled_sample_ratio_median: None,
-        pooled_sample_ratio_p90: None,
     };
-    let mut case_ratios = Vec::new();
-    let mut sample_ratios = Vec::new();
     for (case_id, case) in &cases {
-        summary.invalid_rows += case.invalid_rows;
+        table.invalid_rows += case.invalid_rows;
         let placeholder = case.first_line.contains_key(&SampleKey::Placeholder);
         if placeholder && case.first_line.len() != 1 {
             bail!(
@@ -206,32 +231,71 @@ pub(crate) fn summarize_rows(rows: &[RawRow], options: SummaryOptions) -> Result
                 repetitions.iter().collect::<Vec<_>>()
             );
         }
-        if case.failed {
-            summary.failed_cases += 1;
-            continue;
-        }
-        if case.skipped {
-            summary.skipped_cases += 1;
-            continue;
-        }
         let contiguous =
             !repetitions.is_empty() && repetitions == (1..=repetitions.len()).collect();
-        if !contiguous || case.invalid_rows > 0 {
-            summary.incomplete_cases += 1;
-            continue;
-        }
-        let timings = case
-            .measured
-            .values()
-            .filter_map(|row| row.timing)
-            .collect::<Vec<_>>();
-        let reference = median_u64(timings.iter().map(|timing| timing.reference_ns));
-        let target = median_u64(timings.iter().map(|timing| timing.target_ns));
-        let case_ratio = target / reference;
+        let outcome = if case.failed {
+            CaseOutcome::Failed
+        } else if case.skipped {
+            CaseOutcome::Skipped
+        } else if !contiguous || case.invalid_rows > 0 {
+            CaseOutcome::Incomplete
+        } else {
+            CaseOutcome::Eligible(EligibleCase {
+                timings: case
+                    .measured
+                    .values()
+                    .filter_map(|row| row.timing)
+                    .collect(),
+            })
+        };
+        table.cases.insert((*case_id).to_owned(), outcome);
+    }
+    Ok(table)
+}
+
+pub(crate) fn summarize_rows(rows: &[RawRow], options: SummaryOptions) -> Result<JsonlSummary> {
+    let table = classify_cases(rows, options)?;
+    let mut summary = JsonlSummary {
+        schema_version: SUMMARY_SCHEMA,
+        estimator: ESTIMATOR,
+        expected_repetitions: options.expected_repetitions,
+        cases: table.cases.len(),
+        eligible_cases: 0,
+        failed_cases: 0,
+        skipped_cases: 0,
+        incomplete_cases: 0,
+        invalid_rows: table.invalid_rows,
+        faster_cases: 0,
+        case_ratio_median: None,
+        case_ratio_p95: None,
+        measured_samples: 0,
+        faster_samples: 0,
+        pooled_sample_ratio_median: None,
+        pooled_sample_ratio_p90: None,
+    };
+    let mut case_ratios = Vec::new();
+    let mut sample_ratios = Vec::new();
+    for outcome in table.cases.values() {
+        let eligible = match outcome {
+            CaseOutcome::Failed => {
+                summary.failed_cases += 1;
+                continue;
+            }
+            CaseOutcome::Skipped => {
+                summary.skipped_cases += 1;
+                continue;
+            }
+            CaseOutcome::Incomplete => {
+                summary.incomplete_cases += 1;
+                continue;
+            }
+            CaseOutcome::Eligible(eligible) => eligible,
+        };
+        let case_ratio = eligible.ratio();
         summary.eligible_cases += 1;
         summary.faster_cases += usize::from(case_ratio < 1.0);
         case_ratios.push(case_ratio);
-        for timing in timings {
+        for timing in &eligible.timings {
             summary.measured_samples += 1;
             summary.faster_samples += usize::from(timing.target_ns < timing.reference_ns);
             sample_ratios.push(timing.ratio());
@@ -262,7 +326,7 @@ fn median_u64(values: impl Iterator<Item = u64>) -> f64 {
     median(&values).unwrap_or(f64::NAN)
 }
 
-fn median(sorted: &[f64]) -> Option<f64> {
+pub(crate) fn median(sorted: &[f64]) -> Option<f64> {
     match sorted.len() {
         0 => None,
         count if count % 2 == 1 => Some(sorted[count / 2]),
@@ -271,7 +335,7 @@ fn median(sorted: &[f64]) -> Option<f64> {
 }
 
 /// The smallest value with at least `percent`% of the values at or below it.
-fn nearest_rank(sorted: &[f64], percent: usize) -> Option<f64> {
+pub(crate) fn nearest_rank(sorted: &[f64], percent: usize) -> Option<f64> {
     if sorted.is_empty() {
         return None;
     }
