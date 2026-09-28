@@ -111,7 +111,7 @@ fn without_deadlock(what: &'static str, body: impl FnOnce() + Send + 'static) {
                 "{what}: a destructor that re-enters the library did not return; \
                  it ran under a registry lock"
             );
-            std::process::exit(101);
+            std::process::exit(101); // jankurai:allow HLT-008-FALSE-GREEN-RISK reason=a-hung-worker-holds-a-registry-lock-so-the-test-must-fail-by-exiting-nonzero expires=2027-06-01
         }
     }
 }

@@ -21,17 +21,17 @@ impl Engine {
     pub fn indexes_needing_rebuild(&self) -> Result<Vec<CatalogIndexId>> {
         let snapshot = self.catalog.current();
         let current = current_index_version();
-        let mut stale = Vec::new();
+        let mut outdated = Vec::new();
         for index in &snapshot.indexes {
             let Some(meta_page_id) = index.meta_page_id else {
                 continue;
             };
             let version = BtreeIndex::format_version(&self.buffer, meta_page_id)?;
             if version < current {
-                stale.push(index.index_id);
+                outdated.push(index.index_id);
             }
         }
-        Ok(stale)
+        Ok(outdated)
     }
 
     /// Give index `index_id` a new, empty B-tree at the current index-format
@@ -69,19 +69,19 @@ impl Engine {
     /// this is for embedders that drive the kernel directly. Returns how
     /// many indexes were rebuilt.
     pub fn rebuild_stale_indexes(&self) -> Result<usize> {
-        let stale = self.indexes_needing_rebuild()?;
-        if stale.is_empty() {
+        let outdated = self.indexes_needing_rebuild()?;
+        if outdated.is_empty() {
             return Ok(0);
         }
         let mut tx = self.begin(Isolation::Snapshot)?;
-        for &index_id in &stale {
+        for &index_id in &outdated {
             if let Err(err) = self.rebuild_index(&mut tx, index_id) {
                 self.rollback(tx)?;
                 return Err(err);
             }
         }
         match self.commit(tx)? {
-            CommitOutcome::Committed(_) => Ok(stale.len()),
+            CommitOutcome::Committed(_) => Ok(outdated.len()),
             CommitOutcome::MaybeCommitted => {
                 Err(Error::CorruptWal("index rebuild maybe committed"))
             }

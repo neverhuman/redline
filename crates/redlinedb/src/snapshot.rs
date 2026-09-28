@@ -9,8 +9,8 @@ use crate::error::Result;
 use crate::options::{BackupOptions, BackupStats};
 
 #[cfg(test)]
-#[path = "backup_hold_tests.rs"]
-mod backup_hold_tests;
+#[path = "snapshot_checkpoint_hold_tests.rs"]
+mod snapshot_checkpoint_hold_tests;
 
 pub(crate) fn backup_to_path(
     src: &Database,

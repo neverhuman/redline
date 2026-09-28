@@ -30,7 +30,8 @@ const NO_START: Error =
     Error::CorruptWal("wal does not start at lsn 0 and no checkpoint covers the records before it");
 const NO_VALID_CONTROL: Error =
     Error::CorruptWal("no valid control file and the wal does not start at lsn 0");
-const FALLBACK_LACKS_WAL: Error = Error::CorruptWal("fallback checkpoint lacks required WAL");
+const PREVIOUS_LACKS_WAL: Error =
+    Error::CorruptWal("previous checkpoint generation lacks required WAL");
 
 /// Where replay starts, once the WAL is known to hold everything from there.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -149,7 +150,7 @@ pub(super) fn validate_recovery_plan(
 /// those changes committed.
 ///
 /// A slot that does not decode may be a newer generation whose control
-/// write tore, so the valid slot beside it is held to the fallback rule. With
+/// write tore, so the valid slot beside it is held to the previous-generation rule. With
 /// no valid slot at all, recovery replays the whole WAL, which must then
 /// start at LSN 0.
 pub(super) fn select_recoverable_generation(
@@ -202,9 +203,9 @@ pub(super) fn select_recoverable_generation(
         }
         Err(err) => err,
     };
-    if let Some(fallback) = selection.fallback
+    if let Some(previous) = selection.previous
         && let Ok((tx_status, mut plan)) = load_candidate(
-            &fallback,
+            &previous,
             Newer::Valid(&newest),
             scan,
             tx_status_store,
@@ -223,20 +224,20 @@ pub(super) fn select_recoverable_generation(
         warnings.push(format!(
             "checkpoint generation {} is unusable ({newest_err}); recovered from generation {} \
              with the heap of generation {}",
-            newest.generation, fallback.generation, newest.generation
+            newest.generation, previous.generation, newest.generation
         ));
         return Ok(GenerationChoice {
-            checkpoint: Some(fallback),
+            checkpoint: Some(previous),
             tx_status: Some(tx_status),
             plan,
             skipped_generation: Some(newest.generation),
             warnings,
         });
     }
-    // Beside a corrupt slot, the valid one is a fallback, and what it lacks
+    // Beside a corrupt slot, the valid one is the previous generation, and what it lacks
     // is WAL a newer generation's pages may depend on.
     if corrupt_slot && matches!(newest_err, Error::CorruptWal(_)) {
-        return Err(FALLBACK_LACKS_WAL);
+        return Err(PREVIOUS_LACKS_WAL);
     }
     Err(newest_err)
 }
@@ -274,7 +275,7 @@ fn load_candidate(
         Newer::Valid(newer) => !scan.records.is_empty() && scan.valid_end_lsn >= redo_end(newer),
     };
     if !covers_newer {
-        return Err(FALLBACK_LACKS_WAL);
+        return Err(PREVIOUS_LACKS_WAL);
     }
     Ok((tx_status, plan))
 }

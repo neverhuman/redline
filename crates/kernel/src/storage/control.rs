@@ -52,7 +52,7 @@ pub struct ControlSelection {
     /// The checksum-valid control file with the highest generation.
     pub newest: Option<ControlFile>,
     /// The other slot's control file, when it is checksum-valid too.
-    pub fallback: Option<ControlFile>,
+    pub previous: Option<ControlFile>,
     /// Slots holding a file that does not decode. Such a slot may have held
     /// the newest generation before a torn write or damage.
     pub corrupt_slots: Vec<CorruptControlSlot>,
@@ -122,7 +122,7 @@ impl ControlStore {
         valid.sort_by_key(|control| std::cmp::Reverse(control.generation));
         let mut valid = valid.into_iter();
         selection.newest = valid.next();
-        selection.fallback = valid.next();
+        selection.previous = valid.next();
         Ok(selection)
     }
 

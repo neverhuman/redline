@@ -92,7 +92,9 @@ fn read_state(conn: &mut dyn BenchConn) -> Result<RecoveredState> {
             _ => "id, note",
         };
         let mut rows = BTreeMap::new();
+        // `table` passed `oracle::is_keyed_table` and `columns` is a constant.
         for row in conn.query_all(&format!("SELECT {columns} FROM {table} ORDER BY 1"), &[])? {
+            // jankurai:allow HLT-023-INPUT-BOUNDARY-GAP reason=table-names-come-from-the-recovery-oracle-fixed-set expires=2027-06-01
             let key = key(&row)?;
             if rows.insert(key, oracle::row_digest(&row)).is_some() {
                 state.duplicates.push(format!("table {table}: key {key}"));

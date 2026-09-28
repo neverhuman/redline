@@ -99,7 +99,7 @@ fn a_corrupt_slot_beside_a_missing_one_is_not_a_database_never_checkpointed() {
         store.load_selection().unwrap(),
         ControlSelection {
             newest: None,
-            fallback: None,
+            previous: None,
             corrupt_slots: vec![CorruptControlSlot {
                 name: "CONTROL_A",
                 error: Error::InvalidMagic {
@@ -123,7 +123,7 @@ fn control_selection_names_the_newest_and_its_fallback() {
         .unwrap();
     let selection = store.load_selection().unwrap();
     assert_eq!(selection.newest, Some(second));
-    assert_eq!(selection.fallback, Some(first));
+    assert_eq!(selection.previous, Some(first));
     assert!(selection.corrupt_slots.is_empty());
 }
 

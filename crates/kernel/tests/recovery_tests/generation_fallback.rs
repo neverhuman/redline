@@ -5,7 +5,7 @@
 //! pages are already in the page file. The valid slot beside it is only a
 //! fallback, usable when the WAL still holds everything after it; without
 //! that WAL nothing says which rows the newer checkpoint wrote, and the
-//! open must fail with "fallback checkpoint lacks required WAL". A newer
+//! open must fail with "previous checkpoint generation lacks required WAL". A newer
 //! generation whose transaction status belongs to another generation is
 //! unusable, and recovery falls back past it.
 
@@ -18,7 +18,8 @@ use super::generations::{
 };
 use super::wal_segment_count;
 
-const FALLBACK_LACKS_WAL: Error = Error::CorruptWal("fallback checkpoint lacks required WAL");
+const PREVIOUS_LACKS_WAL: Error =
+    Error::CorruptWal("previous checkpoint generation lacks required WAL");
 
 #[test]
 fn corrupt_newer_control_with_the_fallback_wal_missing_fails_closed() {
@@ -36,7 +37,7 @@ fn corrupt_newer_control_with_the_fallback_wal_missing_fails_closed() {
     std::fs::remove_file(wal.join(format!("{first_segment:020}.wal"))).unwrap();
     let before = files_under(root);
 
-    assert_eq!(open_err(root, image.config.clone()), FALLBACK_LACKS_WAL);
+    assert_eq!(open_err(root, image.config.clone()), PREVIOUS_LACKS_WAL);
     assert_eq!(files_under(root), before, "a failed open changed files");
 }
 
@@ -50,7 +51,7 @@ fn corrupt_newer_control_with_no_wal_at_all_fails_closed() {
     std::fs::remove_dir_all(root.join("wal")).unwrap();
     let before = files_under(root);
 
-    assert_eq!(open_err(root, image.config.clone()), FALLBACK_LACKS_WAL);
+    assert_eq!(open_err(root, image.config.clone()), PREVIOUS_LACKS_WAL);
     assert_eq!(files_under(root), before, "a failed open changed files");
 }
 

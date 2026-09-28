@@ -368,7 +368,7 @@ Draft lines for the v5.0.0 CHANGELOG. The integrator owns `CHANGELOG.md`.
   valid control file, recovery now replays the whole WAL only if it starts
   at LSN 0, and fails with "no valid control file and the wal does not
   start at lsn 0" otherwise. A valid slot beside a corrupt one needs a
-  WAL that covers it, or the open fails with "fallback checkpoint lacks
+  WAL that covers it, or the open fails with "previous checkpoint generation lacks
   required WAL".
 - When the newest valid generation cannot be used (its transaction status
   is missing or its WAL check fails), recovery falls back to the other

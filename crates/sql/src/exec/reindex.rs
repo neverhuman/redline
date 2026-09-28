@@ -87,12 +87,12 @@ pub(crate) fn execute_reindex(conn: &Connection, target: &ReindexTarget) -> Resu
 pub(crate) fn upgrade_stale_indexes(db: &Arc<Database>) -> Result<()> {
     let conn = db.connect();
     let engine = Arc::clone(conn.engine());
-    let stale = engine.indexes_needing_rebuild()?;
-    if stale.is_empty() {
+    let outdated = engine.indexes_needing_rebuild()?;
+    if outdated.is_empty() {
         return Ok(());
     }
     let mut tx = engine.begin(Isolation::Snapshot)?;
-    for &index_id in &stale {
+    for &index_id in &outdated {
         if let Err(err) = rebuild_index(&conn, &mut tx, index_id) {
             let described = describe_upgrade_failure(&engine.schema_snapshot(), index_id, err);
             engine.rollback(tx)?;
