@@ -583,3 +583,17 @@ against the v5 headers. There is no v4 compatibility alias.
   After a README rewrite, rerun `bash scripts/check-launch-claims.sh`; moved
   or reworded claim lines need a new reviewed row (`--print`), and rows for
   deleted lines must be removed.
+
+## Tombstones and errata (docs only)
+
+- `GROK_GAPS.md` gains a "v5.0.0 launch decisions" entry, an erratum for the
+  Slice 0 row (2439 + 8 + 4 is 2451, not 2445; the raw run was not kept), and
+  a tombstone table for the nine files it names that never reached the
+  published history (`docs/compatibility/phase2-abi.md` and the other phase-2
+  and cycle-1 notes, `crates/ffi/tests/phase2_abi_probe.c`, the strict-commit
+  tests), each with its current equivalent.
+- `FEATURE_GAPS.md`'s "partial indexes remain parser-only" line is marked
+  historical and points at `docs/sqlite-parity.md`.
+- `docs/audit-rubric.md` and `docs/boundaries.md` name the header's current
+  path, `contracts/c-abi/redlinedb.h`; `docs/testing.md`'s link to
+  `docs/sqlite-parity.md` resolves.

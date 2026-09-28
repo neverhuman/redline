@@ -71,7 +71,7 @@ rtk just <lane-name>
 (or invoke the command list from the TOML directly).
 
 SQLite parity boundary: the official evidence flow lives in
-[`docs/sqlite-parity.md`](docs/sqlite-parity.md), and `redline-testing-official`
+[`docs/sqlite-parity.md`](sqlite-parity.md), and `redline-testing-official`
 is the only lane that produces committed parity evidence. RedlineDB does not
 expose a local SQLite parity coverage/benchmark/report/sentinel producer; the
 in-tree `sqlite_parity` commands and prior parity bundle workflows fail closed.

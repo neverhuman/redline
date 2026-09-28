@@ -19,7 +19,9 @@ Historical gaps that were closed in the phase11 follow-up:
   `UPDATE ... RETURNING`, `INSERT ... ON CONFLICT DO UPDATE`,
   `INSERT OR IGNORE`, `INSERT OR REPLACE`, JSON scalar, and
   `ORDER BY ... LIMIT 1` regression cases; partial indexes remain parser-only
-  with the documented replacement.
+  with the documented replacement. (Historical, 2026-05-15: partial indexes
+  have since been implemented. Their current status and proof are the
+  partial-index rows of `docs/sqlite-parity.md`; this line is not current.)
 - MSRV remains Rust `1.95` for this workspace.
 
 ## 2026-05-15 phase11 follow-up

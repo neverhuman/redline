@@ -1,5 +1,30 @@
 # RedlineDB compatibility implementation ledger
 
+## v5.0.0 launch decisions — 2026-09-28
+
+Recorded for the open-source launch. Each line names where the decision is
+enforced; that file wins over this summary.
+
+- One authority: `neverhuman/redline`, repository id `1390165945`
+  (`ops/release/authority.env`). The old repository name under the same owner
+  resolves to another owner's repository and is not used outside historical
+  records.
+- The corrected C ABI ships as major 5 (the "corrected ABI requires v5"
+  decision below): `libredlinedb.so.5` / `libredlinedb.5.dylib`,
+  `RLDB_ABI_MAJOR 5`, no v4 alias (`docs/api-stability.md`,
+  `docs/exceptions/ffi-c-header.md`).
+- Rust crates are not published to crates.io and the facade has no semver
+  promise (`publish = false`, `scripts/check-publish-policy.sh`).
+- Corpus figures describe the SQLite SQL/CLI corpus against the 3.53.1 oracle
+  and the PostgreSQL 16.15 SQL-shell corpus, never SQLite or PostgreSQL
+  compatibility; launch claims are linted (`scripts/check-launch-claims.sh`).
+- Strict durability is the design rule, not a power-loss certification
+  (`docs/manual/07-transactions.md#not-yet-certified`).
+- `main` merges by rebase only behind strict `RedlineDB/required`, one review
+  and linear history (`docs/testing.md`, `ops/release/main-protection.sh`).
+- Releases are `vX.Y.Z` / `vX.Y.Z-rc.N` tags admitted by
+  `ops/ci/release-version.sh check` (`docs/release.md`).
+
 ## Slice 0 measurement — 2026-09-22
 
 Branch `parity/close-all-gaps` at `origin/main` `3fd3e171a`, before the repair
@@ -8,7 +33,7 @@ commit. Postgres 16.15 settings `160015|C|C|UTC`. SQLite reference
 
 | Suite | Result |
 |---|---|
-| `sqlite_parity` | 2439 passed, 8 failed, 4 skipped, of 2445. Failures: `00166`, `00219`, `00220`, `10405`, `11437`, `11438`, `11439`, `12023`. |
+| `sqlite_parity` | 2439 passed, 8 failed, 4 skipped, of 2445 (errata: these sum to 2451; see the correction register). Failures: `00166`, `00219`, `00220`, `10405`, `11437`, `11438`, `11439`, `12023`. |
 | `beyond_sqlite` target | 127 passed, 138 failed, 0 skipped, of 265. Oracle self-compare 265/265. |
 
 `upper('straße'), lower('ÉCOLE')` on that Postgres is `STRAßE|École`, the same
@@ -96,6 +121,26 @@ and required catalogs; no PostgreSQL storage, replication or PL/pgSQL claim.
 - Accepting USING hnsw does not establish creation of an HNSW index.
 - Reported 2,441 passes/four skips are unqualified corpus observations; twelve
   expected-exit mismatches and 148 disabled-output cases need adjudication.
+- Errata (2026-09-28): the Slice 0 `sqlite_parity` row says 2439 passed,
+  8 failed and 4 skipped of 2445, but 2439 + 8 + 4 = 2451. The raw result of
+  that run was not committed, so which term is wrong cannot be recovered. Do
+  not use the row as a count; the count of record is the committed official
+  summary, `benchmark-results/sqlite-parity/latest/summary.json`.
+
+## Tombstones — files this ledger names that are not in the repository
+
+Checked 2026-09-28. Each file below existed only on an unpublished local
+branch (commit `110b41f49^` or `1cb2d9992`, neither on any remote) and never
+reached `main`, so a link to it is a 404. The hashes recorded next to some of
+them identify that unpublished content. Use the current file instead.
+
+| Named in this ledger | Current equivalent |
+|---|---|
+| `docs/compatibility/phase2-abi.md` | `docs/compatibility/abi-safety.md`, `docs/api-stability.md`, `docs/exceptions/ffi-c-header.md`; tests `crates/ffi/tests/*.rs` |
+| `crates/ffi/tests/phase2_abi_probe.c` | `contracts/c-abi/probe/phase2_abi_probe.c`, run by `scripts/compatibility/phase2-abi-probe.sh` |
+| `docs/compatibility/sql-regressions.md`, `crates/sql/tests/compatibility_roadmap.rs` | `crates/sql/tests/phase10_sqld_alter.rs`, `crates/sql/tests/parity_pg_alter.rs` |
+| `docs/compatibility/durability-review.md`, `docs/compatibility/phase2-durability.md`, `crates/kernel/tests/strict_commit_faults.rs`, `crates/kernel/tests/strict_commit_recovery.rs` | `crates/kernel/tests/failpoint_smoke.rs`, `crates/kernel/tests/recovery_tests.rs`, `crates/kernel/tests/engine_tests.rs`; limits in `docs/manual/07-transactions.md#not-yet-certified` |
+| `docs/compatibility/implementation-cycle1.md`, `docs/compatibility/phase2-plan.md`, `docs/compatibility/phase2-evidence.md` | none; the entries in this ledger are the record |
 
 ## Coordination and evidence contract
 
