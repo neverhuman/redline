@@ -5,6 +5,7 @@ mod exceptions;
 mod latency;
 mod report;
 mod sqlite_parity;
+mod version_history;
 
 use std::process::ExitCode;
 

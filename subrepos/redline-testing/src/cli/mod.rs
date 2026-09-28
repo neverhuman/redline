@@ -26,6 +26,13 @@ pub fn run(cli: Cli) -> Result<()> {
         CommandKind::List(args) => cmds::list(args),
         CommandKind::JankuraiCompare(args) => cmds::jankurai_compare(args),
         CommandKind::Sentinel(args) => cmds::sentinel(args),
+        CommandKind::VersionHistory(args) => {
+            crate::version_history::run(crate::version_history::VersionHistoryOptions {
+                bundle: args.bundle,
+                readme: args.readme,
+                check: args.check,
+            })
+        }
         CommandKind::Version => {
             println!("redline-testing {}", env!("CARGO_PKG_VERSION"));
             Ok(())

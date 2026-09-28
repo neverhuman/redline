@@ -7,6 +7,17 @@ for the publish + attestation flow.
 
 ## [Unreleased]
 
+### Added
+
+- `version-history --bundle <dir> [--readme README.md [--check]]` renders the
+  RedlineDB README "Versions over time" table (between
+  `<!-- version-history:begin -->` and `<!-- version-history:end -->`) from a
+  release bench bundle's `summary.json` (RedlineDB's
+  `scripts/perf/release-bench.sh` and `perf_evidence summarize-bundle`). It
+  refuses a summary whose raw files changed, writes a README only from a
+  publishable bundle, never adds missing markers, and prints the block, marked
+  not publishable when it is not, without `--readme`.
+
 ### Changed
 
 - Bound Jain release packaging to the Cargo product version through the Rust

@@ -20,7 +20,25 @@ pub(crate) enum CommandKind {
     List(ListArgs),
     JankuraiCompare(JankuraiCompareArgs),
     Sentinel(SentinelArgs),
+    VersionHistory(VersionHistoryArgs),
     Version,
+}
+
+/// Renders the README "Versions over time" table from a release bench
+/// bundle's summary.json (RedlineDB's scripts/perf/release-bench.sh and
+/// perf_evidence summarize-bundle). Without --readme the block is printed;
+/// with it, the block between `<!-- version-history:begin -->` and
+/// `<!-- version-history:end -->` is replaced, and only from a publishable
+/// bundle.
+#[derive(Debug, Args)]
+pub(crate) struct VersionHistoryArgs {
+    #[arg(long)]
+    pub(crate) bundle: PathBuf,
+    #[arg(long)]
+    pub(crate) readme: Option<PathBuf>,
+    /// Fail unless the README block already holds exactly the rendered table.
+    #[arg(long, requires = "readme")]
+    pub(crate) check: bool,
 }
 
 #[derive(Debug, Args)]

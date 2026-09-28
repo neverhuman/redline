@@ -216,6 +216,22 @@ redline-testing report \
 suite hash before rendering. Omit it only with `--local-diagnostics` for
 uncommitted local diagnostics.
 
+### Version history
+
+```bash
+redline-testing version-history \
+  --bundle benchmark-results/sqlite-parity/releases/<bundle> \
+  --readme README.md          # add --check to verify instead of write
+```
+
+Renders the README "Versions over time" table from a release bench bundle's
+`summary.json`: pass count on the corpus, median and p95 latency ratio on the
+common pass set with their min-max across runs, and a change against the
+previous version only when it exceeds that spread. The block goes between
+`<!-- version-history:begin -->` and `<!-- version-history:end -->`, which the
+README must already have. A bundle that is not publishable (narrowed corpus,
+fewer than 3 runs, undeclared or mismatched builds, ...) is only printed.
+
 ---
 
 ## Release tarball contents
