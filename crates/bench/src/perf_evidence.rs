@@ -1,5 +1,6 @@
 //! Performance JSONL statistics and W2 manifest generation.
 
+mod build_contract;
 mod records;
 mod summary;
 mod validate_run;
@@ -15,6 +16,9 @@ use anyhow::{Context, Result, anyhow, bail};
 use serde::Serialize;
 use sha2::{Digest, Sha256};
 
+pub use build_contract::{
+    BUILD_CONTRACT_SCHEMA, BuildContract, BuildContractInput, DeclaredBuild, write_build_contract,
+};
 pub use summary::{
     ESTIMATOR, JsonlSummary, SUMMARY_SCHEMA, SummaryOptions, summarize_jsonl, summarize_jsonl_with,
 };
@@ -49,7 +53,9 @@ pub struct W2ManifestInput {
     /// used no profile.
     pub pgo_training_corpus: Option<String>,
     pub rustc_version: String,
-    pub base_rustflags: String,
+    /// The RUSTFLAGS the variant was built with (CARGO_ENCODED_RUSTFLAGS
+    /// cleared); `None` when the builder did not report them.
+    pub rustflags: Option<String>,
     pub host: HostMetadata,
 }
 
@@ -91,7 +97,7 @@ struct PerfMetadata<'a> {
 #[derive(Serialize)]
 struct BuildMetadata<'a> {
     rustc: &'a str,
-    base_rustflags: &'a str,
+    rustflags: Option<&'a str>,
 }
 
 pub fn append_w2_manifest(input: &W2ManifestInput) -> Result<()> {
@@ -137,7 +143,7 @@ pub fn w2_manifest_line(input: &W2ManifestInput) -> Result<String> {
         .with_context(|| format!("stat W2 binary {}", input.binary_path.display()))?
         .len();
     let manifest = W2Manifest {
-        schema_version: "w2-matrix/2",
+        schema_version: "w2-matrix/3",
         captured_at_utc: &input.captured_at_utc,
         profile: &input.profile,
         allocator: &input.allocator,
@@ -154,7 +160,7 @@ pub fn w2_manifest_line(input: &W2ManifestInput) -> Result<String> {
         },
         build: BuildMetadata {
             rustc: &input.rustc_version,
-            base_rustflags: &input.base_rustflags,
+            rustflags: input.rustflags.as_deref(),
         },
         host: &input.host,
     };
@@ -297,7 +303,7 @@ mod tests {
             perf_jsonl: Some("target/perf/fixture.jsonl".to_owned()),
             pgo_training_corpus: None,
             rustc_version: "rustc 1.95.0 (fixture)".to_owned(),
-            base_rustflags: "-Ctarget-cpu=x86-64-v3".to_owned(),
+            rustflags: Some(String::new()),
             host: HostMetadata {
                 node: "fixture-node".to_owned(),
                 machine: "x86_64".to_owned(),
@@ -307,7 +313,7 @@ mod tests {
         };
         let expected = format!(
             concat!(
-                "{{\"schema_version\":\"w2-matrix/2\",",
+                "{{\"schema_version\":\"w2-matrix/3\",",
                 "\"captured_at_utc\":\"2026-07-12T12:34:56Z\",",
                 "\"profile\":\"release\",\"allocator\":\"mimalloc\",",
                 "\"label\":\"w2-release-mimalloc-fixture\",",
@@ -318,7 +324,7 @@ mod tests {
                 "\"jsonl\":\"target/perf/fixture.jsonl\",",
                 "\"pgo_training_corpus\":null}},",
                 "\"build\":{{\"rustc\":\"rustc 1.95.0 (fixture)\",",
-                "\"base_rustflags\":\"-Ctarget-cpu=x86-64-v3\"}},",
+                "\"rustflags\":\"\"}},",
                 "\"host\":{{\"node\":\"fixture-node\",\"machine\":\"x86_64\",",
                 "\"system\":\"Linux\",\"release\":\"fixture-kernel\"}}}}"
             ),
@@ -345,7 +351,7 @@ mod tests {
             perf_jsonl: None,
             pgo_training_corpus: Some("full sqlite_parity corpus (in-sample)".to_owned()),
             rustc_version: "rustc fixture".to_owned(),
-            base_rustflags: String::new(),
+            rustflags: None,
             host: HostMetadata {
                 node: "node".to_owned(),
                 machine: "machine".to_owned(),

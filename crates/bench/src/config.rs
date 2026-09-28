@@ -102,6 +102,12 @@ pub struct CertifyArgs {
     /// so either trigger enables capture.
     #[arg(long, default_value_t = false)]
     pub with_strace: bool,
+    /// Run from a debug build anyway, as a diagnostic: the manifest records
+    /// build_profile debug and publishable false. Without it a debug build
+    /// refuses to certify, since its children exec the same unoptimized
+    /// binary.
+    #[arg(long, default_value_t = false)]
+    pub allow_debug_build: bool,
 }
 
 impl CertifyArgs {

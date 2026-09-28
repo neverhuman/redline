@@ -365,8 +365,9 @@ explicit budget, a quota, a stop condition, and a kill-switch.
   workload iteration.
 - **Dry-run a benchmark without exceeding the budget.** Use the
   lowest-rep certify (e.g. `just phase9-smoke`, or
-  `cargo run -p redlinedb-bench -- certify --config <toml>
-  --seed 7 --repetitions 1 --warmup 0`) with `REDLINEDB_BENCH_KILL=1`
+  `cargo run -p redlinedb-bench --release -- certify --config <toml>
+  --seed 7 --repetitions 1 --warmup 0`; a debug build refuses to certify
+  unless `--allow-debug-build` marks the run a diagnostic) with `REDLINEDB_BENCH_KILL=1`
   pre-exported to force exit at the first iteration boundary; the
   resulting `kill_receipt.json` confirms the wiring without paying
   the full budget. Always inspect the matching `[[workload]]` block

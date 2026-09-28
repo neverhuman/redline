@@ -3,7 +3,8 @@ use std::{path::PathBuf, process};
 use anyhow::Result;
 use clap::{Parser, Subcommand};
 use redlinedb_bench::perf_evidence::{
-    self, RunPlan, SummaryOptions, W2ManifestInput, capture_w2_runtime_metadata,
+    self, BuildContractInput, DeclaredBuild, RunPlan, SummaryOptions, W2ManifestInput,
+    capture_w2_runtime_metadata,
 };
 
 #[derive(Debug, Parser)]
@@ -45,6 +46,31 @@ enum Command {
         case_manifest: Option<PathBuf>,
         input: PathBuf,
     },
+    /// Writes build-contract.json for a measured target: rustc -vV, the
+    /// target, reference and runner digests and versions, the reference's
+    /// PRAGMA compile_options, and the target's build as its builder
+    /// declared it. Without --profile, --features or --rustflags the build
+    /// is recorded as undeclared.
+    BuildContract {
+        #[arg(long)]
+        output: PathBuf,
+        #[arg(long)]
+        target_bin: PathBuf,
+        #[arg(long)]
+        reference_bin: PathBuf,
+        #[arg(long)]
+        runner_bin: PathBuf,
+        #[arg(long)]
+        profile: Option<String>,
+        #[arg(long, allow_hyphen_values = true)]
+        features: Option<String>,
+        /// The RUSTFLAGS the target was built with; `--rustflags=` for a
+        /// build with none.
+        #[arg(long, allow_hyphen_values = true)]
+        rustflags: Option<String>,
+        #[arg(long)]
+        pgo_training_corpus: Option<String>,
+    },
     AssertDistinctBinaries {
         target: PathBuf,
         reference: PathBuf,
@@ -68,8 +94,9 @@ enum Command {
         /// that used no profile.
         #[arg(long)]
         pgo_training_corpus: Option<String>,
+        /// The RUSTFLAGS the variant was built with; omit when unknown.
         #[arg(long, allow_hyphen_values = true)]
-        base_rustflags: String,
+        rustflags: Option<String>,
     },
 }
 
@@ -113,6 +140,32 @@ fn run(cli: Cli) -> Result<()> {
                 perf_evidence::validate_run_path(&input, &plan)?.render(&plan)
             );
         }
+        Command::BuildContract {
+            output,
+            target_bin,
+            reference_bin,
+            runner_bin,
+            profile,
+            features,
+            rustflags,
+            pgo_training_corpus,
+        } => {
+            let declared = profile.is_some() || features.is_some() || rustflags.is_some();
+            perf_evidence::write_build_contract(&BuildContractInput {
+                output: output.clone(),
+                target_bin,
+                reference_bin,
+                runner_bin,
+                build: DeclaredBuild {
+                    declared,
+                    profile,
+                    features,
+                    rustflags,
+                },
+                pgo_training_corpus,
+            })?;
+            println!("wrote {}", output.display());
+        }
         Command::AssertDistinctBinaries { target, reference } => {
             perf_evidence::assert_distinct_binaries(&target, &reference)?;
         }
@@ -125,7 +178,7 @@ fn run(cli: Cli) -> Result<()> {
             suite,
             perf_jsonl,
             pgo_training_corpus,
-            base_rustflags,
+            rustflags,
         } => {
             let (captured_at_utc, rustc_version, host) = capture_w2_runtime_metadata()?;
             perf_evidence::append_w2_manifest(&W2ManifestInput {
@@ -139,7 +192,7 @@ fn run(cli: Cli) -> Result<()> {
                 perf_jsonl,
                 pgo_training_corpus,
                 rustc_version,
-                base_rustflags,
+                rustflags,
                 host,
             })?;
         }

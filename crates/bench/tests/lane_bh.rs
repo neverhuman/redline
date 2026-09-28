@@ -121,6 +121,7 @@ fn certify_warmup_runs_are_discarded() {
         repetitions: 3,
         warmup: 2,
         with_strace: false,
+        allow_debug_build: false,
     };
     let jobs = build_job_queue(&config, &args, args.warmup, args.repetitions).expect("queue");
     let warmup_count = jobs.iter().filter(|j| j.is_warmup).count();
@@ -162,6 +163,8 @@ fn certify_warmup_runs_are_discarded() {
         process_metrics_per_run: None,
         warmup_runs_per_combo: 2,
         measured_runs_per_combo: 3,
+        build_profile: certify::BuildProfile::Release,
+        publishable: true,
     };
 }
 

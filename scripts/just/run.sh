@@ -307,20 +307,20 @@ case "$lane" in
     ;;
   phase9-smoke)
     rtk cargo test -p redlinedb-bench --quiet --locked
-    rtk cargo run -p redlinedb-bench -- certify --config crates/bench/bench/smoke.toml --out-dir target/bench/certify-smoke --seed 7 --repetitions 1 --warmup 0
+    rtk cargo run -p redlinedb-bench --release -- certify --config crates/bench/bench/smoke.toml --out-dir target/bench/certify-smoke --seed 7 --repetitions 1 --warmup 0
     rtk cargo run -p redlinedb-bench -- cross-engine --engine both --test-dir crates/bench/compat --seed 7
     ;;
   phase9-certify)
-    rtk cargo run -p redlinedb-bench -- certify --config crates/bench/bench/certification.toml --out-dir target/bench/certify-certification --seed 7 --repetitions 5 --warmup 1
+    rtk cargo run -p redlinedb-bench --release -- certify --config crates/bench/bench/certification.toml --out-dir target/bench/certify-certification --seed 7 --repetitions 5 --warmup 1
     ;;
   phase9-xbabe1-gap)
     ./scripts/bench/xbabe1_sync.sh
-    ./scripts/bench/xbabe1_run.sh rtk cargo run -p redlinedb-bench -- certify --config crates/bench/bench/gap-cert.toml --out-dir target/bench/xbabe1/gap-cert --seed 7 --repetitions 3 --warmup 1
+    ./scripts/bench/xbabe1_run.sh rtk cargo run -p redlinedb-bench --release -- certify --config crates/bench/bench/gap-cert.toml --out-dir target/bench/xbabe1/gap-cert --seed 7 --repetitions 3 --warmup 1
     ./scripts/bench/xbabe1_fetch.sh gap-cert
     ;;
   phase9-xbabe1-gap-strace)
     ./scripts/bench/xbabe1_sync.sh
-    ./scripts/bench/xbabe1_run.sh rtk cargo run -p redlinedb-bench -- certify --config crates/bench/bench/gap-cert.toml --out-dir target/bench/xbabe1/gap-cert-strace --seed 7 --repetitions 3 --warmup 1 --with-strace
+    ./scripts/bench/xbabe1_run.sh rtk cargo run -p redlinedb-bench --release -- certify --config crates/bench/bench/gap-cert.toml --out-dir target/bench/xbabe1/gap-cert-strace --seed 7 --repetitions 3 --warmup 1 --with-strace
     ./scripts/bench/xbabe1_fetch.sh gap-cert-strace
     ;;
   phase11-oltp-gap)

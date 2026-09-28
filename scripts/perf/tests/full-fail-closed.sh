@@ -147,7 +147,7 @@ elif [ "${#run_dirs[@]}" -ne 1 ]; then
 else
   run_dir="${run_dirs[0]}"
   missing=""
-  for artifact in sqlite_parity.jsonl sqlite_parity.jsonl.complete.json cases.json validation.txt summary.txt; do
+  for artifact in sqlite_parity.jsonl sqlite_parity.jsonl.complete.json cases.json validation.txt summary.txt build-contract.json; do
     [ -s "$run_dir/$artifact" ] || missing="$missing $artifact"
   done
   shared="$(find "$root" -maxdepth 1 -name '*.jsonl' | head -n 1)"
@@ -159,6 +159,23 @@ else
     report FAIL "$name" "the perf lane did not ask the runner for --order alternate: $(cat "$work/$name.args")"
   elif ! grep -q 'eligible cases: *3$' "$run_dir/summary.txt"; then
     report FAIL "$name" "summary does not report 3 eligible cases"
+  elif ! jq -e --arg sha "$(sha256sum "$target" | awk '{print $1}')" '
+      .schema_version == "redline-perf-build-contract-v1"
+      and .target.sha256 == $sha
+      and .target.version == "redlinedb 0.0.0-perf-fixture"
+      and .target.build.declared == false and .target.build.rustflags == null
+      and .reference.compile_options == ["COMPILER=stub", "ENABLE_FTS5", "THREADSAFE=1"]
+      and .runner.version == "redline-testing 1.0.1-stub"
+      and .optimization.pgo_training_corpus == null
+      and (.toolchain.rustc_verbose_version | any(startswith("rustc ")))' \
+      "$run_dir/build-contract.json" > /dev/null; then
+    report FAIL "$name" "build-contract.json does not describe the measured binaries: $(cat "$run_dir/build-contract.json")"
+  elif ! PERF_BUILD_PROFILE=release PERF_BUILD_FEATURES="--features alloc-mimalloc" PERF_BUILD_RUSTFLAGS="" \
+      STUB_MODE=complete PERF_ROOT="$work/root-declared" \
+      bash "$repo_root/scripts/perf/full.sh" "$target" declared > "$work/declared.log" 2>&1 \
+    || ! jq -e '.target.build == {"declared": true, "profile": "release", "features": "--features alloc-mimalloc", "rustflags": ""}' \
+      "$work"/root-declared/runs/*-declared/build-contract.json > /dev/null; then
+    report FAIL "$name" "a declared build is not recorded as declared: $(cat "$work"/root-declared/runs/*-declared/build-contract.json 2>/dev/null)"
   else
     report ok "$name" "accepted into ${run_dir#"$work"/}"
   fi

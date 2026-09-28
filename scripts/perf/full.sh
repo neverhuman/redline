@@ -12,10 +12,11 @@
 #
 # Fails closed. Each invocation gets its own run directory,
 #   $PERF_ROOT/runs/<UTC timestamp>-<pid>-<output-name>/
-# holding cases.json (the runner's corpus listing), sqlite_parity.jsonl
-# with the runner's completion marker and evidence, validation.txt and
-# summary.txt. Nothing is written under a shared name. The run passes only
-# when:
+# holding cases.json (the runner's corpus listing), build-contract.json
+# (the measured binaries and, as PERF_BUILD_* declare it, how the target was
+# built; see scripts/perf/lib.sh), sqlite_parity.jsonl with the runner's
+# completion marker and evidence, validation.txt and summary.txt. Nothing is
+# written under a shared name. The run passes only when:
 #   1. perf_evidence validate-run finds exactly the listed cases, each
 #      executed case with 1 warmup and measured:1..3, each sample once, and
 #      the runner's completion marker certifying the file;
@@ -79,6 +80,7 @@ printf '==> full.sh: %s -> %s\n' "$target_bin" "$run_dir"
 
 "$REDLINE_TESTING_BIN" list --suite sqlite_parity --format json > "$cases"
 expected_cases="$(jq -e 'length' "$cases")"
+perf_build_contract "$run_dir/build-contract.json" "$target_bin" > /dev/null
 
 if [ -z "${PERF_TASKSET_CPUS:-}" ]; then
   export PERF_TASKSET_DISABLE=1

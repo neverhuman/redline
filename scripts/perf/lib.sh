@@ -22,6 +22,12 @@
 #   PERF_KNOWN_FAILURES     known-failures baseline the perf lanes tolerate
 #                           (default metadata/sqlite_parity/known-failures.json)
 #   PERF_EVIDENCE_BIN       a built perf_evidence binary (default: cargo run)
+#   PERF_BUILD_PROFILE, PERF_BUILD_FEATURES, PERF_BUILD_RUSTFLAGS,
+#   PERF_PGO_TRAINING_CORPUS
+#                           how the measured target was built, as its builder
+#                           declares it for build-contract.json; unset means
+#                           undeclared (recorded as null), and an empty
+#                           PERF_BUILD_RUSTFLAGS means built with no flags
 #   CI_REDLINE_TESTING_BIN  CI-resolved binary path (takes precedence)
 
 set -euo pipefail
@@ -121,6 +127,35 @@ perf_run_jsonl() {
       --warmup       "$warmup" \
       --order        "${PERF_ORDER:-alternate}" \
       --output       "$out"
+}
+
+# Write build-contract.json for a measured target (BM3-05): rustc -vV, the
+# target, reference and runner digests and versions, the reference's
+# PRAGMA compile_options, and the target's build as its builder declared it
+# through the PERF_BUILD_* variables above. Nothing undeclared is guessed.
+#
+# Usage: perf_build_contract <output.json> <target-bin>
+perf_build_contract() {
+  local output="$1" target_bin="$2"
+  local -a declared=()
+  if [ -n "${PERF_BUILD_PROFILE+set}" ]; then
+    declared+=(--profile "$PERF_BUILD_PROFILE")
+  fi
+  if [ -n "${PERF_BUILD_FEATURES+set}" ]; then
+    declared+=("--features=$PERF_BUILD_FEATURES")
+  fi
+  if [ -n "${PERF_BUILD_RUSTFLAGS+set}" ]; then
+    declared+=("--rustflags=$PERF_BUILD_RUSTFLAGS")
+  fi
+  if [ -n "${PERF_PGO_TRAINING_CORPUS:-}" ]; then
+    declared+=(--pgo-training-corpus "$PERF_PGO_TRAINING_CORPUS")
+  fi
+  perf_evidence build-contract \
+    --output "$output" \
+    --target-bin "$target_bin" \
+    --reference-bin "$SQLITE_REF_BIN" \
+    --runner-bin "$REDLINE_TESTING_BIN" \
+    "${declared[@]}"
 }
 
 # Print the case-level summary of a JSONL file (perf_evidence

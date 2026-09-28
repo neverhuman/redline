@@ -13,8 +13,12 @@ use crate::process_metrics::ProcessMetrics;
 use crate::report::{self, RunRecord};
 use crate::strace_capture;
 
+#[path = "certify/build_profile.rs"]
+mod build_profile;
 #[path = "certify/scheduler.rs"]
 mod scheduler;
+
+pub use build_profile::{BuildProfile, check_build_profile};
 
 pub use scheduler::{
     Job, MAX_PARALLEL_THREADS_ENV, RESERVED_CORES, ScheduledOutcome, SchedulerStats,
@@ -64,9 +68,16 @@ pub struct CertificationManifest {
     /// matches the count of `RunRecord` entries written for that
     /// combo.
     pub measured_runs_per_combo: usize,
+    /// The profile the benchmark binary (parent and children) was built
+    /// with; `debug` only for a run marked `--allow-debug-build`.
+    pub build_profile: BuildProfile,
+    /// False for a debug diagnostic: its numbers must not be published.
+    pub publishable: bool,
 }
 
 pub fn run(config: &CompareConfig, args: &CertifyArgs) -> Result<CertificationReport> {
+    // Before anything is written: a refused run leaves no artifacts.
+    let build_profile = check_build_profile(cfg!(debug_assertions), args.allow_debug_build)?;
     fs::create_dir_all(&args.out_dir)?;
     let raw_dir = args.out_dir.join("raw");
     fs::create_dir_all(&raw_dir)?;
@@ -166,6 +177,8 @@ pub fn run(config: &CompareConfig, args: &CertifyArgs) -> Result<CertificationRe
         process_metrics_per_run,
         warmup_runs_per_combo: warmup,
         measured_runs_per_combo: measured,
+        build_profile,
+        publishable: build_profile.publishable(),
     };
     let manifest_path = args.out_dir.join("manifest.json");
     report::write_json(Some(&manifest_path), &manifest)?;
@@ -655,6 +668,7 @@ mod tests {
             repetitions: 3,
             warmup: 1,
             with_strace: false,
+            allow_debug_build: false,
         };
         let smoke = CertifyArgs {
             config: PathBuf::from("crates/bench/bench/smoke.toml"),
@@ -663,6 +677,7 @@ mod tests {
             repetitions: 1,
             warmup: 0,
             with_strace: false,
+            allow_debug_build: false,
         };
 
         assert!(is_phase11_oltp_gap_config(&phase11));

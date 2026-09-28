@@ -12,10 +12,17 @@
 #     --allocators mimalloc,jemalloc
 #
 # Profiles:
-#   release            cargo --release, portable x86-64-v3 per .cargo/config.toml
-#   release-native     release-native + REDLINE_BASE_RUSTFLAGS
+#   release            cargo --release with RUSTFLAGS empty: the portable
+#                      shipping build, whatever the caller's environment says
+#   release-native     release-native with RUSTFLAGS=REDLINE_BASE_RUSTFLAGS
 #   release-pgo        scripts/perf/pgo.sh
 #   release-pgo-bolt   scripts/perf/pgo.sh --for-bolt, then scripts/perf/bolt.sh
+#
+# The release and release-native legs clear CARGO_ENCODED_RUSTFLAGS and set
+# RUSTFLAGS explicitly (cargo then ignores any config rustflags), and record
+# exactly those flags in the manifest and in the perf lane's
+# build-contract.json. pgo.sh composes its own flags around a temporary
+# profile path, so the PGO legs record their flags as unknown (null).
 #
 # Suites:
 #   none, full
@@ -120,6 +127,7 @@ for allocator in "${ALLOCATOR_LIST[@]}"; do
 done
 
 OUT_DIR="${PERF_ROOT:-target/perf}/w2-matrix/${RUN_ID}"
+PGO_TRAINING_CORPUS="full sqlite_parity corpus (in-sample)"
 BIN_DIR="$OUT_DIR/bin"
 MANIFEST="$OUT_DIR/manifest.jsonl"
 
@@ -132,6 +140,10 @@ run_cmd() {
     "$@"
   fi
 }
+
+# The flags the last built variant ran with, when the matrix set them.
+BUILD_RUSTFLAGS_KNOWN=0
+BUILD_RUSTFLAGS=""
 
 set_allocator_args() {
   local allocator="$1"
@@ -172,9 +184,13 @@ write_manifest_entry() {
   local -a pgo_corpus_arg=()
   case "$profile" in
     release-pgo|release-pgo-bolt)
-      pgo_corpus_arg=(--pgo-training-corpus "full sqlite_parity corpus (in-sample)")
+      pgo_corpus_arg=(--pgo-training-corpus "$PGO_TRAINING_CORPUS")
       ;;
   esac
+  local -a rustflags_arg=()
+  if [ "$BUILD_RUSTFLAGS_KNOWN" = "1" ]; then
+    rustflags_arg=("--rustflags=$BUILD_RUSTFLAGS")
+  fi
   cargo run --quiet --locked -p redlinedb-bench --bin perf_evidence -- \
     append-w2-manifest \
     --output "$MANIFEST" \
@@ -185,7 +201,7 @@ write_manifest_entry() {
     --suite "$SUITE" \
     "${perf_jsonl_arg[@]}" \
     "${pgo_corpus_arg[@]}" \
-    --base-rustflags="$REDLINE_BASE_RUSTFLAGS"
+    "${rustflags_arg[@]}"
 }
 
 build_variant() {
@@ -195,20 +211,27 @@ build_variant() {
 
   case "$profile" in
     release)
-      run_cmd cargo build --release -p redlinedb-cli --bin redlinedb --locked "${CARGO_ALLOCATOR_ARGS[@]}"
+      BUILD_RUSTFLAGS_KNOWN=1
+      BUILD_RUSTFLAGS=""
+      run_cmd env -u CARGO_ENCODED_RUSTFLAGS RUSTFLAGS="$BUILD_RUSTFLAGS" \
+        cargo build --release -p redlinedb-cli --bin redlinedb --locked "${CARGO_ALLOCATOR_ARGS[@]}"
       src_bin="target/release/redlinedb"
       ;;
     release-native)
-      run_cmd env RUSTFLAGS="$REDLINE_BASE_RUSTFLAGS" \
+      BUILD_RUSTFLAGS_KNOWN=1
+      BUILD_RUSTFLAGS="$REDLINE_BASE_RUSTFLAGS"
+      run_cmd env -u CARGO_ENCODED_RUSTFLAGS RUSTFLAGS="$BUILD_RUSTFLAGS" \
         cargo build --profile release-native -p redlinedb-cli --bin redlinedb --locked "${CARGO_ALLOCATOR_ARGS[@]}"
       src_bin="target/release-native/redlinedb"
       ;;
     release-pgo)
+      BUILD_RUSTFLAGS_KNOWN=0
       run_cmd env REDLINE_CARGO_FEATURE_ARGS="${CARGO_ALLOCATOR_ARGS[*]}" \
         bash scripts/perf/pgo.sh
       src_bin="target/release-pgo/redlinedb"
       ;;
     release-pgo-bolt)
+      BUILD_RUSTFLAGS_KNOWN=0
       run_cmd env REDLINE_CARGO_FEATURE_ARGS="${CARGO_ALLOCATOR_ARGS[*]}" \
         bash scripts/perf/pgo.sh --for-bolt
       run_cmd bash scripts/perf/bolt.sh
@@ -227,11 +250,25 @@ build_variant() {
 # The perf lane writes into its own run directory and names it in
 # $OUT_DIR/<label>.run-dir; a lane that fails stops the matrix.
 run_perf_lane() {
-  local bin="$1" label="$2"
+  local bin="$1" label="$2" profile="$3"
   if [ "$SUITE" = "none" ]; then
     return
   fi
-  run_cmd env PERF_RUN_DIR_OUT="$OUT_DIR/${label}.run-dir" \
+  # Declare the variant's build to the lane's build-contract.json.
+  local -a declared=(
+    PERF_RUN_DIR_OUT="$OUT_DIR/${label}.run-dir"
+    PERF_BUILD_PROFILE="$profile"
+    PERF_BUILD_FEATURES="${CARGO_ALLOCATOR_ARGS[*]}"
+  )
+  if [ "$BUILD_RUSTFLAGS_KNOWN" = "1" ]; then
+    declared+=(PERF_BUILD_RUSTFLAGS="$BUILD_RUSTFLAGS")
+  fi
+  case "$profile" in
+    release-pgo|release-pgo-bolt)
+      declared+=(PERF_PGO_TRAINING_CORPUS="$PGO_TRAINING_CORPUS")
+      ;;
+  esac
+  run_cmd env -u PERF_BUILD_RUSTFLAGS -u PERF_PGO_TRAINING_CORPUS "${declared[@]}" \
     bash "scripts/perf/${SUITE}.sh" "$bin" "$label"
 }
 
@@ -255,7 +292,7 @@ for profile in "${PROFILE_LIST[@]}"; do
     out_bin="$BIN_DIR/redlinedb-${profile}-${allocator}"
     printf '\n==> W2 variant: %s\n' "$label"
     build_variant "$profile" "$allocator" "$label" "$out_bin"
-    run_perf_lane "$out_bin" "$label"
+    run_perf_lane "$out_bin" "$label" "$profile"
     perf_jsonl=""
     if [ "$SUITE" != "none" ] && [ "$DRY_RUN" = "0" ]; then
       perf_jsonl="$(cat "$OUT_DIR/${label}.run-dir")/sqlite_parity.jsonl"

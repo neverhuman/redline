@@ -307,6 +307,7 @@ fn certify_args_strace_enabled_reflects_flag_when_env_absent() {
         repetitions: 1,
         warmup: 0,
         with_strace: true,
+        allow_debug_build: false,
     };
     let without_flag = CertifyArgs {
         with_strace: false,
