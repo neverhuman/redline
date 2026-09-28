@@ -3,7 +3,7 @@ message: "If you use RedlineDB, please cite this software release."
 type: software
 title: RedlineDB
 version: 5.0.0
-# date-released: YYYY-MM-DD  # fill in the v5.0.0 tag date when the release is published
+date-released: 2026-09-29
 abstract: >-
   RedlineDB is an experimental embedded SQL engine written in Rust. It offers a
   SQLite-shaped SQL shell and Rust API over its own storage format, with MVCC

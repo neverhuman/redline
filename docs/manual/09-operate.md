@@ -56,7 +56,11 @@ Each package carries dependency notices, an SBOM, and build provenance naming th
 
 ## Upgrading
 
-A directory written by this commit opens in an engine built from this commit. A future version may bump the catalog format. Read the release notes before you point a new binary at an old directory, and take a physical backup first. This manual describes commit `8ae3a8b79`. `--version` still prints `4.1.0` for the older git tag of that number, so the version line does not tell those builds apart. Re-read the coverage chapters against the `summary.json` and `postgres-regression.json` in the checkout you are actually running before you repeat a count.
+Read the release notes before you point a new binary at an old directory, and take a physical backup with the old binary first (`backup SRC DST --physical`, which every 4.x release has).
+
+The first time v5.0.0 opens a directory written by RedlineDB 4.x, it rebuilds every index from the table rows in one transaction, before the database is handed out: index keys move to one numeric key space, keys inherit their column's declared `NOCASE` or `RTRIM` collation, and expression keys and partial-index predicates are evaluated with the 5.0 SQL rules. If a `UNIQUE` index would then hold two rows with one key, the open fails, names the index and changes nothing; remove the duplicates with the 4.x binary and open again. Afterwards, do not open the directory with 4.x: it refuses a database that has any index, and the control file format (and, once a column declares a collation, the catalog format) is newer than it knows. Directories written before 4.x have not been tested with 5.0.
+
+`redlinedb --version` prints the package version and the pinned SQLite reference, and `redlinedb --build-info` the tag and commit a binary was built from. Re-read the coverage chapters against the `summary.json` and `postgres-regression.json` in the checkout you are actually running before you repeat a count.
 
 ## Logs and quiet mode
 

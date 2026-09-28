@@ -1,22 +1,16 @@
 # Coverage ledger
 
-Copied from the policy file and from a local `sqlite_parity` run on this branch. Nothing rewrites this page on build. When the policy or a new official summary is committed, edit this page in the same commit so the counts stay tied to those files.
+The Postgres counts are copied from the policy file. Nothing rewrites this page on build; when the policy is committed, edit this page in the same commit so the counts stay tied to it. The SQLite counts are not copied here, because a new official report changes them.
 
 ## SQLite
 
-From `benchmark-results/sqlite-parity/latest/summary.json`:
-
-| Field | Value |
+| Question | File |
 | --- | --- |
-| Suite | sqlite_parity |
-| Total | 2445 |
-| Passed | 2445 |
-| Failed | 0 |
-| Skipped | 0 |
-| Repetitions | 3 |
-| Warmup | 1 |
+| Passed, failed and skipped counts | `benchmark-results/sqlite-parity/latest/summary.json`, rendered into the README badge and the block under `sqlite-parity-report:begin` |
+| Every failing case, with its reason and owner | `metadata/sqlite_parity/known-failures.json` |
+| Declared deviations and shared rejections | `subrepos/redline-testing/metadata/sqlite_parity/declared-deviations.json`, listed in the README block |
 
-The README badge and the block under `sqlite-parity-report:begin` are generated from this file. Cases 93–96 passed: `fts5`, highlight, `rtree`, and `dbstat`.
+Cases 93–96 (`fts5`, highlight, `rtree`, and `dbstat`) pass as declared deviations.
 
 ## Postgres
 

@@ -1,6 +1,6 @@
 # Limits
 
-This page is the one to hand to someone who is about to promise RedlineDB as a drop-in. Every line here is true of commit `8ae3a8b79`.
+This page is the one to hand to someone who is about to promise RedlineDB as a drop-in. It describes v5.0.0, and it copies no SQLite counts: those are in the generated README blocks.
 
 ## The file
 
@@ -8,13 +8,15 @@ The database path is a directory containing `data.redline` and `wal/`. SQLite fo
 
 ## SQLite
 
-The committed official summary is 2445 passes, 0 failures, and 0 skips out of 2445, with 3 repetitions and 1 warmup. `fts5`, `rtree`, and `dbstat` are ordinary tables for the corpus statements. An unknown module still fails. `pragma_module_list` also prints names that do not create a table. The README badge is generated from that same summary.
+The README badge and the block under `sqlite-parity-report:begin` give the committed official result, and `metadata/sqlite_parity/known-failures.json` lists every failing case with its reason. `fts5`, `rtree`, and `dbstat` are ordinary tables for the corpus statements. An unknown module still fails. `pragma_module_list` also prints names that do not create a table.
 
 `soundex()` is absent, matching a reference build that was not compiled with it. `UPDATE` and `DELETE` with `ORDER BY` ... `LIMIT` are syntax errors, matching a reference parser that was not generated with that grammar.
 
-The median case in that latency report was slower than SQLite. 361 cases were faster. Quote both if you quote either.
+Latency against SQLite is measured separately on a quiet host (the README's Versions over time table), not in the conformance report, which runs every case at once on a shared host. Measure the queries you run before you quote a speedup.
 
 The C ABI uses `sqlite3_*` names for the calls it implements. A symbol existing is not a promise that every SQLite C flag and every SQLite authorizer hook exists. `docs/security-capabilities.md` lists which hooks and flags are enforced, which are refused with an error, and which are not implemented; read it before relying on the authorizer, `sqlite3_trace_v2` or function flags. Read `crates/ffi` and `docs/boundaries.md` for the surface you are linking.
+
+A few SQLite behaviours differ outside the corpus; the release notes (`docs/releases/v5.0.0.md`, Known limitations) list them. Among them: a failed statement inside an explicit transaction ends the whole transaction, `INSTEAD OF UPDATE` and `INSTEAD OF DELETE` triggers are not supported, and `INSERT ... SELECT` does not fire `AFTER INSERT` triggers.
 
 ## Postgres
 

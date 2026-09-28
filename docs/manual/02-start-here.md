@@ -94,7 +94,7 @@ Parameters use the `Params` trait. Pass `()` when the statement has no placehold
 redlinedb --version
 ```
 
-A 4.1.0 build prints `redlinedb v4.1.0 (SQLite 3.45.1 compatibility)`. That parenthetical is the engine's declared SQLite feature level. The official parity oracle is a separate SQLite 3.53.1 shell, built by `scripts/sqlite/build-reference.sh`. Those two version numbers answer different questions. The first is what this build claims. The second is what the corpus was compared against.
+A 5.0.0 build prints `redlinedb v5.0.0 (tested against SQLite 3.53.1)`. The SQLite version in that line is the pinned reference shell the official corpus runs against, built by `scripts/sqlite/build-reference.sh`. It is not a compatibility level: [SQLite coverage](04-sqlite-coverage.md) says what matches. Builds before 5.0.0 printed `(SQLite 3.45.1 compatibility)`, which was never measured. `redlinedb --build-info` (or `--build-info --json`) adds the release tag and source commit the binary was built from; a development build reports no tag.
 
 `redlinedb --help` prints a SQLite-shaped usage banner that starts `Usage: sqlite3`. That banner is the compatibility text. The binary you ran is still `redlinedb`. With no filename, the shell opens `:memory:` and waits for statements. It does not create a file.
 

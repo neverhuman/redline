@@ -43,7 +43,7 @@ A crash during a log write can leave the start of a record at the end of the log
 ## Limits of the tested configuration
 
 - **tmpfs and ramfs.** fsync does nothing there, and the files are gone after a reboot. `Strict` on tmpfs survives a process kill for the same reason `Normal` does, and nothing more. The receipt tool refuses to take a `Strict` receipt on tmpfs or ramfs.
-- **`wal_pipeline`.** The WAL writer thread behind the `wal_pipeline` cargo feature is off in default and release builds. It creates files without a directory fsync, recovery is not tested against it, and no receipt covers it. The throughput numbers quoted for it in the README say nothing about durability.
+- **`wal_pipeline`.** The WAL writer thread behind the `wal_pipeline` cargo feature is off in default and release builds. It creates files without a directory fsync, recovery is not tested against it, and no receipt covers it. The throughput numbers the v4.0.7 release quoted for it (kept in `docs/performance-history.md`) say nothing about durability.
 - **Other cargo features.** `wal_cross_lane_coalescer`, `numa` and `failpoints` are not in release builds and no receipt covers them. The receipt tool rejects a binary built with kernel failpoints.
 - **Platforms.** Directory fsync is implemented on Unix only. On other platforms the engine claims nothing about directory entries.
 

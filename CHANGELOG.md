@@ -1,36 +1,362 @@
 # Changelog
 
-## Unreleased
+## [5.0.0] - 2026-09-29
 
-### Changed
+First release from the canonical repository `neverhuman/redline`. It covers
+everything after the `v4.1.0` tag (`af2082631`, 2026-09-17): the work merged to
+`main` up to `c1af369`, then the launch branch. Experimental: not a SQLite
+replacement, own file format, experimental C ABI subset, PostgreSQL SQL-shell
+corpus only, and a process-crash (not power-loss) durability claim. Every
+published count and ratio for this release is in the generated README blocks
+and `docs/releases/v5.0.0.md`, not here.
 
-- Validate report warmups per executed case while retaining declared skips, and
-  require full-corpus report generation in the conformance CI gate.
+### Breaking changes and migration
 
-- Made installed macOS native libraries relocatable and added extracted-package
-  dynamic/static C consumer tests before release publication.
+- **Index-format epoch 3.** The first open of a v4 database rebuilds every
+  index from the heap in one transaction, under the v5 rules: one numeric key
+  space for INTEGER and REAL, a column's declared `NOCASE`/`RTRIM` collation
+  inherited by index keys and `UNIQUE` constraints, and v5 SQL semantics for
+  expression keys and partial-index predicates. If a `UNIQUE` index would hold
+  two rows with one key, the open fails with `UNIQUE constraint failed`,
+  names the index and changes nothing. v4 refuses a database with any index
+  afterwards (`unsupported format version: 3`). The control file is format 2,
+  and a catalog that stores collations is format 8. Back up with the v4 binary
+  first (`redlinedb backup DB DB-v4-backup --physical`).
+- **C ABI v5.** The library is `libredlinedb.so.5` / `libredlinedb.5.dylib`
+  (`RLDB_ABI_MAJOR 5`); rebuild C consumers. `sqlite3_prepare_v3` takes
+  upstream's argument order with `unsigned int prepFlags` fourth and rejects
+  flags other than `PERSISTENT` and `NORMALIZE`. `SQLITE_NULL` is 5 (was 0).
+  `sqlite3_column_text` and `sqlite3_value_text` return CAST-to-TEXT text for
+  INTEGER and REAL and a NULL pointer for NULL, `sqlite3_column_bytes` returns
+  that text's length (it was 8 for NULL and numbers), and
+  `sqlite3_column_blob` returns the converted bytes. `sqlite3_column_type`
+  no longer reports REAL as INTEGER. An out-of-range column returns NULL and
+  records `SQLITE_RANGE`. `sqlite3_open(":memory:")`, an empty filename and
+  `SQLITE_OPEN_MEMORY` open a private in-memory database whose filename is
+  `""`; with `SQLITE_OPEN_URI` a `file:` name is refused.
+- **C ABI registrations and flags fail closed.** Functions and collations are
+  removed when their connection closes, and `sqlite3_create_function_v2`
+  destructors run exactly once. `SQLITE_DIRECTONLY`, unknown `enc` bits,
+  window `xValue`/`xInverse` and `sqlite3_trace_v2` with a callback are
+  refused instead of ignored; an authorizer return code other than OK, DENY or
+  IGNORE fails the statement, and the authorizer's database name moved to
+  `arg5`. `sqlite3_blob_open` with `flags == 0` is read-only. `rldb_open_v2`
+  validates `rldb_config` and reads it only up to `struct_size`; a zero field
+  keeps its default and `durability` takes effect. Release builds of the
+  library abort on panic.
+- **Opening a database.** An open takes `owner.lock` before it recovers
+  anything and holds it until the last `Database`, `Connection` and
+  `OwnedStatement` are gone. A read-only open takes the same exclusive lock,
+  so it gets `Busy` while another process has the database open.
+- **Uncertain commits.** A `COMMIT` whose log write failed after its record
+  was queued returns `CommitMaybeCommitted` (`ErrorCode::IoErr`,
+  `RLDB_IOERR`) instead of a plain error; the transaction may be there after
+  a reopen.
+- **SQL semantics (SQLite dialect).** Integer `SUM()` overflow is an
+  `integer overflow` error on every path; integer arithmetic overflow yields
+  REAL; `abs()` of the minimum integer is an error. Comparisons apply SQLite's
+  comparison affinity, and INTEGER and REAL compare exactly. Text operands of
+  arithmetic and `||` follow SQLite (`'1abc'+1` is 2, `'[1]'||'[2]'` is
+  `[1][2]`), and standard `CAST` to `DATE`, `TIMESTAMP`, `BOOLEAN`, `UUID`,
+  `JSON` or `MONEY` is a NUMERIC cast. Text truth values use the numeric
+  prefix. Declared column collations apply to comparisons, sorting, grouping,
+  index keys and `UNIQUE`; an index key collation other than `BINARY`,
+  `NOCASE` or `RTRIM` is refused. `ORDER BY 0`, a negative position or one
+  past the last column is an error. `CREATE VIEW` with a parameter is
+  refused. `ROLLBACK TO` refuses, and fails the transaction, when a statement
+  before the savepoint cannot be replayed exactly. With `recursive_triggers`
+  off, a trigger fired by another trigger's body now runs.
+- **Dialect.** The SQL dialect is a per-database option
+  (`OpenOptions::with_dialect`, `DbOptions::dialect`);
+  `REDLINEDB_RESULT_DIALECT` is read once, when a database opens without it.
+- **PostgreSQL dialect.** `pg_current_wal_lsn()`, `pg_export_snapshot()`,
+  `pg_notify()` and `NOTIFY` fail with `unsupported capability:` instead of
+  answering with a stand-in. A column declared `citext` is refused. The
+  PostgreSQL session functions (advisory locks, `txid_current`,
+  `pg_wal_lsn_diff`, `pg_notify`, `pg_backend_pid`, `current_user` and
+  others) are unknown in the SQLite dialect. Other stand-ins remain (for
+  example publication and replication DDL that replicates nothing);
+  `docs/beyond-postgres-skips.md` lists them all.
+- **Shell.** `--version` and `.version` print
+  `redlinedb v5.0.0 (tested against SQLite 3.53.1)`, naming the pinned
+  reference shell; they no longer claim "SQLite 3.45.1 compatibility".
+- **Install.** Releases, installer and clone URLs moved to
+  `https://github.com/neverhuman/redline`. The installer keeps each version in
+  `PREFIX/lib/redlinedb/versions/<tag>/` behind links through `current`,
+  refuses a prefix an earlier installer filled unless
+  `REDLINEDB_MIGRATE_LEGACY=1`, and refuses archives whose provenance does not
+  name this repository and tag (every archive built before v5.0.0).
+  `redline-web` and `redline-testing` archives keep their records in
+  `share/redlinedb/components/<package>/`. Every crate has `publish = false`;
+  depend on the git tag.
 
-- Consolidated the supporting runner, web console, client and release tooling into
-  the complete GitHub checkout, with portable source builds, four-platform binary
-  packages, pinned audit tooling, and a required aggregate CI gate. Original source
-  histories and unfinished work are preserved through recovery refs.
+### Fixed — durability and recovery
 
-- Replaced the opt-in NUMA feature's C-backed `hwlocality` dependency with
-  Linux sysfs topology discovery and Rustix current-thread affinity. The
-  public helpers and default-feature one-node/no-op behavior are unchanged;
-  NUMA remains off by default pending genuine multi-node qualification.
-- Made the mandated CLI `--all-features` qualification build deterministic:
-  the exact all-three allocator combination uses the default mimalloc while
-  compiling every optional allocator dependency. Normal single-allocator
-  builds are unchanged, and zero or exactly two allocators remain rejected.
-- Switched the existing snmalloc option from its default CMake backend to its
-  supported direct C++17 build, preserving wait-on-address behavior without
-  requiring CMake in the sealed release environment.
+- A checkpoint writes every dirty page as one complete cut and records a
+  separate heap redo LSN; it used to skip pages changed after it chose its LSN
+  and lose the committed rows they held. It syncs the page file before the
+  control file and prunes the WAL only below the previous generation, so a
+  fallback to the older control slot finds its log.
+- Recovery checks the control files, transaction status, catalog and WAL
+  before it changes any file, and fails the open instead of replaying a WAL
+  with a gap, a damaged record followed by a valid one, or a missing schema
+  file. A control file from a newer build fails with `UnsupportedVersion`.
+- A transaction id is never handed out again after a reopen, so rows of a
+  rolled-back or abandoned transaction are not replayed as committed later;
+  recovery reserves the ids in record headers and in heap, index and commit
+  payloads. A WAL naming the last transaction id fails the open. Row ids named
+  in the scanned WAL are reserved too, until the SQL layer reuses row ids
+  after a `DELETE`, as SQLite does.
+- The WAL never restarts below the checkpoint; it used to restart at LSN 0
+  when no record survived, and the next restart lost every commit made after
+  that reopen.
+- Page-image redo skips an image the page already holds and updates the file
+  and any resident copy together; recovery empties replayed heap pages past
+  the checkpoint before heap redo, so an interrupted recovery no longer
+  duplicates rows.
+- Fsync the database root when `wal/` is created, a new database root in its
+  parent, and the `wal` directory on every log open and before a new segment
+  receives a record; rotation switches segments only after that sync. Earlier
+  in this release: the page-file directory when a page file is created, the
+  stats directory after its atomic rename, and WAL bytes on shutdown with an
+  empty queue.
+- A torn WAL tail is copied to `wal/salvage/` and synced before it is cut, and
+  only after recovery succeeded. `PRAGMA redline_recovery_report` describes the
+  last recovery. A restore to a target LSN or CSN records a timeline fork, so
+  later opens stay at the target.
+- `COMMIT` returns only once a transaction that begins afterwards sees it; a
+  CSN reserved by a failed commit no longer blocks later commits.
+- A B-tree split stages every page before it logs or installs any; a
+  reinserted row links to the version it replaces; a physical backup holds off
+  checkpoints while it copies; `Database::restore_from_backup` takes the
+  destination's `owner.lock` first.
+- Persistent SQL databases use pressure checkpoints, and in-memory databases
+  spill to a scratch file, so writes no longer fail with "no unpinned frame
+  available for eviction" once dirty pages outgrow the buffer pool.
+- `PRAGMA integrity_check` treats an all-zero page as never written.
+- Earlier in this release: reject a WAL record whose `prev_lsn` skips the
+  previous record; make the WAL durable through a dirty page's LSN before
+  eviction writes that page; run checkpoints one at a time and fence them
+  against commit publication, page images, index deletes, leaf installs and
+  B-tree splits; install index delete marks, HNSW pages and split pages only
+  after their WAL records; make replay idempotent for heap and index records;
+  fsync the catalog at every checkpoint and the `user_version` sidecar under
+  the live synchronous setting; release row locks when an open transaction is
+  dropped.
+
+### Fixed — SQL correctness
+
+- Comparison affinity in `=`, `<`, `IN`, `BETWEEN`, `CASE`, joins, `HAVING`,
+  trigger bodies, partial-index predicates and index probes, including
+  comparisons with an aggregate; `WHERE rowid = '5'` finds rowid 5. Columns of
+  views, CTEs, subqueries, attached tables and table-valued functions carry
+  SQLite's affinity.
+- Integer overflow, `sum()`/`total()`/`avg()` accumulation (exact past 2^53,
+  compensated REAL sums, overflow decided in input order across a spill),
+  exact INTEGER/REAL comparison, and window frames: a frame ending before the
+  partition is empty, `GROUPS` offsets count peer groups, and a frame offset
+  near 2^63 no longer loops.
+- Declared column collations everywhere SQLite applies them, including
+  `UNIQUE` and the planner's index choice; existing indexes take their
+  column's collation at the first open.
+- One numeric index key space; a `DESC` index key and an index range without
+  a lower bound return the right rows; index-only scans return the stored
+  storage class. Generated columns take their declared affinity, and
+  `ALTER TABLE … ALTER COLUMN … TYPE` converts stored values.
+- `REINDEX` rebuilds indexes, resolving names as SQLite does; it commits only
+  while its transaction is the only one open.
+- An `UPDATE` keeps partial indexes in step with the row; a row that leaves an
+  index and returns under the same key is in it again; `MERGE` and
+  `ON UPDATE CASCADE` check `UNIQUE` constraints. `PRAGMA integrity_check`
+  compares every index with its table.
+- `UNION`, `INTERSECT`, `EXCEPT`, `GROUP BY`, `PARTITION BY` and `DISTINCT`
+  aggregates compare rows as SQLite values (`1` and `1.0` are one value).
+- `ORDER BY <n>` sorts by the n-th result column on every path.
+- A recursive CTE is capped at the outer `LIMIT` only when the query reads it
+  row by row.
+- CTE, derived-table and view rows belong to their statement: a nested `WITH`
+  no longer overwrites the outer CTE, a CTE name no longer shadows a table in
+  later statements, and view and trigger bodies resolve names in their own
+  scope. Statements that read a view, CTE or derived table bind again when
+  they run, with the bound parameters; parameters keep SQLite's numbering
+  across subqueries.
+- `SAVEPOINT`, `RELEASE` and `ROLLBACK TO` act when stepped; `ROLLBACK TO`
+  keeps the transaction's snapshot and `BEGIN IMMEDIATE` reservation.
+- Trigger chains run with `recursive_triggers` off, a failing trigger body
+  leaves no partial effects, and an `INSTEAD OF INSERT` trigger that inserts
+  into its own view no longer overflows the stack.
+- The compatibility rewrites no longer change string literals, quoted names
+  or comments, and keep non-ASCII text intact (`'café'` was stored corrupted
+  when a statement woke a byte-wise pass).
+- U+E000 is an ordinary character outside PostgreSQL `citext`; one unique-key
+  lock covers every spelling of a citext or NaN key.
+- Parallel heap scans return one visible version per row.
+- The shell no longer aborts on `(-9223372036854775807-1)/-1`.
+- Earlier in this release: a REAL primary key no longer slips past the rowid
+  conflict check; `2^63` stays REAL under integer affinity; foreign keys
+  compare under SQLite's key affinity; `nan` and `infinity` spellings stay
+  text under numeric affinity; unique keys read a column's `DEFAULT` for rows
+  that predate the column; the same key and row inserted again keep one index
+  entry.
+
+### Changed — PostgreSQL SQL-shell corpus
+
+- Advisory locks are session-level locks between the connections of one open
+  database; `txid_current()` and `pg_current_xact_id()` return the
+  transaction's id; `pg_wal_lsn_diff()` returns the byte distance.
+- `pg_listening_channels()` is rewritten only as a bare call in code and reads
+  the channel set when it runs.
+
+### Added — PostgreSQL SQL-shell corpus
+
+- Between the `v4.1.0` tag and `main`: `DISTINCT ON`, materialized views
+  (stored as tables, refilled on `REFRESH`), `LANGUAGE SQL` and PL/pgSQL
+  function bodies used by the corpus, enums, domains, `int4range`, `::citext`
+  casts (partial: a column declared `citext` is refused, and `GROUP BY` and
+  indexes compare cast values by their bytes), identity columns,
+  schema-qualified tables, `search_path`, session functions, locale-C
+  `money`, `NULLS FIRST/LAST` index keys, and `LISTEN`/`UNLISTEN` tracking.
+
+### Added — durability evidence
+
+- `docs/manual/durability.md`, the durability contract. Its one claim,
+  `Strict` survives a process kill, carries a claim tag that
+  `ops/ci/durability-claim-gate.sh` checks against the receipts in
+  `benchmark-results/durability/` before a release is published.
+- `redlinedb-bench durability-evidence` takes a receipt on the shipped shell;
+  `durability-evidence-verify` checks one. `PRAGMA redline_durability` reads
+  back the durability mode in force.
+- `redlinedb-bench recover` and `recover-matrix` compare every acknowledged
+  transaction's contents and exit non-zero unless every run qualifies.
+
+### Changed — conformance evidence and reports
+
+- SQLite cases are held to their declared exit code, error text and
+  byte-exact output, blessed only against the pinned sqlite3 3.53.1 shell.
+  Failing cases are published from `metadata/sqlite_parity/known-failures.json`
+  with their reasons; skips are allowed only where the scope policy lists them;
+  each case gets one verdict from complete, unique samples; per-case timeouts,
+  output caps and process-group kills bound every run.
+- The badge and report are scoped to the SQL/CLI corpus and the oracle build,
+  list declared deviations, shared rejections and oracle-build deviations, and
+  take target, reference and runner identities from the run's own provenance.
+- The README's SQLite block reports correctness only and points at the
+  version table for latency; the conformance lane's latency charts are gone,
+  and `ranked.csv` and `summary.json` still record each case's ratio.
+- The PostgreSQL gate frames cells and NULLs, re-checks every pass from recorded
+  assertions, splits results into row matches, expected rejections,
+  declared-unsupported cases and mismatches, and publishes only from a clean
+  source at the expected commit with a measured reference image.
+- A run records the source commit it started from and writes no evidence if the
+  tree changed during the run.
+- `docs/sqlite-parity.md`'s feature tables are rendered from
+  `docs/sqlite-feature-matrix.json`, each row tied to named tests. A CI shard
+  emits the Rust-values and C ABI qualification objects.
+- The parity report workflow runs only when dispatched; it no longer rewrites
+  the README on a schedule.
+
+### Added — performance evidence
+
+- `perf_evidence` parses strictly and summarizes per case; `validate-run`,
+  `build-contract`, `summarize-bundle` and `case-list-ids` subcommands.
+- `scripts/perf/release-bench.sh` measures a named release bench bundle (one
+  pinned worker, K interleaved runs, load checks, build contracts), and
+  `scripts/perf/build-version.sh` rebuilds old tags with identical flags in a
+  sandbox clone.
+- `redline-testing version-history` renders the README's "Versions over time"
+  table from a publishable bundle only.
+- The historical 294-case medium cohort is restored with its digest and
+  selection notes (`bench/perf/cases/medium-set.txt`).
+- The runner can alternate which engine runs first in each sample.
+- The v5.0.0 bundle (`benchmark-results/sqlite-parity/releases/v5.0.0/`)
+  rebuilds v2.0.5, v4.0.3, v4.0.8, v4.0.9, v4.1.0 and v5.0.0 the same way and
+  runs each three times on today's corpus. v5.0.0 passes the most cases
+  (2368), and its median per-process latency ratio against SQLite is 2.246×,
+  6.3% above v4.1.0's 2.112× and outside the run-to-run range; the cause has
+  not been profiled.
+
+### Changed — performance paths
+
+- Inner equijoins probe the right-hand index; an outer-only filter runs before
+  the join; unique-index and integer-primary-key point lookups stay off the
+  routed full scan; a non-splitting leaf insert places one cell; the WAL uses
+  positional I/O and writes contiguous records together; unordered table scans
+  decode each row once. No speed ratio is claimed for these changes.
+- Correctness work in this release costs speed in places: a checkpoint holds
+  heap appends while it writes pages (about 10% lower insert throughput with
+  four writers in the kernel lane's probe), and `COMMIT` waits until new
+  snapshots see it.
+- `qps_compare` (in `redlinedb-bench`) loads the same data into RedlineDB,
+  SQLite and PostgreSQL and reports rows or queries per second.
+
+### Changed — install, CI and release
+
+- GitHub (`neverhuman/redline`) is the sole source and release authority;
+  `redline-proof validate` refuses the old repository name in active files.
+- The installer verifies the checksum and the provenance before it writes
+  anything, stages and validates the new version on the prefix's filesystem,
+  and activates it with one rename; `REDLINEDB_ROLLBACK=1` switches back, and
+  two installers on one prefix take turns. `REDLINEDB_VERIFY_ATTESTATION=1`
+  also runs `gh attestation verify`. It stops on glibc older than 2.35, musl,
+  or macOS older than 15.
+- `redlinedb --build-info [--json]` reports the release tag, source commit,
+  target and repository the binary was built from.
+- Release tags `vX.Y.Z` and `vX.Y.Z-rc.N` of any version are checked before
+  they are built (crate versions, a `CHANGELOG.md` section, real release
+  notes, an annotated tag, on `main` for a stable release); the publisher
+  takes its notes from `docs/releases/vX.Y.Z.md`, and a `verify-published`
+  job installs each
+  published release on all four platforms. Every release carries an attested
+  acceptance manifest.
+- `LICENSE` is the full Apache-2.0 text, `NOTICE` names the project and its
+  SQLite attribution, and archives carry the licence texts of the code they
+  ship (`DEPENDENCIES.tsv`, SBOM). `SECURITY.md` names GitHub private
+  vulnerability reporting.
+- `docs/api-stability.md` states what each interface promises;
+  `docs/compatibility/abi-safety.md` is the C caller contract;
+  `docs/security-capabilities.md` lists what the C ABI enforces.
+- CI runs the `crates/sql` integration tests, the kernel suites under nextest,
+  and a kernel stage with failpoints on. Fork pull requests run only on
+  GitHub-hosted runners, every lockfile is scanned under its own `deny.toml`,
+  and a release carries a security receipt.
+- `scripts/check-launch-claims.sh` lints README and `docs/` for unqualified
+  launch claims; `scripts/test-docs-quickstart.sh` runs the README's and
+  `docs/install.md`'s quick start against each platform's package.
+- `scripts/ci-doctor.sh --profile core|contributor|required` checks the tools
+  each lane needs.
+
+### Removed
+
+- The unwired legacy SQLite parity report generator in `crates/bench`.
+- The placeholder README metric cards (KSLOC, Jankurai score, code shape,
+  Jankurai comparison) and the raw Jankurai comparison block.
+- README claims that could not be supported: crates.io availability and the
+  `redlinedb exec` subcommand, which does not exist.
+- From the README: the hand-typed version history rows, the v4.0.x release
+  train and its microbenchmark headlines, and the RQL benchmark tables. They
+  are kept, labelled historical, in `docs/performance-history.md` and
+  `docs/rql.md`.
+- `REDLINEDB_DEV_LINKS` and `REDLINEDB_INSTALL_DIR` in
+  `scripts/install-from-source.sh`, which now installs through `install.sh`.
+- The chaos benchmark suite's old name; its configs, driver and committed
+  result use `chaos`.
+
+### Documentation
+
+- README rebuilt around the evidence; new `docs/performance-history.md`,
+  `docs/manual/durability.md`, `docs/releases/v5.0.0.md`, `docs/install.md`
+  (the one install guide), `docs/api-stability.md`, `CITATION.cff` and
+  `paper/README.md` (the preprint is historical).
 
 ## [4.1.0] - 2026-05-29
 
 W7 startup optimization — eliminate cgroup walk from the volatile (in-memory)
 database startup path.
+
+The `v4.1.0` tag was cut on 2026-09-17, after this entry was written; the
+performance table below was measured at `057c6cdea` and is historical
+(`docs/performance-history.md`). The entries under "Also in the v4.1.0 tag"
+were listed as unreleased until v5.0.0, but shipped in that tag.
 
 ### Changed
 
@@ -66,6 +392,31 @@ memory profile), PGO binary with quick training set, vs SQLite 3.53.1:
 
 Cumulative improvement from the release-only v4.0.8 baseline:
 median **−5.3%**, p95 **−22.3%**.
+
+### Also in the v4.1.0 tag (2026-09-17)
+
+- Validate report warmups per executed case while retaining declared skips, and
+  require full-corpus report generation in the conformance CI gate.
+
+- Made installed macOS native libraries relocatable and added extracted-package
+  dynamic/static C consumer tests before release publication.
+
+- Consolidated the supporting runner, web console, client and release tooling into
+  the complete GitHub checkout, with portable source builds, four-platform binary
+  packages, pinned audit tooling, and a required aggregate CI gate. Original source
+  histories and unfinished work are preserved through recovery refs.
+
+- Replaced the opt-in NUMA feature's C-backed `hwlocality` dependency with
+  Linux sysfs topology discovery and Rustix current-thread affinity. The
+  public helpers and default-feature one-node/no-op behavior are unchanged;
+  NUMA remains off by default pending genuine multi-node qualification.
+- Made the mandated CLI `--all-features` qualification build deterministic:
+  the exact all-three allocator combination uses the default mimalloc while
+  compiling every optional allocator dependency. Normal single-allocator
+  builds are unchanged, and zero or exactly two allocators remain rejected.
+- Switched the existing snmalloc option from its default CMake backend to its
+  supported direct C++17 build, preserving wait-on-address behavior without
+  requiring CMake in the sealed release environment.
 
 ## [4.0.7] - 2026-05-26
 
@@ -523,8 +874,9 @@ v1.0.0` harness on the full 2445-case `sqlite_parity` suite (30 workers × 3
 reps + 1 warmup). Zero parity regressions: identical 2374/2445 pass set in
 v3.0.0 and v4.0.0 (97.10% pass rate). 1410 of 2374 passing cases (59.4%) are
 ≥5% faster in v4.0.0; mean per-case target-latency change −6.85%. Jankurai
-score holds at 85/100 (pass). See the README "What's new in v4.0.0" section
-for the full ledger, named-optimization table, and benchmark provenance.
+score holds at 85/100 (pass). The README's former "What's new in v4.0.0"
+section, with the full ledger, named-optimization table, and benchmark
+provenance, is kept in `docs/performance-history.md`.
 
 ### Added
 
@@ -944,7 +1296,7 @@ No FFI ABI break; downstream consumers unaffected.
 - `repo-rot-bad-behavior` (B): renamed `certification-phase10-v3*.toml`,
   rewrote `backup.rs:1` doc comments.
 - `python-direct-product-truth-or-db-ownership` (B): ported
-  `scripts/bench/dick_head_choas_report.py` to `crates/bench/src/bin/chaos_report/`.
+  the Python chaos report script to `crates/bench/src/bin/chaos_report/`.
 - `no-agent-friendly-exception-pattern` (F): added typed `DomainError` in
   `crates/domain/`, wired one kernel error path through it.
 - `missing-agent-readable-docs` (F): authored `docs/{audit-rubric,

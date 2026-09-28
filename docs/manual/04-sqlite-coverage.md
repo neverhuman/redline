@@ -8,18 +8,16 @@ The official lane builds SQLite 3.53.1 with `scripts/sqlite/build-reference.sh` 
 
 | | |
 | --- | --- |
-| Corpus | `sqlite_parity`, 2445 cases |
-| Passed | 2445 |
-| Failed | 0 |
-| Skipped | 0 |
-| Repetitions | 3, plus 1 warmup |
-| Report date in the README block | 2026-09-24 |
-| RedlineDB build named in that block | `redlinedb v4.1.0 (SQLite 3.45.1 compatibility)` |
+| Corpus | `sqlite_parity` |
+| Passed, failed, skipped | The README badge and the block under `sqlite-parity-report:begin` |
+| Failing cases, with reasons | `metadata/sqlite_parity/known-failures.json` |
+| Run date, builds and runner | The block's run metadata line |
 | Oracle | SQLite 3.53.1, 2026-05-05 |
-| Runner | `redline-testing` 1.0.1 |
 | Source file | `benchmark-results/sqlite-parity/latest/summary.json` |
 
-The README badge and the block under `sqlite-parity-report:begin` are generated from this summary and the official evidence behind it. Both name the corpus and the oracle, not SQLite as a whole: the badge reads `SQLite SQL/CLI corpus`, and it is green only for a run with official evidence, no failures and no skips. The same block records latency as per-case RedlineDB/SQLite ratios of CLI process wall time (lower is better): the median, p95 and worst ratio and the count of cases where RedlineDB was quicker are in that generated block, and nowhere else, so they cannot go stale here. Those timings come from a conformance run, not a tuned benchmark; the block names the lane and worker count it was measured with. This book does not copy the numbers.
+The README badge and the block under `sqlite-parity-report:begin` are generated from this summary and the official evidence behind it. Both name the corpus and the oracle, not SQLite as a whole: the badge reads `SQLite SQL/CLI corpus`, and it is green only for a run with official evidence, no failures and no skips. The official gate passes only when the failing cases are exactly the ones `known-failures.json` lists, each with the reason it fails and the phase that owns the fix. This book does not copy the counts.
+
+The block reports correctness only. The conformance lane runs every case at once on a shared host, so its timings are not a benchmark; `ranked.csv` and `summary.json` next to the report still record each case's RedlineDB/SQLite ratio. Latency is measured separately on a quiet host, in the README's Versions over time table.
 
 ## Virtual tables the corpus asks for
 
@@ -40,11 +38,11 @@ On the statements the corpus compares, you can expect the ordinary SQLite shape:
 - `CREATE TABLE`, `INSERT`, `UPDATE`, `DELETE`, `SELECT`
 - joins, compound `UNION` / `INTERSECT` / `EXCEPT`, and common table expressions, including recursive ones
 - window functions (`row_number`, `rank`, `lag`, `lead`, and the usual frames)
-- views and row triggers, with the gaps called out in `docs/sqlite-parity.md` (for example, `INSTEAD OF` triggers on views)
+- views and row triggers, with the gaps called out in `docs/sqlite-parity.md` (for example, `INSTEAD OF UPDATE` and `INSTEAD OF DELETE` triggers on views)
 - `RETURNING`, savepoints, and generated columns
 - JSON and math functions that the 3.53.1 oracle was built with
 
-`docs/sqlite-parity.md` is the feature ledger. Its status column is `pass`, `partial`, `fail`, `not-started`, or `rejects-by-design`. Read it when you are about to depend on one feature. The official 2445 on this branch is the corpus result. The ledger is the map of which SQL features that result is made of.
+`docs/sqlite-parity.md` is the feature ledger. Its status column is `pass`, `partial`, `fail`, `not-started`, or `rejects-by-design`. Read it when you are about to depend on one feature. The generated report is the corpus result. The ledger is the map of which SQL features that result is made of.
 
 ## Two SQLite behaviors this build shares with the reference shell
 
