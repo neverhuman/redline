@@ -27,8 +27,19 @@ for archive in "$packages"/*.tar.gz; do
     grep -Eq "$field" <<< "$provenance" || { printf '%s: provenance lacks %s: %s\n' "$name" "$field" "$provenance" >&2; exit 1; }
   done
   grep -Fq "\"tag\":\"$tag\"" <<< "$provenance" || { printf '%s: provenance does not name %s: %s\n' "$name" "$tag" "$provenance" >&2; exit 1; }
+  if [[ $name == redlinedb-v* ]]; then
+    core_tag=$tag
+    core_commit=$(sed -n 's/.*"commit":"\([0-9a-f]\{40\}\)".*/\1/p' <<< "$provenance")
+  fi
   tar -xzf "$archive" -C "$prefix"
 done
 "$prefix/bin/redlinedb" --version
+# The packaged CLI names the tag and commit its archive was built from.
+[[ -n ${core_tag:-} ]] || { printf 'no redlinedb core archive in %s\n' "$packages" >&2; exit 1; }
+info=$("$prefix/bin/redlinedb" --build-info --json) ||
+  { printf 'bin/redlinedb --build-info --json failed\n' >&2; exit 1; }
+for field in "\"tag\":\"$core_tag\"" "\"source_sha\":\"$core_commit\"" "\"repository_id\":$REDLINE_REPO_ID"; do
+  grep -Fq "$field" <<< "$info" || { printf 'bin/redlinedb --build-info lacks %s: %s\n' "$field" "$info" >&2; exit 1; }
+done
 "$prefix/bin/redline-testing" --version
 CHECK_FFI=0 bash "$root/scripts/test-binaries.sh" "$prefix/bin"

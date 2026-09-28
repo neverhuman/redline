@@ -24,6 +24,10 @@ export CARGO_TARGET_DIR=${CARGO_TARGET_DIR:-$root/target}
 output=${OUTPUT_DIR:-$root/target/packages}
 mkdir -p "$output"
 output=$(cd "$output" && pwd)
+commit=$(git rev-parse HEAD)
+# `redlinedb --build-info` reports these (crates/cli/src/build_info.rs);
+# rustc rebuilds the CLI when they change.
+export REDLINEDB_BUILD_TAG=$TAG REDLINEDB_BUILD_SHA=$commit
 ./scripts/build-from-source.sh --all
 stage=$(mktemp -d)
 trap 'rm -rf "$stage"' EXIT
@@ -37,7 +41,6 @@ install -m 644 contracts/c-abi/sqlite3.h "$stage/redlinedb/include/"
 install -m 755 "$CARGO_TARGET_DIR/release/redline-web" "$stage/redline-web/bin/"
 install -m 755 "$CARGO_TARGET_DIR/release/redline-testing" "$CARGO_TARGET_DIR/release/redlinedb-client-smoke" "$stage/redline-testing/bin/"
 cp -R subrepos/redline-testing/{corpus,metadata,schemas,templates} "$stage/redline-testing/share/redlinedb/"
-commit=$(git rev-parse HEAD)
 source_tree=$(git rev-parse 'HEAD^{tree}')
 # Licence collection follows the dependency graph of this build's platform.
 host=$(rustc -vV | sed -n 's/^host: //p')

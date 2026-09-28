@@ -98,7 +98,10 @@ PREFIX/include/redlinedb.h, sqlite3.h -> ../lib/redlinedb/current/include/...
 ```
 
 The licences, SBOM and build provenance of the active version are in
-`PREFIX/lib/redlinedb/current/share/redlinedb/`. Headers stay under
+`PREFIX/lib/redlinedb/current/share/redlinedb/`. `redlinedb --build-info`
+(`--json` for one line of JSON) prints the release tag and source commit the
+binary was built from, its target, and the repository it was released by.
+Headers stay under
 `PREFIX/include`. When that directory is `/usr/include` or
 `/usr/local/include`, which compilers search by default, `sqlite3.h` is not
 linked there, because it would shadow the system SQLite header; use

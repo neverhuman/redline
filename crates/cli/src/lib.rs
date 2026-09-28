@@ -31,6 +31,7 @@ pub(crate) fn cli_open_options() -> OpenOptions {
 use clap::Parser;
 use redlinedb::{Database, OpenOptions, OwnedStep, RqlProgram, RqlStatement};
 
+mod build_info;
 mod dot;
 mod maintenance;
 mod render;
@@ -62,6 +63,11 @@ struct Cli {
 
     #[arg(long = "version")]
     version: bool,
+
+    /// Print which build this is (tag, source commit, target); with
+    /// `--json`, as one line of JSON (schema redline.build-info/v1).
+    #[arg(long = "build-info")]
+    build_info: bool,
 
     #[arg(long = "ifexists")]
     ifexists: bool,
@@ -292,6 +298,11 @@ pub fn run() {
 
     if cli.version {
         println!("{REDLINEDB_VERSION_LINE}");
+        return;
+    }
+
+    if cli.build_info {
+        print!("{}", build_info::render(cli.json));
         return;
     }
 
