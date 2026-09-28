@@ -112,7 +112,7 @@ publish_pr() {
   # provenance; SOURCE_INPUT_PATHS in
   # subrepos/redline-testing/src/evidence/identity.rs must list these paths.
   local inputs
-  inputs=$(git ls-tree -r HEAD -- Cargo.toml Cargo.lock rust-toolchain.toml crates subrepos metadata ops scripts \
+  inputs=$(git ls-tree -r HEAD -- Cargo.toml Cargo.lock rust-toolchain.toml .cargo crates subrepos metadata ops scripts \
     agent/audit-policy.toml .jankurai/audit-policy.toml .github/workflows/ci.yml \
     .github/workflows/sqlite-parity-report.yml | sha256sum | cut -d ' ' -f 1)
   if [ -f .github/parity-report-inputs.sha256 ] && [ "$(cat .github/parity-report-inputs.sha256)" = "$inputs" ]; then

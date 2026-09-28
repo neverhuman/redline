@@ -20,10 +20,13 @@ pub(crate) const RUN_PROVENANCE_SCHEMA: &str = "redline-testing-run-provenance-v
 /// `.github/parity-report-inputs.sha256`; a unit test below keeps the two
 /// lists equal. Generated outputs (README, reports, charts,
 /// benchmark results, `target/`) are outside it.
-pub(crate) const SOURCE_INPUT_PATHS: [&str; 12] = [
+pub(crate) const SOURCE_INPUT_PATHS: [&str; 13] = [
     "Cargo.toml",
     "Cargo.lock",
     "rust-toolchain.toml",
+    // Cargo configuration (linker, target-cpu, rustflags) both measured
+    // builds read from the repository root.
+    ".cargo",
     "crates",
     "subrepos",
     "metadata",
@@ -247,6 +250,44 @@ mod tests {
         assert_eq!(dirty.source_dirty, Some(true));
         assert_eq!(dirty.source_dirty_paths, ["?? crates/engine/extra.rs"]);
         assert_eq!(dirty.source_tree, clean.source_tree);
+    }
+
+    #[test]
+    fn cargo_configuration_is_a_source_input() {
+        // Cargo reads .cargo/config.toml from the repository root for both
+        // measured builds (redlinedb-cli and the runner), so an uncommitted
+        // codegen flag there changes the binaries the run measures.
+        let root = tempfile::Builder::new()
+            .prefix("redline-testing-cargo-config-")
+            .tempdir()
+            .expect("temp repo");
+        let repo = root.path();
+        git(repo, &["init", "--quiet"]);
+        fs::create_dir_all(repo.join(".cargo")).expect("cargo dir");
+        fs::write(repo.join(".cargo/config.toml"), "[build]\n").expect("config");
+        git(repo, &["add", "."]);
+        git(repo, &["commit", "--quiet", "-m", "base"]);
+        let clean = source_identity(repo);
+        assert_eq!(clean.source_dirty, Some(false));
+
+        fs::write(
+            repo.join(".cargo/config.toml"),
+            "[build]\nrustflags = [\"-C\", \"target-cpu=native\"]\n",
+        )
+        .expect("edit config");
+        let dirty = source_identity(repo);
+        assert_eq!(
+            dirty.source_dirty,
+            Some(true),
+            "{:?}",
+            dirty.source_dirty_paths
+        );
+        assert_eq!(dirty.source_dirty_paths, [" M .cargo/config.toml"]);
+
+        // And a committed change moves the inputs hash.
+        git(repo, &["commit", "--quiet", "-am", "native"]);
+        let committed = source_identity(repo);
+        assert_ne!(committed.source_inputs_sha256, clean.source_inputs_sha256);
     }
 
     #[test]
