@@ -630,3 +630,14 @@ Draft lines for the v5.0.0 CHANGELOG. The integrator owns `CHANGELOG.md`.
   segment below the one the log resumes in is salvaged and emptied before
   replay, and a targeted recovery records its timeline fork before the
   checkpoint that ends it, so the fork stays when that checkpoint fails.
+- An open of a path whose previous engine in this process is still
+  closing now waits for that close instead of failing with "database
+  already open: another owner holds owner.lock". Once `owner.lock` lived
+  as long as the last connection, a reopen right after a pool closed (the
+  sqlx driver closes its connections asynchronously) could land in the
+  few milliseconds between the old entry dying and its lock being
+  released. The dead registry slot now stays until the lock is released,
+  so a same-process open waits on it (up to 60 s); an open in another
+  process still gets `Busy`. Dead slots of in-memory sessions are also
+  removed now; they used to stay in the registry for the life of the
+  process.

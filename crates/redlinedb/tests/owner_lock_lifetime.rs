@@ -129,3 +129,63 @@ fn restore_over_an_owned_directory_is_busy_and_changes_nothing() {
     let restored = Database::open_with_options(&target, OpenOptions::default()).expect("open");
     assert_eq!(count_rows(&restored), 3);
 }
+
+/// A same-process open right after the last user of a database drops must
+/// not report "another owner": the lock is still held for the moment the
+/// closing engine needs to finish, and the open waits for that instead.
+#[test]
+fn reopen_while_the_last_user_drops_on_another_thread_waits_for_it() {
+    let root = tempfile::tempdir().expect("tempdir");
+    let path = root.path().join("db");
+    create_db_with_rows(&path);
+    for round in 0..20 {
+        let db = Database::open(&path).expect("open");
+        let mut conn = db.connect().expect("connect");
+        conn.execute("INSERT INTO t VALUES (?, ?)", (100 + round, "round"))
+            .expect("insert");
+        drop(db);
+        let barrier = std::sync::Arc::new(std::sync::Barrier::new(2));
+        let dropper = {
+            let barrier = std::sync::Arc::clone(&barrier);
+            std::thread::spawn(move || {
+                barrier.wait();
+                drop(conn);
+            })
+        };
+        barrier.wait();
+        // Keep opening while the other thread closes the engine: each
+        // attempt either shares the live engine or waits for it to close.
+        let deadline = std::time::Instant::now() + std::time::Duration::from_millis(200);
+        loop {
+            let reopened = Database::open(&path)
+                .unwrap_or_else(|err| panic!("round {round}: reopen failed: {err}"));
+            drop(reopened);
+            if std::time::Instant::now() > deadline {
+                break;
+            }
+        }
+        dropper.join().expect("dropper");
+    }
+    let db = Database::open(&path).expect("final open");
+    assert_eq!(count_rows(&db), 23);
+}
+
+#[test]
+fn sequential_close_and_reopen_of_one_path_never_reports_another_owner() {
+    let root = tempfile::tempdir().expect("tempdir");
+    let path = root.path().join("db");
+    create_db_with_rows(&path);
+    for round in 0..20_i64 {
+        let db = Database::open(&path).expect("open");
+        let mut conn = db.connect().expect("connect");
+        conn.execute("INSERT INTO t VALUES (?, ?)", (200 + round, "seq"))
+            .expect("insert");
+        // The handle goes first and the connection closes the engine.
+        drop(db);
+        drop(conn);
+        assert!(
+            lock_is_free(&path),
+            "round {round}: lock still held after close"
+        );
+    }
+}

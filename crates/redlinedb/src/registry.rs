@@ -3,7 +3,7 @@ use std::fs::{self, File, OpenOptions as FsOpenOptions, TryLockError};
 use std::io::ErrorKind;
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
-use std::sync::{Arc, Mutex, OnceLock, Weak};
+use std::sync::{Arc, Condvar, Mutex, OnceLock, Weak};
 use std::time::Duration;
 
 use crate::error::{Error, ErrorCode, Result};
@@ -132,6 +132,64 @@ pub(crate) struct DatabaseEntry {
     /// (non-global): embedding `redlinedb` never installs a global Rayon
     /// pool that would pollute the host process's existing parallelism.
     pub rayon_pool: Option<Arc<rayon::ThreadPool>>,
+    /// Last: marks the close finished once `owner.lock` above is released.
+    _closed: CloseNotice,
+}
+
+/// While a `DatabaseEntry` drops, its registry slot no longer upgrades but
+/// its engine is still closing and `owner.lock` is still held. An open of
+/// the same path in this process in that window would report another
+/// owner; it waits for the close instead (`wait_while_closing`). The dead
+/// slot stays in the registry until this last field of the entry drops,
+/// after every field before it, the lock included, so a dead slot means
+/// "closing" and no slot means "closed".
+struct CloseNotice {
+    path: PathBuf,
+}
+
+impl Drop for CloseNotice {
+    fn drop(&mut self) {
+        let mut registry = registry().lock().expect("registry poisoned");
+        if registry
+            .entries
+            .get(&self.path)
+            .is_some_and(|slot| slot.strong_count() == 0)
+        {
+            registry.entries.remove(&self.path);
+        }
+        drop(registry);
+        closed_signal().notify_all();
+    }
+}
+
+/// Longest an open waits for this process's previous engine on the same
+/// path to finish closing.
+const CLOSE_WAIT: Duration = Duration::from_secs(60);
+
+fn closed_signal() -> &'static Condvar {
+    static CLOSED: OnceLock<Condvar> = OnceLock::new();
+    CLOSED.get_or_init(Condvar::new)
+}
+
+/// Wait until no entry for `path` is closing in this process, so its
+/// `owner.lock` is free for this open. Returns at once when none is.
+fn wait_while_closing(path: &Path) {
+    let deadline = std::time::Instant::now() + CLOSE_WAIT;
+    let mut registry = registry().lock().expect("registry poisoned");
+    while registry
+        .entries
+        .get(path)
+        .is_some_and(|slot| slot.strong_count() == 0)
+    {
+        let now = std::time::Instant::now();
+        if now >= deadline {
+            return;
+        }
+        registry = closed_signal()
+            .wait_timeout(registry, deadline - now)
+            .expect("registry poisoned")
+            .0;
+    }
 }
 
 impl std::fmt::Debug for DatabaseEntry {
@@ -260,22 +318,31 @@ fn create_ephemeral_database_inner(
 ) -> Result<Arc<DatabaseEntry>> {
     let path = ephemeral_session_path(options.temp_dir.as_deref(), session_name);
     let fingerprint = OpenFingerprint::from_options(options);
-    let open_lock = {
+    // An entry is only ever dropped with the registry mutex released: its
+    // last field locks the registry (`CloseNotice`).
+    let (existing, open_lock) = {
         let mut registry = registry().lock().expect("registry poisoned");
-        if let Some(existing) = registry.entries.get(&path).and_then(Weak::upgrade) {
-            return validate_existing_entry(existing, &fingerprint);
+        match registry.entries.get(&path).and_then(Weak::upgrade) {
+            Some(existing) => (Some(existing), None),
+            None => (None, Some(open_lock_for_path(&mut registry, &path))),
         }
-        open_lock_for_path(&mut registry, &path)
     };
+    if let Some(existing) = existing {
+        return validate_existing_entry(existing, &fingerprint);
+    }
+    let open_lock = open_lock.expect("an open lock when no entry is live");
 
     let _open_guard = open_lock.lock().expect("database open mutex poisoned");
-    {
+    let existing = {
         let registry = registry().lock().expect("registry poisoned");
-        if let Some(existing) = registry.entries.get(&path).and_then(Weak::upgrade) {
-            return validate_existing_entry(existing, &fingerprint);
-        }
+        registry.entries.get(&path).and_then(Weak::upgrade)
+    };
+    if let Some(existing) = existing {
+        return validate_existing_entry(existing, &fingerprint);
     }
 
+    // A named session of this process may still be closing on this path.
+    wait_while_closing(&path);
     // Bind the lock before the root: locals drop in reverse order, so a
     // failed create below removes the directory while the lock is still held.
     let (owner_lock, temp_root) = if private_memory {
@@ -323,6 +390,7 @@ fn create_ephemeral_database_inner(
         interrupt: Arc::new(AtomicBool::new(false)),
         busy_timeout: Mutex::new(options.busy_timeout),
         rayon_pool,
+        _closed: CloseNotice { path: path.clone() },
     });
     let mut registry = registry().lock().expect("registry poisoned");
     registry.entries.insert(path, Arc::downgrade(&entry));
@@ -380,20 +448,27 @@ fn open_database_at(
 ) -> Result<Arc<DatabaseEntry>> {
     let path = normalize_path(path, create)?;
     let fingerprint = OpenFingerprint::from_options(options);
-    let open_lock = {
+    // An entry is only ever dropped with the registry mutex released: its
+    // last field locks the registry (`CloseNotice`).
+    let (existing, open_lock) = {
         let mut registry = registry().lock().expect("registry poisoned");
-        if let Some(existing) = registry.entries.get(&path).and_then(Weak::upgrade) {
-            return validate_existing_entry(existing, &fingerprint);
+        match registry.entries.get(&path).and_then(Weak::upgrade) {
+            Some(existing) => (Some(existing), None),
+            None => (None, Some(open_lock_for_path(&mut registry, &path))),
         }
-        open_lock_for_path(&mut registry, &path)
     };
+    if let Some(existing) = existing {
+        return validate_existing_entry(existing, &fingerprint);
+    }
+    let open_lock = open_lock.expect("an open lock when no entry is live");
 
     let _open_guard = open_lock.lock().expect("database open mutex poisoned");
-    {
+    let existing = {
         let registry = registry().lock().expect("registry poisoned");
-        if let Some(existing) = registry.entries.get(&path).and_then(Weak::upgrade) {
-            return validate_existing_entry(existing, &fingerprint);
-        }
+        registry.entries.get(&path).and_then(Weak::upgrade)
+    };
+    if let Some(existing) = existing {
+        return validate_existing_entry(existing, &fingerprint);
     }
 
     if create {
@@ -411,6 +486,8 @@ fn open_database_at(
     // creates missing files and rewrites index pages, so an open that is
     // going to lose to another owner must fail here, before recovery. A
     // read-only open recovers too, so it takes the same exclusive lock.
+    // This process's own previous engine on the path may still be closing.
+    wait_while_closing(&path);
     let owner_lock = if options.process_owner_lock {
         Some(Arc::new(acquire_owner_lock(&path)?))
     } else {
@@ -441,6 +518,7 @@ fn open_database_at(
         interrupt: Arc::new(AtomicBool::new(false)),
         busy_timeout: Mutex::new(options.busy_timeout),
         rayon_pool,
+        _closed: CloseNotice { path: path.clone() },
     });
     let mut registry = registry().lock().expect("registry poisoned");
     registry.entries.insert(path, Arc::downgrade(&entry));
@@ -523,6 +601,9 @@ fn holds_no_image(dir: &Path) -> Result<bool> {
 /// database is in place.
 pub(crate) fn take_directory_for_replacement(dir: &Path) -> Result<File> {
     fs::create_dir_all(dir)?;
+    if let Ok(canonical) = fs::canonicalize(dir) {
+        wait_while_closing(&canonical);
+    }
     let lock = acquire_owner_lock(dir)?;
     clear_stale_session(dir)?;
     Ok(lock)
