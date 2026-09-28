@@ -355,8 +355,10 @@ pub fn run(config: RunConfig) -> Result<RunSummary> {
             elapsed_ns: started.elapsed().as_nanos(),
         },
         &features,
-        oracle_summary.reference,
-        source,
+        Measured {
+            reference: oracle_summary.reference,
+            source,
+        },
     )?;
 
     Ok(RunSummary {
@@ -377,6 +379,13 @@ pub fn run(config: RunConfig) -> Result<RunSummary> {
     })
 }
 
+/// What the run identified outside its own outputs: the PostgreSQL
+/// reference and the source tree.
+struct Measured {
+    reference: Option<super::engine::ReferenceIdentity>,
+    source: SourceIdentity,
+}
+
 fn write_artifacts(
     config: &RunConfig,
     target: &BinaryIdentity,
@@ -384,8 +393,7 @@ fn write_artifacts(
     raw: &str,
     summary: BeyondSummary,
     features: &[Feature],
-    reference: Option<super::engine::ReferenceIdentity>,
-    source: SourceIdentity,
+    measured: Measured,
 ) -> Result<()> {
     let output_dir = config
         .output
@@ -423,9 +431,9 @@ fn write_artifacts(
         target_binary_sha256: target.sha256.clone(),
         target_version: target.version.clone(),
         postgres_reference_status: postgres_status.to_owned(),
-        reference,
+        reference: measured.reference,
         corpus_sha256: sha256_hex(super::oracle::MANIFEST),
-        source,
+        source: measured.source,
         command_line: config.command_line.clone(),
         started_unix_ms: config.started_unix_ms,
         ended_unix_ms: crate::evidence::now_unix_ms(),
