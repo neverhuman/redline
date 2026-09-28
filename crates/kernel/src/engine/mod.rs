@@ -14,6 +14,8 @@ mod checkpoint_cut_tests;
 mod checkpoint_serial_tests;
 #[cfg(test)]
 mod directory_load_tests;
+#[cfg(test)]
+mod integrity_hole_tests;
 mod maintenance;
 mod recovery;
 mod runtime;

@@ -42,8 +42,19 @@ impl Engine {
             Ok(page_file) => match page_file.page_count() {
                 Ok(page_count) => {
                     for page_no in 1..=page_count {
-                        if let Err(err) = page_file.read_page(PageId(page_no)) {
-                            errors.push(format!("page {page_no}: {err}"));
+                        let page_id = PageId(page_no);
+                        match page_file.read_page(page_id) {
+                            Ok(_) => {}
+                            // All zeroes: the file never received this page.
+                            // A higher page reached it first, while this one
+                            // waits in the pool for a checkpoint, or a crash
+                            // cut it off and recovery replayed its rows onto
+                            // new pages. Nothing refers to it on disk.
+                            Err(Error::InvalidMagic { actual: 0, .. })
+                                if page_file
+                                    .read_page_bytes_unchecked(page_id)
+                                    .is_ok_and(|bytes| bytes.iter().all(|byte| *byte == 0)) => {}
+                            Err(err) => errors.push(format!("page {page_no}: {err}")),
                         }
                     }
                 }

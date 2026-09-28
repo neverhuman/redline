@@ -297,3 +297,17 @@ Draft lines for the v5.0.0 CHANGELOG. The integrator owns `CHANGELOG.md`.
   space: eviction may write any unpinned dirty page there and read it back
   later. Memory stays bounded by the pool; the scratch file grows instead.
   Persistent engines are unchanged.
+
+## integrity_check passes pages the file never received
+
+- `PRAGMA integrity_check` read every page of the page file and reported
+  "invalid magic" for a zero-filled one. A page reaches the file only when
+  a checkpoint or eviction writes it, and a higher page can get there
+  first: a page allocated while a checkpoint took its snapshot, or one a
+  crash cut off before any write, whose rows recovery replays onto new
+  pages. Such a page holds nothing the database refers to, yet the check
+  failed, which is the known-red `recover-matrix` result above and what a
+  clean close without a checkpoint showed.
+- A page whose bytes are all zero now counts as never written, as the full
+  check (`redline_full_check`) already skipped it. Any other unreadable
+  page, a checksum failure included, is still reported.
