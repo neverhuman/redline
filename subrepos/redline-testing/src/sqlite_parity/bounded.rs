@@ -189,7 +189,8 @@ pub fn run_piped(
 
 /// Runs `command` with stdout and stderr sent to files, polling it to
 /// sample its memory, under `limits`: the deadline and the size of both
-/// files are checked on every poll.
+/// files are checked on every poll, and the size once more after the child
+/// exits.
 pub fn run_to_files(
     command: &mut Command,
     stdin: Option<Vec<u8>>,
@@ -241,6 +242,15 @@ pub fn run_to_files(
     if let Some(writer) = writer {
         let _ = writer.join();
     }
+    // A child that writes past the cap and exits between two polls was
+    // never seen over it: the files, not the polls, say whether the kept
+    // bytes stop short of what it wrote.
+    if [stdout_path, stderr_path]
+        .iter()
+        .any(|path| file_len(path) > limits.max_output_bytes as u64)
+    {
+        group.mark(FIRED_OUTPUT_LIMIT);
+    }
     let status = waited.context("poll sqlite parity child")?;
     Ok(Captured {
         outcome: group.outcome(status),
@@ -281,6 +291,15 @@ impl Group {
         {
             signal_kill(&[format!("-{}", self.pgid), self.pgid.to_string()]);
         }
+    }
+
+    /// Records `reason` without signalling: the leader was already reaped,
+    /// so its pid may name another process by now. Only the first reason
+    /// counts.
+    fn mark(&self, reason: u8) {
+        let _ = self
+            .fired
+            .compare_exchange(NOT_FIRED, reason, Ordering::SeqCst, Ordering::SeqCst);
     }
 
     /// After the leader exited: kills whatever is left of its group. The
@@ -473,6 +492,52 @@ mod tests {
         let captured = run_piped(&mut shell("sleep 30"), None, limits(200, 1024)).expect("run");
         assert_eq!(captured.outcome, ExecutionOutcome::Timeout);
         assert_eq!(captured.status.code(), None);
+    }
+
+    #[test]
+    fn file_capture_marks_output_past_the_cap_after_the_child_exits() {
+        // The child writes past the cap and exits between two polls, so no
+        // poll sees the oversized file while the child is still running.
+        // The kept bytes stop at the cap, so the run must say it was
+        // capped, as the piped path does, not pass as a whole result.
+        let dir = tempfile::tempdir().expect("tempdir");
+        let (out, err) = (dir.path().join("out"), dir.path().join("err"));
+        for script in [
+            "head -c 2048 /dev/zero",
+            "head -c 2048 /dev/zero >&2",
+            "sleep 0.05; head -c 2048 /dev/zero",
+        ] {
+            let captured = run_to_files(
+                &mut shell(script),
+                None,
+                limits(10_000, 1024),
+                &out,
+                &err,
+                false,
+            )
+            .expect("run");
+            assert_eq!(
+                captured.outcome,
+                ExecutionOutcome::OutputLimit,
+                "{script}: kept {} stdout and {} stderr bytes",
+                captured.stdout.len(),
+                captured.stderr.len()
+            );
+            assert!(!captured.outcome.is_complete());
+            assert!(captured.stdout.len() <= 1024 && captured.stderr.len() <= 1024);
+        }
+        // Output of exactly the cap is a whole result.
+        let captured = run_to_files(
+            &mut shell("head -c 1024 /dev/zero"),
+            None,
+            limits(10_000, 1024),
+            &out,
+            &err,
+            false,
+        )
+        .expect("run");
+        assert_eq!(captured.outcome, ExecutionOutcome::Exited);
+        assert_eq!(captured.stdout.len(), 1024);
     }
 
     #[test]
