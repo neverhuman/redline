@@ -23,4 +23,5 @@ Third-party dependencies
 Release archives contain third-party Rust crates and, in redline-web, npm
 packages, each under its own licence. share/redlinedb/DEPENDENCIES.tsv lists
 every one with its declared licence, and share/redlinedb/licenses/ holds the
-licence and notice files they ship.
+licence and notice files they ship (share/redlinedb/components/<package>/ in
+the redline-web and redline-testing archives).

@@ -52,7 +52,7 @@ A release install keeps each version in `PREFIX/lib/redlinedb/versions/<tag>/` (
 | `redline-testing-v5.0.0-<platform>.tar.gz` | The conformance runner |
 | `redline-web-v5.0.0-<platform>.tar.gz` | The web console |
 
-Each package carries dependency notices, an SBOM, and build provenance naming the repository, tag, and commit it was built from; for an installed version they are in `PREFIX/lib/redlinedb/current/share/redlinedb/`. The installer verifies the checksum and the provenance before it writes anything. `REDLINEDB_SHA256` makes it also require the digest you pass, and `REDLINEDB_VERIFY_ATTESTATION=1` checks the GitHub build attestation.
+Each package carries dependency notices, an SBOM, and build provenance naming the repository, tag, and commit it was built from; for an installed version they are in `PREFIX/lib/redlinedb/current/share/redlinedb/`, and the web and testing archives keep theirs in `share/redlinedb/components/<package>/`. The installer verifies the checksum and the provenance before it writes anything. `REDLINEDB_SHA256` makes it also require the digest you pass, and `REDLINEDB_VERIFY_ATTESTATION=1` checks the GitHub build attestation.
 
 ## Upgrading
 

@@ -100,8 +100,16 @@ Intel/Apple Silicon (macOS 15+).
 - `redline-web-TAG-PLATFORM.tar.gz`: web server with embedded frontend assets.
 - `redline-testing-TAG-PLATFORM.tar.gz`: conformance runner, corpus and client smoke tool.
 
-Each archive has a `.sha256` sidecar and contains a CycloneDX SBOM and
-`share/redlinedb/build-provenance.json`: one compact JSON line
+Each archive has a `.sha256` sidecar. Its own records (`LICENSE`, `NOTICE`,
+`VERSION`, licences, `DEPENDENCIES.tsv`, a CycloneDX SBOM and
+`build-provenance.json`) are in `share/redlinedb/` for the core package and in
+`share/redlinedb/components/<package>/` for redline-web and redline-testing,
+so the archives extract into one tree in any order without replacing each
+other's records (`scripts/release/package-layout.sh`; `scripts/test-packages.sh`
+extracts them in every order through `scripts/release/check-package-layout.sh`).
+redline-testing's corpus, metadata, schemas and templates stay in
+`share/redlinedb/`, where the runner reads them. `build-provenance.json` is one
+compact JSON line
 (`redline.release-build/v2`) recording the repository URL and numeric id, tag,
 source commit and tree, platform, package and compiler. The CLI reports the
 same tag and commit: `redlinedb --build-info --json` prints one line
@@ -120,8 +128,9 @@ provenance names another repository id or tag, and passes
 `--repo neverhuman/redline` to every `gh` call, so a mirror or fork running the
 same workflow cannot publish. `ops/ci/tests/release-authority.sh` tests both.
 
-Licences: `share/redlinedb/LICENSE` is the Apache-2.0 text and
-`share/redlinedb/NOTICE` the project notice. `scripts/release/collect-licenses.sh`
+Licences (paths for the core package; the components' records are under
+`share/redlinedb/components/<package>/`): `share/redlinedb/LICENSE` is the
+Apache-2.0 text and `share/redlinedb/NOTICE` the project notice. `scripts/release/collect-licenses.sh`
 walks the non-dev Cargo dependency graph of the archive's own binaries and
 libraries on the build platform (and, for redline-web, the npm production
 dependencies) and copies each third-party package's licence, notice and

@@ -20,6 +20,8 @@ for script in "$generate" "$verify" "$root/ops/ci/source-inputs-sha256.sh"; do
 done
 # shellcheck source=ops/release/authority.env
 . "$root/ops/release/authority.env"
+# shellcheck source=scripts/release/package-layout.sh
+. "$root/scripts/release/package-layout.sh"
 work=$(mktemp -d)
 trap 'rm -rf "$work"' EXIT
 failures=0
@@ -48,7 +50,7 @@ inputs=$(cd "$checkout" && bash "$root/ops/ci/source-inputs-sha256.sh")
 # packages [commit] [tree] [compiler of the last archive]: the twelve
 # archives of $tag with checksum files.
 packages() {
-  local p_commit=${1:-$commit} p_tree=${2:-$tree} last_rust=${3:-$rustc_line} rust package platform dir
+  local p_commit=${1:-$commit} p_tree=${2:-$tree} last_rust=${3:-$rustc_line} rust package platform dir share
   rm -rf "$checkout/target/packages" "$work/trees"
   mkdir -p "$checkout/target/packages"
   for package in redlinedb redline-web redline-testing; do
@@ -56,12 +58,13 @@ packages() {
       dir=$work/trees/$package-$platform
       rust=$rustc_line
       [[ $package-$platform != redline-testing-macos-arm64 ]] || rust=$last_rust
-      mkdir -p "$dir/share/redlinedb"
+      share=$dir/$(package_share "$package")
+      mkdir -p "$share"
       jq -cn --arg url "$REDLINE_REPO_URL" --argjson id "$REDLINE_REPO_ID" --arg tag "$tag" \
         --arg commit "$p_commit" --arg tree "$p_tree" --arg platform "$platform" --arg package "$package" \
         --arg rust "$rust" \
         '{schema:"redline.release-build/v2",repository_url:$url,repository_id:$id,tag:$tag,commit:$commit,source_tree:$tree,platform:$platform,package:$package,rust:$rust}' \
-        > "$dir/share/redlinedb/build-provenance.json"
+        > "$share/build-provenance.json"
       # Byte-identical when rebuilt, so each refusal below has one cause.
       tar --sort=name --mtime=@0 --owner=0 --group=0 --numeric-owner -cf - -C "$dir" . \
         | gzip -n > "$checkout/target/packages/$package-$tag-$platform.tar.gz"

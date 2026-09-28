@@ -11,6 +11,8 @@ here=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 # name, and only archives whose provenance names it (ops/release/authority.env).
 # shellcheck source=ops/release/authority.env
 . "$here/../release/authority.env"
+# shellcheck source=scripts/release/package-layout.sh
+. "$here/../../scripts/release/package-layout.sh"
 if [[ ${GITHUB_REPOSITORY_ID:-} != "$REDLINE_REPO_ID" || ${GITHUB_REPOSITORY:-} != "$REDLINE_REPO_SLUG" ]]; then
   printf 'refusing to publish from %s (id %s): RedlineDB releases are published only by %s (id %s)\n' \
     "${GITHUB_REPOSITORY:-an unknown repository}" "${GITHUB_REPOSITORY_ID:-unset}" "$REDLINE_REPO_SLUG" "$REDLINE_REPO_ID" >&2
@@ -50,7 +52,8 @@ done
 for asset in "${assets[@]}"; do
   [[ $asset == *.tar.gz ]] || continue
   archive=target/packages/$asset
-  provenance=$(tar -xzOf "$archive" ./share/redlinedb/build-provenance.json) ||
+  # Each package's own record (scripts/release/package-layout.sh).
+  provenance=$(archive_provenance "$archive") ||
     { printf '%s has no build provenance\n' "$asset" >&2; exit 1; }
   grep -Eq "\"repository_id\":${REDLINE_REPO_ID}[,}]" <<< "$provenance" ||
     { printf '%s was not built by %s\n' "$asset" "$REDLINE_REPO_URL" >&2; exit 1; }

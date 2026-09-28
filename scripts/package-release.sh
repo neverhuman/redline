@@ -31,10 +31,15 @@ export REDLINEDB_BUILD_TAG=$TAG REDLINEDB_BUILD_SHA=$commit
 ./scripts/build-from-source.sh --all
 stage=$(mktemp -d)
 trap 'rm -rf "$stage"' EXIT
-for package in redlinedb redline-web redline-testing; do
-  mkdir -p "$stage/$package/bin" "$stage/$package/share/redlinedb"
-  cp LICENSE NOTICE "$stage/$package/share/redlinedb/"
-  printf '%s\n' "$TAG" > "$stage/$package/share/redlinedb/VERSION"
+# Each package's records go to its own directory (scripts/release/package-layout.sh):
+# share/redlinedb for the core, share/redlinedb/components/<package> otherwise.
+# shellcheck source=scripts/release/package-layout.sh
+. scripts/release/package-layout.sh
+for package in "${release_packages[@]}"; do
+  share=$(package_share "$package")
+  mkdir -p "$stage/$package/bin" "$stage/$package/$share"
+  cp LICENSE NOTICE "$stage/$package/$share/"
+  printf '%s\n' "$TAG" > "$stage/$package/$share/VERSION"
 done
 ./scripts/install-from-source.sh --tree "$stage/redlinedb"
 install -m 644 contracts/c-abi/sqlite3.h "$stage/redlinedb/include/"
@@ -44,7 +49,8 @@ cp -R subrepos/redline-testing/{corpus,metadata,schemas,templates} "$stage/redli
 source_tree=$(git rev-parse 'HEAD^{tree}')
 # Licence collection follows the dependency graph of this build's platform.
 host=$(rustc -vV | sed -n 's/^host: //p')
-for package in redlinedb redline-web redline-testing; do
+for package in "${release_packages[@]}"; do
+  share=$(package_share "$package")
   case "$package" in
     redlinedb) manifest=Cargo.toml ;;
     *) manifest=subrepos/$package/Cargo.toml ;;
@@ -69,16 +75,16 @@ for package in redlinedb redline-web redline-testing; do
   done
   npm_project=()
   [[ $package != redline-web ]] || npm_project=(--npm-project subrepos/redline-web/apps/web)
-  bash scripts/release/collect-licenses.sh --metadata "$stage/metadata.json" --share "$stage/$package/share/redlinedb" \
+  bash scripts/release/collect-licenses.sh --metadata "$stage/metadata.json" --share "$stage/$package/$share" \
     "${roots[@]}" ${npm_project[@]+"${npm_project[@]}"}
   # One compact line: install.sh and publish-github-release.sh match
   # "repository_id":<id> and "tag":"<tag>" in it without a JSON parser.
   jq -cn --arg url "$REDLINE_REPO_URL" --argjson id "$REDLINE_REPO_ID" --arg tag "$TAG" --arg commit "$commit" \
     --arg tree "$source_tree" --arg platform "$platform" --arg package "$package" --arg rust "$(rustc --version)" \
     '{schema:"redline.release-build/v2",repository_url:$url,repository_id:$id,tag:$tag,commit:$commit,source_tree:$tree,platform:$platform,package:$package,rust:$rust}' \
-    > "$stage/$package/share/redlinedb/build-provenance.json"
+    > "$stage/$package/$share/build-provenance.json"
   if [[ $package == redline-web ]]; then
-    npm --prefix subrepos/redline-web/apps/web sbom --sbom-format cyclonedx > "$stage/$package/share/redlinedb/frontend-sbom.cdx.json"
+    npm --prefix subrepos/redline-web/apps/web sbom --sbom-format cyclonedx > "$stage/$package/$share/frontend-sbom.cdx.json"
   fi
   # Archives hold regular files and directories only; no symlinks or devices.
   if [[ -n $(find "$stage/$package" ! -type f ! -type d -print -quit) ]]; then

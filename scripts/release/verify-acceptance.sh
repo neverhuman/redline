@@ -36,6 +36,8 @@ set -euo pipefail
 root=$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)
 # shellcheck source=ops/release/authority.env
 . "$root/ops/release/authority.env"
+# shellcheck source=scripts/release/package-layout.sh
+. "$root/scripts/release/package-layout.sh"
 
 usage() {
   printf 'usage: verify-acceptance.sh <manifest> --packages <dir> [--receipts <dir>] [--tag <tag>]\n' >&2
@@ -138,7 +140,7 @@ else
       read -r sidecar _ < "$archive.sha256" || true
       [[ $sidecar == "$digest" ]] || problem "$name: its checksum file says ${sidecar:-nothing}"
     fi
-    provenance=$(tar -xzOf "$archive" ./share/redlinedb/build-provenance.json 2>/dev/null) \
+    provenance=$(archive_provenance "$archive" 2>/dev/null) \
       || { problem "$name: no build provenance"; continue; }
     jq -e --argjson id "$REDLINE_REPO_ID" --arg tag "$tag" --arg commit "$commit" --arg tree "$tree" --arg rust "$rustc" \
       '.repository_id == $id and .tag == $tag and .commit == $commit and .source_tree == $tree and .rust == $rust' \

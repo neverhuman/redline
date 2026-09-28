@@ -36,6 +36,8 @@ here=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 root=$(cd "$here/../.." && pwd)
 # shellcheck source=ops/release/authority.env
 . "$root/ops/release/authority.env"
+# shellcheck source=scripts/release/package-layout.sh
+. "$root/scripts/release/package-layout.sh"
 
 die() {
   printf 'release-acceptance.sh: %s\n' "$*" >&2
@@ -75,7 +77,7 @@ for archive in "${archives[@]}"; do
   [[ -f $archive.sha256 ]] || die "$name has no checksum file"
   read -r listed _ < "$archive.sha256" || true
   [[ $listed == "$digest" ]] || die "$name does not match its checksum file ($digest, file says ${listed:-nothing})"
-  rust=$(tar -xzOf "$archive" ./share/redlinedb/build-provenance.json | jq -er '.rust') \
+  rust=$(archive_provenance "$archive" | jq -er '.rust') \
     || die "$name has no readable build provenance"
   compilers+=$rust$'\n'
   packages_json=$(jq -c --arg name "$name" --arg sha "$digest" '. + [{name: $name, sha256: $sha}]' <<< "$packages_json")

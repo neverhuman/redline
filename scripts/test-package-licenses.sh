@@ -23,6 +23,8 @@
 # Needs bash, jq, git, cargo and npm; it builds nothing.
 set -euo pipefail
 root=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
+# shellcheck source=scripts/release/package-layout.sh
+. "$root/scripts/release/package-layout.sh"
 packages=${1:-${OUTPUT_DIR:-$root/target/packages}}
 waivers=${LICENSE_WAIVERS:-$root/ops/release/license-waivers.toml}
 collector=$root/scripts/release/collect-licenses.sh
@@ -231,7 +233,7 @@ else
     extract=$work/archive-$(basename "$archive" .tar.gz)
     mkdir -p "$extract"
     tar -xzf "$archive" -C "$extract"
-    check_share "$extract/share/redlinedb" "$(basename "$archive")" "$waivers"
+    check_share "$extract/$(package_share "$(archive_package "$archive")")" "$(basename "$archive")" "$waivers"
   done
 fi
 

@@ -50,6 +50,7 @@ run_preflight() {
     bash ops/ci/tests/release-authority.sh
     bash ops/ci/tests/main-protection.sh
     bash scripts/check-public-hygiene.sh
+    bash scripts/release/test-package-layout.sh
     bash scripts/test-launch-claims.sh
     bash scripts/check-launch-claims.sh
     bash scripts/test-release-version.sh

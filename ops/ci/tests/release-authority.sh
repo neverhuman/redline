@@ -22,6 +22,8 @@ set -euo pipefail
 root=$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)
 # shellcheck source=ops/release/authority.env
 . "$root/ops/release/authority.env"
+# shellcheck source=scripts/release/package-layout.sh
+. "$root/scripts/release/package-layout.sh"
 work=$(mktemp -d)
 trap 'rm -rf "$work"' EXIT
 failures=0
@@ -83,7 +85,7 @@ platforms=(linux-x86_64 linux-arm64 macos-x86_64 macos-arm64)
 # packages <tag> [repository id for the last archive]: the twelve release
 # archives of <tag>, each with its checksum file.
 packages() {
-  local release=$1 last_id=${2:-$REDLINE_REPO_ID} package platform dir id count=0
+  local release=$1 last_id=${2:-$REDLINE_REPO_ID} package platform dir share id count=0
   rm -rf "$checkout/target/packages" "$work/trees"
   mkdir -p "$checkout/target/packages"
   for package in redlinedb redline-web redline-testing; do
@@ -92,9 +94,10 @@ packages() {
       id=$REDLINE_REPO_ID
       [[ $count != 12 ]] || id=$last_id
       dir=$work/trees/$package-$platform
-      mkdir -p "$dir/share/redlinedb"
-      printf '{"schema":"redline.release-build/v2","repository_url":"%s","repository_id":%s,"tag":"%s","commit":"%s","source_tree":"%s","rust":"%s"}\n' \
-        "$REDLINE_REPO_URL" "$id" "$release" "$commit" "$tree" "$rustc_line" > "$dir/share/redlinedb/build-provenance.json"
+      share=$dir/$(package_share "$package")
+      mkdir -p "$share"
+      printf '{"schema":"redline.release-build/v2","repository_url":"%s","repository_id":%s,"tag":"%s","commit":"%s","source_tree":"%s","package":"%s","rust":"%s"}\n' \
+        "$REDLINE_REPO_URL" "$id" "$release" "$commit" "$tree" "$package" "$rustc_line" > "$share/build-provenance.json"
       tar -czf "$checkout/target/packages/$package-$release-$platform.tar.gz" -C "$dir" .
       (cd "$checkout/target/packages" && sha256sum "$package-$release-$platform.tar.gz" > "$package-$release-$platform.tar.gz.sha256")
     done

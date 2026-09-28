@@ -644,3 +644,24 @@ against the v5 headers. There is no v4 compatibility alias.
   tests it on fixture logs. Locally (warm build) the shard takes about 20 s.
 - Not done (still P1 in the audit): a stateful prepared-statement lane
   (prepare, step, modify, reset through a view) and README badges per lane.
+
+## Package records per component (DX-08)
+
+- The redline-web and redline-testing archives now keep their own records
+  (`LICENSE`, `NOTICE`, `VERSION`, `licenses/`, `DEPENDENCIES.tsv`, SBOMs and
+  `build-provenance.json`, whose `package` field names them) in
+  `share/redlinedb/components/<package>/`. Before, all three archives wrote
+  those files to `share/redlinedb/`, so extracting them together left
+  whichever came last, and the core's provenance and licence list could name
+  another package. The core archive is unchanged (`share/redlinedb/`, which
+  `install.sh` reads), and redline-testing's corpus, metadata, schemas and
+  templates stay where the runner reads them.
+- `scripts/test-packages.sh` extracts each platform's archives in every order
+  (`scripts/release/check-package-layout.sh`) and requires
+  `share/redlinedb/build-provenance.json` to name package `redlinedb` and every
+  package's records to be its own. The publisher, the acceptance manifest,
+  `verify-acceptance.sh` and the licence check read each archive's records
+  from its own directory (`scripts/release/package-layout.sh`).
+- Breaking for scripts that read `share/redlinedb/build-provenance.json`,
+  `VERSION` or the licence files from a redline-web or redline-testing
+  archive: read `share/redlinedb/components/<package>/` instead.

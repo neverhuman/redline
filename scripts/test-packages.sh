@@ -16,13 +16,19 @@ prefix="$work/install with spaces"
 mkdir -p "$prefix"
 # shellcheck source=ops/release/authority.env
 . "$root/ops/release/authority.env"
+# shellcheck source=scripts/release/package-layout.sh
+. "$root/scripts/release/package-layout.sh"
+# Each package keeps its own records, and extracting the archives together in
+# any order leaves the core records at share/redlinedb (DX-08).
+bash "$root/scripts/release/check-package-layout.sh" "$packages"
 for archive in "$packages"/*.tar.gz; do
   directory=$(cd "$(dirname "$archive")" && pwd)
   name=${archive##*/}
   (cd "$directory"; if command -v sha256sum >/dev/null; then sha256sum -c "$name.sha256"; else shasum -a 256 -c "$name.sha256"; fi)
   # install.sh and publish-github-release.sh match these exact fields.
-  provenance=$(tar -xzOf "$archive" ./share/redlinedb/build-provenance.json)
-  tag=$(tar -xzOf "$archive" ./share/redlinedb/VERSION)
+  share=$(package_share "$(archive_package "$name")")
+  provenance=$(tar -xzOf "$archive" "./$share/build-provenance.json")
+  tag=$(tar -xzOf "$archive" "./$share/VERSION")
   for field in "\"repository_id\":${REDLINE_REPO_ID}[,}]" '"commit":"[0-9a-f]{40}"' '"source_tree":"[0-9a-f]{40}"'; do
     grep -Eq "$field" <<< "$provenance" || { printf '%s: provenance lacks %s: %s\n' "$name" "$field" "$provenance" >&2; exit 1; }
   done
