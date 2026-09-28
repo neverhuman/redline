@@ -249,7 +249,7 @@ pub fn run(config: RunConfig) -> Result<RunSummary> {
         // even on skip/fail — downstream agents need to see the redlinedb
         // outputs to triage.
         if let Some(t) = outcome.target.as_ref() {
-            let target_record = serde_json::json!({
+            let mut target_record = serde_json::json!({
                 "suite": "beyond_sqlite",
                 "case_id": format!("BEYOND-CASE-{:05}", outcome.case_id),
                 "name": outcome.name,
@@ -275,6 +275,13 @@ pub fn run(config: RunConfig) -> Result<RunSummary> {
                 "target_elapsed_ns": t.target_elapsed_ns,
                 "memory_status": "not_run",
             });
+            // The assertion evidence the gate re-checks (PG-06).
+            if let (Some(evidence), Some(record)) =
+                (t.evidence.as_ref(), target_record.as_object_mut())
+                && let serde_json::Value::Object(fields) = serde_json::to_value(evidence)?
+            {
+                record.extend(fields);
+            }
             oracle_raw.push_str(&target_record.to_string());
             oracle_raw.push('\n');
         }

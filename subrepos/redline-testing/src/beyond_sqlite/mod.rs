@@ -20,6 +20,7 @@
 //! `run()` dispatches to both layers and concatenates their records into the
 //! same JSONL file consumed by `report.rs` / `evidence.rs`.
 
+pub mod assertion;
 pub mod case;
 pub mod engine;
 pub mod gate;

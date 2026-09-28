@@ -92,16 +92,9 @@ pub fn check(raw_path: &Path, baseline_path: Option<&Path>, readme: Option<&Path
         provenance["corpus_sha256"] == corpus_hash,
         "corpus identity mismatch"
     );
-    let required: BTreeSet<_> = super::oracle::load_cases()?
-        .into_iter()
-        .map(|case| format!("BEYOND-CASE-{:05}", case.id))
-        .collect();
-    let declared_rejections: BTreeSet<_> = super::oracle::load_cases()?
-        .into_iter()
-        .filter(|case| case.expected_target_stderr_contains.is_some())
-        .map(|case| format!("BEYOND-CASE-{:05}", case.id))
-        .collect();
-    let failures = outcomes(&raw, &required, &declared_rejections)?;
+    let contracts = cases::contracts(&super::oracle::load_cases()?);
+    let required: BTreeSet<_> = contracts.keys().cloned().collect();
+    let failures = outcomes(&raw, &contracts)?.failed;
     let reference = &provenance["reference"];
     ensure!(
         reference["settings"] == "160015|C|C|UTC",
@@ -227,17 +220,13 @@ pub fn check(raw_path: &Path, baseline_path: Option<&Path>, readme: Option<&Path
 
 #[cfg(test)]
 mod tests {
-    use super::cases::rows;
+    use super::cases::{agreeing_run, contracts};
     use super::*;
     // A complete synthetic bundle lets us exercise artifact verification without
     // a live server. It does not constitute compatibility evidence.
     fn bundle() -> tempfile::TempDir {
         let dir = tempfile::tempdir().unwrap();
-        let raw: String = super::super::oracle::load_cases()
-            .unwrap()
-            .iter()
-            .map(|case| rows("passed").replace("\"c\"", &format!("\"BEYOND-CASE-{:05}\"", case.id)))
-            .collect();
+        let raw = agreeing_run(&contracts(&super::super::oracle::load_cases().unwrap()));
         let mut hashes = serde_json::Map::new();
         for (name, text) in [
             ("beyond_sqlite.raw.jsonl", raw.as_str()),
@@ -349,11 +338,18 @@ mod tests {
                 .to_string()
                 .contains("unknown PostgreSQL reference digest")
         );
+        let contracts = contracts(&super::super::oracle::load_cases().unwrap());
+        let positive = contracts
+            .iter()
+            .find(|(_, contract)| contract.declared_error.is_none())
+            .map(|(id, contract)| (id.clone(), contract.clone()))
+            .unwrap();
+        let only = std::collections::BTreeMap::from([positive.clone()]);
         assert!(
             outcomes(
-                &rows("passed").replace("exit_code\":0", "exit_code\":3"),
-                &BTreeSet::from(["c".to_owned()]),
-                &BTreeSet::new()
+                &cases::agreeing_rows(&positive.0, &positive.1)
+                    .replace("exit_code\":0", "exit_code\":3"),
+                &only
             )
             .is_err()
         );

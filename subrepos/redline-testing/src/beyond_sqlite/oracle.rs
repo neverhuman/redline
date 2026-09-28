@@ -31,6 +31,7 @@ use std::time::{Duration, Instant};
 
 use anyhow::{Context, Result, anyhow, bail};
 
+use super::assertion::{AssertionEvidence, Observed};
 use super::case::{BeyondCase, CompareMode};
 use super::engine::{PostgresReference, ResolveOutcome, invoke_psql, resolve};
 use super::normalize::apply_chain;
@@ -243,6 +244,9 @@ pub struct TargetOutcome {
     pub target_stderr_head: String,
     pub reference_elapsed_ns: u128,
     pub target_elapsed_ns: u128,
+    /// What each assertion was computed from, for the gate to re-check.
+    /// `None` when an engine could not be run (the row is then skipped).
+    pub evidence: Option<AssertionEvidence>,
 }
 
 fn run_one_case(case: &BeyondCase, pg: &PostgresReference) -> CaseOutcome {
@@ -317,11 +321,11 @@ fn run_one_case(case: &BeyondCase, pg: &PostgresReference) -> CaseOutcome {
     }
 }
 
-/// Drive the target shell with the case stdin (prefixed with a SQLite-style
-/// formatting preamble) and compare normalized output to a fresh psql run
-/// against the same reference. The reference run is repeated here (rather
-/// than reusing `run_one_case`'s result) so the comparison is byte-exact
-/// against the reference output captured at the same point in time.
+/// Drive the target shell with the case stdin (prefixed with the transcript
+/// preamble) and compare normalized output to a fresh psql run against the
+/// same reference. The reference run is repeated here (rather than reusing
+/// `run_one_case`'s result) so the comparison is against the reference
+/// output captured at the same point in time.
 fn run_one_case_against_target(
     case: &BeyondCase,
     pg: &PostgresReference,
@@ -329,21 +333,26 @@ fn run_one_case_against_target(
 ) -> TargetOutcome {
     let timeout = Duration::from_millis(case.timeout_ms().into());
     let stdin = assembled_stdin(case);
+    let skipped = |diagnostic: String| TargetOutcome {
+        status: "skipped".to_owned(),
+        diagnostic: Some(diagnostic),
+        reference_exit: -1,
+        target_exit: None,
+        reference_stdout: String::new(),
+        target_stdout: String::new(),
+        target_stderr_head: String::new(),
+        reference_elapsed_ns: 0,
+        target_elapsed_ns: 0,
+        evidence: None,
+    };
 
     let ref_started = Instant::now();
     let reference = match invoke_psql(&pg.bin, &pg.connection, &stdin, &case.pg_settings, timeout) {
         Ok(out) => out,
         Err(err) => {
             return TargetOutcome {
-                status: "skipped".to_owned(),
-                diagnostic: Some(format!("reference re-invocation error: {err}")),
-                reference_exit: -1,
-                target_exit: None,
-                reference_stdout: String::new(),
-                target_stdout: String::new(),
-                target_stderr_head: String::new(),
                 reference_elapsed_ns: ref_started.elapsed().as_nanos(),
-                target_elapsed_ns: 0,
+                ..skipped(format!("reference re-invocation error: {err}"))
             };
         }
     };
@@ -355,15 +364,11 @@ fn run_one_case_against_target(
         Ok(out) => out,
         Err(err) => {
             return TargetOutcome {
-                status: "skipped".to_owned(),
-                diagnostic: Some(format!("target invocation error: {err}")),
                 reference_exit: reference.exit_code,
-                target_exit: None,
                 reference_stdout: truncate(&reference.stdout, 1024),
-                target_stdout: String::new(),
-                target_stderr_head: String::new(),
                 reference_elapsed_ns,
                 target_elapsed_ns: target_started.elapsed().as_nanos(),
+                ..skipped(format!("target invocation error: {err}"))
             };
         }
     };
@@ -372,24 +377,47 @@ fn run_one_case_against_target(
     let ref_norm = normalize_for_compare(&reference.stdout, case);
     let tgt_norm = normalize_for_compare(&target.stdout, case);
     let target_stderr_head = first_nonempty_line(&target.stderr);
+    let declared_error = case.expected_target_stderr_contains.as_deref();
+    // A declared rejection's setup runs alone against a fresh target, so the
+    // record shows whether the rejection could have come from the setup.
+    let setup = match (declared_error, case.setup_stdin.as_deref()) {
+        (Some(_), Some(setup)) => Some(run_setup(setup, target_bin, timeout)),
+        _ => None,
+    };
+    let evidence = AssertionEvidence::new(Observed {
+        expected_reference_exit: case.expected_reference_exit,
+        reference_stdout: &reference.stdout,
+        target_stdout: &target.stdout,
+        reference_normalized: &ref_norm,
+        target_normalized: &tgt_norm,
+        target_stderr: &target.stderr,
+        declared_error,
+        setup_exit_code: setup.as_ref().map(|(code, _)| *code),
+    });
+    let outcome = |status: &str, diagnostic: Option<String>, stdout_limit: usize| TargetOutcome {
+        status: status.to_owned(),
+        diagnostic,
+        reference_exit: reference.exit_code,
+        target_exit: Some(target.exit_code),
+        reference_stdout: truncate(&ref_norm, stdout_limit),
+        target_stdout: truncate(&tgt_norm, stdout_limit),
+        target_stderr_head: target_stderr_head.clone(),
+        reference_elapsed_ns,
+        target_elapsed_ns,
+        evidence: Some(evidence.clone()),
+    };
 
     if reference.exit_code != case.expected_reference_exit
         || reference.exit_code != target.exit_code
     {
-        return TargetOutcome {
-            status: "failed".to_owned(),
-            diagnostic: Some(format!(
+        return outcome(
+            "failed",
+            Some(format!(
                 "exit-code mismatch: reference={} target={} target_stderr={}",
                 reference.exit_code, target.exit_code, target_stderr_head
             )),
-            reference_exit: reference.exit_code,
-            target_exit: Some(target.exit_code),
-            reference_stdout: truncate(&ref_norm, 1024),
-            target_stdout: truncate(&tgt_norm, 1024),
-            target_stderr_head,
-            reference_elapsed_ns,
-            target_elapsed_ns,
-        };
+            1024,
+        );
     }
 
     // Both engines rejected the script, and printed the same thing doing it.
@@ -398,10 +426,10 @@ fn run_one_case_against_target(
     // `BeyondCase::expected_target_stderr_contains`.
     let shared_rejection = if ref_norm == tgt_norm && reference.exit_code != 0 {
         Some(classify_shared_rejection(
-            case,
+            declared_error,
+            evidence.declared_error_matched,
             &target.stderr,
-            target_bin,
-            timeout,
+            setup.as_ref(),
         ))
     } else {
         None
@@ -410,17 +438,7 @@ fn run_one_case_against_target(
     if ref_norm == tgt_norm
         && (reference.exit_code == 0 || matches!(shared_rejection, Some(SharedRejection::Agrees)))
     {
-        TargetOutcome {
-            status: "passed".to_owned(),
-            diagnostic: None,
-            reference_exit: reference.exit_code,
-            target_exit: Some(target.exit_code),
-            reference_stdout: truncate(&ref_norm, 256),
-            target_stdout: truncate(&tgt_norm, 256),
-            target_stderr_head,
-            reference_elapsed_ns,
-            target_elapsed_ns,
-        }
+        outcome("passed", None, 256)
     } else {
         let diagnostic = if let Some(rejection) = shared_rejection {
             rejection.diagnostic(reference.exit_code, target.exit_code, &target_stderr_head)
@@ -437,17 +455,20 @@ fn run_one_case_against_target(
                 target_stderr_head
             )
         };
-        TargetOutcome {
-            status: "failed".to_owned(),
-            diagnostic: Some(diagnostic),
-            reference_exit: reference.exit_code,
-            target_exit: Some(target.exit_code),
-            reference_stdout: truncate(&ref_norm, 1024),
-            target_stdout: truncate(&tgt_norm, 1024),
-            target_stderr_head,
-            reference_elapsed_ns,
-            target_elapsed_ns,
-        }
+        outcome("failed", Some(diagnostic), 1024)
+    }
+}
+
+/// Runs a case's setup alone against a fresh in-memory target: its exit
+/// code (-1 if it could not be run) and the first line of its stderr.
+fn run_setup(setup: &str, target_bin: &Path, timeout: Duration) -> (i32, String) {
+    let stdin = format!("{}{setup}", target_preamble());
+    match invoke_target(target_bin, &stdin, timeout) {
+        Ok(out) => (
+            out.exit_code,
+            truncate(&first_nonempty_line(&out.stderr), 256),
+        ),
+        Err(err) => (-1, format!("setup invocation error: {err}")),
     }
 }
 
@@ -584,39 +605,30 @@ impl SharedRejection {
 /// target executed the case's setup successfully -- so the rejection came
 /// from the statement under test rather than from something before it.
 fn classify_shared_rejection(
-    case: &BeyondCase,
+    declared_error: Option<&str>,
+    declared_error_matched: Option<bool>,
     target_stderr: &str,
-    target_bin: &Path,
-    timeout: Duration,
+    setup: Option<&(i32, String)>,
 ) -> SharedRejection {
-    let Some(expected) = case.expected_target_stderr_contains.as_deref() else {
+    let Some(expected) = declared_error else {
         return SharedRejection::Undeclared;
     };
-    if !target_stderr.contains(expected) {
+    if declared_error_matched != Some(true) {
         return SharedRejection::WrongReason {
             expected: expected.to_owned(),
             actual: truncate(&first_nonempty_line(target_stderr), 256),
         };
     }
-    // Re-run the setup alone against a fresh in-memory database. We do not
-    // care what it produces, only whether the target can execute it at all:
-    // if it cannot, the combined run died before the statement the case is
-    // about, and the matching exit code means nothing.
-    if let Some(setup) = &case.setup_stdin {
-        let stdin = format!("{}{setup}", target_preamble());
-        match invoke_target(target_bin, &stdin, timeout) {
-            Ok(out) if out.exit_code == 0 => {}
-            Ok(out) => {
-                return SharedRejection::SetupFailed {
-                    stderr: truncate(&first_nonempty_line(&out.stderr), 256),
-                };
-            }
-            Err(err) => {
-                return SharedRejection::SetupFailed {
-                    stderr: format!("setup invocation error: {err}"),
-                };
-            }
-        }
+    // The setup ran alone against a fresh in-memory database. We do not
+    // care what it produced, only whether the target could execute it at
+    // all: if it could not, the combined run died before the statement the
+    // case is about, and the matching exit code means nothing.
+    if let Some((code, stderr)) = setup
+        && *code != 0
+    {
+        return SharedRejection::SetupFailed {
+            stderr: stderr.clone(),
+        };
     }
     SharedRejection::Agrees
 }
