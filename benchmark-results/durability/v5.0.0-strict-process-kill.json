@@ -1,0 +1,2685 @@
+{
+  "schema_version": 1,
+  "tool": "redlinedb-bench 5.0.0 durability-evidence",
+  "created_unix": 1790639229,
+  "source_sha": "63e22303f3a69ad93ebe079cb1206e9b3ebf0a93",
+  "dirty": false,
+  "binary": {
+    "path": "/home/ubuntu/redlineDB/.agent/drafts/evidence/receipt-63e22303f/redlinedb",
+    "sha256": "0c803caa8e0ef29c4633b660da45fe48a7b237be1816506fbcd9b10d325d23b8",
+    "bytes": 10818704,
+    "version_line": "redlinedb v5.0.0 (tested against SQLite 3.53.1)",
+    "elf_machine": "x86_64",
+    "rustc_commit": "59807616e1fa2540724bfbac14d7976d7e4a3860"
+  },
+  "failpoint_scan": {
+    "clean": true,
+    "markers_checked": 33,
+    "markers_found": []
+  },
+  "toolchain": {
+    "rustc": "rustc 1.95.0 (59807616e 2026-04-14)",
+    "rustc_commit": "59807616e1fa2540724bfbac14d7976d7e4a3860",
+    "target_triple": "x86_64-unknown-linux-gnu"
+  },
+  "host": {
+    "kernel": "Linux 6.8.0-139-generic #139-Ubuntu SMP PREEMPT_DYNAMIC Sat Aug  1 03:52:05 UTC 2026",
+    "arch": "x86_64",
+    "logical_cpus": 128
+  },
+  "mode": "strict",
+  "effective_mode": "strict",
+  "failure_model": "process-kill",
+  "filesystem": {
+    "work_dir": "/home/ubuntu/redlineDB/.agent/sandbox/durability-work/run-1790639229-7",
+    "mount_point": "/",
+    "fs_type": "ext4",
+    "source": "/dev/nvme2n1p2",
+    "mount_options": "rw,relatime",
+    "super_options": "rw",
+    "device": {
+      "name": "nvme2n1p2",
+      "model": "Sabrent SB-RKT4P-8TB",
+      "rotational": "0",
+      "write_cache": "write back"
+    }
+  },
+  "child_environment": [
+    "PATH"
+  ],
+  "oracle": "recover::oracle (workload `wal`): exact typed digest of every acknowledged transaction, at most the one in-flight key beyond them, no partial transaction, kv_tenant_idx equal to a NOT INDEXED scan, PRAGMA integrity_check ok, second recovery identical to the first",
+  "seed": 7,
+  "kill_window": {
+    "min_acks": 8,
+    "max_acks": 256,
+    "max_delay_us": 3000
+  },
+  "scenarios": {
+    "planned": 30,
+    "run": 30,
+    "passed": 30,
+    "failed": 0,
+    "faults_observed": 30
+  },
+  "rejections": [],
+  "runs": [
+    {
+      "index": 0,
+      "seed": 2910824217569608635,
+      "kill_after_acks": 53,
+      "kill_delay_us": 810,
+      "rows_scripted": 4352,
+      "ready": true,
+      "acks_at_kill": 53,
+      "acks_drained_after_kill": 0,
+      "acknowledged": 53,
+      "recovered_acked": 53,
+      "in_flight_committed": 53,
+      "child_status": "signal(9)",
+      "kill_result": "sent SIGKILL",
+      "fault_observed": true,
+      "effective_modes": [
+        "strict",
+        "strict",
+        "strict"
+      ],
+      "wal_segments_after_kill": 1,
+      "recovery_reports": [
+        [
+          "latest||224|55368|0|57|0|108|0|||||||||||"
+        ],
+        [
+          "latest||224|55368|0|57|0|108|0|||||||||||"
+        ]
+      ],
+      "verdict": {
+        "acknowledged": 53,
+        "recovered_acked": 53,
+        "in_flight_committed": 53,
+        "lost_ack_ids": [],
+        "unexpected_effects": [],
+        "partial_transactions": [],
+        "integrity_errors": [],
+        "harness_errors": [],
+        "fault_observed": true,
+        "fault_required": true,
+        "child_started": true,
+        "qualified": true
+      },
+      "passed": true,
+      "logs": [
+        {
+          "name": "workload.sql",
+          "bytes": 969321,
+          "sha256": "ef709ec31e7bd75c1e7d87e6c5f92c13e97adb2e38fc7110c4796d86fbbee77b"
+        },
+        {
+          "name": "workload.stdout",
+          "bytes": 383,
+          "sha256": "c0d556b528656d12753bba8daee43a701c327c19efff2fe04a820e00e25ca6da"
+        },
+        {
+          "name": "workload.stderr",
+          "bytes": 0,
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        {
+          "name": "ack.ledger",
+          "bytes": 3594,
+          "sha256": "3cce463ffb954fb1e20e0008ceff1e5b8c8ee694bdb9a31d5c6c81671a93d08c"
+        },
+        {
+          "name": "recover-1.stdout",
+          "bytes": 8973,
+          "sha256": "5ae9577461704bab9acb394e762696fb3ad3a2804147d81c46eee6c681530b61"
+        },
+        {
+          "name": "recover-1.stderr",
+          "bytes": 0,
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        {
+          "name": "recover-2.stdout",
+          "bytes": 8973,
+          "sha256": "5ae9577461704bab9acb394e762696fb3ad3a2804147d81c46eee6c681530b61"
+        },
+        {
+          "name": "recover-2.stderr",
+          "bytes": 0,
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        }
+      ]
+    },
+    {
+      "index": 1,
+      "seed": 666034544554242233,
+      "kill_after_acks": 188,
+      "kill_delay_us": 1804,
+      "rows_scripted": 4352,
+      "ready": true,
+      "acks_at_kill": 188,
+      "acks_drained_after_kill": 0,
+      "acknowledged": 188,
+      "recovered_acked": 188,
+      "in_flight_committed": 188,
+      "child_status": "signal(9)",
+      "kill_result": "sent SIGKILL",
+      "fault_observed": true,
+      "effective_modes": [
+        "strict",
+        "strict",
+        "strict"
+      ],
+      "wal_segments_after_kill": 1,
+      "recovery_reports": [
+        [
+          "latest||767|170564|0|192|0|378|0|||||||||||"
+        ],
+        [
+          "latest||767|170564|0|192|0|378|0|||||||||||"
+        ]
+      ],
+      "verdict": {
+        "acknowledged": 188,
+        "recovered_acked": 188,
+        "in_flight_committed": 188,
+        "lost_ack_ids": [],
+        "unexpected_effects": [],
+        "partial_transactions": [],
+        "integrity_errors": [],
+        "harness_errors": [],
+        "fault_observed": true,
+        "fault_required": true,
+        "child_started": true,
+        "qualified": true
+      },
+      "passed": true,
+      "logs": [
+        {
+          "name": "workload.sql",
+          "bytes": 969321,
+          "sha256": "ef709ec31e7bd75c1e7d87e6c5f92c13e97adb2e38fc7110c4796d86fbbee77b"
+        },
+        {
+          "name": "workload.stdout",
+          "bytes": 1416,
+          "sha256": "48dd4d5fb56de256731e42d947dacc77602de0e4e10f1cd9a22e2a64b41e256a"
+        },
+        {
+          "name": "workload.stderr",
+          "bytes": 0,
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        {
+          "name": "ack.ledger",
+          "bytes": 12862,
+          "sha256": "9b0c71b6320846712bc4c61dc962b36b22670b5cc83fddc8c31d230210616bac"
+        },
+        {
+          "name": "recover-1.stdout",
+          "bytes": 30360,
+          "sha256": "cdd32c0d0f1ac49a2831d46478ee29abc32d645118cea8b5d305d2ce9122aa97"
+        },
+        {
+          "name": "recover-1.stderr",
+          "bytes": 0,
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        {
+          "name": "recover-2.stdout",
+          "bytes": 30360,
+          "sha256": "cdd32c0d0f1ac49a2831d46478ee29abc32d645118cea8b5d305d2ce9122aa97"
+        },
+        {
+          "name": "recover-2.stderr",
+          "bytes": 0,
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        }
+      ]
+    },
+    {
+      "index": 2,
+      "seed": 6629102542470643238,
+      "kill_after_acks": 68,
+      "kill_delay_us": 767,
+      "rows_scripted": 4352,
+      "ready": true,
+      "acks_at_kill": 68,
+      "acks_drained_after_kill": 0,
+      "acknowledged": 68,
+      "recovered_acked": 68,
+      "in_flight_committed": 68,
+      "child_status": "signal(9)",
+      "kill_result": "sent SIGKILL",
+      "fault_observed": true,
+      "effective_modes": [
+        "strict",
+        "strict",
+        "strict"
+      ],
+      "wal_segments_after_kill": 1,
+      "recovery_reports": [
+        [
+          "latest||284|60843|0|72|0|138|0|||||||||||"
+        ],
+        [
+          "latest||284|60843|0|72|0|138|0|||||||||||"
+        ]
+      ],
+      "verdict": {
+        "acknowledged": 68,
+        "recovered_acked": 68,
+        "in_flight_committed": 68,
+        "lost_ack_ids": [],
+        "unexpected_effects": [],
+        "partial_transactions": [],
+        "integrity_errors": [],
+        "harness_errors": [],
+        "fault_observed": true,
+        "fault_required": true,
+        "child_started": true,
+        "qualified": true
+      },
+      "passed": true,
+      "logs": [
+        {
+          "name": "workload.sql",
+          "bytes": 969321,
+          "sha256": "ef709ec31e7bd75c1e7d87e6c5f92c13e97adb2e38fc7110c4796d86fbbee77b"
+        },
+        {
+          "name": "workload.stdout",
+          "bytes": 488,
+          "sha256": "0fa95e22eaaaf8b2b11cad7b4f34eaa08fbafec99df15ccab475638a69880a91"
+        },
+        {
+          "name": "workload.stderr",
+          "bytes": 0,
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        {
+          "name": "ack.ledger",
+          "bytes": 4614,
+          "sha256": "13d287c93a4ecb4f406651b5de6d57e0faa95e75b813463e5bda53a5acaab7df"
+        },
+        {
+          "name": "recover-1.stdout",
+          "bytes": 11248,
+          "sha256": "5b41bac8f69a3dacd8c1693be73c49a09c7928b7e578508837a09dc09d666dd0"
+        },
+        {
+          "name": "recover-1.stderr",
+          "bytes": 0,
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        {
+          "name": "recover-2.stdout",
+          "bytes": 11248,
+          "sha256": "5b41bac8f69a3dacd8c1693be73c49a09c7928b7e578508837a09dc09d666dd0"
+        },
+        {
+          "name": "recover-2.stderr",
+          "bytes": 0,
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        }
+      ]
+    },
+    {
+      "index": 3,
+      "seed": 6633706378209464163,
+      "kill_after_acks": 98,
+      "kill_delay_us": 2970,
+      "rows_scripted": 4352,
+      "ready": true,
+      "acks_at_kill": 98,
+      "acks_drained_after_kill": 0,
+      "acknowledged": 98,
+      "recovered_acked": 98,
+      "in_flight_committed": 98,
+      "child_status": "signal(9)",
+      "kill_result": "sent SIGKILL",
+      "fault_observed": true,
+      "effective_modes": [
+        "strict",
+        "strict",
+        "strict"
+      ],
+      "wal_segments_after_kill": 1,
+      "recovery_reports": [
+        [
+          "latest||404|71793|0|102|0|198|0|||||||||||"
+        ],
+        [
+          "latest||404|71793|0|102|0|198|0|||||||||||"
+        ]
+      ],
+      "verdict": {
+        "acknowledged": 98,
+        "recovered_acked": 98,
+        "in_flight_committed": 98,
+        "lost_ack_ids": [],
+        "unexpected_effects": [],
+        "partial_transactions": [],
+        "integrity_errors": [],
+        "harness_errors": [],
+        "fault_observed": true,
+        "fault_required": true,
+        "child_started": true,
+        "qualified": true
+      },
+      "passed": true,
+      "logs": [
+        {
+          "name": "workload.sql",
+          "bytes": 969321,
+          "sha256": "ef709ec31e7bd75c1e7d87e6c5f92c13e97adb2e38fc7110c4796d86fbbee77b"
+        },
+        {
+          "name": "workload.stdout",
+          "bytes": 698,
+          "sha256": "ede44ac5b174e483fb6ca3af4c4398f3d9d2379413d0916aaee7c00c9c4d5399"
+        },
+        {
+          "name": "workload.stderr",
+          "bytes": 0,
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        {
+          "name": "ack.ledger",
+          "bytes": 6654,
+          "sha256": "3696137252216c5971848c5fbfa3bd679ae9799dc0bbf20e2b5d6e22b4de74a3"
+        },
+        {
+          "name": "recover-1.stdout",
+          "bytes": 15807,
+          "sha256": "a42f15e1982eb64f3bf03ba88f394f2c159ed3228de0df9dc2ae6569136711e4"
+        },
+        {
+          "name": "recover-1.stderr",
+          "bytes": 0,
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        {
+          "name": "recover-2.stdout",
+          "bytes": 15807,
+          "sha256": "a42f15e1982eb64f3bf03ba88f394f2c159ed3228de0df9dc2ae6569136711e4"
+        },
+        {
+          "name": "recover-2.stderr",
+          "bytes": 0,
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        }
+      ]
+    },
+    {
+      "index": 4,
+      "seed": 3693732001767012456,
+      "kill_after_acks": 191,
+      "kill_delay_us": 1630,
+      "rows_scripted": 4352,
+      "ready": true,
+      "acks_at_kill": 191,
+      "acks_drained_after_kill": 0,
+      "acknowledged": 191,
+      "recovered_acked": 191,
+      "in_flight_committed": 191,
+      "child_status": "signal(9)",
+      "kill_result": "sent SIGKILL",
+      "fault_observed": true,
+      "effective_modes": [
+        "strict",
+        "strict",
+        "strict"
+      ],
+      "wal_segments_after_kill": 1,
+      "recovery_reports": [
+        [
+          "latest||779|171668|0|195|0|384|0|||||||||||"
+        ],
+        [
+          "latest||779|171668|0|195|0|384|0|||||||||||"
+        ]
+      ],
+      "verdict": {
+        "acknowledged": 191,
+        "recovered_acked": 191,
+        "in_flight_committed": 191,
+        "lost_ack_ids": [],
+        "unexpected_effects": [],
+        "partial_transactions": [],
+        "integrity_errors": [],
+        "harness_errors": [],
+        "fault_observed": true,
+        "fault_required": true,
+        "child_started": true,
+        "qualified": true
+      },
+      "passed": true,
+      "logs": [
+        {
+          "name": "workload.sql",
+          "bytes": 969321,
+          "sha256": "ef709ec31e7bd75c1e7d87e6c5f92c13e97adb2e38fc7110c4796d86fbbee77b"
+        },
+        {
+          "name": "workload.stdout",
+          "bytes": 1440,
+          "sha256": "082d70719fe18d21303fbb29c11548731dbdf910c9317095410d5b4d895b2f13"
+        },
+        {
+          "name": "workload.stderr",
+          "bytes": 0,
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        {
+          "name": "ack.ledger",
+          "bytes": 13069,
+          "sha256": "2c5f78ec2c6b98cca5a98c703963a8c21b68d851265967830060cd2ffcd9694a"
+        },
+        {
+          "name": "recover-1.stdout",
+          "bytes": 30849,
+          "sha256": "47c5c068ca983ab7efa31f5aad46ac5e7dfc9e599b05dbf13cfbdab7a479e03b"
+        },
+        {
+          "name": "recover-1.stderr",
+          "bytes": 0,
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        {
+          "name": "recover-2.stdout",
+          "bytes": 30849,
+          "sha256": "47c5c068ca983ab7efa31f5aad46ac5e7dfc9e599b05dbf13cfbdab7a479e03b"
+        },
+        {
+          "name": "recover-2.stderr",
+          "bytes": 0,
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        }
+      ]
+    },
+    {
+      "index": 5,
+      "seed": 16547104552305861104,
+      "kill_after_acks": 72,
+      "kill_delay_us": 1280,
+      "rows_scripted": 4352,
+      "ready": true,
+      "acks_at_kill": 72,
+      "acks_drained_after_kill": 0,
+      "acknowledged": 72,
+      "recovered_acked": 72,
+      "in_flight_committed": 72,
+      "child_status": "signal(9)",
+      "kill_result": "sent SIGKILL",
+      "fault_observed": true,
+      "effective_modes": [
+        "strict",
+        "strict",
+        "strict"
+      ],
+      "wal_segments_after_kill": 1,
+      "recovery_reports": [
+        [
+          "latest||300|62303|0|76|0|146|0|||||||||||"
+        ],
+        [
+          "latest||300|62303|0|76|0|146|0|||||||||||"
+        ]
+      ],
+      "verdict": {
+        "acknowledged": 72,
+        "recovered_acked": 72,
+        "in_flight_committed": 72,
+        "lost_ack_ids": [],
+        "unexpected_effects": [],
+        "partial_transactions": [],
+        "integrity_errors": [],
+        "harness_errors": [],
+        "fault_observed": true,
+        "fault_required": true,
+        "child_started": true,
+        "qualified": true
+      },
+      "passed": true,
+      "logs": [
+        {
+          "name": "workload.sql",
+          "bytes": 969321,
+          "sha256": "ef709ec31e7bd75c1e7d87e6c5f92c13e97adb2e38fc7110c4796d86fbbee77b"
+        },
+        {
+          "name": "workload.stdout",
+          "bytes": 516,
+          "sha256": "5a271b9cdf990b0d6e62ce63b25cdb8e1d85b96074ffdda2316d5a704d0e270e"
+        },
+        {
+          "name": "workload.stderr",
+          "bytes": 0,
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        {
+          "name": "ack.ledger",
+          "bytes": 4886,
+          "sha256": "18de7c5dd9b252b353b837b193563a637ea2fa7f0e8c951a589fe19992e8b329"
+        },
+        {
+          "name": "recover-1.stdout",
+          "bytes": 11844,
+          "sha256": "48b7a8d361a8124284c408a5e2403056b7eb30cb4a8325f46f8240994212f3a1"
+        },
+        {
+          "name": "recover-1.stderr",
+          "bytes": 0,
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        {
+          "name": "recover-2.stdout",
+          "bytes": 11844,
+          "sha256": "48b7a8d361a8124284c408a5e2403056b7eb30cb4a8325f46f8240994212f3a1"
+        },
+        {
+          "name": "recover-2.stderr",
+          "bytes": 0,
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        }
+      ]
+    },
+    {
+      "index": 6,
+      "seed": 9712906865522083634,
+      "kill_after_acks": 210,
+      "kill_delay_us": 2942,
+      "rows_scripted": 4352,
+      "ready": true,
+      "acks_at_kill": 210,
+      "acks_drained_after_kill": 0,
+      "acknowledged": 210,
+      "recovered_acked": 210,
+      "in_flight_committed": 210,
+      "child_status": "signal(9)",
+      "kill_result": "sent SIGKILL",
+      "fault_observed": true,
+      "effective_modes": [
+        "strict",
+        "strict",
+        "strict"
+      ],
+      "wal_segments_after_kill": 1,
+      "recovery_reports": [
+        [
+          "latest||855|178660|0|214|0|422|0|||||||||||"
+        ],
+        [
+          "latest||855|178660|0|214|0|422|0|||||||||||"
+        ]
+      ],
+      "verdict": {
+        "acknowledged": 210,
+        "recovered_acked": 210,
+        "in_flight_committed": 210,
+        "lost_ack_ids": [],
+        "unexpected_effects": [],
+        "partial_transactions": [],
+        "integrity_errors": [],
+        "harness_errors": [],
+        "fault_observed": true,
+        "fault_required": true,
+        "child_started": true,
+        "qualified": true
+      },
+      "passed": true,
+      "logs": [
+        {
+          "name": "workload.sql",
+          "bytes": 969321,
+          "sha256": "ef709ec31e7bd75c1e7d87e6c5f92c13e97adb2e38fc7110c4796d86fbbee77b"
+        },
+        {
+          "name": "workload.stdout",
+          "bytes": 1592,
+          "sha256": "dd5cb53293196f52831a0cac691f5176bbc3f13f1931ade50a91b0fd1f262faa"
+        },
+        {
+          "name": "workload.stderr",
+          "bytes": 0,
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        {
+          "name": "ack.ledger",
+          "bytes": 14380,
+          "sha256": "4a00a3a80edcbcaaa1cf6e314952a9f1337a5959071fc4c4a0d0479ab7264323"
+        },
+        {
+          "name": "recover-1.stdout",
+          "bytes": 33906,
+          "sha256": "6d5c76439655cb5834038f65f615357671c2e35313494ca82ea03e028eb67c5d"
+        },
+        {
+          "name": "recover-1.stderr",
+          "bytes": 0,
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        {
+          "name": "recover-2.stdout",
+          "bytes": 33906,
+          "sha256": "6d5c76439655cb5834038f65f615357671c2e35313494ca82ea03e028eb67c5d"
+        },
+        {
+          "name": "recover-2.stderr",
+          "bytes": 0,
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        }
+      ]
+    },
+    {
+      "index": 7,
+      "seed": 12450223873388288421,
+      "kill_after_acks": 88,
+      "kill_delay_us": 652,
+      "rows_scripted": 4352,
+      "ready": true,
+      "acks_at_kill": 88,
+      "acks_drained_after_kill": 0,
+      "acknowledged": 88,
+      "recovered_acked": 88,
+      "in_flight_committed": 88,
+      "child_status": "signal(9)",
+      "kill_result": "sent SIGKILL",
+      "fault_observed": true,
+      "effective_modes": [
+        "strict",
+        "strict",
+        "strict"
+      ],
+      "wal_segments_after_kill": 1,
+      "recovery_reports": [
+        [
+          "latest||364|68143|0|92|0|178|0|||||||||||"
+        ],
+        [
+          "latest||364|68143|0|92|0|178|0|||||||||||"
+        ]
+      ],
+      "verdict": {
+        "acknowledged": 88,
+        "recovered_acked": 88,
+        "in_flight_committed": 88,
+        "lost_ack_ids": [],
+        "unexpected_effects": [],
+        "partial_transactions": [],
+        "integrity_errors": [],
+        "harness_errors": [],
+        "fault_observed": true,
+        "fault_required": true,
+        "child_started": true,
+        "qualified": true
+      },
+      "passed": true,
+      "logs": [
+        {
+          "name": "workload.sql",
+          "bytes": 969321,
+          "sha256": "ef709ec31e7bd75c1e7d87e6c5f92c13e97adb2e38fc7110c4796d86fbbee77b"
+        },
+        {
+          "name": "workload.stdout",
+          "bytes": 628,
+          "sha256": "f256d1be078bb9b0a7d5a0c4ee49aa240ca39fc756a0793f1a2f7df0b81dfaa4"
+        },
+        {
+          "name": "workload.stderr",
+          "bytes": 0,
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        {
+          "name": "ack.ledger",
+          "bytes": 5974,
+          "sha256": "a4513b4d5b8c3464a00302dd93edf3e28e063afb1154a81565d14932324b8df0"
+        },
+        {
+          "name": "recover-1.stdout",
+          "bytes": 14288,
+          "sha256": "52b39fe408e853a9e7ce493a6ac822466e16223efb2beaa64a705a75f46172bf"
+        },
+        {
+          "name": "recover-1.stderr",
+          "bytes": 0,
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        {
+          "name": "recover-2.stdout",
+          "bytes": 14288,
+          "sha256": "52b39fe408e853a9e7ce493a6ac822466e16223efb2beaa64a705a75f46172bf"
+        },
+        {
+          "name": "recover-2.stderr",
+          "bytes": 0,
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        }
+      ]
+    },
+    {
+      "index": 8,
+      "seed": 8084004445269624471,
+      "kill_after_acks": 71,
+      "kill_delay_us": 1200,
+      "rows_scripted": 4352,
+      "ready": true,
+      "acks_at_kill": 71,
+      "acks_drained_after_kill": 0,
+      "acknowledged": 71,
+      "recovered_acked": 71,
+      "in_flight_committed": 71,
+      "child_status": "signal(9)",
+      "kill_result": "sent SIGKILL",
+      "fault_observed": true,
+      "effective_modes": [
+        "strict",
+        "strict",
+        "strict"
+      ],
+      "wal_segments_after_kill": 1,
+      "recovery_reports": [
+        [
+          "latest||296|61938|0|75|0|144|0|||||||||||"
+        ],
+        [
+          "latest||296|61938|0|75|0|144|0|||||||||||"
+        ]
+      ],
+      "verdict": {
+        "acknowledged": 71,
+        "recovered_acked": 71,
+        "in_flight_committed": 71,
+        "lost_ack_ids": [],
+        "unexpected_effects": [],
+        "partial_transactions": [],
+        "integrity_errors": [],
+        "harness_errors": [],
+        "fault_observed": true,
+        "fault_required": true,
+        "child_started": true,
+        "qualified": true
+      },
+      "passed": true,
+      "logs": [
+        {
+          "name": "workload.sql",
+          "bytes": 969321,
+          "sha256": "ef709ec31e7bd75c1e7d87e6c5f92c13e97adb2e38fc7110c4796d86fbbee77b"
+        },
+        {
+          "name": "workload.stdout",
+          "bytes": 509,
+          "sha256": "16d6b1a2d2c67844f182ba612fa5ebb82fbab295fc9699cf35e6b5df58c65df7"
+        },
+        {
+          "name": "workload.stderr",
+          "bytes": 0,
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        {
+          "name": "ack.ledger",
+          "bytes": 4818,
+          "sha256": "eee3c7b3fa7528e670048777d28c2eafa75c8c958c094b87f1acaf9a7a674a6e"
+        },
+        {
+          "name": "recover-1.stdout",
+          "bytes": 11695,
+          "sha256": "3a1409ef3ba5a44f8719b83be3582a3070db5f4a00b0aef3857f4bd800ed11dd"
+        },
+        {
+          "name": "recover-1.stderr",
+          "bytes": 0,
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        {
+          "name": "recover-2.stdout",
+          "bytes": 11695,
+          "sha256": "3a1409ef3ba5a44f8719b83be3582a3070db5f4a00b0aef3857f4bd800ed11dd"
+        },
+        {
+          "name": "recover-2.stderr",
+          "bytes": 0,
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        }
+      ]
+    },
+    {
+      "index": 9,
+      "seed": 1131079560193252452,
+      "kill_after_acks": 26,
+      "kill_delay_us": 836,
+      "rows_scripted": 4352,
+      "ready": true,
+      "acks_at_kill": 26,
+      "acks_drained_after_kill": 0,
+      "acknowledged": 26,
+      "recovered_acked": 26,
+      "in_flight_committed": 26,
+      "child_status": "signal(9)",
+      "kill_result": "sent SIGKILL",
+      "fault_observed": true,
+      "effective_modes": [
+        "strict",
+        "strict",
+        "strict"
+      ],
+      "wal_segments_after_kill": 1,
+      "recovery_reports": [
+        [
+          "latest||116|45513|0|30|0|54|0|||||||||||"
+        ],
+        [
+          "latest||116|45513|0|30|0|54|0|||||||||||"
+        ]
+      ],
+      "verdict": {
+        "acknowledged": 26,
+        "recovered_acked": 26,
+        "in_flight_committed": 26,
+        "lost_ack_ids": [],
+        "unexpected_effects": [],
+        "partial_transactions": [],
+        "integrity_errors": [],
+        "harness_errors": [],
+        "fault_observed": true,
+        "fault_required": true,
+        "child_started": true,
+        "qualified": true
+      },
+      "passed": true,
+      "logs": [
+        {
+          "name": "workload.sql",
+          "bytes": 969321,
+          "sha256": "ef709ec31e7bd75c1e7d87e6c5f92c13e97adb2e38fc7110c4796d86fbbee77b"
+        },
+        {
+          "name": "workload.stdout",
+          "bytes": 194,
+          "sha256": "40d8741d72187210489a672244d256a62045b103a1a8acebc54987534f844fb3"
+        },
+        {
+          "name": "workload.stderr",
+          "bytes": 0,
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        {
+          "name": "ack.ledger",
+          "bytes": 1758,
+          "sha256": "b4aacad324daa9f0da577953aaf2ef4ef667053c54f701230c778af562782a74"
+        },
+        {
+          "name": "recover-1.stdout",
+          "bytes": 4881,
+          "sha256": "af8f1da6d9407585b102f407a5cf2042f6d7d31c7b9ce6dd59bf808b2705923c"
+        },
+        {
+          "name": "recover-1.stderr",
+          "bytes": 0,
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        {
+          "name": "recover-2.stdout",
+          "bytes": 4881,
+          "sha256": "af8f1da6d9407585b102f407a5cf2042f6d7d31c7b9ce6dd59bf808b2705923c"
+        },
+        {
+          "name": "recover-2.stderr",
+          "bytes": 0,
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        }
+      ]
+    },
+    {
+      "index": 10,
+      "seed": 8889573932630892721,
+      "kill_after_acks": 65,
+      "kill_delay_us": 2347,
+      "rows_scripted": 4352,
+      "ready": true,
+      "acks_at_kill": 65,
+      "acks_drained_after_kill": 0,
+      "acknowledged": 65,
+      "recovered_acked": 65,
+      "in_flight_committed": 65,
+      "child_status": "signal(9)",
+      "kill_result": "sent SIGKILL",
+      "fault_observed": true,
+      "effective_modes": [
+        "strict",
+        "strict",
+        "strict"
+      ],
+      "wal_segments_after_kill": 1,
+      "recovery_reports": [
+        [
+          "latest||272|59748|0|69|0|132|0|||||||||||"
+        ],
+        [
+          "latest||272|59748|0|69|0|132|0|||||||||||"
+        ]
+      ],
+      "verdict": {
+        "acknowledged": 65,
+        "recovered_acked": 65,
+        "in_flight_committed": 65,
+        "lost_ack_ids": [],
+        "unexpected_effects": [],
+        "partial_transactions": [],
+        "integrity_errors": [],
+        "harness_errors": [],
+        "fault_observed": true,
+        "fault_required": true,
+        "child_started": true,
+        "qualified": true
+      },
+      "passed": true,
+      "logs": [
+        {
+          "name": "workload.sql",
+          "bytes": 969321,
+          "sha256": "ef709ec31e7bd75c1e7d87e6c5f92c13e97adb2e38fc7110c4796d86fbbee77b"
+        },
+        {
+          "name": "workload.stdout",
+          "bytes": 467,
+          "sha256": "3a622823b673611ffa2ee22e69bfb31ef2cf3da0fb8087c1ad05e4361695b288"
+        },
+        {
+          "name": "workload.stderr",
+          "bytes": 0,
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        {
+          "name": "ack.ledger",
+          "bytes": 4410,
+          "sha256": "e00cb534bd6ed39cca6890fdfadb57363a5db3848c9a79ef4ae3dd7ab89e8422"
+        },
+        {
+          "name": "recover-1.stdout",
+          "bytes": 10801,
+          "sha256": "d58d2181103c9d8c1aea3d65780bfff415fe90f6f0185f99d0a7ee378cbb0732"
+        },
+        {
+          "name": "recover-1.stderr",
+          "bytes": 0,
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        {
+          "name": "recover-2.stdout",
+          "bytes": 10801,
+          "sha256": "d58d2181103c9d8c1aea3d65780bfff415fe90f6f0185f99d0a7ee378cbb0732"
+        },
+        {
+          "name": "recover-2.stderr",
+          "bytes": 0,
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        }
+      ]
+    },
+    {
+      "index": 11,
+      "seed": 2875324324034374481,
+      "kill_after_acks": 44,
+      "kill_delay_us": 2932,
+      "rows_scripted": 4352,
+      "ready": true,
+      "acks_at_kill": 44,
+      "acks_drained_after_kill": 0,
+      "acknowledged": 44,
+      "recovered_acked": 44,
+      "in_flight_committed": 44,
+      "child_status": "signal(9)",
+      "kill_result": "sent SIGKILL",
+      "fault_observed": true,
+      "effective_modes": [
+        "strict",
+        "strict",
+        "strict"
+      ],
+      "wal_segments_after_kill": 1,
+      "recovery_reports": [
+        [
+          "latest||188|52083|0|48|0|90|0|||||||||||"
+        ],
+        [
+          "latest||188|52083|0|48|0|90|0|||||||||||"
+        ]
+      ],
+      "verdict": {
+        "acknowledged": 44,
+        "recovered_acked": 44,
+        "in_flight_committed": 44,
+        "lost_ack_ids": [],
+        "unexpected_effects": [],
+        "partial_transactions": [],
+        "integrity_errors": [],
+        "harness_errors": [],
+        "fault_observed": true,
+        "fault_required": true,
+        "child_started": true,
+        "qualified": true
+      },
+      "passed": true,
+      "logs": [
+        {
+          "name": "workload.sql",
+          "bytes": 969321,
+          "sha256": "ef709ec31e7bd75c1e7d87e6c5f92c13e97adb2e38fc7110c4796d86fbbee77b"
+        },
+        {
+          "name": "workload.stdout",
+          "bytes": 320,
+          "sha256": "afb3805ccdf6797a826a43ace92aad2cf0acb1ff7b3138767869c71f9ee5e718"
+        },
+        {
+          "name": "workload.stderr",
+          "bytes": 0,
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        {
+          "name": "ack.ledger",
+          "bytes": 2982,
+          "sha256": "532e49cf8ca18d85096aba6ef3e697218bc76442771a9a58e29204a2dc0f08de"
+        },
+        {
+          "name": "recover-1.stdout",
+          "bytes": 7595,
+          "sha256": "895e766ada4d72901530961b2a6067449a4ca1a80b1bc48f192ad45717197b1d"
+        },
+        {
+          "name": "recover-1.stderr",
+          "bytes": 0,
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        {
+          "name": "recover-2.stdout",
+          "bytes": 7595,
+          "sha256": "895e766ada4d72901530961b2a6067449a4ca1a80b1bc48f192ad45717197b1d"
+        },
+        {
+          "name": "recover-2.stderr",
+          "bytes": 0,
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        }
+      ]
+    },
+    {
+      "index": 12,
+      "seed": 12974548722381415780,
+      "kill_after_acks": 117,
+      "kill_delay_us": 2916,
+      "rows_scripted": 4352,
+      "ready": true,
+      "acks_at_kill": 117,
+      "acks_drained_after_kill": 0,
+      "acknowledged": 117,
+      "recovered_acked": 117,
+      "in_flight_committed": 117,
+      "child_status": "signal(9)",
+      "kill_result": "sent SIGKILL",
+      "fault_observed": true,
+      "effective_modes": [
+        "strict",
+        "strict",
+        "strict"
+      ],
+      "wal_segments_after_kill": 1,
+      "recovery_reports": [
+        [
+          "latest||480|78746|0|121|0|236|0|||||||||||"
+        ],
+        [
+          "latest||480|78746|0|121|0|236|0|||||||||||"
+        ]
+      ],
+      "verdict": {
+        "acknowledged": 117,
+        "recovered_acked": 117,
+        "in_flight_committed": 117,
+        "lost_ack_ids": [],
+        "unexpected_effects": [],
+        "partial_transactions": [],
+        "integrity_errors": [],
+        "harness_errors": [],
+        "fault_observed": true,
+        "fault_required": true,
+        "child_started": true,
+        "qualified": true
+      },
+      "passed": true,
+      "logs": [
+        {
+          "name": "workload.sql",
+          "bytes": 969321,
+          "sha256": "ef709ec31e7bd75c1e7d87e6c5f92c13e97adb2e38fc7110c4796d86fbbee77b"
+        },
+        {
+          "name": "workload.stdout",
+          "bytes": 848,
+          "sha256": "8f7d729fb1607d7d9b55621c32033e05f8603c068d5253c9a0a0eb8f4cefc958"
+        },
+        {
+          "name": "workload.stderr",
+          "bytes": 0,
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        {
+          "name": "ack.ledger",
+          "bytes": 7963,
+          "sha256": "a8eec7c3d206624190803aab4366551c17c2ce3f050845dcab688aeef407b5ba"
+        },
+        {
+          "name": "recover-1.stdout",
+          "bytes": 18866,
+          "sha256": "6b6217a4b966044aeea88d1bc862ad2566d85a3e2671cf02b3fc2a51bea6de63"
+        },
+        {
+          "name": "recover-1.stderr",
+          "bytes": 0,
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        {
+          "name": "recover-2.stdout",
+          "bytes": 18866,
+          "sha256": "6b6217a4b966044aeea88d1bc862ad2566d85a3e2671cf02b3fc2a51bea6de63"
+        },
+        {
+          "name": "recover-2.stderr",
+          "bytes": 0,
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        }
+      ]
+    },
+    {
+      "index": 13,
+      "seed": 7492662993994715053,
+      "kill_after_acks": 92,
+      "kill_delay_us": 1489,
+      "rows_scripted": 4352,
+      "ready": true,
+      "acks_at_kill": 92,
+      "acks_drained_after_kill": 0,
+      "acknowledged": 92,
+      "recovered_acked": 92,
+      "in_flight_committed": 92,
+      "child_status": "signal(9)",
+      "kill_result": "sent SIGKILL",
+      "fault_observed": true,
+      "effective_modes": [
+        "strict",
+        "strict",
+        "strict"
+      ],
+      "wal_segments_after_kill": 1,
+      "recovery_reports": [
+        [
+          "latest||380|69603|0|96|0|186|0|||||||||||"
+        ],
+        [
+          "latest||380|69603|0|96|0|186|0|||||||||||"
+        ]
+      ],
+      "verdict": {
+        "acknowledged": 92,
+        "recovered_acked": 92,
+        "in_flight_committed": 92,
+        "lost_ack_ids": [],
+        "unexpected_effects": [],
+        "partial_transactions": [],
+        "integrity_errors": [],
+        "harness_errors": [],
+        "fault_observed": true,
+        "fault_required": true,
+        "child_started": true,
+        "qualified": true
+      },
+      "passed": true,
+      "logs": [
+        {
+          "name": "workload.sql",
+          "bytes": 969321,
+          "sha256": "ef709ec31e7bd75c1e7d87e6c5f92c13e97adb2e38fc7110c4796d86fbbee77b"
+        },
+        {
+          "name": "workload.stdout",
+          "bytes": 656,
+          "sha256": "4b5c01baa1455362c3327effeec05ac6c429bfcec5a88d71a3acb88829139437"
+        },
+        {
+          "name": "workload.stderr",
+          "bytes": 0,
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        {
+          "name": "ack.ledger",
+          "bytes": 6246,
+          "sha256": "630410837cd252d7803c72b5af747454939e273899bf5ba0000d416fb4cde85e"
+        },
+        {
+          "name": "recover-1.stdout",
+          "bytes": 14900,
+          "sha256": "5566ccf9325f8fcb9d72df8b612d9ee27d1ec2aae1211e4cb8965b7fb9bdc9d6"
+        },
+        {
+          "name": "recover-1.stderr",
+          "bytes": 0,
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        {
+          "name": "recover-2.stdout",
+          "bytes": 14900,
+          "sha256": "5566ccf9325f8fcb9d72df8b612d9ee27d1ec2aae1211e4cb8965b7fb9bdc9d6"
+        },
+        {
+          "name": "recover-2.stderr",
+          "bytes": 0,
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        }
+      ]
+    },
+    {
+      "index": 14,
+      "seed": 9521216419535198885,
+      "kill_after_acks": 138,
+      "kill_delay_us": 655,
+      "rows_scripted": 4352,
+      "ready": true,
+      "acks_at_kill": 138,
+      "acks_drained_after_kill": 0,
+      "acknowledged": 138,
+      "recovered_acked": 138,
+      "in_flight_committed": 138,
+      "child_status": "signal(9)",
+      "kill_result": "sent SIGKILL",
+      "fault_observed": true,
+      "effective_modes": [
+        "strict",
+        "strict",
+        "strict"
+      ],
+      "wal_segments_after_kill": 1,
+      "recovery_reports": [
+        [
+          "latest||564|86454|0|142|0|278|0|||||||||||"
+        ],
+        [
+          "latest||564|86454|0|142|0|278|0|||||||||||"
+        ]
+      ],
+      "verdict": {
+        "acknowledged": 138,
+        "recovered_acked": 138,
+        "in_flight_committed": 138,
+        "lost_ack_ids": [],
+        "unexpected_effects": [],
+        "partial_transactions": [],
+        "integrity_errors": [],
+        "harness_errors": [],
+        "fault_observed": true,
+        "fault_required": true,
+        "child_started": true,
+        "qualified": true
+      },
+      "passed": true,
+      "logs": [
+        {
+          "name": "workload.sql",
+          "bytes": 969321,
+          "sha256": "ef709ec31e7bd75c1e7d87e6c5f92c13e97adb2e38fc7110c4796d86fbbee77b"
+        },
+        {
+          "name": "workload.stdout",
+          "bytes": 1016,
+          "sha256": "4139c9bd9f24b0a5d3ac3cfb47ed093aae6b145ff759d0894fdf69387bc2766f"
+        },
+        {
+          "name": "workload.stderr",
+          "bytes": 0,
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        {
+          "name": "ack.ledger",
+          "bytes": 9412,
+          "sha256": "0b6a22885f27b940e83b9497c4628b93e887757b974d78fecb9843d5c4663f3a"
+        },
+        {
+          "name": "recover-1.stdout",
+          "bytes": 22249,
+          "sha256": "3f2baa9a143c1983bb25acfcaa96d3f9d0f3b4a18769e7399a6d9ae22dc9389e"
+        },
+        {
+          "name": "recover-1.stderr",
+          "bytes": 0,
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        {
+          "name": "recover-2.stdout",
+          "bytes": 22249,
+          "sha256": "3f2baa9a143c1983bb25acfcaa96d3f9d0f3b4a18769e7399a6d9ae22dc9389e"
+        },
+        {
+          "name": "recover-2.stderr",
+          "bytes": 0,
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        }
+      ]
+    },
+    {
+      "index": 15,
+      "seed": 15771014211932201953,
+      "kill_after_acks": 159,
+      "kill_delay_us": 1324,
+      "rows_scripted": 4352,
+      "ready": true,
+      "acks_at_kill": 159,
+      "acks_drained_after_kill": 0,
+      "acknowledged": 159,
+      "recovered_acked": 159,
+      "in_flight_committed": 159,
+      "child_status": "signal(9)",
+      "kill_result": "sent SIGKILL",
+      "fault_observed": true,
+      "effective_modes": [
+        "strict",
+        "strict",
+        "strict"
+      ],
+      "wal_segments_after_kill": 1,
+      "recovery_reports": [
+        [
+          "latest||648|94182|0|163|0|320|0|||||||||||"
+        ],
+        [
+          "latest||648|94182|0|163|0|320|0|||||||||||"
+        ]
+      ],
+      "verdict": {
+        "acknowledged": 159,
+        "recovered_acked": 159,
+        "in_flight_committed": 159,
+        "lost_ack_ids": [],
+        "unexpected_effects": [],
+        "partial_transactions": [],
+        "integrity_errors": [],
+        "harness_errors": [],
+        "fault_observed": true,
+        "fault_required": true,
+        "child_started": true,
+        "qualified": true
+      },
+      "passed": true,
+      "logs": [
+        {
+          "name": "workload.sql",
+          "bytes": 969321,
+          "sha256": "ef709ec31e7bd75c1e7d87e6c5f92c13e97adb2e38fc7110c4796d86fbbee77b"
+        },
+        {
+          "name": "workload.stdout",
+          "bytes": 1184,
+          "sha256": "5cfc112d60e87a77c420c621c70c33259a9675197441dae7f823f8e111db3265"
+        },
+        {
+          "name": "workload.stderr",
+          "bytes": 0,
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        {
+          "name": "ack.ledger",
+          "bytes": 10861,
+          "sha256": "92cf119c5c08aaa11ccb9643d29fb1427505c7f08caadbc059c619fde6fdf71f"
+        },
+        {
+          "name": "recover-1.stdout",
+          "bytes": 25672,
+          "sha256": "99be0bc4040d6d0729bdeeb26b993dab5662cfb2c3a694506d57db149f5cdafd"
+        },
+        {
+          "name": "recover-1.stderr",
+          "bytes": 0,
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        {
+          "name": "recover-2.stdout",
+          "bytes": 25672,
+          "sha256": "99be0bc4040d6d0729bdeeb26b993dab5662cfb2c3a694506d57db149f5cdafd"
+        },
+        {
+          "name": "recover-2.stderr",
+          "bytes": 0,
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        }
+      ]
+    },
+    {
+      "index": 16,
+      "seed": 7880887989416421315,
+      "kill_after_acks": 136,
+      "kill_delay_us": 971,
+      "rows_scripted": 4352,
+      "ready": true,
+      "acks_at_kill": 136,
+      "acks_drained_after_kill": 0,
+      "acknowledged": 136,
+      "recovered_acked": 136,
+      "in_flight_committed": 136,
+      "child_status": "signal(9)",
+      "kill_result": "sent SIGKILL",
+      "fault_observed": true,
+      "effective_modes": [
+        "strict",
+        "strict",
+        "strict"
+      ],
+      "wal_segments_after_kill": 1,
+      "recovery_reports": [
+        [
+          "latest||556|85718|0|140|0|274|0|||||||||||"
+        ],
+        [
+          "latest||556|85718|0|140|0|274|0|||||||||||"
+        ]
+      ],
+      "verdict": {
+        "acknowledged": 136,
+        "recovered_acked": 136,
+        "in_flight_committed": 136,
+        "lost_ack_ids": [],
+        "unexpected_effects": [],
+        "partial_transactions": [],
+        "integrity_errors": [],
+        "harness_errors": [],
+        "fault_observed": true,
+        "fault_required": true,
+        "child_started": true,
+        "qualified": true
+      },
+      "passed": true,
+      "logs": [
+        {
+          "name": "workload.sql",
+          "bytes": 969321,
+          "sha256": "ef709ec31e7bd75c1e7d87e6c5f92c13e97adb2e38fc7110c4796d86fbbee77b"
+        },
+        {
+          "name": "workload.stdout",
+          "bytes": 1000,
+          "sha256": "d1b8a53d52c46d52b47b5c8f581865ae82cd86484b13bf3a3cd8c9900842a1ca"
+        },
+        {
+          "name": "workload.stderr",
+          "bytes": 0,
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        {
+          "name": "ack.ledger",
+          "bytes": 9274,
+          "sha256": "8531b881a7768a2664f3704896b8d24d1d8011e87d1f6123c77cd36d48fcb346"
+        },
+        {
+          "name": "recover-1.stdout",
+          "bytes": 21927,
+          "sha256": "5e4d20e47c8f1909ee1c8e684dc467062069c432d9009857a3839a22933aa6c3"
+        },
+        {
+          "name": "recover-1.stderr",
+          "bytes": 0,
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        {
+          "name": "recover-2.stdout",
+          "bytes": 21927,
+          "sha256": "5e4d20e47c8f1909ee1c8e684dc467062069c432d9009857a3839a22933aa6c3"
+        },
+        {
+          "name": "recover-2.stderr",
+          "bytes": 0,
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        }
+      ]
+    },
+    {
+      "index": 17,
+      "seed": 1955063202624614155,
+      "kill_after_acks": 222,
+      "kill_delay_us": 634,
+      "rows_scripted": 4352,
+      "ready": true,
+      "acks_at_kill": 222,
+      "acks_drained_after_kill": 0,
+      "acknowledged": 222,
+      "recovered_acked": 222,
+      "in_flight_committed": 222,
+      "child_status": "signal(9)",
+      "kill_result": "sent SIGKILL",
+      "fault_observed": true,
+      "effective_modes": [
+        "strict",
+        "strict",
+        "strict"
+      ],
+      "wal_segments_after_kill": 1,
+      "recovery_reports": [
+        [
+          "latest||903|183076|0|226|0|446|0|||||||||||"
+        ],
+        [
+          "latest||903|183076|0|226|0|446|0|||||||||||"
+        ]
+      ],
+      "verdict": {
+        "acknowledged": 222,
+        "recovered_acked": 222,
+        "in_flight_committed": 222,
+        "lost_ack_ids": [],
+        "unexpected_effects": [],
+        "partial_transactions": [],
+        "integrity_errors": [],
+        "harness_errors": [],
+        "fault_observed": true,
+        "fault_required": true,
+        "child_started": true,
+        "qualified": true
+      },
+      "passed": true,
+      "logs": [
+        {
+          "name": "workload.sql",
+          "bytes": 969321,
+          "sha256": "ef709ec31e7bd75c1e7d87e6c5f92c13e97adb2e38fc7110c4796d86fbbee77b"
+        },
+        {
+          "name": "workload.stdout",
+          "bytes": 1688,
+          "sha256": "c6384a0ef1aff9893d77bf89b9b83b8b5f1cf512609b61a6ff2e1916c0ba909a"
+        },
+        {
+          "name": "workload.stderr",
+          "bytes": 0,
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        {
+          "name": "ack.ledger",
+          "bytes": 15208,
+          "sha256": "7161d6fe524c44b7cafa01d394407240cb2169e975bb0d5e413ae45d8199c47f"
+        },
+        {
+          "name": "recover-1.stdout",
+          "bytes": 35862,
+          "sha256": "ea3a519221afd279925f51051a6606e10d92dafc556021a846a258dde48b0d96"
+        },
+        {
+          "name": "recover-1.stderr",
+          "bytes": 0,
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        {
+          "name": "recover-2.stdout",
+          "bytes": 35862,
+          "sha256": "ea3a519221afd279925f51051a6606e10d92dafc556021a846a258dde48b0d96"
+        },
+        {
+          "name": "recover-2.stderr",
+          "bytes": 0,
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        }
+      ]
+    },
+    {
+      "index": 18,
+      "seed": 7285457524409380530,
+      "kill_after_acks": 86,
+      "kill_delay_us": 2796,
+      "rows_scripted": 4352,
+      "ready": true,
+      "acks_at_kill": 86,
+      "acks_drained_after_kill": 0,
+      "acknowledged": 86,
+      "recovered_acked": 86,
+      "in_flight_committed": 86,
+      "child_status": "signal(9)",
+      "kill_result": "sent SIGKILL",
+      "fault_observed": true,
+      "effective_modes": [
+        "strict",
+        "strict",
+        "strict"
+      ],
+      "wal_segments_after_kill": 1,
+      "recovery_reports": [
+        [
+          "latest||356|67413|0|90|0|174|0|||||||||||"
+        ],
+        [
+          "latest||356|67413|0|90|0|174|0|||||||||||"
+        ]
+      ],
+      "verdict": {
+        "acknowledged": 86,
+        "recovered_acked": 86,
+        "in_flight_committed": 86,
+        "lost_ack_ids": [],
+        "unexpected_effects": [],
+        "partial_transactions": [],
+        "integrity_errors": [],
+        "harness_errors": [],
+        "fault_observed": true,
+        "fault_required": true,
+        "child_started": true,
+        "qualified": true
+      },
+      "passed": true,
+      "logs": [
+        {
+          "name": "workload.sql",
+          "bytes": 969321,
+          "sha256": "ef709ec31e7bd75c1e7d87e6c5f92c13e97adb2e38fc7110c4796d86fbbee77b"
+        },
+        {
+          "name": "workload.stdout",
+          "bytes": 614,
+          "sha256": "c3843c7ca206cdc6b8659eaf59b6e8b8a3fe00606cc43869952f0d1ac7c217c1"
+        },
+        {
+          "name": "workload.stderr",
+          "bytes": 0,
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        {
+          "name": "ack.ledger",
+          "bytes": 5838,
+          "sha256": "9c2db6f4ddcc3a064926918d2ab28b58a99a8d922d5ebffc6c2770953c0887e9"
+        },
+        {
+          "name": "recover-1.stdout",
+          "bytes": 13982,
+          "sha256": "cca2223bbcdac696282a5d12f2639328498bf0dd2acee46695925f6141ff86f1"
+        },
+        {
+          "name": "recover-1.stderr",
+          "bytes": 0,
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        {
+          "name": "recover-2.stdout",
+          "bytes": 13982,
+          "sha256": "cca2223bbcdac696282a5d12f2639328498bf0dd2acee46695925f6141ff86f1"
+        },
+        {
+          "name": "recover-2.stderr",
+          "bytes": 0,
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        }
+      ]
+    },
+    {
+      "index": 19,
+      "seed": 13346876194148351706,
+      "kill_after_acks": 146,
+      "kill_delay_us": 2481,
+      "rows_scripted": 4352,
+      "ready": true,
+      "acks_at_kill": 146,
+      "acks_drained_after_kill": 0,
+      "acknowledged": 146,
+      "recovered_acked": 146,
+      "in_flight_committed": 146,
+      "child_status": "signal(9)",
+      "kill_result": "sent SIGKILL",
+      "fault_observed": true,
+      "effective_modes": [
+        "strict",
+        "strict",
+        "strict"
+      ],
+      "wal_segments_after_kill": 1,
+      "recovery_reports": [
+        [
+          "latest||596|89398|0|150|0|294|0|||||||||||"
+        ],
+        [
+          "latest||596|89398|0|150|0|294|0|||||||||||"
+        ]
+      ],
+      "verdict": {
+        "acknowledged": 146,
+        "recovered_acked": 146,
+        "in_flight_committed": 146,
+        "lost_ack_ids": [],
+        "unexpected_effects": [],
+        "partial_transactions": [],
+        "integrity_errors": [],
+        "harness_errors": [],
+        "fault_observed": true,
+        "fault_required": true,
+        "child_started": true,
+        "qualified": true
+      },
+      "passed": true,
+      "logs": [
+        {
+          "name": "workload.sql",
+          "bytes": 969321,
+          "sha256": "ef709ec31e7bd75c1e7d87e6c5f92c13e97adb2e38fc7110c4796d86fbbee77b"
+        },
+        {
+          "name": "workload.stdout",
+          "bytes": 1080,
+          "sha256": "b2f14684cda5bd298e167f4f191f0f07ebfa3f944584de59c468999e58369ee9"
+        },
+        {
+          "name": "workload.stderr",
+          "bytes": 0,
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        {
+          "name": "ack.ledger",
+          "bytes": 9964,
+          "sha256": "fedeacc93b88a793f62de2ec1f2085daa1acce5e4b4d7a4292907f97ff2cd1f9"
+        },
+        {
+          "name": "recover-1.stdout",
+          "bytes": 23553,
+          "sha256": "6a6e81267df39ff7a9c2438d8109148f7d6dcf31214e507ec165e37f15f39179"
+        },
+        {
+          "name": "recover-1.stderr",
+          "bytes": 0,
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        {
+          "name": "recover-2.stdout",
+          "bytes": 23553,
+          "sha256": "6a6e81267df39ff7a9c2438d8109148f7d6dcf31214e507ec165e37f15f39179"
+        },
+        {
+          "name": "recover-2.stderr",
+          "bytes": 0,
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        }
+      ]
+    },
+    {
+      "index": 20,
+      "seed": 13299083528839582049,
+      "kill_after_acks": 97,
+      "kill_delay_us": 2692,
+      "rows_scripted": 4352,
+      "ready": true,
+      "acks_at_kill": 97,
+      "acks_drained_after_kill": 0,
+      "acknowledged": 97,
+      "recovered_acked": 97,
+      "in_flight_committed": 97,
+      "child_status": "signal(9)",
+      "kill_result": "sent SIGKILL",
+      "fault_observed": true,
+      "effective_modes": [
+        "strict",
+        "strict",
+        "strict"
+      ],
+      "wal_segments_after_kill": 1,
+      "recovery_reports": [
+        [
+          "latest||400|71428|0|101|0|196|0|||||||||||"
+        ],
+        [
+          "latest||400|71428|0|101|0|196|0|||||||||||"
+        ]
+      ],
+      "verdict": {
+        "acknowledged": 97,
+        "recovered_acked": 97,
+        "in_flight_committed": 97,
+        "lost_ack_ids": [],
+        "unexpected_effects": [],
+        "partial_transactions": [],
+        "integrity_errors": [],
+        "harness_errors": [],
+        "fault_observed": true,
+        "fault_required": true,
+        "child_started": true,
+        "qualified": true
+      },
+      "passed": true,
+      "logs": [
+        {
+          "name": "workload.sql",
+          "bytes": 969321,
+          "sha256": "ef709ec31e7bd75c1e7d87e6c5f92c13e97adb2e38fc7110c4796d86fbbee77b"
+        },
+        {
+          "name": "workload.stdout",
+          "bytes": 691,
+          "sha256": "255359a07451819ae9e79652356a8d03d6069b3ca699b7f0a3029801c6848681"
+        },
+        {
+          "name": "workload.stderr",
+          "bytes": 0,
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        {
+          "name": "ack.ledger",
+          "bytes": 6586,
+          "sha256": "0d86a833204dbc6f39fdc6e609b4d3aa8ad91ab01858174d1fbc949b68f2a5af"
+        },
+        {
+          "name": "recover-1.stdout",
+          "bytes": 15658,
+          "sha256": "4f5b3425185114fdf66c1f1d01a2d0c740b2ac8639c040bdd28230cfbf1ae359"
+        },
+        {
+          "name": "recover-1.stderr",
+          "bytes": 0,
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        {
+          "name": "recover-2.stdout",
+          "bytes": 15658,
+          "sha256": "4f5b3425185114fdf66c1f1d01a2d0c740b2ac8639c040bdd28230cfbf1ae359"
+        },
+        {
+          "name": "recover-2.stderr",
+          "bytes": 0,
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        }
+      ]
+    },
+    {
+      "index": 21,
+      "seed": 18439087458386920201,
+      "kill_after_acks": 216,
+      "kill_delay_us": 517,
+      "rows_scripted": 4352,
+      "ready": true,
+      "acks_at_kill": 216,
+      "acks_drained_after_kill": 0,
+      "acknowledged": 216,
+      "recovered_acked": 216,
+      "in_flight_committed": null,
+      "child_status": "signal(9)",
+      "kill_result": "sent SIGKILL",
+      "fault_observed": true,
+      "effective_modes": [
+        "strict",
+        "strict",
+        "strict"
+      ],
+      "wal_segments_after_kill": 1,
+      "recovery_reports": [
+        [
+          "latest||877|180706|0|219|0|432|0|||||||||||"
+        ],
+        [
+          "latest||877|180706|0|219|0|432|0|||||||||||"
+        ]
+      ],
+      "verdict": {
+        "acknowledged": 216,
+        "recovered_acked": 216,
+        "in_flight_committed": null,
+        "lost_ack_ids": [],
+        "unexpected_effects": [],
+        "partial_transactions": [],
+        "integrity_errors": [],
+        "harness_errors": [],
+        "fault_observed": true,
+        "fault_required": true,
+        "child_started": true,
+        "qualified": true
+      },
+      "passed": true,
+      "logs": [
+        {
+          "name": "workload.sql",
+          "bytes": 969321,
+          "sha256": "ef709ec31e7bd75c1e7d87e6c5f92c13e97adb2e38fc7110c4796d86fbbee77b"
+        },
+        {
+          "name": "workload.stdout",
+          "bytes": 1640,
+          "sha256": "a9f3a93999a9adeb36979bd5f58ed9473fd2216ba937b4db718d65b59abb37bd"
+        },
+        {
+          "name": "workload.stderr",
+          "bytes": 0,
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        {
+          "name": "ack.ledger",
+          "bytes": 14794,
+          "sha256": "14e43a52dfe5315290076663a0a5adb07a505d3c354b63f685b5f5071627abe2"
+        },
+        {
+          "name": "recover-1.stdout",
+          "bytes": 34721,
+          "sha256": "eb543161c83399f671ff773e269d2a7970fa94dee0a4de6a9ff1ae8dce259ceb"
+        },
+        {
+          "name": "recover-1.stderr",
+          "bytes": 0,
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        {
+          "name": "recover-2.stdout",
+          "bytes": 34721,
+          "sha256": "eb543161c83399f671ff773e269d2a7970fa94dee0a4de6a9ff1ae8dce259ceb"
+        },
+        {
+          "name": "recover-2.stderr",
+          "bytes": 0,
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        }
+      ]
+    },
+    {
+      "index": 22,
+      "seed": 17928078641644988974,
+      "kill_after_acks": 182,
+      "kill_delay_us": 2183,
+      "rows_scripted": 4352,
+      "ready": true,
+      "acks_at_kill": 182,
+      "acks_drained_after_kill": 0,
+      "acknowledged": 182,
+      "recovered_acked": 182,
+      "in_flight_committed": 182,
+      "child_status": "signal(9)",
+      "kill_result": "sent SIGKILL",
+      "fault_observed": true,
+      "effective_modes": [
+        "strict",
+        "strict",
+        "strict"
+      ],
+      "wal_segments_after_kill": 1,
+      "recovery_reports": [
+        [
+          "latest||743|168356|0|186|0|366|0|||||||||||"
+        ],
+        [
+          "latest||743|168356|0|186|0|366|0|||||||||||"
+        ]
+      ],
+      "verdict": {
+        "acknowledged": 182,
+        "recovered_acked": 182,
+        "in_flight_committed": 182,
+        "lost_ack_ids": [],
+        "unexpected_effects": [],
+        "partial_transactions": [],
+        "integrity_errors": [],
+        "harness_errors": [],
+        "fault_observed": true,
+        "fault_required": true,
+        "child_started": true,
+        "qualified": true
+      },
+      "passed": true,
+      "logs": [
+        {
+          "name": "workload.sql",
+          "bytes": 969321,
+          "sha256": "ef709ec31e7bd75c1e7d87e6c5f92c13e97adb2e38fc7110c4796d86fbbee77b"
+        },
+        {
+          "name": "workload.stdout",
+          "bytes": 1368,
+          "sha256": "75aca6fbd4210412b851a09e9ed97b7dee5dd7d2eba0949481ebae1b35f67580"
+        },
+        {
+          "name": "workload.stderr",
+          "bytes": 0,
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        {
+          "name": "ack.ledger",
+          "bytes": 12448,
+          "sha256": "8d753b1b4de2d881d263c4cbed0f4fceeca227ad404f937564bf49ed011f85d5"
+        },
+        {
+          "name": "recover-1.stdout",
+          "bytes": 29382,
+          "sha256": "c77fd7217f0cd3d0062fad6de25de502d3ef5231c9857505603e88a7b81a881c"
+        },
+        {
+          "name": "recover-1.stderr",
+          "bytes": 0,
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        {
+          "name": "recover-2.stdout",
+          "bytes": 29382,
+          "sha256": "c77fd7217f0cd3d0062fad6de25de502d3ef5231c9857505603e88a7b81a881c"
+        },
+        {
+          "name": "recover-2.stderr",
+          "bytes": 0,
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        }
+      ]
+    },
+    {
+      "index": 23,
+      "seed": 2237932406263200046,
+      "kill_after_acks": 81,
+      "kill_delay_us": 215,
+      "rows_scripted": 4352,
+      "ready": true,
+      "acks_at_kill": 81,
+      "acks_drained_after_kill": 0,
+      "acknowledged": 81,
+      "recovered_acked": 81,
+      "in_flight_committed": null,
+      "child_status": "signal(9)",
+      "kill_result": "sent SIGKILL",
+      "fault_observed": true,
+      "effective_modes": [
+        "strict",
+        "strict",
+        "strict"
+      ],
+      "wal_segments_after_kill": 1,
+      "recovery_reports": [
+        [
+          "latest||334|65428|0|84|0|162|0|||||||||||"
+        ],
+        [
+          "latest||334|65428|0|84|0|162|0|||||||||||"
+        ]
+      ],
+      "verdict": {
+        "acknowledged": 81,
+        "recovered_acked": 81,
+        "in_flight_committed": null,
+        "lost_ack_ids": [],
+        "unexpected_effects": [],
+        "partial_transactions": [],
+        "integrity_errors": [],
+        "harness_errors": [],
+        "fault_observed": true,
+        "fault_required": true,
+        "child_started": true,
+        "qualified": true
+      },
+      "passed": true,
+      "logs": [
+        {
+          "name": "workload.sql",
+          "bytes": 969321,
+          "sha256": "ef709ec31e7bd75c1e7d87e6c5f92c13e97adb2e38fc7110c4796d86fbbee77b"
+        },
+        {
+          "name": "workload.stdout",
+          "bytes": 579,
+          "sha256": "7b5c9431e89af087b1a2ff34773b8f582426913203955726eb786bd860e4f090"
+        },
+        {
+          "name": "workload.stderr",
+          "bytes": 0,
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        {
+          "name": "ack.ledger",
+          "bytes": 5498,
+          "sha256": "bcd2a844600f268a98937551782c15f62c69fa2f4ef1eb07c2b569dfb4615b29"
+        },
+        {
+          "name": "recover-1.stdout",
+          "bytes": 13064,
+          "sha256": "d94c07ef6a4f0e948f99e665d20551a79ee9f7a14d19a27183133bffd3de2c02"
+        },
+        {
+          "name": "recover-1.stderr",
+          "bytes": 0,
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        {
+          "name": "recover-2.stdout",
+          "bytes": 13064,
+          "sha256": "d94c07ef6a4f0e948f99e665d20551a79ee9f7a14d19a27183133bffd3de2c02"
+        },
+        {
+          "name": "recover-2.stderr",
+          "bytes": 0,
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        }
+      ]
+    },
+    {
+      "index": 24,
+      "seed": 4807025220587635530,
+      "kill_after_acks": 124,
+      "kill_delay_us": 2320,
+      "rows_scripted": 4352,
+      "ready": true,
+      "acks_at_kill": 124,
+      "acks_drained_after_kill": 0,
+      "acknowledged": 124,
+      "recovered_acked": 124,
+      "in_flight_committed": 124,
+      "child_status": "signal(9)",
+      "kill_result": "sent SIGKILL",
+      "fault_observed": true,
+      "effective_modes": [
+        "strict",
+        "strict",
+        "strict"
+      ],
+      "wal_segments_after_kill": 1,
+      "recovery_reports": [
+        [
+          "latest||508|81308|0|128|0|250|0|||||||||||"
+        ],
+        [
+          "latest||508|81308|0|128|0|250|0|||||||||||"
+        ]
+      ],
+      "verdict": {
+        "acknowledged": 124,
+        "recovered_acked": 124,
+        "in_flight_committed": 124,
+        "lost_ack_ids": [],
+        "unexpected_effects": [],
+        "partial_transactions": [],
+        "integrity_errors": [],
+        "harness_errors": [],
+        "fault_observed": true,
+        "fault_required": true,
+        "child_started": true,
+        "qualified": true
+      },
+      "passed": true,
+      "logs": [
+        {
+          "name": "workload.sql",
+          "bytes": 969321,
+          "sha256": "ef709ec31e7bd75c1e7d87e6c5f92c13e97adb2e38fc7110c4796d86fbbee77b"
+        },
+        {
+          "name": "workload.stdout",
+          "bytes": 904,
+          "sha256": "431c5f0f8b9092e0b64043f1804acc53073491c5170edd30c3868664360f53fe"
+        },
+        {
+          "name": "workload.stderr",
+          "bytes": 0,
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        {
+          "name": "ack.ledger",
+          "bytes": 8446,
+          "sha256": "1658c39ffff16a9e7ef31937623ae8e4d594d8f503e713709f08613728e26210"
+        },
+        {
+          "name": "recover-1.stdout",
+          "bytes": 20007,
+          "sha256": "b801a0f326ee1fb84a71ba32e45ce2dd8a18f746798c107b33c93e9dd5660f33"
+        },
+        {
+          "name": "recover-1.stderr",
+          "bytes": 0,
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        {
+          "name": "recover-2.stdout",
+          "bytes": 20007,
+          "sha256": "b801a0f326ee1fb84a71ba32e45ce2dd8a18f746798c107b33c93e9dd5660f33"
+        },
+        {
+          "name": "recover-2.stderr",
+          "bytes": 0,
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        }
+      ]
+    },
+    {
+      "index": 25,
+      "seed": 4861802277392650911,
+      "kill_after_acks": 122,
+      "kill_delay_us": 983,
+      "rows_scripted": 4352,
+      "ready": true,
+      "acks_at_kill": 122,
+      "acks_drained_after_kill": 0,
+      "acknowledged": 122,
+      "recovered_acked": 122,
+      "in_flight_committed": 122,
+      "child_status": "signal(9)",
+      "kill_result": "sent SIGKILL",
+      "fault_observed": true,
+      "effective_modes": [
+        "strict",
+        "strict",
+        "strict"
+      ],
+      "wal_segments_after_kill": 1,
+      "recovery_reports": [
+        [
+          "latest||500|80576|0|126|0|246|0|||||||||||"
+        ],
+        [
+          "latest||500|80576|0|126|0|246|0|||||||||||"
+        ]
+      ],
+      "verdict": {
+        "acknowledged": 122,
+        "recovered_acked": 122,
+        "in_flight_committed": 122,
+        "lost_ack_ids": [],
+        "unexpected_effects": [],
+        "partial_transactions": [],
+        "integrity_errors": [],
+        "harness_errors": [],
+        "fault_observed": true,
+        "fault_required": true,
+        "child_started": true,
+        "qualified": true
+      },
+      "passed": true,
+      "logs": [
+        {
+          "name": "workload.sql",
+          "bytes": 969321,
+          "sha256": "ef709ec31e7bd75c1e7d87e6c5f92c13e97adb2e38fc7110c4796d86fbbee77b"
+        },
+        {
+          "name": "workload.stdout",
+          "bytes": 888,
+          "sha256": "e69e8c881a666c467a4de39ca8034c8c8fd4d01e1a6c9a4044e76b170a1a9d97"
+        },
+        {
+          "name": "workload.stderr",
+          "bytes": 0,
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        {
+          "name": "ack.ledger",
+          "bytes": 8308,
+          "sha256": "3905ecf668a599c98a892178729b631c9da23f47b3a9adb15a5060919a13094d"
+        },
+        {
+          "name": "recover-1.stdout",
+          "bytes": 19681,
+          "sha256": "8caacbe0c82df53d81a872f4ec661f51575f9506c09229c6773411ff2a0f9169"
+        },
+        {
+          "name": "recover-1.stderr",
+          "bytes": 0,
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        {
+          "name": "recover-2.stdout",
+          "bytes": 19681,
+          "sha256": "8caacbe0c82df53d81a872f4ec661f51575f9506c09229c6773411ff2a0f9169"
+        },
+        {
+          "name": "recover-2.stderr",
+          "bytes": 0,
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        }
+      ]
+    },
+    {
+      "index": 26,
+      "seed": 11584276178365018042,
+      "kill_after_acks": 112,
+      "kill_delay_us": 606,
+      "rows_scripted": 4352,
+      "ready": true,
+      "acks_at_kill": 112,
+      "acks_drained_after_kill": 0,
+      "acknowledged": 112,
+      "recovered_acked": 112,
+      "in_flight_committed": 112,
+      "child_status": "signal(9)",
+      "kill_result": "sent SIGKILL",
+      "fault_observed": true,
+      "effective_modes": [
+        "strict",
+        "strict",
+        "strict"
+      ],
+      "wal_segments_after_kill": 1,
+      "recovery_reports": [
+        [
+          "latest||460|76916|0|116|0|226|0|||||||||||"
+        ],
+        [
+          "latest||460|76916|0|116|0|226|0|||||||||||"
+        ]
+      ],
+      "verdict": {
+        "acknowledged": 112,
+        "recovered_acked": 112,
+        "in_flight_committed": 112,
+        "lost_ack_ids": [],
+        "unexpected_effects": [],
+        "partial_transactions": [],
+        "integrity_errors": [],
+        "harness_errors": [],
+        "fault_observed": true,
+        "fault_required": true,
+        "child_started": true,
+        "qualified": true
+      },
+      "passed": true,
+      "logs": [
+        {
+          "name": "workload.sql",
+          "bytes": 969321,
+          "sha256": "ef709ec31e7bd75c1e7d87e6c5f92c13e97adb2e38fc7110c4796d86fbbee77b"
+        },
+        {
+          "name": "workload.stdout",
+          "bytes": 808,
+          "sha256": "b6183a29844cf8a5dba24037d0393d50c520d36feb7e05b28ff59e99264af0bc"
+        },
+        {
+          "name": "workload.stderr",
+          "bytes": 0,
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        {
+          "name": "ack.ledger",
+          "bytes": 7618,
+          "sha256": "2ac04207039c61a9f049c5b8d4a1ee3ba365bb28ce37a369a39dab4a2493a188"
+        },
+        {
+          "name": "recover-1.stdout",
+          "bytes": 18051,
+          "sha256": "5af3844f197b33502a8d36c2d1294855ffbf22a90026551ec0a4eefd4ae3b8da"
+        },
+        {
+          "name": "recover-1.stderr",
+          "bytes": 0,
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        {
+          "name": "recover-2.stdout",
+          "bytes": 18051,
+          "sha256": "5af3844f197b33502a8d36c2d1294855ffbf22a90026551ec0a4eefd4ae3b8da"
+        },
+        {
+          "name": "recover-2.stderr",
+          "bytes": 0,
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        }
+      ]
+    },
+    {
+      "index": 27,
+      "seed": 3907260164999550922,
+      "kill_after_acks": 230,
+      "kill_delay_us": 815,
+      "rows_scripted": 4352,
+      "ready": true,
+      "acks_at_kill": 230,
+      "acks_drained_after_kill": 0,
+      "acknowledged": 230,
+      "recovered_acked": 230,
+      "in_flight_committed": 230,
+      "child_status": "signal(9)",
+      "kill_result": "sent SIGKILL",
+      "fault_observed": true,
+      "effective_modes": [
+        "strict",
+        "strict",
+        "strict"
+      ],
+      "wal_segments_after_kill": 1,
+      "recovery_reports": [
+        [
+          "latest||935|186020|0|234|0|462|0|||||||||||"
+        ],
+        [
+          "latest||935|186020|0|234|0|462|0|||||||||||"
+        ]
+      ],
+      "verdict": {
+        "acknowledged": 230,
+        "recovered_acked": 230,
+        "in_flight_committed": 230,
+        "lost_ack_ids": [],
+        "unexpected_effects": [],
+        "partial_transactions": [],
+        "integrity_errors": [],
+        "harness_errors": [],
+        "fault_observed": true,
+        "fault_required": true,
+        "child_started": true,
+        "qualified": true
+      },
+      "passed": true,
+      "logs": [
+        {
+          "name": "workload.sql",
+          "bytes": 969321,
+          "sha256": "ef709ec31e7bd75c1e7d87e6c5f92c13e97adb2e38fc7110c4796d86fbbee77b"
+        },
+        {
+          "name": "workload.stdout",
+          "bytes": 1752,
+          "sha256": "096e58825b5448c3ab3646d91cf18604bbb1630566d5a7ac2c588efd68709819"
+        },
+        {
+          "name": "workload.stderr",
+          "bytes": 0,
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        {
+          "name": "ack.ledger",
+          "bytes": 15760,
+          "sha256": "db542e304c21ee693783caed4a42fdeca439118598ad047ea560b86e4595b247"
+        },
+        {
+          "name": "recover-1.stdout",
+          "bytes": 37138,
+          "sha256": "f38d71336a0c0051ca9ce0b0d78acae603ab7be8666a69df6eb245a58e0b35ed"
+        },
+        {
+          "name": "recover-1.stderr",
+          "bytes": 0,
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        {
+          "name": "recover-2.stdout",
+          "bytes": 37138,
+          "sha256": "f38d71336a0c0051ca9ce0b0d78acae603ab7be8666a69df6eb245a58e0b35ed"
+        },
+        {
+          "name": "recover-2.stderr",
+          "bytes": 0,
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        }
+      ]
+    },
+    {
+      "index": 28,
+      "seed": 9801702191500217777,
+      "kill_after_acks": 254,
+      "kill_delay_us": 1606,
+      "rows_scripted": 4352,
+      "ready": true,
+      "acks_at_kill": 254,
+      "acks_drained_after_kill": 0,
+      "acknowledged": 254,
+      "recovered_acked": 254,
+      "in_flight_committed": 254,
+      "child_status": "signal(9)",
+      "kill_result": "sent SIGKILL",
+      "fault_observed": true,
+      "effective_modes": [
+        "strict",
+        "strict",
+        "strict"
+      ],
+      "wal_segments_after_kill": 1,
+      "recovery_reports": [
+        [
+          "latest||1031|194852|0|258|0|510|0|||||||||||"
+        ],
+        [
+          "latest||1031|194852|0|258|0|510|0|||||||||||"
+        ]
+      ],
+      "verdict": {
+        "acknowledged": 254,
+        "recovered_acked": 254,
+        "in_flight_committed": 254,
+        "lost_ack_ids": [],
+        "unexpected_effects": [],
+        "partial_transactions": [],
+        "integrity_errors": [],
+        "harness_errors": [],
+        "fault_observed": true,
+        "fault_required": true,
+        "child_started": true,
+        "qualified": true
+      },
+      "passed": true,
+      "logs": [
+        {
+          "name": "workload.sql",
+          "bytes": 969321,
+          "sha256": "ef709ec31e7bd75c1e7d87e6c5f92c13e97adb2e38fc7110c4796d86fbbee77b"
+        },
+        {
+          "name": "workload.stdout",
+          "bytes": 1944,
+          "sha256": "b9aff648c73c2dbdbafaf24628287773d372ce22778e99f3f19ea199358200f7"
+        },
+        {
+          "name": "workload.stderr",
+          "bytes": 0,
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        {
+          "name": "ack.ledger",
+          "bytes": 17416,
+          "sha256": "9795eb3a6974b07cafb1211721b8eb9c5db1d36ddf2cda27422193198137d807"
+        },
+        {
+          "name": "recover-1.stdout",
+          "bytes": 41039,
+          "sha256": "a53daef96e1bad2fb7c433ffd26b302d10af6ce2a6d1ff21f549083f613668a3"
+        },
+        {
+          "name": "recover-1.stderr",
+          "bytes": 0,
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        {
+          "name": "recover-2.stdout",
+          "bytes": 41039,
+          "sha256": "a53daef96e1bad2fb7c433ffd26b302d10af6ce2a6d1ff21f549083f613668a3"
+        },
+        {
+          "name": "recover-2.stderr",
+          "bytes": 0,
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        }
+      ]
+    },
+    {
+      "index": 29,
+      "seed": 6707420998557272038,
+      "kill_after_acks": 235,
+      "kill_delay_us": 926,
+      "rows_scripted": 4352,
+      "ready": true,
+      "acks_at_kill": 235,
+      "acks_drained_after_kill": 0,
+      "acknowledged": 235,
+      "recovered_acked": 235,
+      "in_flight_committed": 235,
+      "child_status": "signal(9)",
+      "kill_result": "sent SIGKILL",
+      "fault_observed": true,
+      "effective_modes": [
+        "strict",
+        "strict",
+        "strict"
+      ],
+      "wal_segments_after_kill": 1,
+      "recovery_reports": [
+        [
+          "latest||955|187860|0|239|0|472|0|||||||||||"
+        ],
+        [
+          "latest||955|187860|0|239|0|472|0|||||||||||"
+        ]
+      ],
+      "verdict": {
+        "acknowledged": 235,
+        "recovered_acked": 235,
+        "in_flight_committed": 235,
+        "lost_ack_ids": [],
+        "unexpected_effects": [],
+        "partial_transactions": [],
+        "integrity_errors": [],
+        "harness_errors": [],
+        "fault_observed": true,
+        "fault_required": true,
+        "child_started": true,
+        "qualified": true
+      },
+      "passed": true,
+      "logs": [
+        {
+          "name": "workload.sql",
+          "bytes": 969321,
+          "sha256": "ef709ec31e7bd75c1e7d87e6c5f92c13e97adb2e38fc7110c4796d86fbbee77b"
+        },
+        {
+          "name": "workload.stdout",
+          "bytes": 1792,
+          "sha256": "c3701f63d6f4edbbb89de4a83cbd33f7f0fe57b89facc8c86a4f5612e49d9293"
+        },
+        {
+          "name": "workload.stderr",
+          "bytes": 0,
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        {
+          "name": "ack.ledger",
+          "bytes": 16105,
+          "sha256": "a855fb3676d62699176cefe48f9a7532d94bdbae09c2193df767198817591ec3"
+        },
+        {
+          "name": "recover-1.stdout",
+          "bytes": 37941,
+          "sha256": "095df455fcd308d9a51213361f209e7908ba05d3d7628e707cdab7021a81d878"
+        },
+        {
+          "name": "recover-1.stderr",
+          "bytes": 0,
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        {
+          "name": "recover-2.stdout",
+          "bytes": 37941,
+          "sha256": "095df455fcd308d9a51213361f209e7908ba05d3d7628e707cdab7021a81d878"
+        },
+        {
+          "name": "recover-2.stderr",
+          "bytes": 0,
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        }
+      ]
+    }
+  ],
+  "passed": true,
+  "limitations": [
+    "failure model is SIGKILL of the shell process: the OS keeps every byte the process handed it, so this is not an OS crash or a power cut and says nothing about data in the page cache or a device cache",
+    "one connection in one process runs sequential two-row transactions on one table pair with one index; no concurrent writers, no checkpoint or WAL segment rotation is forced during the workload",
+    "the receipt records the binary's SHA-256 and the toolchain found on the host; it does not rebuild the binary from source_sha",
+    "the result holds for the filesystem, mount options and kernel recorded here"
+  ],
+  "logs_dir": "/home/ubuntu/redlineDB/.agent/sandbox/durability-work/run-1790639229-7"
+}
