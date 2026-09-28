@@ -20,15 +20,28 @@ pub(crate) fn unique_key_bytes(
 }
 
 /// The value a unique-key lock encodes for `value`. The conflict check
-/// compares keys with `compare_values`, which compares an INTEGER with a
-/// REAL as doubles, so 1 and 1.0, or i64::MAX and REAL 2^63, are one key and
-/// must take one lock. Every number becomes that double, with -0.0 as 0.0.
-/// Integers that share a double also share a lock, which only makes those
-/// writers wait for each other.
+/// compares keys with `compare_values`, so every pair of values it calls
+/// equal must take one lock; the mapping may over-share (writers of keys
+/// that share a lock only wait for each other), never under-share.
+///
+/// * `compare_values` compares an INTEGER with a REAL as doubles, so 1 and
+///   1.0, or i64::MAX and REAL 2^63, are one key: every number becomes that
+///   double, with -0.0 as 0.0.
+/// * Every NaN payload compares equal, so every NaN takes one lock.
+/// * While `::citext` markers are honoured (a Postgres-dialect statement
+///   after `CREATE EXTENSION citext`), a marked text equals any spelling of
+///   it with or without the marker, so text locks on its unmarked ASCII
+///   lower-case form. Without the marker texts compare by bytes and lock
+///   as they are.
 fn lock_key_value(value: &SqlValue) -> SqlValue {
     match value {
         SqlValue::Integer(v) => SqlValue::Real(*v as f64),
+        SqlValue::Real(v) if v.is_nan() => SqlValue::Real(f64::NAN),
         SqlValue::Real(v) => SqlValue::Real(*v + 0.0),
+        SqlValue::Text(text) if crate::value::citext_marker_active() => {
+            let unmarked = text.strip_prefix('\u{E000}').unwrap_or(text);
+            SqlValue::Text(Arc::from(unmarked.to_ascii_lowercase()))
+        }
         other => other.clone(),
     }
 }
@@ -129,4 +142,53 @@ pub(crate) fn decode_sql_row(bytes: &[u8]) -> Result<Option<(u64, Vec<SqlValue>)
         values.push(value.to_owned());
     }
     Ok(Some((table_id, values)))
+}
+
+#[cfg(test)]
+mod lock_key_tests {
+    use super::*;
+    use crate::connection::Dialect;
+    use crate::value::DialectScope;
+
+    fn key(values: &[SqlValue]) -> Vec<u8> {
+        unique_key_bytes(7, 3, values).expect("key")
+    }
+
+    fn text(v: &str) -> SqlValue {
+        SqlValue::Text(Arc::from(v))
+    }
+
+    #[test]
+    fn every_nan_takes_one_lock() {
+        let quiet = f64::NAN;
+        let negative = -f64::NAN;
+        let payload = f64::from_bits(0x7ff8_0000_0000_0042);
+        assert!(quiet.is_nan() && negative.is_nan() && payload.is_nan());
+        assert_ne!(quiet.to_bits(), negative.to_bits());
+        let want = key(&[SqlValue::Real(quiet)]);
+        assert_eq!(key(&[SqlValue::Real(negative)]), want);
+        assert_eq!(key(&[SqlValue::Real(payload)]), want);
+        assert_eq!(
+            key(&[SqlValue::Integer(1)]),
+            key(&[SqlValue::Real(1.0)]),
+            "INTEGER 1 and REAL 1.0 still share a lock"
+        );
+    }
+
+    #[test]
+    fn citext_spellings_take_one_lock_only_while_citext_is_honoured() {
+        // Outside a Postgres-dialect statement the marker is a character.
+        assert_ne!(key(&[text("\u{E000}ABC")]), key(&[text("abc")]));
+        crate::value::enable_citext_marker();
+        {
+            let _sqlite = DialectScope::for_dialect(Dialect::Sqlite);
+            assert_ne!(key(&[text("\u{E000}ABC")]), key(&[text("abc")]));
+            assert_ne!(key(&[text("ABC")]), key(&[text("abc")]));
+        }
+        let _postgres = DialectScope::for_dialect(Dialect::PostgresSubset);
+        let want = key(&[text("abc")]);
+        assert_eq!(key(&[text("\u{E000}ABC")]), want);
+        assert_eq!(key(&[text("\u{E000}abc")]), want);
+        assert_eq!(key(&[text("ABC")]), want);
+    }
 }

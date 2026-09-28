@@ -198,3 +198,13 @@ index-format epoch below), so such an index is rebuilt at the first open.
   of another type (`WHERE x = '5'`) was built without comparison affinity.
   A 4.x database rebuilds every index at its first open (index-format
   epoch 3), which rebuilds such an index with the new rule.
+
+## Unique-key locks for citext and NaN keys
+
+- The SQL-side unique-key lock takes one lock for every spelling of a
+  `::citext` text while citext comparisons are active (its unmarked ASCII
+  lower-case form), so two writers inserting `'ABC'::citext` and
+  `'abc'::citext` into the same UNIQUE key serialize instead of both passing
+  the heap-scan conflict check. Every NaN payload takes one lock; the record
+  encoder already folded NaN payloads and -0.0, and the lock key now does it
+  explicitly.
