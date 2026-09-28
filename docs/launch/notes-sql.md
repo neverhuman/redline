@@ -338,3 +338,25 @@ one of the rows with 4.x and open again. A database already at epoch 3
   (no terminating `WHERE`) read that way fails with `recursive CTE ...
   exceeded 10000 iterations` instead of answering from a truncated CTE;
   `SELECT x FROM c LIMIT 10` still stops after 10 rows.
+
+## UNION, INTERSECT and EXCEPT compare rows as SQLite values (Q5-04)
+
+- The compound set operations keyed each row by an unescaped string, so
+  rows whose TEXT held the delimiter collided: `SELECT 'a|Tb', 'c' UNION
+  SELECT 'a', 'b|Tc'` gave 1 row (SQLite 2), INTERSECT 1 (0), EXCEPT 0 (1).
+  The key also kept storage classes apart, so INTEGER 1 and REAL 1.0 were
+  two rows: `SELECT 1 UNION SELECT 1.0` gave 2 rows, INTERSECT none and
+  EXCEPT one. Rows are now keyed by a tagged, length-prefixed encoding in
+  which an integral REAL in the i64 range has its INTEGER's key (`1`,
+  `1.0` and `-0.0` are one value; `9007199254740993` and
+  `9007199254740992.0` stay two, as SQLite compares them exactly).
+- The surviving row is SQLite's: `SELECT 1 UNION SELECT 1.0` answers REAL
+  1.0 and `SELECT 1.0 UNION SELECT 1` INTEGER 1 (the right operand wins a
+  tie), and INTERSECT and EXCEPT keep the left operand's row. Among equal
+  rows inside one operand the first is kept, as the pinned SQLite 3.53.1
+  does; SQLite 3.50 kept the last there.
+- A recursive CTE's `UNION` deduplicated by stored-record bytes, so
+  `WITH RECURSIVE r(x) AS (SELECT 1 UNION SELECT 1.0 FROM r)` had 2 rows;
+  it now has one (INTEGER 1, the first seen, as in SQLite).
+- Not yet: set operations ignore collations (`'a' COLLATE NOCASE UNION
+  'A'` is still two rows).

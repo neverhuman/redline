@@ -72,6 +72,7 @@ pub(crate) mod merge;
 pub(crate) mod pragma_tv;
 pub(crate) mod set_ops;
 mod show_var;
+pub(crate) mod sql_equiv;
 mod sqlite_sequence;
 pub(crate) mod table_valued;
 pub(crate) mod trigger;

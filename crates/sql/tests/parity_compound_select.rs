@@ -256,6 +256,25 @@ fn column_count_mismatch_errors() {
     );
 }
 
+/// Q5-04: rows are equal by SQLite's value comparison. Delimiter bytes in
+/// TEXT no longer make two rows collide, and INTEGER 1 equals REAL 1.0.
+/// (The harness compares INTEGER and REAL loosely; the typed survivors are
+/// pinned in `launch_wrong_answer/q5_04_set_keys.rs`.)
+#[test]
+fn compound_rows_compare_as_sqlite_values() {
+    for compound in [
+        "SELECT 'a|Tb', 'c' UNION SELECT 'a', 'b|Tc'",
+        "SELECT 'a|Tb', 'c' INTERSECT SELECT 'a', 'b|Tc'",
+        "SELECT 'a|Tb', 'c' EXCEPT SELECT 'a', 'b|Tc'",
+        "SELECT 1 UNION SELECT 1.0",
+        "SELECT 1 INTERSECT SELECT 1.0",
+        "SELECT 1 EXCEPT SELECT 1.0",
+        "SELECT 1, 'x' UNION SELECT 1.0, 'x'",
+    ] {
+        harness::assert_parity(&format!("SELECT count(*) FROM ({compound})"));
+    }
+}
+
 #[test]
 fn redline_handles_compound_via_database_handle() {
     // End-to-end smoke against `Database::create` so we know the path

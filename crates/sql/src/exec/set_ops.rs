@@ -3,12 +3,13 @@
 //! `UNION ALL` keeps its existing fast path in [`SelectSource::CompoundAll`];
 //! the three deduplicating operations here materialise both branches into
 //! row vectors, then combine according to [`CompoundSetOp`] with hash dedup.
+//! Rows are equal when SQLite's comparison says so, which the
+//! [`super::sql_equiv`] keys encode: INTEGER 1 and REAL 1.0 are one row,
+//! TEXT '1' and INTEGER 1 are two.
 //!
 //! Column count compatibility is checked at execution time; type-class
 //! compatibility uses SQLite-compatible "any-type-fits-any-cell" semantics
 //! since storage classes are dynamic.
-
-use std::collections::HashSet;
 
 use crate::connection::Connection;
 use crate::error::{Error, Result};
@@ -16,46 +17,52 @@ use crate::statement::{CompoundSetOp, SelectPlan};
 use crate::value::SqlValue;
 
 use super::materialize_select_plan_rows;
+use super::sql_equiv::{equiv_key, equiv_key_into};
 
-/// A stable, hash-friendly key derived from a row value.
-fn row_key(row: &[SqlValue]) -> String {
-    let mut s = String::with_capacity(row.len() * 16);
-    for v in row {
-        match v {
-            SqlValue::Null => s.push_str("N|"),
-            SqlValue::Integer(i) => {
-                s.push('I');
-                s.push_str(&i.to_string());
-                s.push('|');
-            }
-            SqlValue::Real(r) => {
-                s.push('R');
-                // bit-equality so NaN/-0 dedup like SQLite (close enough).
-                s.push_str(&format!("{:?}", r.to_bits()));
-                s.push('|');
-            }
-            SqlValue::Text(t) => {
-                s.push('T');
-                s.push_str(t);
-                s.push('|');
-            }
-            SqlValue::Blob(b) => {
-                s.push('B');
-                s.push_str(&format!("{:?}", b.as_ref()));
-                s.push('|');
-            }
-        }
-    }
-    s
-}
-
+/// Rows deduplicated by [`equiv_key`]: the first of equal rows survives,
+/// in its first position.
 fn dedup_rows(rows: Vec<Vec<SqlValue>>) -> Vec<Vec<SqlValue>> {
-    let mut seen: HashSet<String> = HashSet::new();
+    let mut seen: ahash::AHashSet<Vec<u8>> = ahash::AHashSet::with_capacity(rows.len());
+    let mut key = Vec::new();
     let mut out = Vec::with_capacity(rows.len());
     for row in rows {
-        let key = row_key(&row);
-        if seen.insert(key) {
+        equiv_key_into(&row, &mut key);
+        if !seen.contains(key.as_slice()) {
+            seen.insert(key.clone());
             out.push(row);
+        }
+    }
+    out
+}
+
+/// `left UNION right`, as SQLite 3.53 answers it: among equal rows of one
+/// operand the first survives, and on a tie between the operands the right
+/// operand's row replaces the left one in place (`SELECT 1 UNION SELECT
+/// 1.0` is REAL 1.0, `SELECT 1.0 UNION SELECT 1` is INTEGER 1).
+fn union_rows(left: Vec<Vec<SqlValue>>, right: Vec<Vec<SqlValue>>) -> Vec<Vec<SqlValue>> {
+    let mut slot_by_key: ahash::AHashMap<Vec<u8>, usize> =
+        ahash::AHashMap::with_capacity(left.len() + right.len());
+    let mut out: Vec<Vec<SqlValue>> = Vec::with_capacity(left.len() + right.len());
+    let mut from_right: Vec<bool> = Vec::with_capacity(left.len() + right.len());
+    let mut key = Vec::new();
+    for (row, is_right) in left
+        .into_iter()
+        .map(|row| (row, false))
+        .chain(right.into_iter().map(|row| (row, true)))
+    {
+        equiv_key_into(&row, &mut key);
+        match slot_by_key.get(key.as_slice()) {
+            Some(&slot) => {
+                if is_right && !from_right[slot] {
+                    out[slot] = row;
+                    from_right[slot] = true;
+                }
+            }
+            None => {
+                slot_by_key.insert(key.clone(), out.len());
+                out.push(row);
+                from_right.push(is_right);
+            }
         }
     }
     out
@@ -82,40 +89,34 @@ pub(crate) fn collect_compound_set_rows(
         return Ok(Vec::new());
     }
     // Materialise the first branch and then fold the rest in left-to-right.
-    let mut accum = materialize_select_plan_rows(conn, &branches[0], bindings)?;
+    // Every `combine_two` result is already free of equal rows.
+    let mut accum = dedup_rows(materialize_select_plan_rows(conn, &branches[0], bindings)?);
     for branch in &branches[1..] {
         let next = materialize_select_plan_rows(conn, branch, bindings)?;
         check_arity(&accum, &next)?;
         accum = combine_two(op, accum, next);
     }
-    Ok(dedup_rows(accum))
+    Ok(accum)
 }
 
+/// Combine two operands. `left` holds no two equal rows. INTERSECT and
+/// EXCEPT keep left rows; UNION follows [`union_rows`].
 fn combine_two(
     op: CompoundSetOp,
     left: Vec<Vec<SqlValue>>,
     right: Vec<Vec<SqlValue>>,
 ) -> Vec<Vec<SqlValue>> {
     match op {
-        CompoundSetOp::UnionDistinct => {
-            let mut out = left;
-            out.extend(right);
-            out
-        }
-        CompoundSetOp::Intersect => {
-            let r_keys: HashSet<String> = right.iter().map(|r| row_key(r)).collect();
-            let l_dedup = dedup_rows(left);
-            l_dedup
-                .into_iter()
-                .filter(|row| r_keys.contains(&row_key(row)))
-                .collect()
-        }
-        CompoundSetOp::Except => {
-            let r_keys: HashSet<String> = right.iter().map(|r| row_key(r)).collect();
-            let l_dedup = dedup_rows(left);
-            l_dedup
-                .into_iter()
-                .filter(|row| !r_keys.contains(&row_key(row)))
+        CompoundSetOp::UnionDistinct => union_rows(left, right),
+        CompoundSetOp::Intersect | CompoundSetOp::Except => {
+            let keep_matches = matches!(op, CompoundSetOp::Intersect);
+            let r_keys: ahash::AHashSet<Vec<u8>> = right.iter().map(|r| equiv_key(r)).collect();
+            let mut key = Vec::new();
+            left.into_iter()
+                .filter(|row| {
+                    equiv_key_into(row, &mut key);
+                    r_keys.contains(key.as_slice()) == keep_matches
+                })
                 .collect()
         }
     }

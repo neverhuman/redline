@@ -4,8 +4,10 @@
 //! WS-A7b: the per-iteration `working_set` clone is replaced by a
 //! `Range<usize>` "frontier" into the single `accumulated` vector, and the
 //! linear `row_in` UNION dedup is replaced by an `AHashSet` keyed on the
-//! encoded row bytes. The encoded bytes themselves live in a `bumpalo::Bump`
-//! arena so set keys are zero-copy `&'arena [u8]` slices.
+//! row's equivalence key (`sql_equiv`, so INTEGER 1 and REAL 1.0 are one
+//! row, and the first of them is kept, as in SQLite). The key bytes live
+//! in a `bumpalo::Bump` arena so set keys are zero-copy `&'arena [u8]`
+//! slices.
 
 use std::collections::HashMap;
 use std::ops::Range;
@@ -18,7 +20,7 @@ use sqlparser::ast::{
 use crate::connection::Connection;
 use crate::error::{Error, Result};
 use crate::value::SqlValue;
-use redlinedb_kernel::catalog::{SchemaEpoch, SchemaSnapshot, ValueRef, encode_record};
+use redlinedb_kernel::catalog::{SchemaEpoch, SchemaSnapshot};
 
 use super::registry::{deregister_rows, register_cte_rows};
 use super::{
@@ -263,61 +265,11 @@ pub(super) fn materialize_cte(
     )
 }
 
-/// Encode one row into `encode_buf` and return a slice borrow.
-/// `encode_record` clears `encode_buf` itself so the same buffer can
-/// be reused across all rows in the loop.
+/// Write the row's equivalence key into `encode_buf` and return a slice
+/// borrow. The same buffer is reused across all rows in the loop.
 fn encode_row_into<'buf>(row: &[SqlValue], encode_buf: &'buf mut Vec<u8>) -> &'buf [u8] {
-    let mut refs = ValueRefStack::new();
-    for v in row {
-        refs.push(v.as_ref());
-    }
-    encode_record(refs.as_slice(), encode_buf)
-        .expect("encode_record on owned SqlValue cannot fail");
+    crate::exec::sql_equiv::equiv_key_into(row, encode_buf);
     encode_buf.as_slice()
-}
-
-/// Inline-stack helper for `ValueRef` collections during row encoding.
-/// Avoids allocating a fresh `Vec` per row for the common case of
-/// <= 16 columns; falls back to heap for wider rows.
-struct ValueRefStack<'a> {
-    inline: [ValueRef<'a>; 16],
-    len: usize,
-    spill: Option<Vec<ValueRef<'a>>>,
-}
-
-impl<'a> ValueRefStack<'a> {
-    #[inline]
-    fn new() -> Self {
-        Self {
-            inline: [ValueRef::Null; 16],
-            len: 0,
-            spill: None,
-        }
-    }
-
-    #[inline]
-    fn push(&mut self, v: ValueRef<'a>) {
-        if let Some(spill) = self.spill.as_mut() {
-            spill.push(v);
-        } else if self.len < self.inline.len() {
-            self.inline[self.len] = v;
-            self.len += 1;
-        } else {
-            let mut spill = Vec::with_capacity(self.len * 2);
-            spill.extend_from_slice(&self.inline[..self.len]);
-            spill.push(v);
-            self.spill = Some(spill);
-        }
-    }
-
-    #[inline]
-    fn as_slice(&self) -> &[ValueRef<'a>] {
-        if let Some(spill) = self.spill.as_ref() {
-            spill.as_slice()
-        } else {
-            &self.inline[..self.len]
-        }
-    }
 }
 
 fn finish_cte(
