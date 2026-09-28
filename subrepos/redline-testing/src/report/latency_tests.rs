@@ -272,6 +272,65 @@ fn latency_svgs_use_ratio_bands_without_mixed_estimators() {
         "median chart must say its ratio is not the quotient of its p50s:\n{median}"
     );
     assert!(!median.contains("Median gap"), "{median}");
+    // The per-case ratios are 0.5, 2 and 10, so their median is 2.00x; the
+    // p50 quotient, the mixed estimator, would be 5 ms / 4 ms = 1.25x.
+    assert!(median.contains(">2.00x<"), "{median}");
+    assert!(!median.contains("1.25x"), "p50 quotient in:\n{median}");
+    // The absolute p50s are labelled on their own.
+    assert!(
+        median.contains(">SQLite p50<") && median.contains(">4.00ms<"),
+        "{median}"
+    );
+    assert!(
+        median.contains(">RedlineDB p50<") && median.contains(">5.00ms<"),
+        "{median}"
+    );
+}
+
+/// One passed case per (reference, target) pair, measured three times.
+fn raw_cases(timings: &[(u128, u128)]) -> String {
+    timings
+        .iter()
+        .enumerate()
+        .map(|(index, (reference, target))| {
+            raw_case(&format!("{:05}", index + 1), "CASE", *reference, *target)
+        })
+        .collect()
+}
+
+#[test]
+fn ratio_bands_count_each_case_once_at_band_edges() {
+    // Ratios 0.5, 1 (equal medians), 2, 10 and 50: each band edge belongs
+    // to the band above it, and only a strictly faster case is "<1x".
+    let raw = raw_cases(&[
+        (2_000_000, 1_000_000),
+        (2_000_000, 2_000_000),
+        (2_000_000, 4_000_000),
+        (2_000_000, 20_000_000),
+        (2_000_000, 100_000_000),
+    ]);
+    let records = super::render::parse_raw_records(&raw).expect("records");
+    let ranked = rank_cases(&records).expect("rank");
+    let bars = super::ratio::ratio_histogram_bars(&ranked);
+    let counts = bars
+        .iter()
+        .map(|bar| (bar.label.as_str(), bar.value_label.as_str()))
+        .collect::<Vec<_>>();
+    assert_eq!(
+        counts,
+        [
+            ("<1x faster", "1"),
+            ("1-2x", "1"),
+            ("2-5x", "1"),
+            ("5-10x", "0"),
+            ("10-50x", "1"),
+            (">=50x", "1"),
+        ]
+    );
+    // The "<1x faster" bar is the headline faster count.
+    assert_eq!(bars[0].value, summarize(&ranked).faster as f64);
+    let total = bars.iter().map(|bar| bar.value).sum::<f64>();
+    assert_eq!(total, ranked.len() as f64, "every case in exactly one band");
 }
 
 /// A run in which no case has a passed measured sample ranks nothing, so
