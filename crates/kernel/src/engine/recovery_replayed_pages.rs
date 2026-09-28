@@ -62,16 +62,20 @@ pub(super) fn clear_heap_pages_past_checkpoint(
     Ok(cleared)
 }
 
+/// A test hook that can stop recovery with an error.
+#[cfg(test)]
+pub(super) type RecoveryHook = Box<dyn FnMut() -> crate::Result<()>>;
+
 #[cfg(test)]
 thread_local! {
-    static AFTER_HEAP_REPLAY: std::cell::RefCell<Option<Box<dyn FnMut() -> crate::Result<()>>>> =
+    static AFTER_HEAP_REPLAY: std::cell::RefCell<Option<RecoveryHook>> =
         std::cell::RefCell::new(None);
 }
 
 /// Test hook that runs on this thread once recovery has replayed the heap. An
 /// error stops the open there, as a crash would, with nothing flushed.
 #[cfg(test)]
-pub(super) fn set_after_heap_replay_hook(hook: Option<Box<dyn FnMut() -> crate::Result<()>>>) {
+pub(super) fn set_after_heap_replay_hook(hook: Option<RecoveryHook>) {
     AFTER_HEAP_REPLAY.with(|slot| *slot.borrow_mut() = hook);
 }
 

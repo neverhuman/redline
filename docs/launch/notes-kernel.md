@@ -48,7 +48,11 @@ Draft lines for the v5.0.0 CHANGELOG. The integrator owns `CHANGELOG.md`.
   were never checkpointed stay zero-filled in the page file. Their contents
   are recovered from the WAL, so every acknowledged row reads back exactly,
   but `integrity_check` reads the raw page file and reports "invalid magic".
-  A clean shutdown without a checkpoint shows the same errors.
+  A clean shutdown without a checkpoint shows the same errors. Resolved
+  below ("integrity_check passes pages the file never received"): on the
+  lane head with that change, `recover-matrix --config
+  crates/bench/bench/recovery-matrix.toml --seed 7` passes 36 of 36 runs
+  and exits 0.
 
 ## Database ownership
 
