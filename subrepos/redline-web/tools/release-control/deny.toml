@@ -1,0 +1,28 @@
+# cargo-deny policy for this standalone tool; same rules as the root deny.toml.
+# ops/ci/security-family.sh runs it with --config, so the parent directory's
+# deny.toml is never picked up in its place.
+
+[advisories]
+version = 2
+yanked = "deny"
+# Add a RUSTSEC id here only with a dated justification.
+ignore = []
+
+[licenses]
+version = 2
+allow = [
+    "Apache-2.0",
+]
+confidence-threshold = 0.8
+
+[bans]
+multiple-versions = "warn"
+wildcards = "deny"
+allow-wildcard-paths = true
+highlight = "all"
+
+[sources]
+unknown-registry = "deny"
+unknown-git = "deny"
+allow-registry = ["https://github.com/rust-lang/crates.io-index"]
+allow-git = []

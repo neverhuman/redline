@@ -1,0 +1,31 @@
+# cargo-deny policy for redline-central; same rules as the root deny.toml.
+# ops/ci/security-family.sh runs it with --config.
+
+[advisories]
+version = 2
+yanked = "deny"
+# Add a RUSTSEC id here only with a dated justification.
+ignore = []
+
+[licenses]
+version = 2
+allow = [
+    "Apache-2.0",
+    "MIT",
+    "Unicode-3.0",
+]
+confidence-threshold = 0.8
+
+[bans]
+multiple-versions = "warn"
+# Both members are publish = false, so their versionless path dependency is
+# allowed and any other wildcard is not.
+wildcards = "deny"
+allow-wildcard-paths = true
+highlight = "all"
+
+[sources]
+unknown-registry = "deny"
+unknown-git = "deny"
+allow-registry = ["https://github.com/rust-lang/crates.io-index"]
+allow-git = []

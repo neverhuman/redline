@@ -116,7 +116,33 @@ against the v5 headers. There is no v4 compatibility alias.
   "Existing crates.io versions remain available" (there are none) and uses
   the legacy `neverhuman/RedlineDB` URL with tag `v4.1.0` in its Rust
   dependency snippet. The README rewrite should use the snippet above and
-  link `docs/api-stability.md`.
+  link `docs/api-stability.md`. Its "Database files" section states that
+  v5.0.0 writes index-format epoch 3 and that 4.x refuses such a database;
+  that is the sql lane's commit 4c5141381 (`INDEX_VERSION` 2 to 3), so the
+  sentence is true only once that commit is merged. `docs/testing.md` still
+  lists a `cargo yank` rollback step, which no longer applies.
+
+## Supply chain and secret scanning
+
+- Every tracked `Cargo.lock` outside test fixtures is now scanned: the CI
+  security job derives the list with `git ls-files`, where it used to be a
+  typed list that skipped redline-central's `cargo deny` (it had no
+  `deny.toml`) and missed the two nested tools. Each needs its own
+  `deny.toml`, passed with `--config`, or an entry with a reason in
+  `ops/ci/security-exemptions.tsv`. redline-central and both nested tools now
+  have one.
+- Every `deny.toml` denies yanked crates, unknown registries, unknown git
+  sources and wildcard versions (path dependencies of `publish = false` crates
+  stay allowed). redline-central's crates are now `publish = false` too.
+- Two lockfile moves the new policy required: `chacha20` 0.10.0 and 0.10.1
+  (yanked) to 0.10.2 in the root and redline-central lockfiles, and
+  `event-listener` 5.4.1 to 5.4.2 (RUSTSEC-2026-0221, unsound `StackSlot`
+  Send/Sync, reached through sqlx-core by `redlinedb-sqlx`).
+- The gitleaks allowlist tests the matched text instead of the whole line, so
+  a secret next to an allowlisted checksum is reported.
+- `ops/ci/security-receipt.sh` writes `target/security/receipt.json` for a
+  release candidate (see `docs/security-scans.md`). A full-history scan of
+  the candidate found no leaks.
 
 ## Safety contract and panics
 

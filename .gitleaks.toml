@@ -1,11 +1,18 @@
 [extend]
 useDefault = true
 
+# Historical proof metadata: Cargo checksums, Git SHAs and request idempotency
+# IDs are not credentials. regexTarget = "match" tests each regex against the
+# text the rule matched (it starts at the key name, for example
+# `key_sha256": "<hex>"`), not the whole line, so a real secret that shares a
+# line with one of these values is still reported. ops/ci/tests/security-policy.sh
+# checks that. Every entry is listed as a reviewed exception in the security
+# receipt (ops/ci/security-receipt.sh).
 [allowlist]
 description = "Historical proof metadata: Cargo checksums, Git SHAs and request idempotency IDs are not credentials"
-regexTarget = "line"
+regexTarget = "match"
 regexes = [
-  '''lock_api-0\.4\.14\.crate sha256=[a-f0-9]{64}''',
-  '''"(?:pr_api_base_snapshot|api_base_sha_at_open)":\s*"[a-f0-9]{40}"''',
-  '''"key_sha256":\s*"[a-f0-9]{64}"''',
+  '''^lock_api-0\.4\.14\.crate sha256=[a-f0-9]{64}''',
+  '''^(?:pr_api_base_snapshot|api_base_sha_at_open)":\s*"[a-f0-9]{40}"''',
+  '''^key_sha256":\s*"[a-f0-9]{64}"''',
 ]

@@ -331,6 +331,9 @@ tagged release must satisfy:
 - **Security** — `just security` (cargo audit, cargo deny,
   gitleaks) green; the `security` job in
   `.github/workflows/jankurai.yml` blocks the PR otherwise.
+  `bash ops/ci/security-receipt.sh` on the candidate writes
+  `target/security/receipt.json`; see
+  [`docs/security-scans.md`](security-scans.md).
 - **Backups** — kernel `Engine::backup` integration test green
   (`cargo test -p redlinedb-kernel backup`); restore round-trip
   proven by the failpoint matrix lane.

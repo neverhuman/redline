@@ -1,10 +1,17 @@
+# cargo-deny policy for the root workspace. ops/ci/security-family.sh and
+# ops/ci/security-receipt.sh run it with --config, so a component never picks
+# up another directory's deny.toml by walking up.
+
 [advisories]
 version = 2
 # No explicit db-path: use cargo-deny's default ($CARGO_HOME/advisory-dbs),
 # which the sealed offline host CI pre-stages. A hardcoded ~/.cargo/advisory-db
 # points at an unstaged location and makes the advisory scan fail closed in the
 # network-isolated sandbox.
-yanked = "warn"
+# A yanked crate fails the check: release candidates must not ship one.
+yanked = "deny"
+# Add a RUSTSEC id here only with a dated justification; the security receipt
+# lists every entry as a reviewed exception.
 ignore = []
 
 [licenses]
@@ -21,9 +28,15 @@ confidence-threshold = 0.8
 
 [bans]
 multiple-versions = "warn"
-wildcards = "allow"
+# Every workspace crate is publish = false (scripts/check-publish-policy.sh),
+# so versionless path dependencies between members are allowed and any other
+# wildcard version requirement is not.
+wildcards = "deny"
+allow-wildcard-paths = true
 highlight = "all"
 
 [sources]
-unknown-registry = "warn"
-unknown-git = "warn"
+unknown-registry = "deny"
+unknown-git = "deny"
+allow-registry = ["https://github.com/rust-lang/crates.io-index"]
+allow-git = []

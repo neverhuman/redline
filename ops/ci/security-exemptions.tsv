@@ -1,0 +1,6 @@
+# Cargo.lock directories allowed to have no deny.toml beside them.
+# One per line: <directory relative to the repository root><TAB><reason>.
+# ops/ci/security-family.sh skips `cargo deny` for these (it still runs
+# `cargo audit`), and ops/ci/security-receipt.sh lists each as a reviewed
+# exception. Every tracked Cargo.lock has its own deny.toml today, so the
+# table is empty.

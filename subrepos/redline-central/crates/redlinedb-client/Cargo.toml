@@ -3,6 +3,7 @@ name = "redlinedb-client"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
+publish.workspace = true
 description = "Sync remote client for redlinedb-server (framed TCP protocol) with a rusqlite-shaped API."
 
 [dependencies]

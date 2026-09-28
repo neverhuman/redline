@@ -1,0 +1,12 @@
+# ops/ci/tests/security-policy.sh fills @PUBLISH@ and @DEPENDENCY@.
+[package]
+name = "fixture-app"
+version = "0.1.0"
+edition = "2021"
+license = "Apache-2.0"
+publish = @PUBLISH@
+
+[dependencies]
+@DEPENDENCY@
+
+[workspace]

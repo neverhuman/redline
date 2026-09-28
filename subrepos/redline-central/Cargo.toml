@@ -9,6 +9,8 @@ members = [
 version = "4.1.0"
 edition = "2021"
 license = "Apache-2.0"
+# Not published to crates.io (see docs/api-stability.md at the repository root).
+publish = false
 
 [workspace.dependencies]
 serde = { version = "1", features = ["derive"] }

@@ -3,6 +3,7 @@ name = "db-shim"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
+publish.workspace = true
 description = "Backend-neutral database contract with isolated Redline, SQLite, and Postgres adapters."
 
 [features]

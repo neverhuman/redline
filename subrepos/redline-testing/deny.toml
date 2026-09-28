@@ -6,6 +6,7 @@
 
 [advisories]
 db-urls = ["https://github.com/rustsec/advisory-db"]
+yanked = "deny"
 # Add specific RUSTSEC ids here only with a dated justification.
 ignore = []
 
@@ -27,8 +28,9 @@ confidence-threshold = 0.8
 
 [bans]
 multiple-versions = "allow"
-wildcards = "allow"
+wildcards = "deny"
+allow-wildcard-paths = true
 
 [sources]
 unknown-registry = "deny"
-unknown-git = "warn"
+unknown-git = "deny"
