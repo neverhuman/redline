@@ -486,6 +486,20 @@ pub(crate) fn parse_pragma_template(
             vec![String::from("index"), String::from("status")],
             pragma_redline_index_check_rows(conn)?,
         ),
+        "redline_durability" => {
+            if value.is_some() {
+                return Err(Error::UnsupportedSql(
+                    "PRAGMA redline_durability is read-only; use OpenOptions or PRAGMA synchronous"
+                        .to_owned(),
+                ));
+            }
+            pragma_static_select(
+                sql,
+                schema_epoch,
+                vec![String::from("redline_durability")],
+                vec![vec![super::pragma_recovery::durability(conn)]],
+            )
+        }
         "redline_recovery_report" => pragma_static_select(
             sql,
             schema_epoch,

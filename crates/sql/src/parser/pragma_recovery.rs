@@ -1,5 +1,6 @@
 //! `PRAGMA redline_recovery_report`: what the crash recovery that opened
-//! this database found and did (workplan R9, step 4).
+//! this database found and did (workplan R9, step 4). Also `PRAGMA
+//! redline_durability`, the commit durability in force (workplan R10).
 //!
 //! One row for a database this process opened from disk, none for one it
 //! created or holds only in memory. Counts and LSNs are integers; a value
@@ -8,7 +9,7 @@
 use std::path::Path;
 use std::sync::Arc;
 
-use redlinedb_kernel::engine::{RecoveryReport, RecoveryTarget};
+use redlinedb_kernel::engine::{CommitDurability, RecoveryReport, RecoveryTarget};
 
 use crate::connection::Connection;
 use crate::value::SqlValue;
@@ -35,6 +36,18 @@ pub(super) const COLUMNS: &[&str] = &[
     "abandoned_wal",
     "warnings",
 ];
+
+/// `PRAGMA redline_durability`: the commit durability the engine applies
+/// now, named as `REDLINEDB_DEFAULT_DURABILITY` names it. `PRAGMA
+/// synchronous` cannot answer this: it keeps SQLite's per-connection recall
+/// value, which starts at FULL whatever mode the database was opened in.
+pub(super) fn durability(conn: &Connection) -> SqlValue {
+    text(match conn.engine().commit_durability() {
+        CommitDurability::Strict => "strict",
+        CommitDurability::Normal => "normal",
+        CommitDurability::UnsafeDev => "unsafe_dev",
+    })
+}
 
 pub(super) fn rows(conn: &Connection) -> Vec<Vec<SqlValue>> {
     conn.engine()
