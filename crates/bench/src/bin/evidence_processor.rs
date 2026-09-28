@@ -14,6 +14,8 @@ use sha2::{Digest, Sha256};
 mod completion;
 #[path = "evidence_processor/sqlite_known_failures.rs"]
 mod sqlite_known_failures;
+#[path = "evidence_processor/sqlite_scope_policy.rs"]
+mod sqlite_scope_policy;
 
 const EXPECTED_SCHEMA: &str = "redline-testing-official-evidence-v1";
 const PROCESSED_SCHEMA: &str = "redline-testing-official-evidence-processed-v1";
@@ -283,22 +285,19 @@ fn validated_suite(
     if failed != 0 && !matches!(name, "sqlite_parity" | "memory" | "beyond_sqlite") {
         bail!("suite {name} failed {failed} test(s)");
     }
+    // Which cases a suite may skip is exactly the scope policy's list,
+    // checked against the raw records in `run` (SQ-05); here the three
+    // counts must cover the whole corpus.
     match name {
-        "sqlite_parity" | "memory" => {
-            let max_skips = 4;
-            if total != EXPECTED_SQLITE_CASES
-                || passed + failed + skipped != EXPECTED_SQLITE_CASES
-                || skipped > max_skips
-            {
+        "sqlite_parity" | "memory" | "rql_phase1" => {
+            let expected = if name == "rql_phase1" {
+                EXPECTED_RQL_PHASE1_CASES
+            } else {
+                EXPECTED_SQLITE_CASES
+            };
+            if total != expected || passed + failed + skipped != expected {
                 bail!(
-                    "suite {name} expected {EXPECTED_SQLITE_CASES} cases with at most {max_skips} target-capability skips, got total={total} passed={passed} failed={failed} skipped={skipped}"
-                );
-            }
-        }
-        "rql_phase1" => {
-            if total != EXPECTED_RQL_PHASE1_CASES || passed + skipped != EXPECTED_RQL_PHASE1_CASES {
-                bail!(
-                    "suite {name} expected {EXPECTED_RQL_PHASE1_CASES} runnable cases, got total={total} passed={passed} skipped={skipped}"
+                    "suite {name} expected {expected} cases, got total={total} passed={passed} failed={failed} skipped={skipped}"
                 );
             }
         }
@@ -401,6 +400,7 @@ fn run(root: PathBuf) -> Result<PathBuf> {
     if !["passed", "failed"].contains(&status.as_str()) {
         bail!("official evidence status is not successful: {status:?}");
     }
+    require_official_run(&official)?;
 
     let output_hashes = normalize_hash_map(&official["output_file_hashes"]);
     if output_hashes.is_empty() {
@@ -495,6 +495,20 @@ fn run(root: PathBuf) -> Result<PathBuf> {
             raw_failed.into_iter().collect(),
         );
     }
+    // Published SQLite skips are exactly the committed scope policy's.
+    let scope_policy = sqlite_scope_policy::ScopePolicy::load(&repo_root)?;
+    scope_policy.check_recorded(&official)?;
+    for name in sqlite_scope_policy::POLICY_SUITES {
+        let raw_path = validated[name]["raw_path"]
+            .as_str()
+            .ok_or_else(|| anyhow!("suite {name} has no raw_path"))?;
+        let raw_skipped = sqlite_scope_policy::raw_skipped_case_ids(&root.join(raw_path), name)?;
+        scope_policy.check_suite(name, &suites[name], &raw_skipped)?;
+        validated.get_mut(name).expect("validated suite").insert(
+            "skipped_case_ids".to_owned(),
+            raw_skipped.into_iter().collect(),
+        );
+    }
     let has_failures = validated
         .values()
         .any(|suite| suite["failed"].as_u64().unwrap_or(1) > 0);
@@ -540,6 +554,7 @@ fn run(root: PathBuf) -> Result<PathBuf> {
     processed.insert("status".to_owned(), Value::String(status));
     processed.insert("postgres_regression".to_owned(), pg);
     processed.insert("sqlite_known_failures".to_owned(), known_failures.summary());
+    processed.insert("sqlite_scope_policy".to_owned(), scope_policy.summary());
     processed.insert(
         "suite_summaries".to_owned(),
         Value::Object(
@@ -560,6 +575,17 @@ fn run(root: PathBuf) -> Result<PathBuf> {
     fs::write(&processed_path, bytes)
         .with_context(|| format!("write {}", processed_path.display()))?;
     Ok(processed_path)
+}
+
+/// Only `run --official` evidence is publishable: a diagnostic run may
+/// narrow the corpus or skip the official checks (SQ-05).
+fn require_official_run(official: &Value) -> Result<()> {
+    match official.get("run_mode").and_then(Value::as_str) {
+        Some("official") => Ok(()),
+        other => bail!(
+            "official evidence comes from a run_mode {other:?} run; only `redline-testing run --official` evidence is publishable"
+        ),
+    }
 }
 
 fn main() {
@@ -602,7 +628,7 @@ mod tests {
     }
 
     #[test]
-    fn accepts_the_pinned_v101_suite_sizes() {
+    fn sqlite_suites_cover_the_whole_corpus() {
         let suite = |total, passed, skipped| {
             serde_json::json!({
                 "total": total,
@@ -618,11 +644,26 @@ mod tests {
             })
         };
         let mut paths = BTreeSet::new();
-        assert!(validated_suite("sqlite_parity", &suite(2_445, 2_441, 4), &mut paths).is_ok());
-        assert!(validated_suite("memory", &suite(2_445, 2_441, 4), &mut paths).is_ok());
-        assert!(validated_suite("rql_phase1", &suite(1_385, 1_129, 256), &mut paths).is_ok());
+        // The counts cover the corpus; which skips are allowed is the scope
+        // policy's list, checked against the raw records in `run`.
+        assert!(validated_suite("sqlite_parity", &suite(2_445, 2_445, 0), &mut paths).is_ok());
+        assert!(validated_suite("rql_phase1", &suite(1_385, 1_183, 202), &mut paths).is_ok());
         assert!(validated_suite("sqlite_parity", &suite(1_127, 1_123, 4), &mut paths).is_err());
+        assert!(validated_suite("rql_phase1", &suite(1_385, 1_183, 201), &mut paths).is_err());
+        assert!(validated_suite("rql_phase1", &suite(1_127, 1_127, 0), &mut paths).is_err());
     }
+
+    #[test]
+    fn only_official_runs_are_publishable() {
+        require_official_run(&serde_json::json!({"run_mode": "official"})).expect("official");
+        for evidence in [
+            serde_json::json!({"run_mode": "diagnostic"}),
+            serde_json::json!({}),
+        ] {
+            assert!(require_official_run(&evidence).is_err(), "{evidence}");
+        }
+    }
+
     #[test]
     fn sqlite_suites_publish_failures_within_complete_totals() {
         let suite = |passed: u64, failed: u64, skipped: u64| {

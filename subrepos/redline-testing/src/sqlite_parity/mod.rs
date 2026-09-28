@@ -1,4 +1,6 @@
 mod bounded;
+#[cfg(all(test, unix))]
+mod capability_tests;
 pub mod case;
 mod catalog;
 mod compare;
@@ -11,6 +13,7 @@ mod record_sink;
 mod report;
 mod rql_phase1;
 mod runner;
+mod scope_policy;
 #[cfg(test)]
 mod target_contract_tests;
 #[cfg(test)]
@@ -22,7 +25,7 @@ use std::path::PathBuf;
 use anyhow::Result;
 
 pub use bounded::{Limits, check_kill};
-pub use catalog::all_cases;
+pub use catalog::{all_cases, check_official_selection};
 pub use engine::REFERENCE_CLI_BIN;
 pub use identity::{assertion_policy_sha256, corpus_sha256};
 pub use known_failures::{BaselineSource, KNOWN_FAILURES_SCHEMA, KnownFailures};
@@ -31,6 +34,7 @@ pub use rql_phase1::rql_phase1_cases;
 pub use runner::RunSummary;
 #[cfg(test)]
 pub(crate) use runner::{CaseFailure, VerdictReason};
+pub use scope_policy::{SCOPE_POLICY_PATH, SCOPE_POLICY_SCHEMA, ScopePolicy, today_utc};
 
 pub struct RunConfig {
     /// The suite the records belong to: `sqlite_parity`, `memory` or
@@ -49,26 +53,29 @@ pub struct RunConfig {
     pub case_ids: Vec<String>,
     /// The deadline and output cap of every engine run (SQ-09).
     pub limits: Limits,
+    /// An official run: the whole corpus, no environment narrowing (SQ-05).
+    pub official: bool,
 }
 
 pub fn run(config: RunConfig) -> Result<RunSummary> {
-    let cases = catalog::narrow_to_ids(catalog::selected_official_cases()?, &config.case_ids)?;
+    let policy = ScopePolicy::compiled()?;
+    let cases = catalog::narrow_to_ids(catalog::select_cases(config.official)?, &config.case_ids)?;
     let reference = engine::EngineSpec::new(engine::REFERENCE_CLI_BIN, config.reference_bin)
         .with_limits(config.limits);
     let target = engine::EngineSpec::new("redlinedb", config.target_bin).with_limits(config.limits);
     runner::validate_compare_engines(&reference, &target)?;
-    let capabilities = reference.sqlite_shell_capabilities()?;
-    let sqlite_version = capabilities
-        .as_ref()
-        .map(|capabilities| capabilities.version.clone());
-    // Probe the target binary too — cases that gate on optional SQLite
-    // features (fts5, rtree, dbstat, …) are skipped when the target
-    // lacks them, per the ship-contract: corpus ships what passes
-    // reference self-compare; the parity sweep must not gate on target
-    // engine readiness for explicitly-optional features.
-    let target_capabilities = target.target_capabilities().ok();
-    let partition =
-        engine::partition_cases(cases, capabilities.as_ref(), target_capabilities.as_ref());
+    // Cases that gate on an optional feature (fts5, rtree, dbstat, …) are
+    // judged against what both shells can do. A probe that cannot run is
+    // an error (SQ-05): it never turns into a skip or into no gating.
+    let capabilities = reference.capabilities()?;
+    let target_capabilities = target.capabilities()?;
+    let partition = engine::partition_cases(
+        cases,
+        &capabilities,
+        &target_capabilities,
+        &policy,
+        config.suite,
+    )?;
     let pairs = partition
         .runnable
         .into_iter()
@@ -81,7 +88,7 @@ pub fn run(config: RunConfig) -> Result<RunSummary> {
         tmp_root: &config.tmp_root,
         warmup: config.warmup,
         repetitions: config.repetitions,
-        sqlite_version,
+        sqlite_version: Some(capabilities.version.clone()),
         progress: config.progress,
         memory_samples: config.memory_samples,
     };
@@ -89,6 +96,7 @@ pub fn run(config: RunConfig) -> Result<RunSummary> {
         &run,
         &pairs,
         &partition.skipped,
+        &partition.rejected,
         config.workers,
         record_sink::RecordSink::open(&config.output, config.suite)?,
     )

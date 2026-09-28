@@ -8,7 +8,9 @@ use anyhow::{Context, Result};
 use serde::Serialize;
 use sha2::{Digest, Sha256};
 
-use crate::sqlite_parity::{BaselineSource, KNOWN_FAILURES_SCHEMA, RunSummary};
+use crate::sqlite_parity::{
+    BaselineSource, KNOWN_FAILURES_SCHEMA, RunSummary, SCOPE_POLICY_PATH, SCOPE_POLICY_SCHEMA,
+};
 use crate::{latency, report};
 
 mod identity;
@@ -50,6 +52,8 @@ pub struct OfficialSuiteEvidence {
     pub failed_case_ids: Option<BTreeSet<String>>,
     /// The case ids the known-failures baseline lists for this suite.
     pub known_failure_ids: Option<BTreeSet<String>>,
+    /// The case ids skipped under the scope policy (SQ-05).
+    pub skipped_case_ids: Option<BTreeSet<String>>,
     /// The completion marker of `raw_path` (SQ-09), for a suite whose
     /// records the runner streams.
     pub completion_path: Option<PathBuf>,
@@ -78,6 +82,7 @@ impl OfficialSuiteEvidence {
             skipped: summary.skipped,
             failed_case_ids: Some(failed_case_ids(summary)),
             known_failure_ids: None,
+            skipped_case_ids: Some(summary.skipped_case_ids.iter().cloned().collect()),
             completion_path: None,
         }
     }
@@ -98,6 +103,7 @@ impl OfficialSuiteEvidence {
     /// (beyond_sqlite; its gate writes postgres-qualification.json).
     pub fn without_case_ids(mut self) -> Self {
         self.failed_case_ids = None;
+        self.skipped_case_ids = None;
         self
     }
 }
@@ -127,6 +133,11 @@ pub struct OfficialEvidenceConfig {
     pub suites: Vec<OfficialSuiteEvidence>,
     /// The SQLite known-failures baseline the run was gated with.
     pub known_failures: Option<BaselineSource>,
+    /// The scope policy compiled into the runner (SQ-05).
+    pub scope_policy_sha256: String,
+    /// Whether this was a `run --official`; only such evidence is
+    /// publishable.
+    pub official: bool,
     /// The bound on every engine run (SQ-09).
     pub case_timeout_ms: u128,
     pub max_output_bytes: usize,
@@ -165,7 +176,17 @@ struct OfficialSuiteJson {
     #[serde(skip_serializing_if = "Option::is_none")]
     known_failure_ids: Option<BTreeSet<String>>,
     #[serde(skip_serializing_if = "Option::is_none")]
+    skipped_case_ids: Option<BTreeSet<String>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     completion_path: Option<String>,
+}
+
+/// The scope policy a run was selected with (SQ-05).
+#[derive(Debug, Serialize)]
+struct ScopePolicyJson {
+    schema_version: &'static str,
+    path: &'static str,
+    sha256: String,
 }
 
 /// The known-failures baseline a run was gated with.
@@ -189,6 +210,9 @@ struct OfficialEvidenceJson {
     sqlite: BinaryEvidence,
     suites: BTreeMap<String, OfficialSuiteJson>,
     sqlite_known_failures: Option<KnownFailuresJson>,
+    sqlite_scope_policy: ScopePolicyJson,
+    /// `official` for `run --official`, else `diagnostic` (not publishable).
+    run_mode: &'static str,
     status: String,
     command_line: Vec<String>,
     generated_at_unix_ms: u128,
@@ -483,6 +507,7 @@ pub fn write_official_evidence(config: OfficialEvidenceConfig) -> Result<()> {
                 provenance_path: relative_display(&config.output_dir, &suite.provenance_path),
                 failed_case_ids: suite.failed_case_ids,
                 known_failure_ids: suite.known_failure_ids,
+                skipped_case_ids: suite.skipped_case_ids,
                 completion_path: suite
                     .completion_path
                     .as_deref()
@@ -504,6 +529,16 @@ pub fn write_official_evidence(config: OfficialEvidenceConfig) -> Result<()> {
             path: display_path(&source.path),
             sha256: source.sha256,
         }),
+        sqlite_scope_policy: ScopePolicyJson {
+            schema_version: SCOPE_POLICY_SCHEMA,
+            path: SCOPE_POLICY_PATH,
+            sha256: config.scope_policy_sha256,
+        },
+        run_mode: if config.official {
+            "official"
+        } else {
+            "diagnostic"
+        },
         status: if failed == 0 { "passed" } else { "failed" }.to_owned(),
         command_line: config.command_line,
         generated_at_unix_ms: config.generated_at_unix_ms,

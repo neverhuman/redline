@@ -12,9 +12,10 @@ use sqlparser::parser::Parser;
 
 use super::RunConfig;
 use super::case::Case;
-use super::engine::{self, EngineSpec, SkippedCase};
+use super::engine::{self, EngineSpec};
 use super::record_sink::RecordSink;
 use super::runner::{self, CasePair, RunSummary, SuiteRun};
+use super::scope_policy::{GapKind, ScopePolicy};
 
 const RQL_PHASE1_CATEGORIES: &[&str] = &[
     "GEN_SQL_AGGREGATE",
@@ -86,33 +87,39 @@ pub fn rql_phase1_cases() -> Result<Vec<Case>> {
 }
 
 pub fn run(config: RunConfig) -> Result<RunSummary> {
+    let policy = ScopePolicy::compiled()?;
     let reference = EngineSpec::new("sqlite3", config.reference_bin).with_limits(config.limits);
     let target = EngineSpec::new("redlinedb", config.target_bin).with_limits(config.limits);
     runner::validate_compare_engines(&reference, &target)?;
 
-    let capabilities = reference.sqlite_shell_capabilities()?;
-    let sqlite_version = capabilities
-        .as_ref()
-        .map(|capabilities| capabilities.version.clone());
-    let target_capabilities = target.target_capabilities().ok();
-    let partition = engine::partition_cases(
-        super::catalog::narrow_to_ids(rql_phase1_cases()?, &config.case_ids)?,
-        capabilities.as_ref(),
-        target_capabilities.as_ref(),
-    );
+    let capabilities = reference.capabilities()?;
+    let target_capabilities = target.capabilities()?;
+    let cases = super::catalog::select_cases(config.official)?
+        .into_iter()
+        .filter(is_rql_phase1_source)
+        .collect::<Vec<_>>();
+    let mut partition = engine::partition_cases(
+        super::catalog::narrow_to_ids(cases, &config.case_ids)?,
+        &capabilities,
+        &target_capabilities,
+        &policy,
+        config.suite,
+    )?;
 
-    let mut skipped = partition.skipped;
     let mut pairs = Vec::new();
-    for case in partition.runnable {
+    for case in std::mem::take(&mut partition.runnable) {
         match rewrite_case(&case) {
             Ok(target_case) => pairs.push(CasePair {
                 reference: case,
                 target: target_case,
             }),
-            Err(err) => skipped.push(SkippedCase {
+            Err(err) => partition.target_gap(
+                &policy,
+                config.suite,
                 case,
-                reason: format!("RQL phase-1 rewrite unsupported: {err:#}"),
-            }),
+                GapKind::RqlRewrite,
+                format!("RQL phase-1 rewrite unsupported: {err:#}"),
+            ),
         }
     }
     let run = SuiteRun {
@@ -122,7 +129,7 @@ pub fn run(config: RunConfig) -> Result<RunSummary> {
         tmp_root: &config.tmp_root,
         warmup: config.warmup,
         repetitions: config.repetitions,
-        sqlite_version,
+        sqlite_version: Some(capabilities.version.clone()),
         progress: config.progress,
         memory_samples: config.memory_samples,
     };
@@ -131,7 +138,8 @@ pub fn run(config: RunConfig) -> Result<RunSummary> {
     runner::compare_cases(
         &run,
         &pairs,
-        &skipped,
+        &partition.skipped,
+        &partition.rejected,
         1,
         RecordSink::open(&config.output, config.suite)?,
     )

@@ -57,6 +57,10 @@
       "command": "rtk cargo run --locked -p xtask -- generate --check",
       "purpose": "verify generated shards match their rule files"
     },
+    "corpus/sqlite_parity/scope-policy.json": {
+      "command": "rtk cargo test --locked",
+      "purpose": "verify the compiled-in SQLite skip policy parses and names real corpus cases"
+    },
     "deny.toml": {
       "command": "rtk env REDLINE_STRICT_TOOLS=1 bash ops/ci/security.sh",
       "purpose": "verify Rust dependency policy remains fail closed"

@@ -55,6 +55,7 @@ fn write_evidence(raw_text: &str) -> (tempfile::TempDir, String, String) {
             slowest: Vec::new(),
             failures: Vec::new(),
             skipped_case_ids: Vec::new(),
+            passed_case_ids: Vec::new(),
         },
     )
 }
@@ -181,12 +182,15 @@ fn suite_summary_lists_failed_and_skipped_cases() {
         .expect("case")
     };
     let mut summary = RunSummary::default();
-    summary.record_run(None);
-    summary.record_run(Some(CaseFailure {
-        case_id: case(11).display_id(),
-        name: case(11).name,
-        verdict_reasons: [VerdictReason::TargetSemanticFailure].into(),
-    }));
+    summary.record_run(case(1).display_id(), None);
+    summary.record_run(
+        case(11).display_id(),
+        Some(CaseFailure {
+            case_id: case(11).display_id(),
+            name: case(11).name,
+            verdict_reasons: [VerdictReason::TargetSemanticFailure].into(),
+        }),
+    );
     summary.record_skip(&case(21));
     let (_root, _ranked, summary) = write_evidence_with(
         &format!(

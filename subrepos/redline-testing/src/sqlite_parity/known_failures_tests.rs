@@ -33,11 +33,11 @@ fn failure(case_id: &str, name: &str, reasons: &[VerdictReason]) -> CaseFailure 
 /// A run of `passed` passing cases plus `failures`.
 fn summary(passed: usize, failures: Vec<CaseFailure>) -> RunSummary {
     let mut summary = RunSummary::default();
-    for _ in 0..passed {
-        summary.record_run(None);
+    for index in 0..passed {
+        summary.record_run(format!("{:05}", 90_000 + index), None);
     }
     for failure in failures {
-        summary.record_run(Some(failure));
+        summary.record_run(failure.case_id.clone(), Some(failure));
     }
     summary
 }

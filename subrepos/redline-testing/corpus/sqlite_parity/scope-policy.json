@@ -1,0 +1,1824 @@
+{
+  "schema_version": "redline-testing-sqlite-scope-policy-v1",
+  "description": "The only cases a sqlite_parity, memory or rql_phase1 run may skip. Each entry names the suite, the case (id and name), the gap it covers (kind: target_capability when the target lacks a capability the case requires, rql_rewrite when the RQL phase-1 rewrite cannot express the case), why, who closes it, and the last UTC day an official run accepts it (expiry). redline-testing compiles this file in: a gap that is not listed fails its case (target_unsupported), a reference shell that lacks a declared capability always fails its case (reference_capability_missing), a listed case that runs fails the run, and `run --official` refuses an expired entry. The RedlineDB evidence processor requires each suite's skipped case ids, recomputed from its raw records, to equal this list and the run to have recorded this file's sha256. The rql_phase1 entries were seeded from the official lane run of 2026-09-27; reason is the rewriter's refusal from that run.",
+  "exceptions": [
+    {
+      "suite": "rql_phase1",
+      "case_id": "00007",
+      "name": "WITHOUT_ROWID_TABLE",
+      "kind": "rql_rewrite",
+      "reason": "lower SQL to RQL for 00007: table constraints are outside RQL phase-1",
+      "owner": "RQL phase-1 rewriter (subrepos/redline-testing/src/sqlite_parity/rql_phase1.rs rewrite_case)",
+      "expiry": "2027-03-31"
+    },
+    {
+      "suite": "rql_phase1",
+      "case_id": "00010",
+      "name": "GENERATED_COLUMNS",
+      "kind": "rql_rewrite",
+      "reason": "lower SQL to RQL for 00010: generated columns are outside RQL phase-1",
+      "owner": "RQL phase-1 rewriter (subrepos/redline-testing/src/sqlite_parity/rql_phase1.rs rewrite_case)",
+      "expiry": "2027-03-31"
+    },
+    {
+      "suite": "rql_phase1",
+      "case_id": "00011",
+      "name": "CREATE_TABLE_AS_SELECT",
+      "kind": "rql_rewrite",
+      "reason": "lower SQL to RQL for 00011: CREATE TABLE AS SELECT is outside RQL phase-1 JSON lowering",
+      "owner": "RQL phase-1 rewriter (subrepos/redline-testing/src/sqlite_parity/rql_phase1.rs rewrite_case)",
+      "expiry": "2027-03-31"
+    },
+    {
+      "suite": "rql_phase1",
+      "case_id": "00013",
+      "name": "INSERT_SELECT",
+      "kind": "rql_rewrite",
+      "reason": "lower SQL to RQL for 00013: INSERT SELECT is outside RQL phase-1 JSON lowering",
+      "owner": "RQL phase-1 rewriter (subrepos/redline-testing/src/sqlite_parity/rql_phase1.rs rewrite_case)",
+      "expiry": "2027-03-31"
+    },
+    {
+      "suite": "rql_phase1",
+      "case_id": "00014",
+      "name": "INSERT_RETURNING",
+      "kind": "rql_rewrite",
+      "reason": "lower SQL to RQL for 00014: INSERT RETURNING is outside RQL phase-1",
+      "owner": "RQL phase-1 rewriter (subrepos/redline-testing/src/sqlite_parity/rql_phase1.rs rewrite_case)",
+      "expiry": "2027-03-31"
+    },
+    {
+      "suite": "rql_phase1",
+      "case_id": "00016",
+      "name": "UPDATE_RETURNING",
+      "kind": "rql_rewrite",
+      "reason": "lower SQL to RQL for 00016: UPDATE RETURNING is outside RQL phase-1",
+      "owner": "RQL phase-1 rewriter (subrepos/redline-testing/src/sqlite_parity/rql_phase1.rs rewrite_case)",
+      "expiry": "2027-03-31"
+    },
+    {
+      "suite": "rql_phase1",
+      "case_id": "00018",
+      "name": "DELETE_RETURNING",
+      "kind": "rql_rewrite",
+      "reason": "lower SQL to RQL for 00018: DELETE RETURNING is outside RQL phase-1",
+      "owner": "RQL phase-1 rewriter (subrepos/redline-testing/src/sqlite_parity/rql_phase1.rs rewrite_case)",
+      "expiry": "2027-03-31"
+    },
+    {
+      "suite": "rql_phase1",
+      "case_id": "00033",
+      "name": "PARTIAL_INDEX",
+      "kind": "rql_rewrite",
+      "reason": "lower SQL to RQL for 00033: partial or extended index syntax is outside RQL phase-1",
+      "owner": "RQL phase-1 rewriter (subrepos/redline-testing/src/sqlite_parity/rql_phase1.rs rewrite_case)",
+      "expiry": "2027-03-31"
+    },
+    {
+      "suite": "rql_phase1",
+      "case_id": "00034",
+      "name": "EXPRESSION_INDEX",
+      "kind": "rql_rewrite",
+      "reason": "lower SQL to RQL for 00034: index expression `lower(name)` is outside RQL phase-1",
+      "owner": "RQL phase-1 rewriter (subrepos/redline-testing/src/sqlite_parity/rql_phase1.rs rewrite_case)",
+      "expiry": "2027-03-31"
+    },
+    {
+      "suite": "rql_phase1",
+      "case_id": "00037",
+      "name": "DROP_VIEW",
+      "kind": "rql_rewrite",
+      "reason": "lower SQL to RQL for 00037: unsupported statement `CREATE VIEW v AS SELECT 1 AS x`",
+      "owner": "RQL phase-1 rewriter (subrepos/redline-testing/src/sqlite_parity/rql_phase1.rs rewrite_case)",
+      "expiry": "2027-03-31"
+    },
+    {
+      "suite": "rql_phase1",
+      "case_id": "00041",
+      "name": "DROP_TRIGGER",
+      "kind": "rql_rewrite",
+      "reason": "lower SQL to RQL for 00041: unsupported statement `CREATE TRIGGER tr AFTER INSERT ON t BEGIN SELECT 1; END`",
+      "owner": "RQL phase-1 rewriter (subrepos/redline-testing/src/sqlite_parity/rql_phase1.rs rewrite_case)",
+      "expiry": "2027-03-31"
+    },
+    {
+      "suite": "rql_phase1",
+      "case_id": "00053",
+      "name": "SELECT_WHERE_ORDER_LIMIT_OFFSET",
+      "kind": "rql_rewrite",
+      "reason": "lower SQL to RQL for 00053: extended SELECT query syntax is outside RQL phase-1",
+      "owner": "RQL phase-1 rewriter (subrepos/redline-testing/src/sqlite_parity/rql_phase1.rs rewrite_case)",
+      "expiry": "2027-03-31"
+    },
+    {
+      "suite": "rql_phase1",
+      "case_id": "00054",
+      "name": "JOINS_INNER_LEFT_CROSS_NATURAL",
+      "kind": "rql_rewrite",
+      "reason": "lower SQL to RQL for 00054: join constraint `Natural` is outside RQL phase-1",
+      "owner": "RQL phase-1 rewriter (subrepos/redline-testing/src/sqlite_parity/rql_phase1.rs rewrite_case)",
+      "expiry": "2027-03-31"
+    },
+    {
+      "suite": "rql_phase1",
+      "case_id": "00055",
+      "name": "JOINS_RIGHT_FULL_OUTER",
+      "kind": "rql_rewrite",
+      "reason": "lower SQL to RQL for 00055: join constraint `Using([ObjectName([Identifier(Ident { value: \"id\", quote_style: None, span: Span(Location(5,77)..Location(5,79)) })])])` is outside RQL phase-1",
+      "owner": "RQL phase-1 rewriter (subrepos/redline-testing/src/sqlite_parity/rql_phase1.rs rewrite_case)",
+      "expiry": "2027-03-31"
+    },
+    {
+      "suite": "rql_phase1",
+      "case_id": "00057",
+      "name": "COMPOUND_SELECT_UNION_INTERSECT_EXCEPT",
+      "kind": "rql_rewrite",
+      "reason": "lower SQL to RQL for 00057: query body `SELECT x FROM (SELECT 1 AS x UNION SELECT 2) INTERSECT SELECT 2` is outside RQL phase-1",
+      "owner": "RQL phase-1 rewriter (subrepos/redline-testing/src/sqlite_parity/rql_phase1.rs rewrite_case)",
+      "expiry": "2027-03-31"
+    },
+    {
+      "suite": "rql_phase1",
+      "case_id": "00059",
+      "name": "AGGREGATE_FUNCTIONS_CORE",
+      "kind": "rql_rewrite",
+      "reason": "lower SQL to RQL for 00059: extended SELECT query syntax is outside RQL phase-1",
+      "owner": "RQL phase-1 rewriter (subrepos/redline-testing/src/sqlite_parity/rql_phase1.rs rewrite_case)",
+      "expiry": "2027-03-31"
+    },
+    {
+      "suite": "rql_phase1",
+      "case_id": "00060",
+      "name": "FILTER_CLAUSE",
+      "kind": "rql_rewrite",
+      "reason": "lower SQL to RQL for 00060: extended SELECT query syntax is outside RQL phase-1",
+      "owner": "RQL phase-1 rewriter (subrepos/redline-testing/src/sqlite_parity/rql_phase1.rs rewrite_case)",
+      "expiry": "2027-03-31"
+    },
+    {
+      "suite": "rql_phase1",
+      "case_id": "00066",
+      "name": "VALUES_STATEMENT",
+      "kind": "rql_rewrite",
+      "reason": "lower SQL to RQL for 00066: query body `VALUES (1, 'a'), (2, 'b')` is outside RQL phase-1",
+      "owner": "RQL phase-1 rewriter (subrepos/redline-testing/src/sqlite_parity/rql_phase1.rs rewrite_case)",
+      "expiry": "2027-03-31"
+    },
+    {
+      "suite": "rql_phase1",
+      "case_id": "00067",
+      "name": "CASE_COALESCE_NULLIF_IIF",
+      "kind": "rql_rewrite",
+      "reason": "lower SQL to RQL for 00067: expression `CASE WHEN 1 THEN 'yes' ELSE 'no' END` is outside RQL phase-1",
+      "owner": "RQL phase-1 rewriter (subrepos/redline-testing/src/sqlite_parity/rql_phase1.rs rewrite_case)",
+      "expiry": "2027-03-31"
+    },
+    {
+      "suite": "rql_phase1",
+      "case_id": "00070",
+      "name": "LIKE_GLOB_MATCH_ESCAPE",
+      "kind": "rql_rewrite",
+      "reason": "parse SQL for 00070: sql parser error: Expected: end of statement, found: 'a*' at Line: 1, Column: 36",
+      "owner": "RQL phase-1 rewriter (subrepos/redline-testing/src/sqlite_parity/rql_phase1.rs rewrite_case)",
+      "expiry": "2027-03-31"
+    },
+    {
+      "suite": "rql_phase1",
+      "case_id": "00071",
+      "name": "BETWEEN_IN_ISNULL_IS",
+      "kind": "rql_rewrite",
+      "reason": "parse SQL for 00071: sql parser error: Expected: [NOT] NULL | TRUE | FALSE | DISTINCT | [form] NORMALIZED FROM after IS, found: 1 at Line: 1, Column: 80",
+      "owner": "RQL phase-1 rewriter (subrepos/redline-testing/src/sqlite_parity/rql_phase1.rs rewrite_case)",
+      "expiry": "2027-03-31"
+    },
+    {
+      "suite": "rql_phase1",
+      "case_id": "00072",
+      "name": "ORDER_BY_NULLS_FIRST_LAST",
+      "kind": "rql_rewrite",
+      "reason": "lower SQL to RQL for 00072: extended SELECT query syntax is outside RQL phase-1",
+      "owner": "RQL phase-1 rewriter (subrepos/redline-testing/src/sqlite_parity/rql_phase1.rs rewrite_case)",
+      "expiry": "2027-03-31"
+    },
+    {
+      "suite": "rql_phase1",
+      "case_id": "00073",
+      "name": "INDEXED_BY",
+      "kind": "rql_rewrite",
+      "reason": "parse SQL for 00073: sql parser error: Expected: end of statement, found: BY at Line: 4, Column: 25",
+      "owner": "RQL phase-1 rewriter (subrepos/redline-testing/src/sqlite_parity/rql_phase1.rs rewrite_case)",
+      "expiry": "2027-03-31"
+    },
+    {
+      "suite": "rql_phase1",
+      "case_id": "00074",
+      "name": "NOT_INDEXED",
+      "kind": "rql_rewrite",
+      "reason": "parse SQL for 00074: sql parser error: Expected: end of statement, found: INDEXED at Line: 4, Column: 21",
+      "owner": "RQL phase-1 rewriter (subrepos/redline-testing/src/sqlite_parity/rql_phase1.rs rewrite_case)",
+      "expiry": "2027-03-31"
+    },
+    {
+      "suite": "rql_phase1",
+      "case_id": "00089",
+      "name": "JSON_TABLE_VALUED_FUNCTIONS",
+      "kind": "rql_rewrite",
+      "reason": "lower SQL to RQL for 00089: extended table factor syntax is outside RQL phase-1",
+      "owner": "RQL phase-1 rewriter (subrepos/redline-testing/src/sqlite_parity/rql_phase1.rs rewrite_case)",
+      "expiry": "2027-03-31"
+    },
+    {
+      "suite": "rql_phase1",
+      "case_id": "00104",
+      "name": "SELECT_DISTINCT",
+      "kind": "rql_rewrite",
+      "reason": "lower SQL to RQL for 00104: extended SELECT query syntax is outside RQL phase-1",
+      "owner": "RQL phase-1 rewriter (subrepos/redline-testing/src/sqlite_parity/rql_phase1.rs rewrite_case)",
+      "expiry": "2027-03-31"
+    },
+    {
+      "suite": "rql_phase1",
+      "case_id": "10007",
+      "name": "IS_DISTINCT_FROM_BASIC",
+      "kind": "rql_rewrite",
+      "reason": "lower SQL to RQL for 10007: expression `NULL IS DISTINCT FROM NULL` is outside RQL phase-1",
+      "owner": "RQL phase-1 rewriter (subrepos/redline-testing/src/sqlite_parity/rql_phase1.rs rewrite_case)",
+      "expiry": "2027-03-31"
+    },
+    {
+      "suite": "rql_phase1",
+      "case_id": "10008",
+      "name": "IS_NOT_DISTINCT_FROM_BASIC",
+      "kind": "rql_rewrite",
+      "reason": "lower SQL to RQL for 10008: expression `NULL IS NOT DISTINCT FROM NULL` is outside RQL phase-1",
+      "owner": "RQL phase-1 rewriter (subrepos/redline-testing/src/sqlite_parity/rql_phase1.rs rewrite_case)",
+      "expiry": "2027-03-31"
+    },
+    {
+      "suite": "rql_phase1",
+      "case_id": "10019",
+      "name": "CASE_WHEN_NULL_MATCH",
+      "kind": "rql_rewrite",
+      "reason": "lower SQL to RQL for 10019: extended SELECT query syntax is outside RQL phase-1",
+      "owner": "RQL phase-1 rewriter (subrepos/redline-testing/src/sqlite_parity/rql_phase1.rs rewrite_case)",
+      "expiry": "2027-03-31"
+    },
+    {
+      "suite": "rql_phase1",
+      "case_id": "10025",
+      "name": "NULL_GLOB_PATTERN",
+      "kind": "rql_rewrite",
+      "reason": "parse SQL for 10025: sql parser error: Expected: end of statement, found: 'a*' at Line: 1, Column: 18",
+      "owner": "RQL phase-1 rewriter (subrepos/redline-testing/src/sqlite_parity/rql_phase1.rs rewrite_case)",
+      "expiry": "2027-03-31"
+    },
+    {
+      "suite": "rql_phase1",
+      "case_id": "10034",
+      "name": "CREATE_INDEX_ASC_NULLS_FIRST_REJECTED",
+      "kind": "rql_rewrite",
+      "reason": "expected-error cases are not performance candidates for RQL phase-1",
+      "owner": "RQL phase-1 rewriter (subrepos/redline-testing/src/sqlite_parity/rql_phase1.rs rewrite_case)",
+      "expiry": "2027-03-31"
+    },
+    {
+      "suite": "rql_phase1",
+      "case_id": "10035",
+      "name": "CREATE_INDEX_DESC_NULLS_LAST_REJECTED",
+      "kind": "rql_rewrite",
+      "reason": "expected-error cases are not performance candidates for RQL phase-1",
+      "owner": "RQL phase-1 rewriter (subrepos/redline-testing/src/sqlite_parity/rql_phase1.rs rewrite_case)",
+      "expiry": "2027-03-31"
+    },
+    {
+      "suite": "rql_phase1",
+      "case_id": "10036",
+      "name": "CREATE_INDEX_ASC_NULLS_LAST_REJECTED",
+      "kind": "rql_rewrite",
+      "reason": "expected-error cases are not performance candidates for RQL phase-1",
+      "owner": "RQL phase-1 rewriter (subrepos/redline-testing/src/sqlite_parity/rql_phase1.rs rewrite_case)",
+      "expiry": "2027-03-31"
+    },
+    {
+      "suite": "rql_phase1",
+      "case_id": "10037",
+      "name": "CREATE_INDEX_DESC_NULLS_FIRST_REJECTED",
+      "kind": "rql_rewrite",
+      "reason": "expected-error cases are not performance candidates for RQL phase-1",
+      "owner": "RQL phase-1 rewriter (subrepos/redline-testing/src/sqlite_parity/rql_phase1.rs rewrite_case)",
+      "expiry": "2027-03-31"
+    },
+    {
+      "suite": "rql_phase1",
+      "case_id": "10038",
+      "name": "ORDER_BY_COLLATE_NOCASE_ASC_DEFAULT",
+      "kind": "rql_rewrite",
+      "reason": "lower SQL to RQL for 10038: expression `x COLLATE NOCASE` is outside RQL phase-1",
+      "owner": "RQL phase-1 rewriter (subrepos/redline-testing/src/sqlite_parity/rql_phase1.rs rewrite_case)",
+      "expiry": "2027-03-31"
+    },
+    {
+      "suite": "rql_phase1",
+      "case_id": "10039",
+      "name": "ORDER_BY_COLLATE_NOCASE_NULLS_LAST",
+      "kind": "rql_rewrite",
+      "reason": "lower SQL to RQL for 10039: expression `x COLLATE NOCASE` is outside RQL phase-1",
+      "owner": "RQL phase-1 rewriter (subrepos/redline-testing/src/sqlite_parity/rql_phase1.rs rewrite_case)",
+      "expiry": "2027-03-31"
+    },
+    {
+      "suite": "rql_phase1",
+      "case_id": "10043",
+      "name": "UNION_ALL_ORDER_BY_ASC_NULL_FIRST",
+      "kind": "rql_rewrite",
+      "reason": "lower SQL to RQL for 10043: query body `SELECT x FROM u UNION ALL SELECT x FROM v` is outside RQL phase-1",
+      "owner": "RQL phase-1 rewriter (subrepos/redline-testing/src/sqlite_parity/rql_phase1.rs rewrite_case)",
+      "expiry": "2027-03-31"
+    },
+    {
+      "suite": "rql_phase1",
+      "case_id": "10054",
+      "name": "FILTER_WHERE_IS_NOT_NULL",
+      "kind": "rql_rewrite",
+      "reason": "lower SQL to RQL for 10054: extended function syntax is outside RQL phase-1",
+      "owner": "RQL phase-1 rewriter (subrepos/redline-testing/src/sqlite_parity/rql_phase1.rs rewrite_case)",
+      "expiry": "2027-03-31"
+    },
+    {
+      "suite": "rql_phase1",
+      "case_id": "10299",
+      "name": "BEGIN_WITHIN_BEGIN_REJECTED",
+      "kind": "rql_rewrite",
+      "reason": "expected-error cases are not performance candidates for RQL phase-1",
+      "owner": "RQL phase-1 rewriter (subrepos/redline-testing/src/sqlite_parity/rql_phase1.rs rewrite_case)",
+      "expiry": "2027-03-31"
+    },
+    {
+      "suite": "rql_phase1",
+      "case_id": "10300",
+      "name": "COMMIT_WITHOUT_TRANSACTION",
+      "kind": "rql_rewrite",
+      "reason": "expected-error cases are not performance candidates for RQL phase-1",
+      "owner": "RQL phase-1 rewriter (subrepos/redline-testing/src/sqlite_parity/rql_phase1.rs rewrite_case)",
+      "expiry": "2027-03-31"
+    },
+    {
+      "suite": "rql_phase1",
+      "case_id": "10301",
+      "name": "ROLLBACK_WITHOUT_TRANSACTION",
+      "kind": "rql_rewrite",
+      "reason": "expected-error cases are not performance candidates for RQL phase-1",
+      "owner": "RQL phase-1 rewriter (subrepos/redline-testing/src/sqlite_parity/rql_phase1.rs rewrite_case)",
+      "expiry": "2027-03-31"
+    },
+    {
+      "suite": "rql_phase1",
+      "case_id": "10302",
+      "name": "SAVEPOINT_DEPTH_1_RELEASE",
+      "kind": "rql_rewrite",
+      "reason": "lower SQL to RQL for 10302: RQL v0.1 does not expose savepoints",
+      "owner": "RQL phase-1 rewriter (subrepos/redline-testing/src/sqlite_parity/rql_phase1.rs rewrite_case)",
+      "expiry": "2027-03-31"
+    },
+    {
+      "suite": "rql_phase1",
+      "case_id": "10303",
+      "name": "SAVEPOINT_DEPTH_2_RELEASE",
+      "kind": "rql_rewrite",
+      "reason": "lower SQL to RQL for 10303: RQL v0.1 does not expose savepoints",
+      "owner": "RQL phase-1 rewriter (subrepos/redline-testing/src/sqlite_parity/rql_phase1.rs rewrite_case)",
+      "expiry": "2027-03-31"
+    },
+    {
+      "suite": "rql_phase1",
+      "case_id": "10304",
+      "name": "SAVEPOINT_DEPTH_3_RELEASE",
+      "kind": "rql_rewrite",
+      "reason": "lower SQL to RQL for 10304: RQL v0.1 does not expose savepoints",
+      "owner": "RQL phase-1 rewriter (subrepos/redline-testing/src/sqlite_parity/rql_phase1.rs rewrite_case)",
+      "expiry": "2027-03-31"
+    },
+    {
+      "suite": "rql_phase1",
+      "case_id": "10305",
+      "name": "SAVEPOINT_DEPTH_4_RELEASE",
+      "kind": "rql_rewrite",
+      "reason": "lower SQL to RQL for 10305: RQL v0.1 does not expose savepoints",
+      "owner": "RQL phase-1 rewriter (subrepos/redline-testing/src/sqlite_parity/rql_phase1.rs rewrite_case)",
+      "expiry": "2027-03-31"
+    },
+    {
+      "suite": "rql_phase1",
+      "case_id": "10306",
+      "name": "SAVEPOINT_DEPTH_5_RELEASE",
+      "kind": "rql_rewrite",
+      "reason": "lower SQL to RQL for 10306: RQL v0.1 does not expose savepoints",
+      "owner": "RQL phase-1 rewriter (subrepos/redline-testing/src/sqlite_parity/rql_phase1.rs rewrite_case)",
+      "expiry": "2027-03-31"
+    },
+    {
+      "suite": "rql_phase1",
+      "case_id": "10307",
+      "name": "ROLLBACK_TO_SAVEPOINT_INNER",
+      "kind": "rql_rewrite",
+      "reason": "lower SQL to RQL for 10307: RQL v0.1 does not expose savepoints",
+      "owner": "RQL phase-1 rewriter (subrepos/redline-testing/src/sqlite_parity/rql_phase1.rs rewrite_case)",
+      "expiry": "2027-03-31"
+    },
+    {
+      "suite": "rql_phase1",
+      "case_id": "10308",
+      "name": "ROLLBACK_TO_SAVEPOINT_DOES_NOT_CLOSE",
+      "kind": "rql_rewrite",
+      "reason": "lower SQL to RQL for 10308: RQL v0.1 does not expose savepoints",
+      "owner": "RQL phase-1 rewriter (subrepos/redline-testing/src/sqlite_parity/rql_phase1.rs rewrite_case)",
+      "expiry": "2027-03-31"
+    },
+    {
+      "suite": "rql_phase1",
+      "case_id": "10309",
+      "name": "RELEASE_UNKNOWN_SAVEPOINT_REJECTED",
+      "kind": "rql_rewrite",
+      "reason": "expected-error cases are not performance candidates for RQL phase-1",
+      "owner": "RQL phase-1 rewriter (subrepos/redline-testing/src/sqlite_parity/rql_phase1.rs rewrite_case)",
+      "expiry": "2027-03-31"
+    },
+    {
+      "suite": "rql_phase1",
+      "case_id": "10310",
+      "name": "ROLLBACK_TO_UNKNOWN_SAVEPOINT_REJECTED",
+      "kind": "rql_rewrite",
+      "reason": "expected-error cases are not performance candidates for RQL phase-1",
+      "owner": "RQL phase-1 rewriter (subrepos/redline-testing/src/sqlite_parity/rql_phase1.rs rewrite_case)",
+      "expiry": "2027-03-31"
+    },
+    {
+      "suite": "rql_phase1",
+      "case_id": "10314",
+      "name": "ROLLBACK_OF_SAVEPOINT_PRESERVES_OUTER",
+      "kind": "rql_rewrite",
+      "reason": "lower SQL to RQL for 10314: RQL v0.1 does not expose savepoints",
+      "owner": "RQL phase-1 rewriter (subrepos/redline-testing/src/sqlite_parity/rql_phase1.rs rewrite_case)",
+      "expiry": "2027-03-31"
+    },
+    {
+      "suite": "rql_phase1",
+      "case_id": "10316",
+      "name": "PRAGMA_RECURSIVE_TRIGGERS_DEFAULT",
+      "kind": "rql_rewrite",
+      "reason": "lower SQL to RQL for 10316: unsupported statement `PRAGMA recursive_triggers`",
+      "owner": "RQL phase-1 rewriter (subrepos/redline-testing/src/sqlite_parity/rql_phase1.rs rewrite_case)",
+      "expiry": "2027-03-31"
+    },
+    {
+      "suite": "rql_phase1",
+      "case_id": "10317",
+      "name": "PRAGMA_RECURSIVE_TRIGGERS_ON_THEN_READ",
+      "kind": "rql_rewrite",
+      "reason": "lower SQL to RQL for 10317: unsupported statement `PRAGMA recursive_triggers = 1`",
+      "owner": "RQL phase-1 rewriter (subrepos/redline-testing/src/sqlite_parity/rql_phase1.rs rewrite_case)",
+      "expiry": "2027-03-31"
+    },
+    {
+      "suite": "rql_phase1",
+      "case_id": "10318",
+      "name": "RECURSIVE_TRIGGERS_WITH_SAVEPOINTS",
+      "kind": "rql_rewrite",
+      "reason": "lower SQL to RQL for 10318: unsupported statement `PRAGMA recursive_triggers = 1`",
+      "owner": "RQL phase-1 rewriter (subrepos/redline-testing/src/sqlite_parity/rql_phase1.rs rewrite_case)",
+      "expiry": "2027-03-31"
+    },
+    {
+      "suite": "rql_phase1",
+      "case_id": "10319",
+      "name": "SAVEPOINT_REUSE_AFTER_RELEASE",
+      "kind": "rql_rewrite",
+      "reason": "lower SQL to RQL for 10319: RQL v0.1 does not expose savepoints",
+      "owner": "RQL phase-1 rewriter (subrepos/redline-testing/src/sqlite_parity/rql_phase1.rs rewrite_case)",
+      "expiry": "2027-03-31"
+    },
+    {
+      "suite": "rql_phase1",
+      "case_id": "10320",
+      "name": "ROLLBACK_TO_OUTER_DROPS_INNER_WRITES",
+      "kind": "rql_rewrite",
+      "reason": "lower SQL to RQL for 10320: RQL v0.1 does not expose savepoints",
+      "owner": "RQL phase-1 rewriter (subrepos/redline-testing/src/sqlite_parity/rql_phase1.rs rewrite_case)",
+      "expiry": "2027-03-31"
+    },
+    {
+      "suite": "rql_phase1",
+      "case_id": "10445",
+      "name": "JOIN_INNER_USING_MERGES_COLUMN",
+      "kind": "rql_rewrite",
+      "reason": "lower SQL to RQL for 10445: join constraint `Using([ObjectName([Identifier(Ident { value: \"id\", quote_style: None, span: Span(Location(5,30)..Location(5,32)) })])])` is outside RQL phase-1",
+      "owner": "RQL phase-1 rewriter (subrepos/redline-testing/src/sqlite_parity/rql_phase1.rs rewrite_case)",
+      "expiry": "2027-03-31"
+    },
+    {
+      "suite": "rql_phase1",
+      "case_id": "10451",
+      "name": "JOIN_NATURAL",
+      "kind": "rql_rewrite",
+      "reason": "lower SQL to RQL for 10451: join constraint `Natural` is outside RQL phase-1",
+      "owner": "RQL phase-1 rewriter (subrepos/redline-testing/src/sqlite_parity/rql_phase1.rs rewrite_case)",
+      "expiry": "2027-03-31"
+    },
+    {
+      "suite": "rql_phase1",
+      "case_id": "10455",
+      "name": "JOIN_SUBQUERY_AS_TABLE_SOURCE",
+      "kind": "rql_rewrite",
+      "reason": "lower SQL to RQL for 10455: table factor `(SELECT a_id, count(*) AS cnt FROM b GROUP BY a_id) AS t` is outside RQL phase-1",
+      "owner": "RQL phase-1 rewriter (subrepos/redline-testing/src/sqlite_parity/rql_phase1.rs rewrite_case)",
+      "expiry": "2027-03-31"
+    },
+    {
+      "suite": "rql_phase1",
+      "case_id": "10456",
+      "name": "JOIN_LATERAL_LIKE_CORRELATED",
+      "kind": "rql_rewrite",
+      "reason": "known RQL/SQLite runtime-output divergence for phase-1",
+      "owner": "RQL phase-1 rewriter (subrepos/redline-testing/src/sqlite_parity/rql_phase1.rs rewrite_case)",
+      "expiry": "2027-03-31"
+    },
+    {
+      "suite": "rql_phase1",
+      "case_id": "10461",
+      "name": "JOIN_INDEXED_BY",
+      "kind": "rql_rewrite",
+      "reason": "parse SQL for 10461: sql parser error: Expected: end of statement, found: BY at Line: 6, Column: 33",
+      "owner": "RQL phase-1 rewriter (subrepos/redline-testing/src/sqlite_parity/rql_phase1.rs rewrite_case)",
+      "expiry": "2027-03-31"
+    },
+    {
+      "suite": "rql_phase1",
+      "case_id": "10462",
+      "name": "JOIN_NOT_INDEXED_HINT",
+      "kind": "rql_rewrite",
+      "reason": "parse SQL for 10462: sql parser error: Expected: end of statement, found: INDEXED at Line: 6, Column: 29",
+      "owner": "RQL phase-1 rewriter (subrepos/redline-testing/src/sqlite_parity/rql_phase1.rs rewrite_case)",
+      "expiry": "2027-03-31"
+    },
+    {
+      "suite": "rql_phase1",
+      "case_id": "10466",
+      "name": "JOIN_NATURAL_LEFT",
+      "kind": "rql_rewrite",
+      "reason": "lower SQL to RQL for 10466: join constraint `Natural` is outside RQL phase-1",
+      "owner": "RQL phase-1 rewriter (subrepos/redline-testing/src/sqlite_parity/rql_phase1.rs rewrite_case)",
+      "expiry": "2027-03-31"
+    },
+    {
+      "suite": "rql_phase1",
+      "case_id": "10468",
+      "name": "JOIN_SUBQUERY_WITH_GROUPBY",
+      "kind": "rql_rewrite",
+      "reason": "lower SQL to RQL for 10468: table factor `(SELECT a_id, sum(val) AS total FROM b GROUP BY a_id) AS agg` is outside RQL phase-1",
+      "owner": "RQL phase-1 rewriter (subrepos/redline-testing/src/sqlite_parity/rql_phase1.rs rewrite_case)",
+      "expiry": "2027-03-31"
+    },
+    {
+      "suite": "rql_phase1",
+      "case_id": "10469",
+      "name": "JOIN_VIEW_AS_RIGHT_SIDE",
+      "kind": "rql_rewrite",
+      "reason": "lower SQL to RQL for 10469: unsupported statement `CREATE VIEW b_top AS SELECT a_id, max(val) AS top FROM b GROUP BY a_id`",
+      "owner": "RQL phase-1 rewriter (subrepos/redline-testing/src/sqlite_parity/rql_phase1.rs rewrite_case)",
+      "expiry": "2027-03-31"
+    },
+    {
+      "suite": "rql_phase1",
+      "case_id": "10495",
+      "name": "ANY_OPERATOR_UNSUPPORTED",
+      "kind": "rql_rewrite",
+      "reason": "expected-error cases are not performance candidates for RQL phase-1",
+      "owner": "RQL phase-1 rewriter (subrepos/redline-testing/src/sqlite_parity/rql_phase1.rs rewrite_case)",
+      "expiry": "2027-03-31"
+    },
+    {
+      "suite": "rql_phase1",
+      "case_id": "10496",
+      "name": "ALL_OPERATOR_UNSUPPORTED",
+      "kind": "rql_rewrite",
+      "reason": "expected-error cases are not performance candidates for RQL phase-1",
+      "owner": "RQL phase-1 rewriter (subrepos/redline-testing/src/sqlite_parity/rql_phase1.rs rewrite_case)",
+      "expiry": "2027-03-31"
+    },
+    {
+      "suite": "rql_phase1",
+      "case_id": "10499",
+      "name": "DERIVED_TABLE_IN_FROM_WITH_ALIAS",
+      "kind": "rql_rewrite",
+      "reason": "lower SQL to RQL for 10499: table factor `(SELECT x * 2 AS doubled FROM t) sub` is outside RQL phase-1",
+      "owner": "RQL phase-1 rewriter (subrepos/redline-testing/src/sqlite_parity/rql_phase1.rs rewrite_case)",
+      "expiry": "2027-03-31"
+    },
+    {
+      "suite": "rql_phase1",
+      "case_id": "10500",
+      "name": "MULTIPLE_DERIVED_TABLES_IN_FROM",
+      "kind": "rql_rewrite",
+      "reason": "lower SQL to RQL for 10500: table factor `(SELECT id, v FROM a) sa` is outside RQL phase-1",
+      "owner": "RQL phase-1 rewriter (subrepos/redline-testing/src/sqlite_parity/rql_phase1.rs rewrite_case)",
+      "expiry": "2027-03-31"
+    },
+    {
+      "suite": "rql_phase1",
+      "case_id": "10502",
+      "name": "SCALAR_SUBQUERY_MULTI_COLUMN_ERROR",
+      "kind": "rql_rewrite",
+      "reason": "expected-error cases are not performance candidates for RQL phase-1",
+      "owner": "RQL phase-1 rewriter (subrepos/redline-testing/src/sqlite_parity/rql_phase1.rs rewrite_case)",
+      "expiry": "2027-03-31"
+    },
+    {
+      "suite": "rql_phase1",
+      "case_id": "10504",
+      "name": "CHECK_CONSTRAINT_SUBQUERY_REJECTED",
+      "kind": "rql_rewrite",
+      "reason": "expected-error cases are not performance candidates for RQL phase-1",
+      "owner": "RQL phase-1 rewriter (subrepos/redline-testing/src/sqlite_parity/rql_phase1.rs rewrite_case)",
+      "expiry": "2027-03-31"
+    },
+    {
+      "suite": "rql_phase1",
+      "case_id": "10509",
+      "name": "NESTED_THREE_LEVEL_SUBQUERY",
+      "kind": "rql_rewrite",
+      "reason": "lower SQL to RQL for 10509: table factor `(SELECT x FROM t WHERE x < 5) inner_q` is outside RQL phase-1",
+      "owner": "RQL phase-1 rewriter (subrepos/redline-testing/src/sqlite_parity/rql_phase1.rs rewrite_case)",
+      "expiry": "2027-03-31"
+    },
+    {
+      "suite": "rql_phase1",
+      "case_id": "10510",
+      "name": "SUBQUERY_WITH_COLLATE",
+      "kind": "rql_rewrite",
+      "reason": "lower SQL to RQL for 10510: expression `'a' COLLATE NOCASE` is outside RQL phase-1",
+      "owner": "RQL phase-1 rewriter (subrepos/redline-testing/src/sqlite_parity/rql_phase1.rs rewrite_case)",
+      "expiry": "2027-03-31"
+    },
+    {
+      "suite": "rql_phase1",
+      "case_id": "10514",
+      "name": "AVG_DISTINCT_BASIC",
+      "kind": "rql_rewrite",
+      "reason": "known RQL/SQLite runtime-output divergence for phase-1",
+      "owner": "RQL phase-1 rewriter (subrepos/redline-testing/src/sqlite_parity/rql_phase1.rs rewrite_case)",
+      "expiry": "2027-03-31"
+    },
+    {
+      "suite": "rql_phase1",
+      "case_id": "10516",
+      "name": "FILTER_COUNT_STAR_PREDICATE",
+      "kind": "rql_rewrite",
+      "reason": "lower SQL to RQL for 10516: extended function syntax is outside RQL phase-1",
+      "owner": "RQL phase-1 rewriter (subrepos/redline-testing/src/sqlite_parity/rql_phase1.rs rewrite_case)",
+      "expiry": "2027-03-31"
+    },
+    {
+      "suite": "rql_phase1",
+      "case_id": "10517",
+      "name": "FILTER_SUM_X_IS_NOT_NULL",
+      "kind": "rql_rewrite",
+      "reason": "lower SQL to RQL for 10517: extended function syntax is outside RQL phase-1",
+      "owner": "RQL phase-1 rewriter (subrepos/redline-testing/src/sqlite_parity/rql_phase1.rs rewrite_case)",
+      "expiry": "2027-03-31"
+    },
+    {
+      "suite": "rql_phase1",
+      "case_id": "10518",
+      "name": "GROUP_CONCAT_ORDER_BY_DESC",
+      "kind": "rql_rewrite",
+      "reason": "lower SQL to RQL for 10518: function argument clauses are outside RQL phase-1",
+      "owner": "RQL phase-1 rewriter (subrepos/redline-testing/src/sqlite_parity/rql_phase1.rs rewrite_case)",
+      "expiry": "2027-03-31"
+    },
+    {
+      "suite": "rql_phase1",
+      "case_id": "10519",
+      "name": "GROUP_CONCAT_DELIMITER_ORDER_BY",
+      "kind": "rql_rewrite",
+      "reason": "lower SQL to RQL for 10519: function argument clauses are outside RQL phase-1",
+      "owner": "RQL phase-1 rewriter (subrepos/redline-testing/src/sqlite_parity/rql_phase1.rs rewrite_case)",
+      "expiry": "2027-03-31"
+    },
+    {
+      "suite": "rql_phase1",
+      "case_id": "10524",
+      "name": "GROUP_BY_ROLLUP_UNSUPPORTED",
+      "kind": "rql_rewrite",
+      "reason": "expected-error cases are not performance candidates for RQL phase-1",
+      "owner": "RQL phase-1 rewriter (subrepos/redline-testing/src/sqlite_parity/rql_phase1.rs rewrite_case)",
+      "expiry": "2027-03-31"
+    },
+    {
+      "suite": "rql_phase1",
+      "case_id": "10525",
+      "name": "GROUP_BY_GROUPING_SETS_UNSUPPORTED",
+      "kind": "rql_rewrite",
+      "reason": "expected-error cases are not performance candidates for RQL phase-1",
+      "owner": "RQL phase-1 rewriter (subrepos/redline-testing/src/sqlite_parity/rql_phase1.rs rewrite_case)",
+      "expiry": "2027-03-31"
+    },
+    {
+      "suite": "rql_phase1",
+      "case_id": "10529",
+      "name": "AGGREGATE_COLLATE_NOCASE_DISTINCT",
+      "kind": "rql_rewrite",
+      "reason": "lower SQL to RQL for 10529: expression `x COLLATE NOCASE` is outside RQL phase-1",
+      "owner": "RQL phase-1 rewriter (subrepos/redline-testing/src/sqlite_parity/rql_phase1.rs rewrite_case)",
+      "expiry": "2027-03-31"
+    },
+    {
+      "suite": "rql_phase1",
+      "case_id": "10530",
+      "name": "FILTER_PLUS_DISTINCT_COMBO",
+      "kind": "rql_rewrite",
+      "reason": "lower SQL to RQL for 10530: extended function syntax is outside RQL phase-1",
+      "owner": "RQL phase-1 rewriter (subrepos/redline-testing/src/sqlite_parity/rql_phase1.rs rewrite_case)",
+      "expiry": "2027-03-31"
+    },
+    {
+      "suite": "rql_phase1",
+      "case_id": "10531",
+      "name": "FILTER_VS_CASE_WHEN_EQUIVALENCE",
+      "kind": "rql_rewrite",
+      "reason": "lower SQL to RQL for 10531: extended function syntax is outside RQL phase-1",
+      "owner": "RQL phase-1 rewriter (subrepos/redline-testing/src/sqlite_parity/rql_phase1.rs rewrite_case)",
+      "expiry": "2027-03-31"
+    },
+    {
+      "suite": "rql_phase1",
+      "case_id": "10532",
+      "name": "AGGREGATE_OVER_CTE",
+      "kind": "rql_rewrite",
+      "reason": "lower SQL to RQL for 10532: extended SELECT query syntax is outside RQL phase-1",
+      "owner": "RQL phase-1 rewriter (subrepos/redline-testing/src/sqlite_parity/rql_phase1.rs rewrite_case)",
+      "expiry": "2027-03-31"
+    },
+    {
+      "suite": "rql_phase1",
+      "case_id": "10545",
+      "name": "PERCENTILE_CONT_REQUIRES_CAPABILITY",
+      "kind": "rql_rewrite",
+      "reason": "expected-error cases are not performance candidates for RQL phase-1",
+      "owner": "RQL phase-1 rewriter (subrepos/redline-testing/src/sqlite_parity/rql_phase1.rs rewrite_case)",
+      "expiry": "2027-03-31"
+    },
+    {
+      "suite": "rql_phase1",
+      "case_id": "10546",
+      "name": "MEDIAN_REQUIRES_CAPABILITY",
+      "kind": "rql_rewrite",
+      "reason": "lower SQL to RQL for 10546: extended SELECT query syntax is outside RQL phase-1",
+      "owner": "RQL phase-1 rewriter (subrepos/redline-testing/src/sqlite_parity/rql_phase1.rs rewrite_case)",
+      "expiry": "2027-03-31"
+    },
+    {
+      "suite": "rql_phase1",
+      "case_id": "10589",
+      "name": "LIKE_ESCAPE_UNDERSCORE",
+      "kind": "rql_rewrite",
+      "reason": "lower SQL to RQL for 10589: LIKE ANY/ESCAPE is outside RQL phase-1",
+      "owner": "RQL phase-1 rewriter (subrepos/redline-testing/src/sqlite_parity/rql_phase1.rs rewrite_case)",
+      "expiry": "2027-03-31"
+    },
+    {
+      "suite": "rql_phase1",
+      "case_id": "10590",
+      "name": "LIKE_ESCAPE_PERCENT",
+      "kind": "rql_rewrite",
+      "reason": "lower SQL to RQL for 10590: LIKE ANY/ESCAPE is outside RQL phase-1",
+      "owner": "RQL phase-1 rewriter (subrepos/redline-testing/src/sqlite_parity/rql_phase1.rs rewrite_case)",
+      "expiry": "2027-03-31"
+    },
+    {
+      "suite": "rql_phase1",
+      "case_id": "10592",
+      "name": "LIKE_CASE_SENSITIVE_PRAGMA_ON",
+      "kind": "rql_rewrite",
+      "reason": "parse SQL for 10592: sql parser error: Expected: a concrete value, found: ON at Line: 1, Column: 28",
+      "owner": "RQL phase-1 rewriter (subrepos/redline-testing/src/sqlite_parity/rql_phase1.rs rewrite_case)",
+      "expiry": "2027-03-31"
+    },
+    {
+      "suite": "rql_phase1",
+      "case_id": "10594",
+      "name": "GLOB_STAR_WILDCARD",
+      "kind": "rql_rewrite",
+      "reason": "parse SQL for 10594: sql parser error: Expected: end of statement, found: 'a*' at Line: 1, Column: 19",
+      "owner": "RQL phase-1 rewriter (subrepos/redline-testing/src/sqlite_parity/rql_phase1.rs rewrite_case)",
+      "expiry": "2027-03-31"
+    },
+    {
+      "suite": "rql_phase1",
+      "case_id": "10595",
+      "name": "GLOB_QUESTION_WILDCARD",
+      "kind": "rql_rewrite",
+      "reason": "parse SQL for 10595: sql parser error: Expected: end of statement, found: 'a?c' at Line: 1, Column: 19",
+      "owner": "RQL phase-1 rewriter (subrepos/redline-testing/src/sqlite_parity/rql_phase1.rs rewrite_case)",
+      "expiry": "2027-03-31"
+    },
+    {
+      "suite": "rql_phase1",
+      "case_id": "10596",
+      "name": "GLOB_CHAR_CLASS",
+      "kind": "rql_rewrite",
+      "reason": "parse SQL for 10596: sql parser error: Expected: end of statement, found: '[abc]bc' at Line: 1, Column: 19",
+      "owner": "RQL phase-1 rewriter (subrepos/redline-testing/src/sqlite_parity/rql_phase1.rs rewrite_case)",
+      "expiry": "2027-03-31"
+    },
+    {
+      "suite": "rql_phase1",
+      "case_id": "10597",
+      "name": "GLOB_CHAR_RANGE",
+      "kind": "rql_rewrite",
+      "reason": "parse SQL for 10597: sql parser error: Expected: end of statement, found: '[a-z][a-z][a-z]' at Line: 1, Column: 19",
+      "owner": "RQL phase-1 rewriter (subrepos/redline-testing/src/sqlite_parity/rql_phase1.rs rewrite_case)",
+      "expiry": "2027-03-31"
+    },
+    {
+      "suite": "rql_phase1",
+      "case_id": "10598",
+      "name": "GLOB_NEGATED_CHAR_CLASS",
+      "kind": "rql_rewrite",
+      "reason": "parse SQL for 10598: sql parser error: Expected: end of statement, found: '[^abc]bc' at Line: 1, Column: 19",
+      "owner": "RQL phase-1 rewriter (subrepos/redline-testing/src/sqlite_parity/rql_phase1.rs rewrite_case)",
+      "expiry": "2027-03-31"
+    },
+    {
+      "suite": "rql_phase1",
+      "case_id": "10599",
+      "name": "NOT_GLOB_BASIC",
+      "kind": "rql_rewrite",
+      "reason": "parse SQL for 10599: sql parser error: Expected: end of statement, found: GLOB at Line: 1, Column: 18",
+      "owner": "RQL phase-1 rewriter (subrepos/redline-testing/src/sqlite_parity/rql_phase1.rs rewrite_case)",
+      "expiry": "2027-03-31"
+    },
+    {
+      "suite": "rql_phase1",
+      "case_id": "10600",
+      "name": "REGEXP_POSITIVE",
+      "kind": "rql_rewrite",
+      "reason": "lower SQL to RQL for 10600: binary operator `REGEXP` is outside RQL phase-1",
+      "owner": "RQL phase-1 rewriter (subrepos/redline-testing/src/sqlite_parity/rql_phase1.rs rewrite_case)",
+      "expiry": "2027-03-31"
+    },
+    {
+      "suite": "rql_phase1",
+      "case_id": "10603",
+      "name": "GLOB_WITH_NULL",
+      "kind": "rql_rewrite",
+      "reason": "parse SQL for 10603: sql parser error: Expected: end of statement, found: 'a*' at Line: 1, Column: 18",
+      "owner": "RQL phase-1 rewriter (subrepos/redline-testing/src/sqlite_parity/rql_phase1.rs rewrite_case)",
+      "expiry": "2027-03-31"
+    },
+    {
+      "suite": "rql_phase1",
+      "case_id": "10605",
+      "name": "LIKE_INSIDE_CHECK_CONSTRAINT",
+      "kind": "rql_rewrite",
+      "reason": "lower SQL to RQL for 10605: CHECK constraints are outside RQL phase-1",
+      "owner": "RQL phase-1 rewriter (subrepos/redline-testing/src/sqlite_parity/rql_phase1.rs rewrite_case)",
+      "expiry": "2027-03-31"
+    },
+    {
+      "suite": "rql_phase1",
+      "case_id": "10608",
+      "name": "GLOB_CASE_SENSITIVE_ALWAYS",
+      "kind": "rql_rewrite",
+      "reason": "parse SQL for 10608: sql parser error: Expected: a concrete value, found: ON at Line: 1, Column: 28",
+      "owner": "RQL phase-1 rewriter (subrepos/redline-testing/src/sqlite_parity/rql_phase1.rs rewrite_case)",
+      "expiry": "2027-03-31"
+    },
+    {
+      "suite": "rql_phase1",
+      "case_id": "10630",
+      "name": "JSON_REJECTS_BLOB",
+      "kind": "rql_rewrite",
+      "reason": "expected-error cases are not performance candidates for RQL phase-1",
+      "owner": "RQL phase-1 rewriter (subrepos/redline-testing/src/sqlite_parity/rql_phase1.rs rewrite_case)",
+      "expiry": "2027-03-31"
+    },
+    {
+      "suite": "rql_phase1",
+      "case_id": "11001",
+      "name": "MATH_ACOS_0_0",
+      "kind": "rql_rewrite",
+      "reason": "known RQL/SQLite runtime-output divergence for phase-1",
+      "owner": "RQL phase-1 rewriter (subrepos/redline-testing/src/sqlite_parity/rql_phase1.rs rewrite_case)",
+      "expiry": "2027-03-31"
+    },
+    {
+      "suite": "rql_phase1",
+      "case_id": "11002",
+      "name": "MATH_ACOS_1_0",
+      "kind": "rql_rewrite",
+      "reason": "known RQL/SQLite runtime-output divergence for phase-1",
+      "owner": "RQL phase-1 rewriter (subrepos/redline-testing/src/sqlite_parity/rql_phase1.rs rewrite_case)",
+      "expiry": "2027-03-31"
+    },
+    {
+      "suite": "rql_phase1",
+      "case_id": "11003",
+      "name": "MATH_ACOS_0_5",
+      "kind": "rql_rewrite",
+      "reason": "known RQL/SQLite runtime-output divergence for phase-1",
+      "owner": "RQL phase-1 rewriter (subrepos/redline-testing/src/sqlite_parity/rql_phase1.rs rewrite_case)",
+      "expiry": "2027-03-31"
+    },
+    {
+      "suite": "rql_phase1",
+      "case_id": "11005",
+      "name": "MATH_ACOSH_2_0",
+      "kind": "rql_rewrite",
+      "reason": "known RQL/SQLite runtime-output divergence for phase-1",
+      "owner": "RQL phase-1 rewriter (subrepos/redline-testing/src/sqlite_parity/rql_phase1.rs rewrite_case)",
+      "expiry": "2027-03-31"
+    },
+    {
+      "suite": "rql_phase1",
+      "case_id": "11006",
+      "name": "MATH_ACOSH_10_0",
+      "kind": "rql_rewrite",
+      "reason": "known RQL/SQLite runtime-output divergence for phase-1",
+      "owner": "RQL phase-1 rewriter (subrepos/redline-testing/src/sqlite_parity/rql_phase1.rs rewrite_case)",
+      "expiry": "2027-03-31"
+    },
+    {
+      "suite": "rql_phase1",
+      "case_id": "11007",
+      "name": "MATH_ACOSH_100_0",
+      "kind": "rql_rewrite",
+      "reason": "known RQL/SQLite runtime-output divergence for phase-1",
+      "owner": "RQL phase-1 rewriter (subrepos/redline-testing/src/sqlite_parity/rql_phase1.rs rewrite_case)",
+      "expiry": "2027-03-31"
+    },
+    {
+      "suite": "rql_phase1",
+      "case_id": "11008",
+      "name": "MATH_ASIN_1_0",
+      "kind": "rql_rewrite",
+      "reason": "known RQL/SQLite runtime-output divergence for phase-1",
+      "owner": "RQL phase-1 rewriter (subrepos/redline-testing/src/sqlite_parity/rql_phase1.rs rewrite_case)",
+      "expiry": "2027-03-31"
+    },
+    {
+      "suite": "rql_phase1",
+      "case_id": "11010",
+      "name": "MATH_ASIN_1_0",
+      "kind": "rql_rewrite",
+      "reason": "known RQL/SQLite runtime-output divergence for phase-1",
+      "owner": "RQL phase-1 rewriter (subrepos/redline-testing/src/sqlite_parity/rql_phase1.rs rewrite_case)",
+      "expiry": "2027-03-31"
+    },
+    {
+      "suite": "rql_phase1",
+      "case_id": "11011",
+      "name": "MATH_ASIN_0_5",
+      "kind": "rql_rewrite",
+      "reason": "known RQL/SQLite runtime-output divergence for phase-1",
+      "owner": "RQL phase-1 rewriter (subrepos/redline-testing/src/sqlite_parity/rql_phase1.rs rewrite_case)",
+      "expiry": "2027-03-31"
+    },
+    {
+      "suite": "rql_phase1",
+      "case_id": "11012",
+      "name": "MATH_ASINH_1_0",
+      "kind": "rql_rewrite",
+      "reason": "known RQL/SQLite runtime-output divergence for phase-1",
+      "owner": "RQL phase-1 rewriter (subrepos/redline-testing/src/sqlite_parity/rql_phase1.rs rewrite_case)",
+      "expiry": "2027-03-31"
+    },
+    {
+      "suite": "rql_phase1",
+      "case_id": "11014",
+      "name": "MATH_ASINH_1_0",
+      "kind": "rql_rewrite",
+      "reason": "known RQL/SQLite runtime-output divergence for phase-1",
+      "owner": "RQL phase-1 rewriter (subrepos/redline-testing/src/sqlite_parity/rql_phase1.rs rewrite_case)",
+      "expiry": "2027-03-31"
+    },
+    {
+      "suite": "rql_phase1",
+      "case_id": "11015",
+      "name": "MATH_ASINH_10_0",
+      "kind": "rql_rewrite",
+      "reason": "known RQL/SQLite runtime-output divergence for phase-1",
+      "owner": "RQL phase-1 rewriter (subrepos/redline-testing/src/sqlite_parity/rql_phase1.rs rewrite_case)",
+      "expiry": "2027-03-31"
+    },
+    {
+      "suite": "rql_phase1",
+      "case_id": "11016",
+      "name": "MATH_ATAN_1_0",
+      "kind": "rql_rewrite",
+      "reason": "known RQL/SQLite runtime-output divergence for phase-1",
+      "owner": "RQL phase-1 rewriter (subrepos/redline-testing/src/sqlite_parity/rql_phase1.rs rewrite_case)",
+      "expiry": "2027-03-31"
+    },
+    {
+      "suite": "rql_phase1",
+      "case_id": "11018",
+      "name": "MATH_ATAN_1_0",
+      "kind": "rql_rewrite",
+      "reason": "known RQL/SQLite runtime-output divergence for phase-1",
+      "owner": "RQL phase-1 rewriter (subrepos/redline-testing/src/sqlite_parity/rql_phase1.rs rewrite_case)",
+      "expiry": "2027-03-31"
+    },
+    {
+      "suite": "rql_phase1",
+      "case_id": "11019",
+      "name": "MATH_ATAN_10_0",
+      "kind": "rql_rewrite",
+      "reason": "known RQL/SQLite runtime-output divergence for phase-1",
+      "owner": "RQL phase-1 rewriter (subrepos/redline-testing/src/sqlite_parity/rql_phase1.rs rewrite_case)",
+      "expiry": "2027-03-31"
+    },
+    {
+      "suite": "rql_phase1",
+      "case_id": "11021",
+      "name": "MATH_ATANH_0_5",
+      "kind": "rql_rewrite",
+      "reason": "known RQL/SQLite runtime-output divergence for phase-1",
+      "owner": "RQL phase-1 rewriter (subrepos/redline-testing/src/sqlite_parity/rql_phase1.rs rewrite_case)",
+      "expiry": "2027-03-31"
+    },
+    {
+      "suite": "rql_phase1",
+      "case_id": "11022",
+      "name": "MATH_ATANH_0_5",
+      "kind": "rql_rewrite",
+      "reason": "known RQL/SQLite runtime-output divergence for phase-1",
+      "owner": "RQL phase-1 rewriter (subrepos/redline-testing/src/sqlite_parity/rql_phase1.rs rewrite_case)",
+      "expiry": "2027-03-31"
+    },
+    {
+      "suite": "rql_phase1",
+      "case_id": "11023",
+      "name": "MATH_ATANH_0_9",
+      "kind": "rql_rewrite",
+      "reason": "known RQL/SQLite runtime-output divergence for phase-1",
+      "owner": "RQL phase-1 rewriter (subrepos/redline-testing/src/sqlite_parity/rql_phase1.rs rewrite_case)",
+      "expiry": "2027-03-31"
+    },
+    {
+      "suite": "rql_phase1",
+      "case_id": "11033",
+      "name": "MATH_COS_1_0",
+      "kind": "rql_rewrite",
+      "reason": "known RQL/SQLite runtime-output divergence for phase-1",
+      "owner": "RQL phase-1 rewriter (subrepos/redline-testing/src/sqlite_parity/rql_phase1.rs rewrite_case)",
+      "expiry": "2027-03-31"
+    },
+    {
+      "suite": "rql_phase1",
+      "case_id": "11035",
+      "name": "MATH_COS_1_0",
+      "kind": "rql_rewrite",
+      "reason": "known RQL/SQLite runtime-output divergence for phase-1",
+      "owner": "RQL phase-1 rewriter (subrepos/redline-testing/src/sqlite_parity/rql_phase1.rs rewrite_case)",
+      "expiry": "2027-03-31"
+    },
+    {
+      "suite": "rql_phase1",
+      "case_id": "11037",
+      "name": "MATH_COSH_1_0",
+      "kind": "rql_rewrite",
+      "reason": "known RQL/SQLite runtime-output divergence for phase-1",
+      "owner": "RQL phase-1 rewriter (subrepos/redline-testing/src/sqlite_parity/rql_phase1.rs rewrite_case)",
+      "expiry": "2027-03-31"
+    },
+    {
+      "suite": "rql_phase1",
+      "case_id": "11038",
+      "name": "MATH_COSH_1_0",
+      "kind": "rql_rewrite",
+      "reason": "known RQL/SQLite runtime-output divergence for phase-1",
+      "owner": "RQL phase-1 rewriter (subrepos/redline-testing/src/sqlite_parity/rql_phase1.rs rewrite_case)",
+      "expiry": "2027-03-31"
+    },
+    {
+      "suite": "rql_phase1",
+      "case_id": "11039",
+      "name": "MATH_COSH_2_0",
+      "kind": "rql_rewrite",
+      "reason": "known RQL/SQLite runtime-output divergence for phase-1",
+      "owner": "RQL phase-1 rewriter (subrepos/redline-testing/src/sqlite_parity/rql_phase1.rs rewrite_case)",
+      "expiry": "2027-03-31"
+    },
+    {
+      "suite": "rql_phase1",
+      "case_id": "11041",
+      "name": "MATH_DEGREES_3_14159265358979",
+      "kind": "rql_rewrite",
+      "reason": "known RQL/SQLite runtime-output divergence for phase-1",
+      "owner": "RQL phase-1 rewriter (subrepos/redline-testing/src/sqlite_parity/rql_phase1.rs rewrite_case)",
+      "expiry": "2027-03-31"
+    },
+    {
+      "suite": "rql_phase1",
+      "case_id": "11042",
+      "name": "MATH_DEGREES_1_5707963267949",
+      "kind": "rql_rewrite",
+      "reason": "known RQL/SQLite runtime-output divergence for phase-1",
+      "owner": "RQL phase-1 rewriter (subrepos/redline-testing/src/sqlite_parity/rql_phase1.rs rewrite_case)",
+      "expiry": "2027-03-31"
+    },
+    {
+      "suite": "rql_phase1",
+      "case_id": "11043",
+      "name": "MATH_DEGREES_3_14159265358979",
+      "kind": "rql_rewrite",
+      "reason": "known RQL/SQLite runtime-output divergence for phase-1",
+      "owner": "RQL phase-1 rewriter (subrepos/redline-testing/src/sqlite_parity/rql_phase1.rs rewrite_case)",
+      "expiry": "2027-03-31"
+    },
+    {
+      "suite": "rql_phase1",
+      "case_id": "11045",
+      "name": "MATH_EXP_1_0",
+      "kind": "rql_rewrite",
+      "reason": "known RQL/SQLite runtime-output divergence for phase-1",
+      "owner": "RQL phase-1 rewriter (subrepos/redline-testing/src/sqlite_parity/rql_phase1.rs rewrite_case)",
+      "expiry": "2027-03-31"
+    },
+    {
+      "suite": "rql_phase1",
+      "case_id": "11046",
+      "name": "MATH_EXP_1_0",
+      "kind": "rql_rewrite",
+      "reason": "known RQL/SQLite runtime-output divergence for phase-1",
+      "owner": "RQL phase-1 rewriter (subrepos/redline-testing/src/sqlite_parity/rql_phase1.rs rewrite_case)",
+      "expiry": "2027-03-31"
+    },
+    {
+      "suite": "rql_phase1",
+      "case_id": "11047",
+      "name": "MATH_EXP_2_0",
+      "kind": "rql_rewrite",
+      "reason": "known RQL/SQLite runtime-output divergence for phase-1",
+      "owner": "RQL phase-1 rewriter (subrepos/redline-testing/src/sqlite_parity/rql_phase1.rs rewrite_case)",
+      "expiry": "2027-03-31"
+    },
+    {
+      "suite": "rql_phase1",
+      "case_id": "11053",
+      "name": "MATH_LN_2_0",
+      "kind": "rql_rewrite",
+      "reason": "known RQL/SQLite runtime-output divergence for phase-1",
+      "owner": "RQL phase-1 rewriter (subrepos/redline-testing/src/sqlite_parity/rql_phase1.rs rewrite_case)",
+      "expiry": "2027-03-31"
+    },
+    {
+      "suite": "rql_phase1",
+      "case_id": "11054",
+      "name": "MATH_LN_0_5",
+      "kind": "rql_rewrite",
+      "reason": "known RQL/SQLite runtime-output divergence for phase-1",
+      "owner": "RQL phase-1 rewriter (subrepos/redline-testing/src/sqlite_parity/rql_phase1.rs rewrite_case)",
+      "expiry": "2027-03-31"
+    },
+    {
+      "suite": "rql_phase1",
+      "case_id": "11055",
+      "name": "MATH_LN_10_0",
+      "kind": "rql_rewrite",
+      "reason": "known RQL/SQLite runtime-output divergence for phase-1",
+      "owner": "RQL phase-1 rewriter (subrepos/redline-testing/src/sqlite_parity/rql_phase1.rs rewrite_case)",
+      "expiry": "2027-03-31"
+    },
+    {
+      "suite": "rql_phase1",
+      "case_id": "11065",
+      "name": "MATH_RADIANS_90_0",
+      "kind": "rql_rewrite",
+      "reason": "known RQL/SQLite runtime-output divergence for phase-1",
+      "owner": "RQL phase-1 rewriter (subrepos/redline-testing/src/sqlite_parity/rql_phase1.rs rewrite_case)",
+      "expiry": "2027-03-31"
+    },
+    {
+      "suite": "rql_phase1",
+      "case_id": "11066",
+      "name": "MATH_RADIANS_180_0",
+      "kind": "rql_rewrite",
+      "reason": "known RQL/SQLite runtime-output divergence for phase-1",
+      "owner": "RQL phase-1 rewriter (subrepos/redline-testing/src/sqlite_parity/rql_phase1.rs rewrite_case)",
+      "expiry": "2027-03-31"
+    },
+    {
+      "suite": "rql_phase1",
+      "case_id": "11067",
+      "name": "MATH_RADIANS_180_0",
+      "kind": "rql_rewrite",
+      "reason": "known RQL/SQLite runtime-output divergence for phase-1",
+      "owner": "RQL phase-1 rewriter (subrepos/redline-testing/src/sqlite_parity/rql_phase1.rs rewrite_case)",
+      "expiry": "2027-03-31"
+    },
+    {
+      "suite": "rql_phase1",
+      "case_id": "11070",
+      "name": "MATH_SIN_3_14159265358979",
+      "kind": "rql_rewrite",
+      "reason": "known RQL/SQLite runtime-output divergence for phase-1",
+      "owner": "RQL phase-1 rewriter (subrepos/redline-testing/src/sqlite_parity/rql_phase1.rs rewrite_case)",
+      "expiry": "2027-03-31"
+    },
+    {
+      "suite": "rql_phase1",
+      "case_id": "11073",
+      "name": "MATH_SINH_1_0",
+      "kind": "rql_rewrite",
+      "reason": "known RQL/SQLite runtime-output divergence for phase-1",
+      "owner": "RQL phase-1 rewriter (subrepos/redline-testing/src/sqlite_parity/rql_phase1.rs rewrite_case)",
+      "expiry": "2027-03-31"
+    },
+    {
+      "suite": "rql_phase1",
+      "case_id": "11074",
+      "name": "MATH_SINH_1_0",
+      "kind": "rql_rewrite",
+      "reason": "known RQL/SQLite runtime-output divergence for phase-1",
+      "owner": "RQL phase-1 rewriter (subrepos/redline-testing/src/sqlite_parity/rql_phase1.rs rewrite_case)",
+      "expiry": "2027-03-31"
+    },
+    {
+      "suite": "rql_phase1",
+      "case_id": "11075",
+      "name": "MATH_SINH_2_0",
+      "kind": "rql_rewrite",
+      "reason": "known RQL/SQLite runtime-output divergence for phase-1",
+      "owner": "RQL phase-1 rewriter (subrepos/redline-testing/src/sqlite_parity/rql_phase1.rs rewrite_case)",
+      "expiry": "2027-03-31"
+    },
+    {
+      "suite": "rql_phase1",
+      "case_id": "11081",
+      "name": "MATH_TAN_0_7853981633974483",
+      "kind": "rql_rewrite",
+      "reason": "known RQL/SQLite runtime-output divergence for phase-1",
+      "owner": "RQL phase-1 rewriter (subrepos/redline-testing/src/sqlite_parity/rql_phase1.rs rewrite_case)",
+      "expiry": "2027-03-31"
+    },
+    {
+      "suite": "rql_phase1",
+      "case_id": "11082",
+      "name": "MATH_TAN_0_7853981633974483",
+      "kind": "rql_rewrite",
+      "reason": "known RQL/SQLite runtime-output divergence for phase-1",
+      "owner": "RQL phase-1 rewriter (subrepos/redline-testing/src/sqlite_parity/rql_phase1.rs rewrite_case)",
+      "expiry": "2027-03-31"
+    },
+    {
+      "suite": "rql_phase1",
+      "case_id": "11083",
+      "name": "MATH_TAN_1_0",
+      "kind": "rql_rewrite",
+      "reason": "known RQL/SQLite runtime-output divergence for phase-1",
+      "owner": "RQL phase-1 rewriter (subrepos/redline-testing/src/sqlite_parity/rql_phase1.rs rewrite_case)",
+      "expiry": "2027-03-31"
+    },
+    {
+      "suite": "rql_phase1",
+      "case_id": "11085",
+      "name": "MATH_TANH_1_0",
+      "kind": "rql_rewrite",
+      "reason": "known RQL/SQLite runtime-output divergence for phase-1",
+      "owner": "RQL phase-1 rewriter (subrepos/redline-testing/src/sqlite_parity/rql_phase1.rs rewrite_case)",
+      "expiry": "2027-03-31"
+    },
+    {
+      "suite": "rql_phase1",
+      "case_id": "11086",
+      "name": "MATH_TANH_1_0",
+      "kind": "rql_rewrite",
+      "reason": "known RQL/SQLite runtime-output divergence for phase-1",
+      "owner": "RQL phase-1 rewriter (subrepos/redline-testing/src/sqlite_parity/rql_phase1.rs rewrite_case)",
+      "expiry": "2027-03-31"
+    },
+    {
+      "suite": "rql_phase1",
+      "case_id": "11087",
+      "name": "MATH_TANH_10_0",
+      "kind": "rql_rewrite",
+      "reason": "known RQL/SQLite runtime-output divergence for phase-1",
+      "owner": "RQL phase-1 rewriter (subrepos/redline-testing/src/sqlite_parity/rql_phase1.rs rewrite_case)",
+      "expiry": "2027-03-31"
+    },
+    {
+      "suite": "rql_phase1",
+      "case_id": "11092",
+      "name": "MATH_PI_NO_ARG",
+      "kind": "rql_rewrite",
+      "reason": "known RQL/SQLite runtime-output divergence for phase-1",
+      "owner": "RQL phase-1 rewriter (subrepos/redline-testing/src/sqlite_parity/rql_phase1.rs rewrite_case)",
+      "expiry": "2027-03-31"
+    },
+    {
+      "suite": "rql_phase1",
+      "case_id": "11093",
+      "name": "MATH_ATAN2_1_0_0_0",
+      "kind": "rql_rewrite",
+      "reason": "known RQL/SQLite runtime-output divergence for phase-1",
+      "owner": "RQL phase-1 rewriter (subrepos/redline-testing/src/sqlite_parity/rql_phase1.rs rewrite_case)",
+      "expiry": "2027-03-31"
+    },
+    {
+      "suite": "rql_phase1",
+      "case_id": "11095",
+      "name": "MATH_ATAN2_1_0_1_0",
+      "kind": "rql_rewrite",
+      "reason": "known RQL/SQLite runtime-output divergence for phase-1",
+      "owner": "RQL phase-1 rewriter (subrepos/redline-testing/src/sqlite_parity/rql_phase1.rs rewrite_case)",
+      "expiry": "2027-03-31"
+    },
+    {
+      "suite": "rql_phase1",
+      "case_id": "11096",
+      "name": "MATH_ATAN2_1_0_1_0",
+      "kind": "rql_rewrite",
+      "reason": "known RQL/SQLite runtime-output divergence for phase-1",
+      "owner": "RQL phase-1 rewriter (subrepos/redline-testing/src/sqlite_parity/rql_phase1.rs rewrite_case)",
+      "expiry": "2027-03-31"
+    },
+    {
+      "suite": "rql_phase1",
+      "case_id": "11209",
+      "name": "CAST_INT_5_AS_NUMERIC",
+      "kind": "rql_rewrite",
+      "reason": "known RQL/SQLite runtime-output divergence for phase-1",
+      "owner": "RQL phase-1 rewriter (subrepos/redline-testing/src/sqlite_parity/rql_phase1.rs rewrite_case)",
+      "expiry": "2027-03-31"
+    },
+    {
+      "suite": "rql_phase1",
+      "case_id": "11214",
+      "name": "CAST_INT_NEG_3_AS_NUMERIC",
+      "kind": "rql_rewrite",
+      "reason": "known RQL/SQLite runtime-output divergence for phase-1",
+      "owner": "RQL phase-1 rewriter (subrepos/redline-testing/src/sqlite_parity/rql_phase1.rs rewrite_case)",
+      "expiry": "2027-03-31"
+    },
+    {
+      "suite": "rql_phase1",
+      "case_id": "11219",
+      "name": "CAST_REAL_3_14_AS_NUMERIC",
+      "kind": "rql_rewrite",
+      "reason": "known RQL/SQLite runtime-output divergence for phase-1",
+      "owner": "RQL phase-1 rewriter (subrepos/redline-testing/src/sqlite_parity/rql_phase1.rs rewrite_case)",
+      "expiry": "2027-03-31"
+    },
+    {
+      "suite": "rql_phase1",
+      "case_id": "11224",
+      "name": "CAST_REAL_0_AS_NUMERIC",
+      "kind": "rql_rewrite",
+      "reason": "known RQL/SQLite runtime-output divergence for phase-1",
+      "owner": "RQL phase-1 rewriter (subrepos/redline-testing/src/sqlite_parity/rql_phase1.rs rewrite_case)",
+      "expiry": "2027-03-31"
+    },
+    {
+      "suite": "rql_phase1",
+      "case_id": "11229",
+      "name": "CAST_TEXT_42_AS_NUMERIC",
+      "kind": "rql_rewrite",
+      "reason": "known RQL/SQLite runtime-output divergence for phase-1",
+      "owner": "RQL phase-1 rewriter (subrepos/redline-testing/src/sqlite_parity/rql_phase1.rs rewrite_case)",
+      "expiry": "2027-03-31"
+    },
+    {
+      "suite": "rql_phase1",
+      "case_id": "11234",
+      "name": "CAST_TEXT_NUM_AS_NUMERIC",
+      "kind": "rql_rewrite",
+      "reason": "known RQL/SQLite runtime-output divergence for phase-1",
+      "owner": "RQL phase-1 rewriter (subrepos/redline-testing/src/sqlite_parity/rql_phase1.rs rewrite_case)",
+      "expiry": "2027-03-31"
+    },
+    {
+      "suite": "rql_phase1",
+      "case_id": "11239",
+      "name": "CAST_TEXT_BARE_AS_NUMERIC",
+      "kind": "rql_rewrite",
+      "reason": "known RQL/SQLite runtime-output divergence for phase-1",
+      "owner": "RQL phase-1 rewriter (subrepos/redline-testing/src/sqlite_parity/rql_phase1.rs rewrite_case)",
+      "expiry": "2027-03-31"
+    },
+    {
+      "suite": "rql_phase1",
+      "case_id": "11244",
+      "name": "CAST_BLOB_HEX_AS_NUMERIC",
+      "kind": "rql_rewrite",
+      "reason": "known RQL/SQLite runtime-output divergence for phase-1",
+      "owner": "RQL phase-1 rewriter (subrepos/redline-testing/src/sqlite_parity/rql_phase1.rs rewrite_case)",
+      "expiry": "2027-03-31"
+    },
+    {
+      "suite": "rql_phase1",
+      "case_id": "11306",
+      "name": "AFFINITY_INTEGER_BLOB_HEX",
+      "kind": "rql_rewrite",
+      "reason": "known RQL/SQLite runtime-output divergence for phase-1",
+      "owner": "RQL phase-1 rewriter (subrepos/redline-testing/src/sqlite_parity/rql_phase1.rs rewrite_case)",
+      "expiry": "2027-03-31"
+    },
+    {
+      "suite": "rql_phase1",
+      "case_id": "11314",
+      "name": "AFFINITY_BIGINT_BLOB_HEX",
+      "kind": "rql_rewrite",
+      "reason": "known RQL/SQLite runtime-output divergence for phase-1",
+      "owner": "RQL phase-1 rewriter (subrepos/redline-testing/src/sqlite_parity/rql_phase1.rs rewrite_case)",
+      "expiry": "2027-03-31"
+    },
+    {
+      "suite": "rql_phase1",
+      "case_id": "11317",
+      "name": "AFFINITY_REAL_INT_BIG",
+      "kind": "rql_rewrite",
+      "reason": "known RQL/SQLite runtime-output divergence for phase-1",
+      "owner": "RQL phase-1 rewriter (subrepos/redline-testing/src/sqlite_parity/rql_phase1.rs rewrite_case)",
+      "expiry": "2027-03-31"
+    },
+    {
+      "suite": "rql_phase1",
+      "case_id": "11322",
+      "name": "AFFINITY_REAL_BLOB_HEX",
+      "kind": "rql_rewrite",
+      "reason": "known RQL/SQLite runtime-output divergence for phase-1",
+      "owner": "RQL phase-1 rewriter (subrepos/redline-testing/src/sqlite_parity/rql_phase1.rs rewrite_case)",
+      "expiry": "2027-03-31"
+    },
+    {
+      "suite": "rql_phase1",
+      "case_id": "11325",
+      "name": "AFFINITY_DOUBLE_INT_BIG",
+      "kind": "rql_rewrite",
+      "reason": "known RQL/SQLite runtime-output divergence for phase-1",
+      "owner": "RQL phase-1 rewriter (subrepos/redline-testing/src/sqlite_parity/rql_phase1.rs rewrite_case)",
+      "expiry": "2027-03-31"
+    },
+    {
+      "suite": "rql_phase1",
+      "case_id": "11330",
+      "name": "AFFINITY_DOUBLE_BLOB_HEX",
+      "kind": "rql_rewrite",
+      "reason": "known RQL/SQLite runtime-output divergence for phase-1",
+      "owner": "RQL phase-1 rewriter (subrepos/redline-testing/src/sqlite_parity/rql_phase1.rs rewrite_case)",
+      "expiry": "2027-03-31"
+    },
+    {
+      "suite": "rql_phase1",
+      "case_id": "11338",
+      "name": "AFFINITY_TEXT_BLOB_HEX",
+      "kind": "rql_rewrite",
+      "reason": "known RQL/SQLite runtime-output divergence for phase-1",
+      "owner": "RQL phase-1 rewriter (subrepos/redline-testing/src/sqlite_parity/rql_phase1.rs rewrite_case)",
+      "expiry": "2027-03-31"
+    },
+    {
+      "suite": "rql_phase1",
+      "case_id": "11346",
+      "name": "AFFINITY_VARCHAR_8_BLOB_HEX",
+      "kind": "rql_rewrite",
+      "reason": "known RQL/SQLite runtime-output divergence for phase-1",
+      "owner": "RQL phase-1 rewriter (subrepos/redline-testing/src/sqlite_parity/rql_phase1.rs rewrite_case)",
+      "expiry": "2027-03-31"
+    },
+    {
+      "suite": "rql_phase1",
+      "case_id": "11354",
+      "name": "AFFINITY_BLOB_BLOB_HEX",
+      "kind": "rql_rewrite",
+      "reason": "known RQL/SQLite runtime-output divergence for phase-1",
+      "owner": "RQL phase-1 rewriter (subrepos/redline-testing/src/sqlite_parity/rql_phase1.rs rewrite_case)",
+      "expiry": "2027-03-31"
+    },
+    {
+      "suite": "rql_phase1",
+      "case_id": "11362",
+      "name": "AFFINITY_NUMERIC_BLOB_HEX",
+      "kind": "rql_rewrite",
+      "reason": "known RQL/SQLite runtime-output divergence for phase-1",
+      "owner": "RQL phase-1 rewriter (subrepos/redline-testing/src/sqlite_parity/rql_phase1.rs rewrite_case)",
+      "expiry": "2027-03-31"
+    },
+    {
+      "suite": "rql_phase1",
+      "case_id": "11410",
+      "name": "STRING_LOWER_",
+      "kind": "rql_rewrite",
+      "reason": "known RQL/SQLite runtime-output divergence for phase-1",
+      "owner": "RQL phase-1 rewriter (subrepos/redline-testing/src/sqlite_parity/rql_phase1.rs rewrite_case)",
+      "expiry": "2027-03-31"
+    },
+    {
+      "suite": "rql_phase1",
+      "case_id": "11436",
+      "name": "STRING_ZEROBLOB_4",
+      "kind": "rql_rewrite",
+      "reason": "known RQL/SQLite runtime-output divergence for phase-1",
+      "owner": "RQL phase-1 rewriter (subrepos/redline-testing/src/sqlite_parity/rql_phase1.rs rewrite_case)",
+      "expiry": "2027-03-31"
+    },
+    {
+      "suite": "rql_phase1",
+      "case_id": "11437",
+      "name": "STRING_SOUNDEX_ROBERT",
+      "kind": "rql_rewrite",
+      "reason": "expected-error cases are not performance candidates for RQL phase-1",
+      "owner": "RQL phase-1 rewriter (subrepos/redline-testing/src/sqlite_parity/rql_phase1.rs rewrite_case)",
+      "expiry": "2027-03-31"
+    },
+    {
+      "suite": "rql_phase1",
+      "case_id": "11438",
+      "name": "STRING_SOUNDEX_RUPERT",
+      "kind": "rql_rewrite",
+      "reason": "expected-error cases are not performance candidates for RQL phase-1",
+      "owner": "RQL phase-1 rewriter (subrepos/redline-testing/src/sqlite_parity/rql_phase1.rs rewrite_case)",
+      "expiry": "2027-03-31"
+    },
+    {
+      "suite": "rql_phase1",
+      "case_id": "11439",
+      "name": "STRING_SOUNDEX_X",
+      "kind": "rql_rewrite",
+      "reason": "expected-error cases are not performance candidates for RQL phase-1",
+      "owner": "RQL phase-1 rewriter (subrepos/redline-testing/src/sqlite_parity/rql_phase1.rs rewrite_case)",
+      "expiry": "2027-03-31"
+    },
+    {
+      "suite": "rql_phase1",
+      "case_id": "11523",
+      "name": "DATETIME_JULIANDAY_EPOCH_PLUS_30_MINUTES",
+      "kind": "rql_rewrite",
+      "reason": "known RQL/SQLite runtime-output divergence for phase-1",
+      "owner": "RQL phase-1 rewriter (subrepos/redline-testing/src/sqlite_parity/rql_phase1.rs rewrite_case)",
+      "expiry": "2027-03-31"
+    },
+    {
+      "suite": "rql_phase1",
+      "case_id": "11528",
+      "name": "DATETIME_JULIANDAY_EPOCH_PLUS_10_SECONDS",
+      "kind": "rql_rewrite",
+      "reason": "known RQL/SQLite runtime-output divergence for phase-1",
+      "owner": "RQL phase-1 rewriter (subrepos/redline-testing/src/sqlite_parity/rql_phase1.rs rewrite_case)",
+      "expiry": "2027-03-31"
+    },
+    {
+      "suite": "rql_phase1",
+      "case_id": "11578",
+      "name": "DATETIME_JULIANDAY_Y2K_PLUS_30_MINUTES",
+      "kind": "rql_rewrite",
+      "reason": "known RQL/SQLite runtime-output divergence for phase-1",
+      "owner": "RQL phase-1 rewriter (subrepos/redline-testing/src/sqlite_parity/rql_phase1.rs rewrite_case)",
+      "expiry": "2027-03-31"
+    },
+    {
+      "suite": "rql_phase1",
+      "case_id": "11583",
+      "name": "DATETIME_JULIANDAY_Y2K_PLUS_10_SECONDS",
+      "kind": "rql_rewrite",
+      "reason": "known RQL/SQLite runtime-output divergence for phase-1",
+      "owner": "RQL phase-1 rewriter (subrepos/redline-testing/src/sqlite_parity/rql_phase1.rs rewrite_case)",
+      "expiry": "2027-03-31"
+    },
+    {
+      "suite": "rql_phase1",
+      "case_id": "11633",
+      "name": "DATETIME_JULIANDAY_DATE_2024_PLUS_30_MINUTES",
+      "kind": "rql_rewrite",
+      "reason": "known RQL/SQLite runtime-output divergence for phase-1",
+      "owner": "RQL phase-1 rewriter (subrepos/redline-testing/src/sqlite_parity/rql_phase1.rs rewrite_case)",
+      "expiry": "2027-03-31"
+    },
+    {
+      "suite": "rql_phase1",
+      "case_id": "11638",
+      "name": "DATETIME_JULIANDAY_DATE_2024_PLUS_10_SECONDS",
+      "kind": "rql_rewrite",
+      "reason": "known RQL/SQLite runtime-output divergence for phase-1",
+      "owner": "RQL phase-1 rewriter (subrepos/redline-testing/src/sqlite_parity/rql_phase1.rs rewrite_case)",
+      "expiry": "2027-03-31"
+    },
+    {
+      "suite": "rql_phase1",
+      "case_id": "11843",
+      "name": "JSON_ARROW_",
+      "kind": "rql_rewrite",
+      "reason": "lower SQL to RQL for 11843: binary operator `->` is outside RQL phase-1",
+      "owner": "RQL phase-1 rewriter (subrepos/redline-testing/src/sqlite_parity/rql_phase1.rs rewrite_case)",
+      "expiry": "2027-03-31"
+    },
+    {
+      "suite": "rql_phase1",
+      "case_id": "11844",
+      "name": "JSON_DARROW_",
+      "kind": "rql_rewrite",
+      "reason": "lower SQL to RQL for 11844: binary operator `->>` is outside RQL phase-1",
+      "owner": "RQL phase-1 rewriter (subrepos/redline-testing/src/sqlite_parity/rql_phase1.rs rewrite_case)",
+      "expiry": "2027-03-31"
+    },
+    {
+      "suite": "rql_phase1",
+      "case_id": "11845",
+      "name": "JSON_ARROW_A",
+      "kind": "rql_rewrite",
+      "reason": "lower SQL to RQL for 11845: binary operator `->` is outside RQL phase-1",
+      "owner": "RQL phase-1 rewriter (subrepos/redline-testing/src/sqlite_parity/rql_phase1.rs rewrite_case)",
+      "expiry": "2027-03-31"
+    },
+    {
+      "suite": "rql_phase1",
+      "case_id": "11846",
+      "name": "JSON_DARROW_A",
+      "kind": "rql_rewrite",
+      "reason": "lower SQL to RQL for 11846: binary operator `->>` is outside RQL phase-1",
+      "owner": "RQL phase-1 rewriter (subrepos/redline-testing/src/sqlite_parity/rql_phase1.rs rewrite_case)",
+      "expiry": "2027-03-31"
+    },
+    {
+      "suite": "rql_phase1",
+      "case_id": "11847",
+      "name": "JSON_ARROW_A_B",
+      "kind": "rql_rewrite",
+      "reason": "lower SQL to RQL for 11847: binary operator `->` is outside RQL phase-1",
+      "owner": "RQL phase-1 rewriter (subrepos/redline-testing/src/sqlite_parity/rql_phase1.rs rewrite_case)",
+      "expiry": "2027-03-31"
+    },
+    {
+      "suite": "rql_phase1",
+      "case_id": "11848",
+      "name": "JSON_DARROW_A_B",
+      "kind": "rql_rewrite",
+      "reason": "lower SQL to RQL for 11848: binary operator `->>` is outside RQL phase-1",
+      "owner": "RQL phase-1 rewriter (subrepos/redline-testing/src/sqlite_parity/rql_phase1.rs rewrite_case)",
+      "expiry": "2027-03-31"
+    },
+    {
+      "suite": "rql_phase1",
+      "case_id": "11849",
+      "name": "JSON_ARROW_A_B_0",
+      "kind": "rql_rewrite",
+      "reason": "lower SQL to RQL for 11849: binary operator `->` is outside RQL phase-1",
+      "owner": "RQL phase-1 rewriter (subrepos/redline-testing/src/sqlite_parity/rql_phase1.rs rewrite_case)",
+      "expiry": "2027-03-31"
+    },
+    {
+      "suite": "rql_phase1",
+      "case_id": "11850",
+      "name": "JSON_DARROW_A_B_0",
+      "kind": "rql_rewrite",
+      "reason": "lower SQL to RQL for 11850: binary operator `->>` is outside RQL phase-1",
+      "owner": "RQL phase-1 rewriter (subrepos/redline-testing/src/sqlite_parity/rql_phase1.rs rewrite_case)",
+      "expiry": "2027-03-31"
+    },
+    {
+      "suite": "rql_phase1",
+      "case_id": "11851",
+      "name": "JSON_ARROW_A_B_1",
+      "kind": "rql_rewrite",
+      "reason": "lower SQL to RQL for 11851: binary operator `->` is outside RQL phase-1",
+      "owner": "RQL phase-1 rewriter (subrepos/redline-testing/src/sqlite_parity/rql_phase1.rs rewrite_case)",
+      "expiry": "2027-03-31"
+    },
+    {
+      "suite": "rql_phase1",
+      "case_id": "11852",
+      "name": "JSON_DARROW_A_B_1",
+      "kind": "rql_rewrite",
+      "reason": "lower SQL to RQL for 11852: binary operator `->>` is outside RQL phase-1",
+      "owner": "RQL phase-1 rewriter (subrepos/redline-testing/src/sqlite_parity/rql_phase1.rs rewrite_case)",
+      "expiry": "2027-03-31"
+    },
+    {
+      "suite": "rql_phase1",
+      "case_id": "11853",
+      "name": "JSON_ARROW_A_B_1_C",
+      "kind": "rql_rewrite",
+      "reason": "lower SQL to RQL for 11853: binary operator `->` is outside RQL phase-1",
+      "owner": "RQL phase-1 rewriter (subrepos/redline-testing/src/sqlite_parity/rql_phase1.rs rewrite_case)",
+      "expiry": "2027-03-31"
+    },
+    {
+      "suite": "rql_phase1",
+      "case_id": "11854",
+      "name": "JSON_DARROW_A_B_1_C",
+      "kind": "rql_rewrite",
+      "reason": "lower SQL to RQL for 11854: binary operator `->>` is outside RQL phase-1",
+      "owner": "RQL phase-1 rewriter (subrepos/redline-testing/src/sqlite_parity/rql_phase1.rs rewrite_case)",
+      "expiry": "2027-03-31"
+    },
+    {
+      "suite": "rql_phase1",
+      "case_id": "11855",
+      "name": "JSON_ARROW_D",
+      "kind": "rql_rewrite",
+      "reason": "lower SQL to RQL for 11855: binary operator `->` is outside RQL phase-1",
+      "owner": "RQL phase-1 rewriter (subrepos/redline-testing/src/sqlite_parity/rql_phase1.rs rewrite_case)",
+      "expiry": "2027-03-31"
+    },
+    {
+      "suite": "rql_phase1",
+      "case_id": "11856",
+      "name": "JSON_DARROW_D",
+      "kind": "rql_rewrite",
+      "reason": "lower SQL to RQL for 11856: binary operator `->>` is outside RQL phase-1",
+      "owner": "RQL phase-1 rewriter (subrepos/redline-testing/src/sqlite_parity/rql_phase1.rs rewrite_case)",
+      "expiry": "2027-03-31"
+    },
+    {
+      "suite": "rql_phase1",
+      "case_id": "11857",
+      "name": "JSON_ARROW_D_0",
+      "kind": "rql_rewrite",
+      "reason": "lower SQL to RQL for 11857: binary operator `->` is outside RQL phase-1",
+      "owner": "RQL phase-1 rewriter (subrepos/redline-testing/src/sqlite_parity/rql_phase1.rs rewrite_case)",
+      "expiry": "2027-03-31"
+    },
+    {
+      "suite": "rql_phase1",
+      "case_id": "11858",
+      "name": "JSON_DARROW_D_0",
+      "kind": "rql_rewrite",
+      "reason": "lower SQL to RQL for 11858: binary operator `->>` is outside RQL phase-1",
+      "owner": "RQL phase-1 rewriter (subrepos/redline-testing/src/sqlite_parity/rql_phase1.rs rewrite_case)",
+      "expiry": "2027-03-31"
+    },
+    {
+      "suite": "rql_phase1",
+      "case_id": "11859",
+      "name": "JSON_ARROW_D_3",
+      "kind": "rql_rewrite",
+      "reason": "lower SQL to RQL for 11859: binary operator `->` is outside RQL phase-1",
+      "owner": "RQL phase-1 rewriter (subrepos/redline-testing/src/sqlite_parity/rql_phase1.rs rewrite_case)",
+      "expiry": "2027-03-31"
+    },
+    {
+      "suite": "rql_phase1",
+      "case_id": "11860",
+      "name": "JSON_DARROW_D_3",
+      "kind": "rql_rewrite",
+      "reason": "lower SQL to RQL for 11860: binary operator `->>` is outside RQL phase-1",
+      "owner": "RQL phase-1 rewriter (subrepos/redline-testing/src/sqlite_parity/rql_phase1.rs rewrite_case)",
+      "expiry": "2027-03-31"
+    },
+    {
+      "suite": "rql_phase1",
+      "case_id": "11861",
+      "name": "JSON_ARROW_E",
+      "kind": "rql_rewrite",
+      "reason": "lower SQL to RQL for 11861: binary operator `->` is outside RQL phase-1",
+      "owner": "RQL phase-1 rewriter (subrepos/redline-testing/src/sqlite_parity/rql_phase1.rs rewrite_case)",
+      "expiry": "2027-03-31"
+    },
+    {
+      "suite": "rql_phase1",
+      "case_id": "11862",
+      "name": "JSON_DARROW_E",
+      "kind": "rql_rewrite",
+      "reason": "lower SQL to RQL for 11862: binary operator `->>` is outside RQL phase-1",
+      "owner": "RQL phase-1 rewriter (subrepos/redline-testing/src/sqlite_parity/rql_phase1.rs rewrite_case)",
+      "expiry": "2027-03-31"
+    },
+    {
+      "suite": "rql_phase1",
+      "case_id": "11863",
+      "name": "JSON_ARROW_MISSING",
+      "kind": "rql_rewrite",
+      "reason": "lower SQL to RQL for 11863: binary operator `->` is outside RQL phase-1",
+      "owner": "RQL phase-1 rewriter (subrepos/redline-testing/src/sqlite_parity/rql_phase1.rs rewrite_case)",
+      "expiry": "2027-03-31"
+    },
+    {
+      "suite": "rql_phase1",
+      "case_id": "11864",
+      "name": "JSON_DARROW_MISSING",
+      "kind": "rql_rewrite",
+      "reason": "lower SQL to RQL for 11864: binary operator `->>` is outside RQL phase-1",
+      "owner": "RQL phase-1 rewriter (subrepos/redline-testing/src/sqlite_parity/rql_phase1.rs rewrite_case)",
+      "expiry": "2027-03-31"
+    },
+    {
+      "suite": "rql_phase1",
+      "case_id": "11865",
+      "name": "JSON_ARROW_A_B_99",
+      "kind": "rql_rewrite",
+      "reason": "lower SQL to RQL for 11865: binary operator `->` is outside RQL phase-1",
+      "owner": "RQL phase-1 rewriter (subrepos/redline-testing/src/sqlite_parity/rql_phase1.rs rewrite_case)",
+      "expiry": "2027-03-31"
+    },
+    {
+      "suite": "rql_phase1",
+      "case_id": "11866",
+      "name": "JSON_DARROW_A_B_99",
+      "kind": "rql_rewrite",
+      "reason": "lower SQL to RQL for 11866: binary operator `->>` is outside RQL phase-1",
+      "owner": "RQL phase-1 rewriter (subrepos/redline-testing/src/sqlite_parity/rql_phase1.rs rewrite_case)",
+      "expiry": "2027-03-31"
+    }
+  ]
+}

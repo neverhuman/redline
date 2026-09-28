@@ -79,6 +79,7 @@ impl Fixture {
         let path = self.path().join("fake-redlinedb");
         fs::write(&path, format!("{TARGET_PRELUDE}{body}\n")).expect("write fake target");
         fs::set_permissions(&path, fs::Permissions::from_mode(0o755)).expect("chmod fake target");
+        wait_until_executable(&path);
         path
     }
 
@@ -165,6 +166,26 @@ impl Run {
         let text = fs::read_to_string(path).ok()?;
         Some(serde_json::from_str(&text).expect("completion marker is JSON"))
     }
+}
+
+/// A child another test thread forked while `path` was open for writing
+/// holds a write descriptor until it execs, and exec'ing `path` then fails
+/// with ETXTBSY. Once one exec succeeds, none is left.
+fn wait_until_executable(path: &Path) {
+    for _ in 0..500 {
+        match Command::new(path)
+            .arg("--version")
+            .stdout(Stdio::null())
+            .stderr(Stdio::null())
+            .status()
+        {
+            Err(error) if error.raw_os_error() == Some(26) => {
+                std::thread::sleep(Duration::from_millis(10));
+            }
+            _ => return,
+        }
+    }
+    panic!("{} stayed busy", path.display());
 }
 
 /// No process whose command line contains `pattern` is alive.

@@ -230,12 +230,15 @@ run_redline_testing_official() {
   # `set -e` is active in this shell, so `|| rc=$?` keeps the exit code.
   # The runner writes every suite's evidence before it judges failures:
   # sqlite_parity and memory failures must be exactly the ones
-  # metadata/sqlite_parity/known-failures.json lists (both ways), and any
-  # other failure is fatal.
+  # metadata/sqlite_parity/known-failures.json lists (both ways), skips
+  # must be exactly the ones the runner's scope policy lists, and any other
+  # failure is fatal. --official refuses a narrowed corpus and marks the
+  # evidence publishable.
   rc=0
   REDLINEDB_DEFAULT_DURABILITY=normal \
   REDLINEDB_QUIET_DURABILITY=1 \
   "$redline_testing_bin" run \
+    --official \
     --target-bin "${CARGO_TARGET_DIR:-target}/release/redlinedb" \
     --sqlite-bin "$sqlite_parity_reference_bin" \
     --suite all \

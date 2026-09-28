@@ -39,6 +39,9 @@ pub struct CompareRecord {
     pub execution_outcome: ExecutionOutcome,
     pub reference_execution_outcome: ExecutionOutcome,
     pub target_execution_outcome: ExecutionOutcome,
+    /// The `scope-policy.json` exception a skipped case was skipped under
+    /// (SQ-05); `null` for every other record.
+    pub policy_exception_id: Option<String>,
     /// The comparison rules this record was judged by (SQ-06).
     pub normalization_policy: &'static str,
     pub comparison_mode: ComparisonMode,
@@ -71,6 +74,7 @@ pub fn skipped_compare_record(
     sqlite_version: Option<String>,
     artifact_dir: Option<PathBuf>,
     diagnostic: Option<String>,
+    policy_exception_id: &str,
 ) -> CompareRecord {
     CompareRecord {
         case_id: case.display_id(),
@@ -97,6 +101,7 @@ pub fn skipped_compare_record(
         execution_outcome: ExecutionOutcome::NotRun,
         reference_execution_outcome: ExecutionOutcome::NotRun,
         target_execution_outcome: ExecutionOutcome::NotRun,
+        policy_exception_id: Some(policy_exception_id.to_owned()),
         normalization_policy: NORMALIZATION_POLICY,
         comparison_mode: case.comparison_mode,
         reference_exit_code: None,
@@ -116,6 +121,33 @@ pub fn skipped_compare_record(
         target_peak_rss_kb: None,
         target_rss_sampled_kb: None,
     }
+}
+
+/// The one record of a case that failed at selection (SQ-05): nothing ran,
+/// so it is a `not_run` placeholder whose status is `failed`.
+pub fn selection_failure_record(
+    case: &Case,
+    reference_engine: &str,
+    target_engine: &str,
+    sqlite_version: Option<String>,
+    artifact_dir: PathBuf,
+    verdict: &Verdict,
+) -> CompareRecord {
+    let mut record = skipped_compare_record(
+        case,
+        reference_engine,
+        target_engine,
+        sqlite_version,
+        Some(artifact_dir),
+        verdict.diagnostic.clone(),
+        "",
+    );
+    record.sample_role = "not_run".to_owned();
+    record.status = verdict.status().to_owned();
+    record.verdict_reason = verdict.reason;
+    record.stage = verdict.stage;
+    record.policy_exception_id = None;
+    record
 }
 
 pub fn compare_record(
@@ -159,6 +191,7 @@ pub fn compare_record(
             .unwrap_or(ExecutionOutcome::Exited),
         reference_execution_outcome: reference_output.outcome,
         target_execution_outcome: target_output.outcome,
+        policy_exception_id: None,
         normalization_policy: NORMALIZATION_POLICY,
         comparison_mode: case.comparison_mode,
         reference_exit_code: reference_output.status_code,

@@ -100,6 +100,25 @@ for the publish + attestation flow.
   suite writes `<raw>.complete.json`; `official-evidence.json` declares and
   hashes it (`completion_path`) and records `case_timeout_ms` and
   `max_output_bytes`. `run --case-id` narrows one suite for diagnosis.
+- Skips follow an exact policy, not a budget (SQ-05).
+  `corpus/sqlite_parity/scope-policy.json`
+  (`redline-testing-sqlite-scope-policy-v1`, compiled in) lists every case a
+  `sqlite_parity`, `memory` or `rql_phase1` run may skip, with `suite`,
+  `case_id`, `name`, `kind` (`target_capability` or `rql_rewrite`), `reason`,
+  `owner` and `expiry`; it holds the 202 `rql_phase1` rewrite gaps. A gap
+  the policy does not list fails the case as `target_unsupported`; a
+  reference shell without a declared capability fails it as
+  `reference_capability_missing`; a listed case that runs fails the run.
+  Skipped records carry `policy_exception_id`, failed selections a `not_run`
+  placeholder. Unknown capability tokens and case statuses are errors (case
+  10600's `REGEXP` is now the known token `regexp`, probed on both shells),
+  and a capability probe that cannot run, times out or floods is an error
+  instead of an absent capability; probes are bounded like cases.
+  `run --official` requires `--suite all` and `--sqlite-known-failures`,
+  refuses `--case-id`, `REDLINE_TESTING_PINNED_ONLY` and expired exceptions,
+  and writes `run_mode: official`; other runs write `run_mode: diagnostic`.
+  `official-evidence.json` records `sqlite_scope_policy` (schema, path,
+  sha256) and each suite's `skipped_case_ids`.
 
 ### Removed
 

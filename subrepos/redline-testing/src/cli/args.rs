@@ -68,6 +68,12 @@ pub(crate) struct RunArgs {
     /// SQLite-shell suite; never official evidence.
     #[arg(long = "case-id", value_name = "ID")]
     pub(crate) case_ids: Vec<String>,
+    /// An official run (the RedlineDB official lane): `--suite all` over the
+    /// whole corpus with a known-failures baseline, no case narrowing, no
+    /// `REDLINE_TESTING_PINNED_ONLY`, and no expired scope-policy exception.
+    /// Only its evidence is publishable.
+    #[arg(long)]
+    pub(crate) official: bool,
 }
 
 #[derive(Debug, Args)]

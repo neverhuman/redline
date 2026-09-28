@@ -11,7 +11,7 @@ use serde::{Deserialize, Serialize};
 
 use super::case::Case;
 use super::compare::{comparable, contract_text, describe, first_difference};
-use super::engine::{EngineOutput, EngineSpec, SkippedCase};
+use super::engine::{EngineOutput, EngineSpec, RejectedCase, SkippedCase};
 use super::normalize::normalize_output;
 use super::record_sink::RecordSink;
 use super::report;
@@ -40,6 +40,13 @@ pub enum VerdictReason {
     /// the output cap or could not be started (SQ-09). Never a baseline
     /// entry: a known failure must fail the same way every run.
     ExecutionFailure,
+    /// The reference shell lacks a capability the case declares, so it
+    /// cannot stand for SQLite on this case (SQ-05). Never skipped.
+    ReferenceCapabilityMissing,
+    /// The target cannot run the case (a missing capability, or an RQL
+    /// rewrite that cannot express it) and the scope policy lists no
+    /// exception for it (SQ-05).
+    TargetUnsupported,
 }
 
 impl VerdictReason {
@@ -51,6 +58,8 @@ impl VerdictReason {
             Self::TargetSemanticFailure => "target_semantic_failure",
             Self::DifferentialMismatch => "differential_mismatch",
             Self::ExecutionFailure => "execution_failure",
+            Self::ReferenceCapabilityMissing => "reference_capability_missing",
+            Self::TargetUnsupported => "target_unsupported",
         }
     }
 }
@@ -110,7 +119,9 @@ impl Verdict {
             VerdictReason::ReferenceContractFailure
             | VerdictReason::TargetSemanticFailure
             | VerdictReason::DifferentialMismatch
-            | VerdictReason::ExecutionFailure => "failed",
+            | VerdictReason::ExecutionFailure
+            | VerdictReason::ReferenceCapabilityMissing
+            | VerdictReason::TargetUnsupported => "failed",
         }
     }
 }
@@ -139,6 +150,8 @@ pub struct RunSummary {
     pub failures: Vec<CaseFailure>,
     /// Every case skipped at selection, in run order.
     pub skipped_case_ids: Vec<String>,
+    /// Every case whose samples all passed, in completion order.
+    pub passed_case_ids: Vec<String>,
 }
 
 impl RunSummary {
@@ -150,15 +163,26 @@ impl RunSummary {
     }
 
     /// Counts a case that ran; `failure` is `Some` when a sample failed.
-    pub fn record_run(&mut self, failure: Option<CaseFailure>) {
+    pub fn record_run(&mut self, case_id: String, failure: Option<CaseFailure>) {
         self.total += 1;
         match failure {
             Some(failure) => {
                 self.failed += 1;
                 self.failures.push(failure);
             }
-            None => self.passed += 1,
+            None => {
+                self.passed += 1;
+                self.passed_case_ids.push(case_id);
+            }
         }
+    }
+
+    /// Counts a case that failed at selection, before anything ran.
+    pub fn record_selection_failure(&mut self, case: &Case, reason: VerdictReason) {
+        self.record_run(
+            case.display_id(),
+            case_failure(case, BTreeSet::from([reason])),
+        );
     }
 }
 
@@ -195,15 +219,17 @@ pub(super) struct SuiteRun<'a> {
 }
 
 /// Runs a suite's cases on `workers` threads and streams each case's
-/// records to `sink` as it completes (SQ-09); skipped cases are written
-/// first. An engine that times out, floods, crashes or cannot start fails
-/// its case, not the run. Only a harness error (an artifact or record that
-/// cannot be written) stops the run; the records of every case finished by
-/// then stay on disk, and no completion marker is written.
+/// records to `sink` as it completes (SQ-09). Cases the scope policy skips
+/// and cases rejected at selection (SQ-05) are written first, each as one
+/// placeholder record. An engine that times out, floods, crashes or cannot
+/// start fails its case, not the run. Only a harness error (an artifact or
+/// record that cannot be written) stops the run; the records of every case
+/// finished by then stay on disk, and no completion marker is written.
 pub(super) fn compare_cases(
     run: &SuiteRun<'_>,
     pairs: &[CasePair],
     skipped: &[SkippedCase],
+    rejected: &[RejectedCase],
     workers: usize,
     sink: RecordSink,
 ) -> Result<RunSummary> {
@@ -219,6 +245,31 @@ pub(super) fn compare_cases(
             run.sqlite_version.clone(),
             Some(artifact),
             Some(skipped_case.reason.clone()),
+            &skipped_case.policy_exception_id,
+        )])?;
+    }
+    for rejected_case in rejected {
+        summary.record_selection_failure(&rejected_case.case, rejected_case.verdict_reason);
+        let artifact = report::write_skip_artifact(&rejected_case.case, &rejected_case.reason)?;
+        eprintln!(
+            "{} failure case={} verdict={:?} reason={} artifact={}",
+            run.label,
+            rejected_case.case.display_id(),
+            rejected_case.verdict_reason,
+            rejected_case.reason,
+            artifact.display()
+        );
+        sink.write_case(&[report::selection_failure_record(
+            &rejected_case.case,
+            &run.reference.name,
+            &run.target.name,
+            run.sqlite_version.clone(),
+            artifact,
+            &Verdict::failed(
+                rejected_case.verdict_reason,
+                VerdictStage::Selection,
+                rejected_case.reason.clone(),
+            ),
         )])?;
     }
     run_pairs(run, pairs, workers, &sink, &mut summary)?;
@@ -235,6 +286,7 @@ struct CaseRun {
 
 /// What the collector keeps of a case whose records are already written.
 struct CaseDone {
+    case_id: String,
     failure: Option<CaseFailure>,
     slowest: Vec<(String, u128)>,
 }
@@ -262,6 +314,7 @@ fn run_pairs(
                     let done = run_one_case(run, pair).and_then(|case_run| {
                         sink.write_case(&case_run.records)?;
                         Ok(CaseDone {
+                            case_id: pair.reference.display_id(),
                             failure: case_run.failure,
                             slowest: case_run.slowest,
                         })
@@ -281,7 +334,7 @@ fn run_pairs(
             match done {
                 Ok(done) => {
                     summary.slowest.extend(done.slowest);
-                    summary.record_run(done.failure);
+                    summary.record_run(done.case_id, done.failure);
                 }
                 Err(error) => {
                     first_error.get_or_insert(error);

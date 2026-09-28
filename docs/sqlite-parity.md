@@ -132,6 +132,20 @@ for the same feature (10560 for savepoints, 10253 and 10568 for
 `PRAGMA query_only`, 10584 for foreign keys). SQ-07 regenerates the ledger from
 typed proof.
 
+Skips are listed the same way; there is no skip budget.
+`subrepos/redline-testing/corpus/sqlite_parity/scope-policy.json` is compiled
+into the runner and lists every case a `sqlite_parity`, `memory` or
+`rql_phase1` run may skip, with the gap it covers, why, who closes it, and an
+expiry date. Today it lists only the 202 `rql_phase1` cases whose SQL the RQL
+phase-1 rewriter cannot express. A gap it does not list fails its case
+(`target_unsupported`), and a reference shell without a capability a case
+declares always fails it (`reference_capability_missing`). An unknown
+capability token, an unknown case status or a capability probe that cannot run
+is an error. The official lane runs `redline-testing run --official`, which
+refuses `REDLINE_TESTING_PINNED_ONLY`, `--case-id` and an expired exception,
+and `evidence_processor` accepts only official evidence whose skipped case ids,
+recomputed from the raw records, equal the policy's list.
+
 Cases the pinned build cannot express are declared in
 `subrepos/redline-testing/metadata/sqlite_parity/declared-deviations.json`
 and listed in the report: the `soundex()` cases 11437-11439 and 00219/00220

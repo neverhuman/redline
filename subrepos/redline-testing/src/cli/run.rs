@@ -6,7 +6,7 @@ use anyhow::{Context, Result, bail};
 
 use crate::beyond_sqlite;
 use crate::evidence::{self, EvidenceConfig, OfficialEvidenceConfig, OfficialSuiteEvidence};
-use crate::sqlite_parity::{self, KnownFailures};
+use crate::sqlite_parity::{self, KnownFailures, ScopePolicy};
 
 use super::args::{ProgressMode, RunArgs, Suite};
 
@@ -27,9 +27,17 @@ pub(crate) fn run_suite(args: RunArgs) -> Result<()> {
             args.suite.as_str()
         );
     }
+    let scope_policy = load_scope_policy(&args)?;
 
     match args.suite {
-        Suite::All => run_all_suites(&args, workers, tmp_root, sqlite_bin, &known_failures),
+        Suite::All => run_all_suites(
+            &args,
+            workers,
+            tmp_root,
+            sqlite_bin,
+            &known_failures,
+            &scope_policy,
+        ),
         Suite::SqliteParity | Suite::Memory | Suite::RqlPhase1 => {
             prepare_output(&args.output)?;
             let started = Instant::now();
@@ -53,8 +61,11 @@ pub(crate) fn run_suite(args: RunArgs) -> Result<()> {
                 );
             }
             // The raw records and the suite's evidence are written; now
-            // the failures must be exactly the known ones.
-            known_failures.gate(args.suite.as_str(), &summary)
+            // the failures must be exactly the known ones and the skips
+            // exactly the listed ones.
+            let known = known_failures.gate(args.suite.as_str(), &summary);
+            let scope = scope_policy.gate(args.suite.as_str(), &summary);
+            join_problems([known, scope])
         }
         Suite::BeyondSqlite => {
             prepare_output(&args.output)?;
@@ -71,6 +82,48 @@ pub(crate) fn run_suite(args: RunArgs) -> Result<()> {
                 args.postgres_readme.as_deref(),
             )
         }
+    }
+}
+
+/// The scope policy compiled into this runner (SQ-05), after the checks an
+/// official run makes: `--suite all` with a known-failures baseline over
+/// the whole corpus, and no expired exception.
+fn load_scope_policy(args: &RunArgs) -> Result<ScopePolicy> {
+    let policy = ScopePolicy::compiled()?;
+    policy.check_corpus(&sqlite_parity::all_cases()?)?;
+    if !args.official {
+        return Ok(policy);
+    }
+    if !matches!(args.suite, Suite::All) {
+        bail!(
+            "--official runs --suite all, not --suite {}",
+            args.suite.as_str()
+        );
+    }
+    if !args.case_ids.is_empty() {
+        bail!("--official runs the whole corpus; drop --case-id");
+    }
+    if args.sqlite_known_failures.is_none() {
+        bail!(
+            "--official needs --sqlite-known-failures: an official run publishes only known failures"
+        );
+    }
+    // select_cases refuses it too; failing here writes nothing first.
+    sqlite_parity::check_official_selection()?;
+    policy.check_expiry(&sqlite_parity::today_utc())?;
+    Ok(policy)
+}
+
+fn join_problems(results: impl IntoIterator<Item = Result<()>>) -> Result<()> {
+    let problems = results
+        .into_iter()
+        .filter_map(Result::err)
+        .map(|error| format!("{error:#}"))
+        .collect::<Vec<_>>();
+    if problems.is_empty() {
+        Ok(())
+    } else {
+        bail!("{}", problems.join("\n"))
     }
 }
 
@@ -93,6 +146,7 @@ fn run_all_suites(
     tmp_root: PathBuf,
     sqlite_bin: PathBuf,
     known_failures: &KnownFailures,
+    scope_policy: &ScopePolicy,
 ) -> Result<()> {
     let generated_at_unix_ms = evidence::now_unix_ms();
     let output_dir = args
@@ -175,7 +229,12 @@ fn run_all_suites(
         ("memory", &memory_summary),
         ("rql_phase1", &rql_summary),
     ]
-    .map(|(suite, summary)| known_failures.gate(suite, summary));
+    .map(|(suite, summary)| {
+        join_problems([
+            known_failures.gate(suite, summary),
+            scope_policy.gate(suite, summary),
+        ])
+    });
     evidence::write_official_evidence(OfficialEvidenceConfig {
         output_dir: output_dir.to_path_buf(),
         all_output: args.output.clone(),
@@ -235,20 +294,12 @@ fn run_all_suites(
             .without_case_ids(),
         ],
         known_failures: known_failures.source().cloned(),
+        scope_policy_sha256: scope_policy.sha256().to_owned(),
+        official: args.official,
         case_timeout_ms: u128::from(args.case_timeout_ms),
         max_output_bytes: args.max_output_bytes,
     })?;
-    let problems = sqlite_gates
-        .into_iter()
-        .chain([postgres_gate])
-        .filter_map(Result::err)
-        .map(|error| format!("{error:#}"))
-        .collect::<Vec<_>>();
-    if problems.is_empty() {
-        Ok(())
-    } else {
-        bail!("{}", problems.join("\n"))
-    }
+    join_problems(sqlite_gates.into_iter().chain([postgres_gate]))
 }
 
 fn run_sqlite_like_suite(
@@ -274,6 +325,7 @@ fn run_sqlite_like_suite(
         memory_samples,
         case_ids: args.case_ids.clone(),
         limits: sqlite_parity::Limits::new(args.case_timeout_ms, args.max_output_bytes)?,
+        official: args.official,
     };
     let summary = if matches!(suite, Suite::RqlPhase1) {
         sqlite_parity::run_rql_phase1(config)?

@@ -1,7 +1,6 @@
 use std::fs;
-use std::io::Write;
 use std::path::{Path, PathBuf};
-use std::process::{Command, Stdio};
+use std::process::Command;
 use std::sync::{Arc, OnceLock};
 use std::time::{Duration, Instant};
 
@@ -11,6 +10,8 @@ use sha2::{Digest, Sha256};
 use super::bounded::{self, Captured, ExecutionOutcome, Limits};
 use super::case::{Case, Profile};
 use super::memory::ProcessMemory;
+use super::runner::VerdictReason;
+use super::scope_policy::{GapKind, SCOPE_POLICY_PATH, ScopePolicy};
 use super::text::sanitize_identifier;
 
 /// Canonical name of the SQLite reference CLI that the harness drives over a
@@ -70,6 +71,7 @@ pub enum Capability {
     GenerateSeries,
     JsonPretty,
     JsonbArrayInsert,
+    Regexp,
 }
 
 impl Capability {
@@ -89,6 +91,7 @@ impl Capability {
             Self::GenerateSeries => "generate_series virtual table",
             Self::JsonPretty => "json_pretty() (3.46+)",
             Self::JsonbArrayInsert => "jsonb_array_insert() (3.47+)",
+            Self::Regexp => "the REGEXP operator",
         }
     }
 
@@ -108,6 +111,7 @@ impl Capability {
             "generate_series" => Some(Self::GenerateSeries),
             "json_pretty" => Some(Self::JsonPretty),
             "jsonb_array_insert" => Some(Self::JsonbArrayInsert),
+            "regexp" => Some(Self::Regexp),
             _ => None,
         }
     }
@@ -130,6 +134,7 @@ pub struct ShellCapabilities {
     pub generate_series: bool,
     pub json_pretty: bool,
     pub jsonb_array_insert: bool,
+    pub regexp: bool,
 }
 
 impl ShellCapabilities {
@@ -149,13 +154,26 @@ impl ShellCapabilities {
             Capability::GenerateSeries => self.generate_series,
             Capability::JsonPretty => self.json_pretty,
             Capability::JsonbArrayInsert => self.jsonb_array_insert,
+            Capability::Regexp => self.regexp,
         }
     }
 }
 
+/// A case not run because the scope policy lists its gap (SQ-05).
 #[derive(Debug)]
 pub struct SkippedCase {
     pub case: Case,
+    pub reason: String,
+    /// The `scope-policy.json` exception that allows the skip.
+    pub policy_exception_id: String,
+}
+
+/// A case that cannot run and that no exception covers: it fails, with
+/// `reference_capability_missing` or `target_unsupported`.
+#[derive(Debug)]
+pub struct RejectedCase {
+    pub case: Case,
+    pub verdict_reason: VerdictReason,
     pub reason: String,
 }
 
@@ -163,47 +181,78 @@ pub struct SkippedCase {
 pub struct CasePartition {
     pub runnable: Vec<Case>,
     pub skipped: Vec<SkippedCase>,
+    pub rejected: Vec<RejectedCase>,
 }
 
-pub fn partition_cases(
-    cases: Vec<Case>,
-    reference_caps: Option<&ShellCapabilities>,
-    target_caps: Option<&ShellCapabilities>,
-) -> CasePartition {
-    let mut partition = CasePartition::default();
-    for case in cases {
-        let required = required_capabilities(&case);
-        if required.is_empty() {
-            partition.runnable.push(case);
-            continue;
-        }
-        let skip_reason = required.iter().copied().find_map(|capability| {
-            if let Some(caps) = reference_caps
-                && !caps.supports(capability)
-            {
-                return Some(format!(
-                    "{} lacks {}",
-                    shell_version_prefix(caps),
-                    capability.description()
-                ));
-            }
-            if let Some(caps) = target_caps
-                && !caps.supports(capability)
-            {
-                return Some(format!(
-                    "{} lacks {}",
-                    shell_version_prefix(caps),
-                    capability.description()
-                ));
-            }
-            None
-        });
-        match skip_reason {
-            Some(reason) => partition.skipped.push(SkippedCase { case, reason }),
-            None => partition.runnable.push(case),
+impl CasePartition {
+    /// Files a case the target side cannot run: skipped when `policy`
+    /// lists this gap for it in `suite`, rejected otherwise.
+    pub fn target_gap(
+        &mut self,
+        policy: &ScopePolicy,
+        suite: &str,
+        case: Case,
+        kind: GapKind,
+        reason: String,
+    ) {
+        match policy.covers(suite, &case, kind) {
+            Some(policy_exception_id) => self.skipped.push(SkippedCase {
+                case,
+                reason,
+                policy_exception_id,
+            }),
+            None => self.rejected.push(RejectedCase {
+                case,
+                verdict_reason: VerdictReason::TargetUnsupported,
+                reason: format!("{reason}; {SCOPE_POLICY_PATH} lists no exception for it"),
+            }),
         }
     }
-    partition
+}
+
+/// Splits `cases` by what both shells can run (SQ-05). A case whose
+/// declared capability the reference lacks fails: agreement with such a
+/// reference proves nothing, and no exception can cover it. A case whose
+/// capability the target lacks is skipped only when the scope policy lists
+/// it for `suite`, and fails otherwise.
+pub fn partition_cases(
+    cases: Vec<Case>,
+    reference_caps: &ShellCapabilities,
+    target_caps: &ShellCapabilities,
+    policy: &ScopePolicy,
+    suite: &str,
+) -> Result<CasePartition> {
+    let mut partition = CasePartition::default();
+    for case in cases {
+        let required = required_capabilities(&case)?;
+        if let Some(capability) = required
+            .iter()
+            .find(|capability| !reference_caps.supports(**capability))
+        {
+            partition.rejected.push(RejectedCase {
+                reason: format!(
+                    "reference sqlite3 {} lacks {}",
+                    reference_caps.version,
+                    capability.description()
+                ),
+                verdict_reason: VerdictReason::ReferenceCapabilityMissing,
+                case,
+            });
+        } else if let Some(capability) = required
+            .iter()
+            .find(|capability| !target_caps.supports(**capability))
+        {
+            let reason = format!(
+                "target {} lacks {}",
+                target_caps.version,
+                capability.description()
+            );
+            partition.target_gap(policy, suite, case, GapKind::TargetCapability, reason);
+        } else {
+            partition.runnable.push(case);
+        }
+    }
+    Ok(partition)
 }
 
 /// Capabilities a case needs. Pulls from two sources, in order of priority:
@@ -211,10 +260,9 @@ pub fn partition_cases(
 ///   1. Legacy hardcoded table for pinned-manifest cases that don't carry
 ///      capability tokens (ids 92, 134, 154, 155, 156, 222).
 ///   2. The `required_capabilities` field on the case itself, populated by
-///      new shards under `corpus/sqlite_parity/cases/`. Unknown tokens are
-///      silently dropped — the case simply runs without gating on a
-///      capability we don't know about (forwards-compatible).
-pub fn required_capabilities(case: &Case) -> Vec<Capability> {
+///      new shards under `corpus/sqlite_parity/cases/`. A token this runner
+///      does not know is an error: dropping it would run the case ungated.
+pub fn required_capabilities(case: &Case) -> Result<Vec<Capability>> {
     let mut caps = match case.id {
         92 => vec![Capability::PercentileFunctions],
         93 | 94 => vec![Capability::Fts5],
@@ -228,109 +276,48 @@ pub fn required_capabilities(case: &Case) -> Vec<Capability> {
         _ => Vec::new(),
     };
     for token in &case.required_capabilities {
-        if let Some(cap) = Capability::from_token(token) {
-            if !caps.contains(&cap) {
-                caps.push(cap);
-            }
+        let Some(cap) = Capability::from_token(token) else {
+            bail!(
+                "case {} {} requires unknown capability token {token:?}",
+                case.display_id(),
+                case.name
+            );
+        };
+        if !caps.contains(&cap) {
+            caps.push(cap);
         }
     }
-    caps
+    Ok(caps)
 }
 
-pub fn probe_sqlite_shell_capabilities(bin: &Path) -> Result<ShellCapabilities> {
+/// Every capability probe, as (capability, how to probe it). A probe that
+/// runs and fails means the capability is absent; one that cannot run,
+/// times out or floods is an error (SQ-05): it never becomes a skip.
+fn probe_capabilities(bin: &Path, limits: Limits) -> Result<ShellCapabilities> {
     let version = probe_version(bin)?;
-    let memory_db = Path::new(":memory:");
+    let probe = |script: &str| run_sql_script(bin, script, limits);
+    let help_contains = |needle: &str| shell_help_contains(bin, needle, limits);
     Ok(ShellCapabilities {
         version,
-        percentile_functions: run_sql_script(
-            bin,
-            memory_db,
-            ".mode list\n.headers off\nCREATE TABLE t(x INTEGER); INSERT INTO t VALUES (1), (2), (3);\nSELECT median(x), percentile_cont(x,0.5) FROM t;\n",
-            &[],
-        )?,
-        dot_crlf: shell_help_contains(bin, ".crlf")?,
-        dot_dbinfo: shell_help_contains(bin, ".dbinfo")?,
-        dot_dbtotxt: shell_help_contains(bin, ".dbtotxt")?,
-        dot_recover: shell_help_contains(bin, ".recover")?,
-        escape_symbol_option: escape_symbol_option_supported(bin)?,
-        fts5: run_sql_script(
-            bin,
-            memory_db,
-            "CREATE VIRTUAL TABLE _probe_fts USING fts5(x);\n",
-            &[],
-        )?,
-        rtree: run_sql_script(
-            bin,
-            memory_db,
-            "CREATE VIRTUAL TABLE _probe_rtree USING rtree(id, x0, x1, y0, y1);\n",
-            &[],
-        )?,
-        dbstat: run_sql_script(
-            bin,
-            memory_db,
-            "CREATE TABLE _probe_t(x);\nINSERT INTO _probe_t VALUES(1);\nCREATE VIRTUAL TABLE main._probe_stat USING dbstat;\nSELECT count(*) FROM _probe_stat;\n",
-            &[],
-        )?,
-        jsonb: run_sql_script(bin, memory_db, "SELECT length(jsonb('1'));\n", &[])?,
-        math1: run_sql_script(
-            bin,
-            memory_db,
-            "SELECT round(acos(1.0),3), round(sqrt(4.0),3);\n",
-            &[],
-        )?,
-        generate_series: run_sql_script(
-            bin,
-            memory_db,
-            "SELECT count(*) FROM generate_series(1,3);\n",
-            &[],
-        )?,
-        json_pretty: run_sql_script(bin, memory_db, "SELECT json_pretty('{\"a\":1}');\n", &[])?,
-        jsonb_array_insert: run_sql_script(
-            bin,
-            memory_db,
-            "SELECT length(jsonb_array_insert('[]', '$[0]', 1));\n",
-            &[],
-        )?,
-    })
-}
-
-/// Probe an arbitrary sqlite-shell-compatible binary (including the
-/// `redlinedb-cli` target binary) for the SQL/CLI capabilities the
-/// pinned-manifest cases gate on. We only probe the subset that
-/// pinned-manifest cases actually require — bench-only or CLI-only
-/// capabilities that no required-capability case names are skipped to
-/// keep target startup cost down.
-pub fn probe_target_capabilities(bin: &Path) -> Result<ShellCapabilities> {
-    let version = probe_version(bin)?;
-    let memory_db = Path::new(":memory:");
-    let probe = |script: &str| run_sql_script(bin, memory_db, script, &[]);
-    Ok(ShellCapabilities {
-        version,
-        // CLI-only / non-SQL capabilities — gate via shell help when
-        // available, default to absent for engines that don't ship the
-        // sqlite3 CLI help surface.
         percentile_functions: probe(
             ".mode list\n.headers off\nCREATE TABLE t(x INTEGER); INSERT INTO t VALUES (1), (2), (3);\nSELECT median(x), percentile_cont(x,0.5) FROM t;\n",
-        )
-        .unwrap_or(false),
-        dot_crlf: shell_help_contains(bin, ".crlf").unwrap_or(false),
-        dot_dbinfo: shell_help_contains(bin, ".dbinfo").unwrap_or(false),
-        dot_dbtotxt: shell_help_contains(bin, ".dbtotxt").unwrap_or(false),
-        dot_recover: shell_help_contains(bin, ".recover").unwrap_or(false),
-        escape_symbol_option: escape_symbol_option_supported(bin).unwrap_or(false),
-        fts5: probe("CREATE VIRTUAL TABLE _probe_fts USING fts5(x);\n").unwrap_or(false),
-        rtree: probe("CREATE VIRTUAL TABLE _probe_rtree USING rtree(id, x0, x1, y0, y1);\n")
-            .unwrap_or(false),
+        )?,
+        dot_crlf: help_contains(".crlf")?,
+        dot_dbinfo: help_contains(".dbinfo")?,
+        dot_dbtotxt: help_contains(".dbtotxt")?,
+        dot_recover: help_contains(".recover")?,
+        escape_symbol_option: escape_symbol_option_supported(bin, limits)?,
+        fts5: probe("CREATE VIRTUAL TABLE _probe_fts USING fts5(x);\n")?,
+        rtree: probe("CREATE VIRTUAL TABLE _probe_rtree USING rtree(id, x0, x1, y0, y1);\n")?,
         dbstat: probe(
             "CREATE TABLE _probe_t(x);\nINSERT INTO _probe_t VALUES(1);\nCREATE VIRTUAL TABLE main._probe_stat USING dbstat;\nSELECT count(*) FROM _probe_stat;\n",
-        )
-        .unwrap_or(false),
-        jsonb: probe("SELECT length(jsonb('1'));\n").unwrap_or(false),
-        math1: probe("SELECT round(acos(1.0),3), round(sqrt(4.0),3);\n").unwrap_or(false),
-        generate_series: probe("SELECT count(*) FROM generate_series(1,3);\n").unwrap_or(false),
-        json_pretty: probe("SELECT json_pretty('{\"a\":1}');\n").unwrap_or(false),
-        jsonb_array_insert: probe("SELECT length(jsonb_array_insert('[]', '$[0]', 1));\n")
-            .unwrap_or(false),
+        )?,
+        jsonb: probe("SELECT length(jsonb('1'));\n")?,
+        math1: probe("SELECT round(acos(1.0),3), round(sqrt(4.0),3);\n")?,
+        generate_series: probe("SELECT count(*) FROM generate_series(1,3);\n")?,
+        json_pretty: probe("SELECT json_pretty('{\"a\":1}');\n")?,
+        jsonb_array_insert: probe("SELECT length(jsonb_array_insert('[]', '$[0]', 1));\n")?,
+        regexp: probe("SELECT 'abc' REGEXP 'b';\n")?,
     })
 }
 
@@ -493,20 +480,13 @@ impl EngineSpec {
         Ok(self.output(identity, captured, memory_samples))
     }
 
-    pub fn sqlite_shell_capabilities(&self) -> Result<Option<ShellCapabilities>> {
-        if is_sqlite_shell(&self.name) {
-            Ok(Some(probe_sqlite_shell_capabilities(&self.bin)?))
-        } else {
-            Ok(None)
-        }
-    }
-
-    /// Probe the engine binary for the SQL/CLI capabilities required by
-    /// pinned-manifest cases. Works for any sqlite-shell-compatible CLI
-    /// (sqlite3 or redlinedb), so we can skip target-optional cases the
-    /// target lacks without failing the parity gate.
-    pub fn target_capabilities(&self) -> Result<ShellCapabilities> {
-        probe_target_capabilities(&self.bin)
+    /// The capabilities of this sqlite-shell-compatible CLI (the sqlite3
+    /// reference or the redlinedb target), each probed under the engine's
+    /// limits. A probe that cannot run is an error, never a missing
+    /// capability.
+    pub fn capabilities(&self) -> Result<ShellCapabilities> {
+        probe_capabilities(&self.bin, self.limits)
+            .with_context(|| format!("probe {} capabilities of {}", self.name, self.bin.display()))
     }
 
     pub fn binary_identity(&self) -> Result<BinaryIdentity> {
@@ -628,13 +608,17 @@ fn replace_tmp(input: &str, tmp: &Path) -> String {
     input.replace("{{TMP}}", &tmp.to_string_lossy())
 }
 
+/// `<bin> --version`, bounded like a case run.
 fn probe_version(bin: &Path) -> Result<String> {
-    let output = Command::new(bin)
-        .arg("--version")
-        .stdout(Stdio::piped())
-        .stderr(Stdio::piped())
-        .output()
+    let output = bounded::run_piped(Command::new(bin).arg("--version"), None, Limits::default())
         .with_context(|| format!("run {} --version", bin.display()))?;
+    if !output.outcome.is_complete() {
+        bail!(
+            "{} --version ended with {}",
+            bin.display(),
+            output.outcome.as_str()
+        );
+    }
     let version = String::from_utf8_lossy(&output.stdout).trim().to_owned();
     if version.is_empty() {
         Ok(String::from("<unknown>"))
@@ -643,82 +627,47 @@ fn probe_version(bin: &Path) -> Result<String> {
     }
 }
 
-fn run_sql_script(bin: &Path, db_path: &Path, script: &str, extra_args: &[&str]) -> Result<bool> {
-    let mut command = Command::new(bin);
-    command.arg("-batch").arg("-bail");
-    for arg in extra_args {
-        command.arg(arg);
-    }
-    command.arg(db_path);
-    command.stdin(Stdio::piped());
-    command.stdout(Stdio::null());
-    command.stderr(Stdio::null());
-    let mut child = command
-        .spawn()
-        .with_context(|| format!("probe sqlite shell capability with {}", bin.display()))?;
-    if !script.is_empty() {
-        let mut stdin = child
-            .stdin
-            .take()
-            .context("sqlite shell capability probe stdin unavailable")?;
-        use std::io::Write;
-        stdin
-            .write_all(script.as_bytes())
-            .context("write sqlite shell capability probe script")?;
-    }
-    let status = child
-        .wait()
-        .context("wait for sqlite shell capability probe")?;
-    Ok(status.success())
-}
-
-fn shell_help_contains(bin: &Path, needle: &str) -> Result<bool> {
-    let output = run_shell_probe(bin, ".help\n.quit\n", &[])?;
-    Ok(output.status.success() && output.stdout.contains(needle))
-}
-
-fn escape_symbol_option_supported(bin: &Path) -> Result<bool> {
-    let output = run_shell_probe(bin, "SELECT char(1);\n", &["-escape", "symbol"])?;
-    Ok(output.status.success())
-}
-
-fn run_shell_probe(bin: &Path, script: &str, extra_args: &[&str]) -> Result<ShellProbeOutput> {
+/// Runs a probe script on `:memory:` under `limits`: whether it succeeded,
+/// or an error when it could not give an answer.
+fn run_probe(
+    bin: &Path,
+    script: &str,
+    extra_args: &[&str],
+    limits: Limits,
+) -> Result<bounded::Captured> {
     let mut command = Command::new(bin);
     command.arg("-batch").arg("-bail");
     for arg in extra_args {
         command.arg(arg);
     }
     command.arg(":memory:");
-    command.stdin(Stdio::piped());
-    command.stdout(Stdio::piped());
-    command.stderr(Stdio::piped());
-    let mut child = command
-        .spawn()
-        .with_context(|| format!("probe sqlite shell with {}", bin.display()))?;
-    let mut stdin = child
-        .stdin
-        .take()
-        .context("sqlite shell probe stdin unavailable")?;
-    stdin
-        .write_all(script.as_bytes())
-        .context("write sqlite shell probe script")?;
-    drop(stdin);
-    let output = child
-        .wait_with_output()
-        .context("wait for sqlite shell probe")?;
-    Ok(ShellProbeOutput {
-        status: output.status,
-        stdout: String::from_utf8_lossy(&output.stdout).into_owned(),
-    })
+    let captured = bounded::run_piped(&mut command, Some(script.as_bytes().to_vec()), limits)
+        .with_context(|| format!("probe {} with {script:?}", bin.display()))?;
+    if !captured.outcome.is_complete() {
+        bail!(
+            "capability probe {script:?} of {} ended with {}",
+            bin.display(),
+            captured.outcome.as_str()
+        );
+    }
+    Ok(captured)
 }
 
-struct ShellProbeOutput {
-    status: std::process::ExitStatus,
-    stdout: String,
+fn run_sql_script(bin: &Path, script: &str, limits: Limits) -> Result<bool> {
+    Ok(run_probe(bin, script, &[], limits)?.status.success())
 }
 
-fn shell_version_prefix(capabilities: &ShellCapabilities) -> String {
-    format!("sqlite3 {}", capabilities.version)
+fn shell_help_contains(bin: &Path, needle: &str, limits: Limits) -> Result<bool> {
+    let output = run_probe(bin, ".help\n.quit\n", &[], limits)?;
+    Ok(output.status.success() && String::from_utf8_lossy(&output.stdout).contains(needle))
+}
+
+fn escape_symbol_option_supported(bin: &Path, limits: Limits) -> Result<bool> {
+    Ok(
+        run_probe(bin, "SELECT char(1);\n", &["-escape", "symbol"], limits)?
+            .status
+            .success(),
+    )
 }
 
 #[cfg(unix)]

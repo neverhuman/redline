@@ -111,13 +111,17 @@ redline-testing run \
 ```
 
 `--case-id <ID>` (repeatable) narrows one SQLite-shell suite to the named
-cases for diagnosis; such a run is never official evidence.
+cases for diagnosis; such a run is never official evidence. `--official`
+marks the RedlineDB official lane: it requires `--suite all` and
+`--sqlite-known-failures`, and refuses `--case-id`,
+`REDLINE_TESTING_PINNED_ONLY` and an expired scope-policy exception. Only its
+evidence (`run_mode: official`) is publishable.
 
 ### Environment variables
 
 | Variable | Default | Effect |
 |---|---|---|
-| `REDLINE_TESTING_PINNED_ONLY` | unset | Set to `1` to run only the 1,127 pinned upstream cases (skip extended shards) |
+| `REDLINE_TESTING_PINNED_ONLY` | unset | Set to `1` to run only the 1,127 pinned upstream cases (skip extended shards); `run --official` refuses it whatever its value |
 | `REDLINE_TESTING_POSTGRES_URL` | unset | PostgreSQL DSN for the `beyond_sqlite` oracle (e.g. `postgresql://localhost/postgres`) |
 
 ### Output fields
@@ -310,6 +314,16 @@ The target is then held to the same declared exit code and fragments
 byte (`differential_mismatch`; a case may declare `comparison_mode: cli_text_lf`
 or `ignore_line_prefixes`). A child killed by a signal never passes. Each raw
 record carries `verdict_reason`, `stage` and `normalization_policy`.
+
+**Skips:** a case is skipped only when
+`corpus/sqlite_parity/scope-policy.json` (compiled in) lists it for the suite,
+with the gap (`target_capability` or `rql_rewrite`), a reason, an owner and an
+expiry; its raw record names the exception (`policy_exception_id`). A gap the
+policy does not list fails the case (`target_unsupported`), a reference shell
+without a declared capability always fails it (`reference_capability_missing`),
+and a listed case that runs fails the run. An unknown capability token, an
+unknown case status, or a capability probe that cannot run, times out or
+floods is an error, never a skip.
 
 **Bounded cases:** every engine run starts in its own process group. Its stdin
 is written by a separate thread and its stdout and stderr are drained while it

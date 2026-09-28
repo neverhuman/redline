@@ -333,6 +333,7 @@ pub fn run(config: RunConfig) -> Result<RunSummary> {
         // The PostgreSQL gate reads its failed cases from the raw records
         // (postgres-qualification.json), not from this summary.
         failures: Vec::new(),
+        passed_case_ids: Vec::new(),
         skipped_case_ids: Vec::new(),
     })
 }
