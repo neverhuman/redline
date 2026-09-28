@@ -308,7 +308,8 @@ fn subquery_parameters_keep_the_statement_numbering() {
 /// statement keeps the rows of its preparation and writes once per
 /// preparation (beyond-SQLite cases 20108 and 20109). A reset and re-step
 /// returns those rows again without writing again; PostgreSQL would run the
-/// UPDATE again, a limit recorded in docs/launch/notes-sql2.md.
+/// UPDATE again, a limit listed under "Known defects at release" in
+/// docs/launch/v5.0.0-evidence.md.
 #[test]
 fn a_data_modifying_cte_writes_once() {
     use redlinedb_sql::{Database, DbOptions, Dialect};

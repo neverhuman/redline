@@ -213,8 +213,8 @@ fn v4_unique_duplicates_fail_the_upgrade_and_change_nothing() {
 /// in `crates/kernel/src/engine/catalog_ops/index.rs` (lines 136-151 at tag
 /// v4.1.0, identical since v4.0.3): 2 opens, 1 is rebuilt, anything else
 /// fails `Engine::open` with `UnsupportedVersion`, which 4.1.0 prints as
-/// `unsupported format version: N`. Real binaries: see
-/// `docs/launch/notes-sql.md`.
+/// `unsupported format version: N`. The epoch rules are under "Decisions"
+/// in `docs/launch/v5.0.0-evidence.md`.
 fn v4_1_0_open_gate(epoch: u16) -> Result<(), redlinedb_kernel::Error> {
     match epoch {
         2 | 1 => Ok(()),

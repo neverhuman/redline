@@ -267,7 +267,7 @@ fn fallback_control_keeps_wal_needed_by_previous_generation() {
     // from generation 1 adds a second copy of each row generation 2 wrote
     // to a page generation 1 already had. That happens the same way when a
     // checkpoint dies between its page writes and its control write, with
-    // no corrupt slot at all; it is open in docs/launch/notes-kernel.md and
+    // no corrupt slot at all; it is a known defect in docs/launch/v5.0.0-evidence.md and
     // tracked by `fallback_after_corrupt_newer_control_scans_each_row_once`.
     assert_rows_read_back(&reopened, &image.rows);
     assert_scan_finds_every_row(&reopened, &image.rows);

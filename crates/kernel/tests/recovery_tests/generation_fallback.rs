@@ -80,8 +80,8 @@ fn a_newer_generation_with_another_generations_tx_status_falls_back() {
     assert_rows_exact(&reopened, &image.rows);
 }
 
-/// The open duplicate-row defect (docs/launch/notes-kernel.md, "Recovery
-/// checks the WAL and the checkpoint it starts from"): after a fallback
+/// The open duplicate-row defect (docs/launch/v5.0.0-evidence.md, "Known
+/// defects at release"): after a fallback
 /// through a corrupt newer control slot, heap redo from the older
 /// generation adds a second copy of each row the newer checkpoint wrote.
 #[test]
