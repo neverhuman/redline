@@ -1,7 +1,7 @@
 use super::evidence::{
     human_duration_ns, median_sqlite_ns, median_target_ns, suite_accent, suite_display_name,
 };
-use super::ratio::{format_ratio, ratio_histogram_bars, summarize};
+use super::ratio::{NO_RATIO, format_summary_ratio, ratio_histogram_bars, summarize};
 use super::types::{
     RankedCase, RawRecord, ReportOptions, SummaryJson, SvgArtifact, SvgBar, SvgSpec,
 };
@@ -70,11 +70,11 @@ pub(crate) fn build_svg_artifacts(
                 metrics: vec![
                     SvgMetric {
                         label: "Median ratio".to_owned(),
-                        value: format_ratio(latency.median_ratio),
+                        value: format_summary_ratio(latency.median_ratio),
                     },
                     SvgMetric {
                         label: "p95 ratio".to_owned(),
-                        value: format_ratio(latency.p95_ratio),
+                        value: format_summary_ratio(latency.p95_ratio),
                     },
                     SvgMetric {
                         label: "Faster cases".to_owned(),
@@ -129,15 +129,15 @@ pub(crate) fn build_svg_artifacts(
                 metrics: vec![
                     SvgMetric {
                         label: "Median ratio".to_owned(),
-                        value: format_ratio(latency.median_ratio),
+                        value: format_summary_ratio(latency.median_ratio),
                     },
                     SvgMetric {
                         label: "SQLite p50".to_owned(),
-                        value: human_duration_ns(median_sqlite_ns(ranked)),
+                        value: p50_text(ranked, median_sqlite_ns),
                     },
                     SvgMetric {
                         label: "RedlineDB p50".to_owned(),
-                        value: human_duration_ns(median_target_ns(ranked)),
+                        value: p50_text(ranked, median_target_ns),
                     },
                 ],
                 bars: vec![],
@@ -147,6 +147,15 @@ pub(crate) fn build_svg_artifacts(
 
     let _ = raw_records;
     artifacts
+}
+
+/// A p50 over the ranked cases, or `n/a` when none was ranked.
+fn p50_text(ranked: &[RankedCase], p50: fn(&[RankedCase]) -> u128) -> String {
+    if ranked.is_empty() {
+        NO_RATIO.to_owned()
+    } else {
+        human_duration_ns(p50(ranked))
+    }
 }
 
 pub(crate) fn render_styled_svg(spec: &SvgSpec) -> String {

@@ -274,6 +274,36 @@ fn latency_svgs_use_ratio_bands_without_mixed_estimators() {
     assert!(!median.contains("Median gap"), "{median}");
 }
 
+/// A run in which no case has a passed measured sample ranks nothing, so
+/// it has no latency ratio: never a 0.00x that reads as a win.
+#[test]
+fn a_report_with_no_ranked_case_prints_no_ratio() {
+    let raw = raw_case("00001", "FAILED", 2_000_000, 4_000_000).replace("\"passed\"", "\"failed\"");
+    let generated = try_generate("sqlite_parity", &raw).expect("report of a failed run");
+    assert_eq!(generated.ranked_csv, RANKED_CSV_HEADER);
+    for text in std::iter::once(&generated.readme).chain(&generated.svgs) {
+        assert!(!text.contains("0.00x"), "a ratio from no case:\n{text}");
+    }
+    assert!(
+        generated.readme.contains("no latency ratio"),
+        "{}",
+        generated.readme
+    );
+    // The latency and median charts say so; the histogram only counts.
+    let [latency, _, median] = &generated.svgs[..] else {
+        panic!("expected three SVGs");
+    };
+    assert!(
+        latency.contains(">Median ratio<") && latency.contains(">n/a<"),
+        "{latency}"
+    );
+    assert!(
+        median.contains(">SQLite p50<") && !median.contains(">0ns<"),
+        "{median}"
+    );
+    assert_eq!(median.matches(">n/a<").count(), 3, "{median}");
+}
+
 #[test]
 fn zero_reference_median_fails_the_report() {
     let err = try_generate("sqlite_parity", &raw_case("00009", "ZERO", 0, 5_000_000))
@@ -308,9 +338,9 @@ fn summary_uses_per_case_ratio_order_statistics() {
     let ranked = rank_cases(&ranked_fixture(&(1..=20).collect::<Vec<_>>())).expect("rank");
     let summary = summarize(&ranked);
     assert_eq!(summary.cases, 20);
-    assert_eq!(summary.median_ratio, 11.0);
-    assert_eq!(summary.p95_ratio, 19.0);
-    assert_eq!(summary.worst_ratio, 20.0);
+    assert_eq!(summary.median_ratio, Some(11.0));
+    assert_eq!(summary.p95_ratio, Some(19.0));
+    assert_eq!(summary.worst_ratio, Some(20.0));
     assert_eq!(summary.faster, 0, "equal or slower cases are never faster");
     assert_eq!(summary.below_resolution, 20);
 }

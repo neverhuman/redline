@@ -7,7 +7,7 @@ use super::evidence::{
 };
 use super::provenance::{ReportIdentity, ReportMode};
 use super::qualification::counts_text;
-use super::ratio::{format_ratio, summarize};
+use super::ratio::{format_ratio, format_summary_ratio, summarize};
 use super::types::{
     DeviationKind, EvidenceVersions, Qualification, RankedCase, RawRecord, ReportOptions,
     SqliteQualification, SummaryJson,
@@ -110,15 +110,19 @@ pub(crate) fn render_report_block(
     let suite_label = suite_display_name(&options.suite);
     let suite_subject = suite_subject(&options.suite);
     let latency = summarize(ranked);
-    let latency_line = format!(
-        "median per-case latency ratio **{}** (RedlineDB/SQLite, lower is better), p95 **{}**, worst **{}**, faster **{}/{}**; **{}** cases have a SQLite median under 3 ms (`below_resolution`)",
-        format_ratio(latency.median_ratio),
-        format_ratio(latency.p95_ratio),
-        format_ratio(latency.worst_ratio),
-        latency.faster,
-        latency.cases,
-        latency.below_resolution
-    );
+    let latency_line = if latency.cases == 0 {
+        "no latency ratio: no case has a passed measured sample to rank".to_owned()
+    } else {
+        format!(
+            "median per-case latency ratio **{}** (RedlineDB/SQLite, lower is better), p95 **{}**, worst **{}**, faster **{}/{}**; **{}** cases have a SQLite median under 3 ms (`below_resolution`)",
+            format_summary_ratio(latency.median_ratio),
+            format_summary_ratio(latency.p95_ratio),
+            format_summary_ratio(latency.worst_ratio),
+            latency.faster,
+            latency.cases,
+            latency.below_resolution
+        )
+    };
     let lane = evidence_versions.map_or("unrecorded (no official evidence)", |versions| {
         versions.lane.as_str()
     });
