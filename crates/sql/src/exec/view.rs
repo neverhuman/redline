@@ -37,16 +37,9 @@ pub(crate) fn is_view_table_def(def: &TableDef) -> bool {
     (def.relation_id.0 & 0xFFFF_0000_0000_0000) == VIEW_RELATION_TAG
 }
 
-thread_local! {
-    static VIEW_REL_COUNTER: std::cell::Cell<u64> = const { std::cell::Cell::new(0) };
-}
-
+/// Process-unique, never reused (Q5-09).
 fn next_view_rel_id() -> RelId {
-    VIEW_REL_COUNTER.with(|cell| {
-        let n = cell.get() + 1;
-        cell.set(n);
-        RelId(VIEW_RELATION_TAG | n)
-    })
+    super::bind_env::next_synthetic_id(VIEW_RELATION_TAG)
 }
 
 /// Try to interpret a FROM table reference as a view. Returns
@@ -131,7 +124,10 @@ fn materialize_view(
     conn: &Connection,
     view: &ViewDef,
 ) -> Result<(Vec<Vec<SqlValue>>, Vec<String>)> {
+    // The body names real tables, whatever the query around it calls a CTE.
+    let _own_scope = super::cte::Isolated::enter();
     let template = crate::parser::parse_prepared_template(conn, view.body_sql.as_ref())?;
+    super::bind_env::note_materialization();
     let column_names: Vec<String> = if !view.columns.is_empty() {
         view.columns.iter().map(|c| c.as_ref().to_owned()).collect()
     } else {
@@ -214,6 +210,7 @@ pub(crate) fn view_column_names(
     if !view.columns.is_empty() {
         return Ok(view.columns.iter().map(|c| c.as_ref().to_owned()).collect());
     }
+    let _own_scope = super::cte::Isolated::enter();
     let template = crate::parser::parse_prepared_template(conn, view.body_sql.as_ref())?;
     Ok(template.output_columns.iter().cloned().collect())
 }

@@ -80,44 +80,59 @@ pub(crate) struct CteDef {
 thread_local! {
     static CTE_SCOPE: std::cell::RefCell<Vec<HashMap<String, CteDef>>> =
         const { std::cell::RefCell::new(Vec::new()) };
-    /// Monotonic counter for synthetic CTE relation ids within a single
-    /// statement's thread. Reset before every top-level `bind_with_query`
-    /// call so ids are stable per query plan.
-    static CTE_REL_COUNTER: std::cell::Cell<u64> = const { std::cell::Cell::new(0) };
-    /// Per-thread name → CteDef registry that survives scope teardown.
-    /// `bind_with_query` populates this when it materializes CTEs so
-    /// subqueries that bind at exec time (after the scope stack has
-    /// been popped) can still resolve CTE references by name. Cleared
-    /// at the start of every new top-level `bind_with_query` call.
-    static CTE_PERMANENT: std::cell::RefCell<HashMap<String, CteDef>> =
-        std::cell::RefCell::new(HashMap::new());
 }
 
-fn register_permanent_cte(name: String, def: CteDef) {
-    CTE_PERMANENT.with(|cell| {
-        cell.borrow_mut().insert(name.to_ascii_lowercase(), def);
-    });
-}
-
-fn clear_permanent_ctes() {
-    CTE_PERMANENT.with(|cell| cell.borrow_mut().clear());
-}
-
-fn lookup_permanent_cte(name: &str) -> Option<CteDef> {
-    CTE_PERMANENT.with(|cell| {
-        let map = cell.borrow();
-        map.iter()
-            .find(|(k, _)| k.eq_ignore_ascii_case(name))
-            .map(|(_, v)| v.clone())
-    })
-}
-
+/// Q5-09: synthetic CTE relation ids are process-unique and never reused;
+/// restarting them at 1 on every WITH let a nested WITH overwrite the
+/// outer CTE's rows.
 fn next_cte_rel_id() -> RelId {
-    CTE_REL_COUNTER.with(|cell| {
-        let n = cell.get() + 1;
-        cell.set(n);
-        RelId(CTE_RELATION_TAG | n)
-    })
+    super::bind_env::next_synthetic_id(CTE_RELATION_TAG)
+}
+
+/// Keeps the CTE scopes a binder pushed from outliving it: on drop, on the
+/// success and the error path alike, the scope stack returns to the depth
+/// it had when the guard was taken.
+pub(crate) struct ScopeGuard {
+    depth: usize,
+}
+
+impl ScopeGuard {
+    pub(crate) fn enter() -> Self {
+        Self {
+            depth: CTE_SCOPE.with(|cell| cell.borrow().len()),
+        }
+    }
+}
+
+impl Drop for ScopeGuard {
+    fn drop(&mut self) {
+        CTE_SCOPE.with(|cell| cell.borrow_mut().truncate(self.depth));
+    }
+}
+
+/// Binds a view body or a trigger body in a scope of its own: it sees
+/// neither the CTEs of the statement that uses it nor that statement's
+/// bind-time scopes, as in SQLite. What the body registers is dropped with
+/// the guard (Q5-09).
+pub(crate) struct Isolated {
+    scopes: Vec<HashMap<String, CteDef>>,
+    _capture: super::bind_env::Capture,
+}
+
+impl Isolated {
+    pub(crate) fn enter() -> Self {
+        Self {
+            scopes: CTE_SCOPE.with(|cell| std::mem::take(&mut *cell.borrow_mut())),
+            _capture: super::bind_env::Capture::barrier(),
+        }
+    }
+}
+
+impl Drop for Isolated {
+    fn drop(&mut self) {
+        let scopes = std::mem::take(&mut self.scopes);
+        CTE_SCOPE.with(|cell| *cell.borrow_mut() = scopes);
+    }
 }
 
 /// Build a synthetic `TableDef` for a CTE so the join executor can treat
@@ -248,10 +263,10 @@ pub(crate) fn scope_active() -> bool {
 
 /// Bind a `WITH ... query` form. Pre-executes each CTE body (handling
 /// recursive references) and pushes a CTE scope before binding the
-/// trailing query. The scope is popped before returning; we *also*
-/// publish each CTE's name into `CTE_PERMANENT_NAMES` so subqueries
-/// that bind at exec time (after the scope stack has been torn down)
-/// can still resolve the name to its pre-materialized rows.
+/// trailing query. The scopes are popped before returning, on every path;
+/// each CTE is *also* registered with the preparing statement
+/// (`bind_env::register_cte`) so subqueries that bind while it runs, after
+/// the scope stack has been torn down, still resolve the name.
 pub(crate) fn bind_with_query(
     conn: &Connection,
     schema: Arc<SchemaSnapshot>,
@@ -266,10 +281,9 @@ pub(crate) fn bind_with_query(
         ..
     } = with;
 
-    CTE_REL_COUNTER.with(|cell| cell.set(0));
-    // Clear stale permanent entries from any previous top-level
-    // statement before binding the new one.
-    clear_permanent_ctes();
+    // Q5-09: scopes pushed below are popped when this guard drops, also
+    // when a CTE body fails to bind.
+    let _scopes = ScopeGuard::enter();
     // Q5-03: derive every cap before materializing, while the sibling
     // CTE bodies are still at hand for `derive_cte_row_cap` to inspect.
     let row_caps: Vec<Option<usize>> = cte_tables
@@ -279,7 +293,6 @@ pub(crate) fn bind_with_query(
             row_cap::derive_cte_row_cap(&body_query, &cte.alias.name.value, &cte_tables, index)
         })
         .collect();
-    let mut pushed_scopes = 0usize;
     for (cte, row_cap) in cte_tables.into_iter().zip(row_caps) {
         let def = recursive::materialize_cte(
             conn,
@@ -290,17 +303,12 @@ pub(crate) fn bind_with_query(
             recursive,
             row_cap,
         )?;
-        register_permanent_cte(def.name.to_string(), def.clone());
+        super::bind_env::register_cte(&def);
         let mut single = HashMap::new();
         single.insert(def.name.to_string(), def);
         push_scope(single);
-        pushed_scopes += 1;
     }
-    let bound = super::super::parser::bind_query(conn, schema, schema_epoch, sql, body_query);
-    for _ in 0..pushed_scopes {
-        pop_scope();
-    }
-    bound
+    super::super::parser::bind_query(conn, schema, schema_epoch, sql, body_query)
 }
 
 /// Run a Query and materialize all output rows. Returns rows plus column names.
@@ -313,6 +321,7 @@ pub(crate) fn run_query_to_rows(
     declared_columns: &[String],
 ) -> Result<(Vec<Vec<SqlValue>>, Vec<String>)> {
     let template = super::super::parser::bind_query(conn, schema, schema_epoch, sql, query)?;
+    super::bind_env::note_materialization();
     let columns: Vec<String> = if !declared_columns.is_empty() {
         declared_columns.to_vec()
     } else {
@@ -367,18 +376,18 @@ pub(crate) fn try_resolve_cte_bound_table(
     })
 }
 
-/// Single resolution point that consults both scope tiers in a
-/// deterministic order: active scope (the local `WITH` we are
-/// currently binding) wins over the permanent registry (an enclosing
-/// `WITH` whose scope has already been popped — used by subqueries
-/// that bind at exec time).
+/// Single resolution point that consults both tiers in a deterministic
+/// order: the active scope (the local `WITH` being bound) wins over the
+/// CTEs the preparing or running statement registered (an enclosing `WITH`
+/// whose scope has already been popped — used by subqueries that bind at
+/// exec time). A CTE never outlives its statement (Q5-09).
 fn resolve_cte_def(ident_name: &str) -> Option<CteDef> {
-    if scope_active() {
-        if let Some(def) = lookup(ident_name) {
-            return Some(def);
-        }
+    if scope_active()
+        && let Some(def) = lookup(ident_name)
+    {
+        return Some(def);
     }
-    lookup_permanent_cte(ident_name)
+    super::bind_env::lookup_cte(ident_name)
 }
 
 #[allow(dead_code)]

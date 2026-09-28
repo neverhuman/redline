@@ -196,8 +196,18 @@ impl Connection {
                 let template = self.savepoint_template(head, action);
                 return Ok((Some(Statement::new(Arc::clone(self), template)), tail));
             }
+            // Q5-09: the statement owns what its binding materializes.
+            let capture = crate::exec::bind_env::Capture::begin();
             let template = self.prepare_cached(head)?;
-            Ok((Some(Statement::new(Arc::clone(self), template)), tail))
+            let bind_env = capture.finish();
+            Ok((
+                Some(Statement::with_bind_env(
+                    Arc::clone(self),
+                    template,
+                    bind_env,
+                )),
+                tail,
+            ))
         })) {
             Ok(result) => result,
             Err(payload) => Err(Error::Parse(format!(
@@ -249,8 +259,13 @@ impl Connection {
 
     /// Prepare one typed Redline Query Language statement.
     pub fn prepare_rql(self: &Arc<Self>, statement: &crate::RqlStatement) -> Result<Statement> {
+        let capture = crate::exec::bind_env::Capture::begin();
         let template = self.prepare_rql_template(statement)?;
-        Ok(Statement::new(Arc::clone(self), template))
+        Ok(Statement::with_bind_env(
+            Arc::clone(self),
+            template,
+            capture.finish(),
+        ))
     }
 
     /// Build a detached RQL template for facade-level caches.
@@ -296,13 +311,16 @@ impl Connection {
             return Ok(template);
         }
 
+        let materializations = crate::exec::bind_env::materializations();
         let template = Arc::new(crate::rql::prepare_template_with_options(
             self.as_ref(),
             statement,
             options,
         )?);
         self.ensure_rql_template_allowed(&template)?;
-        if !template_embeds_materialised_rows(&template) {
+        if crate::exec::bind_env::materializations() == materializations
+            && !template_embeds_materialised_rows(&template)
+        {
             self.db
                 .stmt_cache
                 .insert(key.clone(), Arc::clone(&template));
@@ -537,8 +555,9 @@ impl Connection {
 
     fn replay_journal(self: &Arc<Self>, entries: &[JournalEntry]) -> Result<()> {
         for entry in entries {
+            let capture = crate::exec::bind_env::Capture::begin();
             let template = self.prepare_cached(&entry.sql)?;
-            let mut stmt = Statement::new(Arc::clone(self), template);
+            let mut stmt = Statement::with_bind_env(Arc::clone(self), template, capture.finish());
             if !entry.bindings.is_empty() {
                 for (idx, slot) in entry.bindings.iter().enumerate().skip(1) {
                     if let Some(value) = slot {
@@ -1271,16 +1290,21 @@ impl Connection {
             return Ok(template);
         }
 
+        let materializations = crate::exec::bind_env::materializations();
         let mut template = parse_prepared_template(self.as_ref(), sql)?;
         template.stats_epoch = self.stats_epoch().0;
         template.optimizer_hash = self.optimizer_hash();
         let template = Arc::new(template);
         // Some binders execute subqueries during prepare and embed the
-        // resulting rows in the prepared template (views, CTE row stores,
-        // table-valued functions). That template is valid for the returned
-        // statement, but it must not be reused by either cache: base-table
-        // DML does not advance the schema/stats cache key.
-        if template_embeds_materialised_rows(&template) {
+        // resulting rows in the prepared template (views, CTEs, derived
+        // tables, table-valued functions), whatever the statement kind.
+        // That template is valid for the returned statement, but it must
+        // not be reused by either cache: base-table DML does not advance
+        // the schema/stats cache key, and the rows belong to the statement
+        // (Q5-08, Q5-09).
+        if crate::exec::bind_env::materializations() != materializations
+            || template_embeds_materialised_rows(&template)
+        {
             return Ok(template);
         }
         self.db

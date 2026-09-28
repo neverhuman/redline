@@ -41,16 +41,9 @@ fn is_reserved_alias(lower: &str) -> bool {
     RESERVED_ALIASES.iter().any(|reserved| *reserved == lower)
 }
 
-thread_local! {
-    static CROSS_DB_REL_COUNTER: std::cell::Cell<u64> = const { std::cell::Cell::new(0) };
-}
-
+/// Process-unique, never reused (Q5-09).
 fn next_cross_db_rel_id() -> RelId {
-    CROSS_DB_REL_COUNTER.with(|cell| {
-        let n = cell.get() + 1;
-        cell.set(n);
-        RelId(CROSS_DB_RELATION_TAG | n)
-    })
+    super::bind_env::next_synthetic_id(CROSS_DB_RELATION_TAG)
 }
 
 /// Public re-export of the synthetic-rel id allocator. Reused by the

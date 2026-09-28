@@ -224,6 +224,9 @@ fn run_body_with_context(
         crate::exec::push_outer_row(SqlRow::Table(row));
         pushed += 1;
     }
+    // The body names real tables, whatever the firing statement calls a
+    // CTE (Q5-09).
+    let own_scope = crate::exec::cte::Isolated::enter();
     let result = || -> Result<()> {
         if let Some(predicate_sql) = &trigger.when_predicate_sql
             && !evaluate_when_predicate(conn, predicate_sql)?
@@ -233,6 +236,7 @@ fn run_body_with_context(
         execute_body_statements(conn, trigger.body_sql.as_ref())?;
         Ok(())
     }();
+    drop(own_scope);
     for _ in 0..pushed {
         crate::exec::pop_outer_row();
     }

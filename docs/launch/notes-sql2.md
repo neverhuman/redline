@@ -58,3 +58,24 @@ them into `CHANGELOG.md`.
 - `RELEASE` of the last savepoint inside `BEGIN` no longer forgets the
   statements before it: `BEGIN; SAVEPOINT a; INSERT ...; RELEASE a;
   SAVEPOINT b; ...; ROLLBACK TO b` used to lose the first insert.
+
+## CTE, derived-table and view rows belong to their statement (Q5-09)
+
+- A nested `WITH` no longer overwrites the outer CTE's rows:
+  `WITH a(x) AS (SELECT 11) SELECT a.x, s.y FROM a JOIN (WITH b(y) AS
+  (SELECT 22) SELECT y FROM b) s ON 1` answers `11|22` (it answered
+  `22|22`), also through a view whose body has a `WITH`.
+- A CTE name no longer shadows a real table in later statements on the same
+  thread. After `WITH t(a) AS (SELECT 99) SELECT a FROM t`, a plain
+  `SELECT a FROM t` read 99, `INSERT INTO t SELECT a+1 FROM t` stored 100
+  and `DELETE FROM t WHERE a IN (SELECT a FROM t)` deleted nothing; the same
+  leak crossed connections and databases on one thread, and a CTE whose
+  binding failed left its scope behind.
+- Two prepared statements with CTE joins no longer read each other's rows.
+- A view body and a trigger body resolve names in their own scope: a CTE in
+  the statement that uses the view or fires the trigger no longer replaces
+  the table the body names.
+- The rows a statement's binding materializes are freed with the statement,
+  and a template that embeds them is never served from a statement cache
+  (an `INSERT ... SELECT` joining a derived table or view used to be cached
+  with the rows of its first preparation).

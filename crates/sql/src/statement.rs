@@ -855,6 +855,9 @@ pub(crate) enum SelectRuntimeSource {
 pub struct Statement {
     pub(crate) conn: Arc<Connection>,
     pub(crate) template: Arc<PreparedTemplate>,
+    /// The rows and CTE names this statement's binding materialized; every
+    /// step installs them, and dropping the statement frees them (Q5-09).
+    bind_env: Option<Arc<crate::exec::bind_env::BindEnv>>,
     bindings: Vec<Option<SqlValue>>,
     runtime: RuntimeState,
     current_row: Option<Vec<SqlValue>>,
@@ -881,11 +884,21 @@ pub enum Step {
 
 impl Statement {
     pub(crate) fn new(conn: Arc<Connection>, template: Arc<PreparedTemplate>) -> Self {
+        Self::with_bind_env(conn, template, None)
+    }
+
+    /// A statement that owns what its preparation's binding materialized.
+    pub(crate) fn with_bind_env(
+        conn: Arc<Connection>,
+        template: Arc<PreparedTemplate>,
+        bind_env: Option<Arc<crate::exec::bind_env::BindEnv>>,
+    ) -> Self {
         let mut bindings = Vec::with_capacity(template.param_layout.count() + 1);
         bindings.resize(template.param_layout.count() + 1, None);
         Self {
             conn,
             template,
+            bind_env,
             bindings,
             runtime: RuntimeState::Idle,
             current_row: None,
@@ -984,7 +997,9 @@ impl Statement {
                     if is_rql_template(&self.template) {
                         return Err(Error::SchemaChanged);
                     }
+                    let capture = crate::exec::bind_env::Capture::begin();
                     let new_template = self.conn.prepare_cached(self.template.sql.as_ref())?;
+                    self.bind_env = capture.finish();
                     let mut new_bindings =
                         Vec::with_capacity(new_template.param_layout.count() + 1);
                     new_bindings.resize(new_template.param_layout.count() + 1, None);
@@ -1005,6 +1020,7 @@ impl Statement {
                 // the cache persists across those iterations because
                 // the thread-local scope only resets on a fresh
                 // `execute_prepared` call.
+                let _env = crate::exec::bind_env::Installed::install(self.bind_env.as_ref());
                 let hazards = crate::replay::HazardScope::begin();
                 let result = execute_prepared(conn, &self.template, &self.bindings)?;
                 let replay_safe =
@@ -1020,6 +1036,7 @@ impl Statement {
                 // and don't affect tx state.
                 self.maybe_journal(replay_safe);
             }
+            let _env = crate::exec::bind_env::Installed::install(self.bind_env.as_ref());
             match &mut self.runtime {
                 RuntimeState::Select(runtime) => {
                     let done = crate::exec::step_select_runtime(

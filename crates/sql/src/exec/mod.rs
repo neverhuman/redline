@@ -61,6 +61,7 @@ use insert::*;
 pub(crate) mod select_top;
 use select_top::*;
 pub(crate) mod attach;
+pub(crate) mod bind_env;
 pub(crate) mod cross_db;
 pub(crate) mod cte;
 pub(crate) mod fk;
@@ -222,11 +223,13 @@ pub(crate) fn with_current_connection<T>(conn: &Connection, f: impl FnOnce() -> 
         if prev.is_null() {
             expr::clear_subquery_template_cache();
             crate::json::scalar::clear_json_caches();
+            bind_env::clear_scratch();
         }
         let result = f();
         if prev.is_null() {
             expr::clear_subquery_template_cache();
             crate::json::scalar::clear_json_caches();
+            bind_env::clear_scratch();
         }
         cell.set(prev);
         result
