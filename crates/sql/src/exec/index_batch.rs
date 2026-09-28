@@ -347,9 +347,54 @@ pub(super) fn execute_index_covering_range(
 #[derive(Debug, Clone, Copy)]
 pub(crate) enum OutputColumnSource {
     /// Decode the i-th leaf-key part from the encoded `logical_key`.
-    IndexColumn { ordinal: usize },
+    /// `whole` says which storage class a whole number in the i64 range
+    /// comes back as: the key space stores INTEGER 2 and REAL 2.0 as one key.
+    IndexColumn { ordinal: usize, whole: WholeNumber },
     /// Read the rowid alias straight off `IndexRowRef.row_id`.
     Rowid,
+}
+
+/// The storage class a covering scan gives a whole-number key part.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum WholeNumber {
+    Integer,
+    Real,
+}
+
+/// The covering source for key part `ordinal` of `index`, which reads table
+/// column `attnum`, or `None` when the key cannot reproduce the stored value
+/// and the scan must read the heap:
+/// - a column without affinity (BLOB affinity) can hold INTEGER 2 or REAL
+///   2.0, and both are the same key;
+/// - a NOCASE key stores the text folded to lower case.
+///
+/// INTEGER and NUMERIC affinity store a whole REAL in the i64 range as
+/// INTEGER, and REAL affinity stores every number as REAL, so for those the
+/// storage class of a whole number follows from the affinity. TEXT affinity
+/// stores no numbers at all.
+pub(crate) fn covering_column_source(
+    table: &TableDef,
+    index: &IndexDef,
+    ordinal: usize,
+) -> Option<OutputColumnSource> {
+    use redlinedb_kernel::catalog::{Affinity, IndexKeySource};
+    let key = index.keys.get(ordinal)?;
+    let IndexKeySource::Column { attnum } = key.source else {
+        return None;
+    };
+    if key
+        .collation
+        .as_deref()
+        .is_some_and(|name| name.eq_ignore_ascii_case("NOCASE"))
+    {
+        return None;
+    }
+    let whole = match table.columns.get(attnum as usize)?.affinity {
+        Affinity::Blob => return None,
+        Affinity::Real => WholeNumber::Real,
+        Affinity::Integer | Affinity::Numeric | Affinity::Text => WholeNumber::Integer,
+    };
+    Some(OutputColumnSource::IndexColumn { ordinal, whole })
 }
 
 /// Decode the index leaf row into the requested `out_columns` shape.
@@ -365,9 +410,9 @@ fn decode_covering_row(
             OutputColumnSource::Rowid => {
                 row.push(SqlValue::Integer(entry.row_id.0 as i64));
             }
-            OutputColumnSource::IndexColumn { ordinal } => {
-                let value =
-                    decode_index_key_part(key_bytes, dirs, *ordinal).unwrap_or(SqlValue::Null);
+            OutputColumnSource::IndexColumn { ordinal, whole } => {
+                let value = decode_index_key_part(key_bytes, dirs, *ordinal, *whole)
+                    .unwrap_or(SqlValue::Null);
                 row.push(value);
             }
         }
@@ -376,16 +421,16 @@ fn decode_covering_row(
 }
 
 /// Decode the encoded leaf key into a vector of `SqlValue`s. The
-/// encoding lives in `redlinedb_kernel::catalog::key::encode_part`:
-/// each part starts with a 1-byte type tag, holds its body, and is
-/// terminated by `0xff`. `Desc` parts have every body byte (and the
-/// tag) bit-inverted so we flip them back before decoding.
+/// encoding lives in `redlinedb_kernel::catalog::key`: each part starts
+/// with a 1-byte type tag, holds its body, and is terminated by `0xff`.
+/// `Desc` parts have every body byte (and the tag) bit-inverted so we flip
+/// them back before decoding. A whole number decodes as INTEGER.
 #[allow(dead_code)]
 pub(crate) fn decode_index_key_parts(bytes: &[u8], dirs: &[SortDir]) -> Vec<SqlValue> {
     let mut out = Vec::with_capacity(dirs.len());
     let mut idx = 0;
     for &dir in dirs {
-        let Some((part, next_idx)) = decode_part_at(bytes, idx, dir) else {
+        let Some((part, next_idx)) = decode_part_at(bytes, idx, dir, WholeNumber::Integer) else {
             out.push(SqlValue::Null);
             break;
         };
@@ -395,10 +440,15 @@ pub(crate) fn decode_index_key_parts(bytes: &[u8], dirs: &[SortDir]) -> Vec<SqlV
     out
 }
 
-fn decode_index_key_part(bytes: &[u8], dirs: &[SortDir], target: usize) -> Option<SqlValue> {
+fn decode_index_key_part(
+    bytes: &[u8],
+    dirs: &[SortDir],
+    target: usize,
+    whole: WholeNumber,
+) -> Option<SqlValue> {
     let mut idx = 0;
     for (ordinal, &dir) in dirs.iter().enumerate() {
-        let (part, next_idx) = decode_part_at(bytes, idx, dir)?;
+        let (part, next_idx) = decode_part_at(bytes, idx, dir, whole)?;
         if ordinal == target {
             return Some(part);
         }
@@ -407,33 +457,45 @@ fn decode_index_key_part(bytes: &[u8], dirs: &[SortDir], target: usize) -> Optio
     None
 }
 
-fn decode_part_at(bytes: &[u8], idx: usize, dir: SortDir) -> Option<(SqlValue, usize)> {
+fn decode_part_at(
+    bytes: &[u8],
+    idx: usize,
+    dir: SortDir,
+    whole: WholeNumber,
+) -> Option<(SqlValue, usize)> {
+    use redlinedb_kernel::catalog::{
+        DecodedNumericKey, decode_numeric_key_part, is_numeric_key_tag, numeric_key_part_len,
+    };
     let raw_tag = *bytes.get(idx)?;
     let tag = maybe_uninvert(raw_tag, dir);
     let part_len = match tag {
         0x00 => 1,
-        0x10 | 0x20 => 9,
         0x30 | 0x40 => textish_part_len(bytes, idx + 1, dir)?,
+        _ if is_numeric_key_tag(tag) => {
+            numeric_key_part_len(&bytes[idx..], |byte| maybe_uninvert(byte, dir))?
+        }
         _ => return None,
     };
     let end = idx.checked_add(part_len)?;
     if end > bytes.len() {
         return None;
     }
+    let mut part = bytes[idx..end].to_vec();
+    if dir == SortDir::Desc {
+        for byte in part.iter_mut() {
+            *byte = !*byte;
+        }
+    }
     let value = match tag {
         0x00 => SqlValue::Null,
-        0x10 => decode_integer_part(&bytes[idx + 1..end], dir),
-        0x20 => decode_real_part(&bytes[idx + 1..end], dir),
-        0x30 | 0x40 => {
-            let mut part = bytes[idx..end].to_vec();
-            if dir == SortDir::Desc {
-                for byte in part.iter_mut() {
-                    *byte = !*byte;
-                }
-            }
-            decode_part(&part)
-        }
-        _ => return None,
+        0x30 | 0x40 => decode_part(&part),
+        _ => match decode_numeric_key_part(&part)?.0 {
+            DecodedNumericKey::Whole(v) => match whole {
+                WholeNumber::Integer => SqlValue::Integer(v),
+                WholeNumber::Real => SqlValue::Real(v as f64),
+            },
+            DecodedNumericKey::Real(v) => SqlValue::Real(v),
+        },
     };
     // `encode_index_key` appends an uninverted 0xff separator after
     // every encoded part. Tolerate a missing final separator by moving
@@ -467,84 +529,21 @@ fn maybe_uninvert(byte: u8, dir: SortDir) -> u8 {
     if dir == SortDir::Desc { !byte } else { byte }
 }
 
+/// Decode a TEXT or BLOB part (tag byte first, already un-inverted).
 fn decode_part(bytes: &[u8]) -> SqlValue {
-    if bytes.is_empty() {
-        return SqlValue::Null;
-    }
-    match bytes[0] {
-        0x00 => SqlValue::Null,
-        0x10 => {
-            if bytes.len() < 9 {
-                return SqlValue::Null;
-            }
-            let arr: [u8; 8] = bytes[1..9].try_into().unwrap_or([0; 8]);
-            let raw = u64::from_be_bytes(arr) ^ 0x8000_0000_0000_0000;
-            SqlValue::Integer(raw as i64)
-        }
-        0x20 => {
-            if bytes.len() < 9 {
-                return SqlValue::Null;
-            }
-            let arr: [u8; 8] = bytes[1..9].try_into().unwrap_or([0; 8]);
-            let sortable = u64::from_be_bytes(arr);
-            let bits = if sortable & 0x8000_0000_0000_0000 != 0 {
-                sortable ^ 0x8000_0000_0000_0000
-            } else {
-                !sortable
-            };
-            SqlValue::Real(f64::from_bits(bits))
-        }
-        0x30 => {
+    match bytes.first() {
+        Some(0x30) => {
             let body = unescape_textish(&bytes[1..]);
             SqlValue::Text(std::sync::Arc::from(
                 String::from_utf8_lossy(&body).into_owned(),
             ))
         }
-        0x40 => {
+        Some(0x40) => {
             let body = unescape_textish(&bytes[1..]);
             SqlValue::Blob(std::sync::Arc::from(body.into_boxed_slice()))
         }
         _ => SqlValue::Null,
     }
-}
-
-/// Pull the leading 8 bytes off an index-key payload, undoing the
-/// per-byte bit-flip if the column is sorted descending. Returns `None`
-/// when there are fewer than 8 bytes available — callers map that to
-/// `SqlValue::Null`.
-fn take_sortable_u64(bytes: &[u8], dir: SortDir) -> Option<u64> {
-    if bytes.len() < 8 {
-        return None;
-    }
-    let mut arr = [0_u8; 8];
-    if dir == SortDir::Desc {
-        for (slot, byte) in arr.iter_mut().zip(bytes.iter().take(8)) {
-            *slot = !*byte;
-        }
-    } else {
-        arr.copy_from_slice(&bytes[..8]);
-    }
-    Some(u64::from_be_bytes(arr))
-}
-
-fn decode_integer_part(bytes: &[u8], dir: SortDir) -> SqlValue {
-    let Some(sortable) = take_sortable_u64(bytes, dir) else {
-        return SqlValue::Null;
-    };
-    let raw = sortable ^ 0x8000_0000_0000_0000;
-    SqlValue::Integer(raw as i64)
-}
-
-fn decode_real_part(bytes: &[u8], dir: SortDir) -> SqlValue {
-    let Some(sortable) = take_sortable_u64(bytes, dir) else {
-        return SqlValue::Null;
-    };
-    let bits = if sortable & 0x8000_0000_0000_0000 != 0 {
-        sortable ^ 0x8000_0000_0000_0000
-    } else {
-        !sortable
-    };
-    SqlValue::Real(f64::from_bits(bits))
 }
 
 /// Inverse of `encode_bytes` in `catalog::key`: strips the trailing
@@ -625,7 +624,10 @@ mod tests {
     fn output_column_source_is_copy() {
         let _a = OutputColumnSource::Rowid;
         let _b = _a;
-        let _c = OutputColumnSource::IndexColumn { ordinal: 0 };
+        let _c = OutputColumnSource::IndexColumn {
+            ordinal: 0,
+            whole: WholeNumber::Integer,
+        };
         let _d = _c;
     }
 }

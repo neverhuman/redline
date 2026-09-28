@@ -137,52 +137,31 @@ impl Engine {
         self.index_handle(index_id)
     }
 
+    /// Open a handle for every catalog index whose B-tree is at the current
+    /// index-format epoch. An index at an older epoch gets no handle: WAL
+    /// replay then skips its records (no open B-tree carries its physical
+    /// id), and once recovery is complete the SQL layer rebuilds it from the
+    /// heap (see [`Engine::indexes_needing_rebuild`]). Rebuilding here would
+    /// run before the row directory is loaded and before index WAL replay.
+    /// An index at a newer epoch fails the open.
     pub(crate) fn rehydrate_index_handles(self: &Arc<Self>) -> Result<()> {
         let snapshot = self.catalog.current();
-        let mut rebuilt = Vec::new();
+        let current = current_index_version();
         let mut opened = Vec::new();
         for index in &snapshot.indexes {
             let Some(meta_page_id) = index.meta_page_id else {
                 // Pre-Lane-A index without physical pages; nothing to reopen.
                 continue;
             };
-            let descriptor = IndexDescriptor::new(
-                PhysicalIndexId(index.index_id.0),
-                index.relation_id,
-                if index.unique {
-                    IndexUniqueness::Unique
-                } else {
-                    IndexUniqueness::NonUnique
-                },
-            );
-            let version = BtreeIndex::format_version(&self.buffer, meta_page_id)?;
-            if version == INDEX_VERSION {
-                let btree = BtreeIndex::open_with_wal(
-                    Arc::clone(&self.buffer),
-                    meta_page_id,
-                    descriptor,
-                    self.page_wal(),
-                )?;
-                btree.set_phase11_counters(Arc::clone(&self.phase11_counters));
-                opened.push((index.index_id, Arc::new(btree)));
-            } else if version == 1 {
-                let table = snapshot
-                    .table_by_id(index.table_id)
-                    .ok_or(Error::CatalogCorrupt("index table missing during rebuild"))?;
-                rebuilt.push((index.as_ref().clone(), table));
-            } else {
+            let (version, physical_id) = BtreeIndex::meta_identity(&self.buffer, meta_page_id)?;
+            if version != current {
+                if (1..current).contains(&version) {
+                    continue;
+                }
                 return Err(Error::UnsupportedVersion(version));
             }
-        }
-        let mut next_snapshot = (*snapshot).clone();
-        let mut rebuild_tx = if rebuilt.is_empty() {
-            None
-        } else {
-            Some(self.begin(Isolation::Snapshot)?)
-        };
-        for (index, table) in rebuilt {
             let descriptor = IndexDescriptor::new(
-                PhysicalIndexId(index.index_id.0),
+                physical_id,
                 index.relation_id,
                 if index.unique {
                     IndexUniqueness::Unique
@@ -190,30 +169,14 @@ impl Engine {
                     IndexUniqueness::NonUnique
                 },
             );
-            let btree =
-                BtreeIndex::create_with_wal(Arc::clone(&self.buffer), descriptor, self.page_wal())?;
+            let btree = BtreeIndex::open_with_wal(
+                Arc::clone(&self.buffer),
+                meta_page_id,
+                descriptor,
+                self.page_wal(),
+            )?;
             btree.set_phase11_counters(Arc::clone(&self.phase11_counters));
-            let tx = rebuild_tx
-                .as_mut()
-                .ok_or(Error::CorruptPage("missing index rebuild transaction"))?;
-            btree.record_initial_page_images(tx.id())?;
-            self.backfill_index(tx, &btree, &table, &index)?;
-            next_snapshot =
-                apply_set_index_meta_page_id(next_snapshot, index.index_id, btree.meta_page_id())?;
             opened.push((index.index_id, Arc::new(btree)));
-        }
-        if let Some(mut tx) = rebuild_tx {
-            let next_snapshot = Arc::new(next_snapshot);
-            tx.set_pending_schema_snapshot(next_snapshot);
-            match self.commit(tx)? {
-                CommitOutcome::Committed(_) => {}
-                CommitOutcome::MaybeCommitted => {
-                    return Err(Error::CorruptWal("index rebuild maybe committed"));
-                }
-                CommitOutcome::RolledBack => {
-                    return Err(Error::CorruptWal("index rebuild rolled back"));
-                }
-            }
         }
         let mut handles = self
             .index_handles
@@ -230,7 +193,7 @@ impl Engine {
     /// to make the index immediately usable for the rest of the transaction.
     /// On a non-empty table this performs the SQLite-style synchronous
     /// CREATE INDEX backfill. On an empty table it is a no-op.
-    fn backfill_index(
+    pub(super) fn backfill_index(
         &self,
         tx: &mut Txn,
         btree: &BtreeIndex,

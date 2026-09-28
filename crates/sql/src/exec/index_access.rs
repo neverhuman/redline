@@ -42,7 +42,7 @@ use super::index_batch::{
 use super::policy::{ActiveExecBatchPolicy, ExecBatchPolicy};
 use super::tail::load_table_row_by_rowid;
 
-pub(crate) use super::index_batch::OutputColumnSource;
+pub(crate) use super::index_batch::{OutputColumnSource, covering_column_source};
 
 /// Maximum batch size used by the streaming cursor consumer. Matches
 /// the prior `range_scan_visible` wrapper's chunk size so per-batch
@@ -389,18 +389,32 @@ pub(crate) fn try_match_index_access_hinted(
         if let Some((bounds, predicates, consumed_idx)) =
             leading_range_bounds(&conjuncts, table, leading, bindings)
         {
-            let start = match &bounds.lower {
+            // A DESC key stores every byte inverted, so its byte order is
+            // the reverse of value order: the upper value bound gives the
+            // first key and the lower value bound the last. A comparison is
+            // never true for NULL, and NULL keys sort first (ASC) or last
+            // (DESC), so an open end stops short of them; otherwise an
+            // ordered LIMIT walk spends its rows on NULLs.
+            let desc = matches!(index.keys.first(), Some(key) if key.sort_dir == SortDir::Desc);
+            let (first, last) = if desc {
+                (&bounds.upper, &bounds.lower)
+            } else {
+                (&bounds.lower, &bounds.upper)
+            };
+            let start = match first {
                 Some((value, inclusive)) => {
                     let bytes = encode_prefix_key(index, std::slice::from_ref(value));
                     if *inclusive { bytes } else { next_key(&bytes) }
                 }
-                None => Vec::new(),
+                None if desc => Vec::new(),
+                None => next_key(&encode_prefix_key(index, &[SqlValue::Null])),
             };
-            let end = match &bounds.upper {
+            let end = match last {
                 Some((value, inclusive)) => {
                     let bytes = encode_prefix_key(index, std::slice::from_ref(value));
                     if *inclusive { next_key(&bytes) } else { bytes }
                 }
+                None if desc => encode_prefix_key(index, &[SqlValue::Null]),
                 None => max_key_for(index),
             };
             let residual_conjuncts = residuals_from_consumed(&conjuncts, &consumed_idx);
@@ -442,7 +456,11 @@ fn suffix_range_after_prefix(
             let key = encode_prefix_key(index, &[leading_value.clone(), value.clone()]);
             if *inclusive { key } else { next_key(&key) }
         }
-        None => leading_prefix.clone(),
+        // Skip the suffix's NULL keys, which no comparison matches.
+        None => next_key(&encode_prefix_key(
+            index,
+            &[leading_value.clone(), SqlValue::Null],
+        )),
     };
     let end = match &bounds.upper {
         Some((value, inclusive)) => {

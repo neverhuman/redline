@@ -10,8 +10,8 @@ use crate::catalog::{
 use crate::engine::tx::PendingIndexHandle;
 use crate::format::{PageGeneration, PageId, TuplePtr};
 use crate::index::{
-    BtreeIndex, INDEX_VERSION, IndexDescriptor, IndexId as PhysicalIndexId, IndexRowRef,
-    IndexUniqueness,
+    BtreeIndex, IndexDescriptor, IndexId as PhysicalIndexId, IndexRowRef, IndexUniqueness,
+    current_index_version,
 };
 use crate::txn::Isolation;
 use crate::{Error, Result};
@@ -20,6 +20,8 @@ use super::{CommitOutcome, Engine, Txn};
 
 #[path = "catalog_ops/index.rs"]
 mod index;
+#[path = "catalog_ops/index_rebuild.rs"]
+mod index_rebuild;
 #[path = "catalog_ops/schema.rs"]
 mod schema;
 #[path = "catalog_ops/support.rs"]

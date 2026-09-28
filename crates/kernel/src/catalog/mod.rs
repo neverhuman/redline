@@ -5,6 +5,9 @@ mod ddl;
 mod expr;
 mod ids;
 mod key;
+mod key_epoch;
+#[cfg(test)]
+mod key_tests;
 mod manager;
 mod names;
 mod numeric;
@@ -31,9 +34,13 @@ pub use expr::{
 };
 pub use ids::{ColumnId, ConstraintId, IndexId, ObjectId, RelationId, SchemaId, TableId};
 pub use key::{
-    EncodedIndexKey, IndexKeyDef, IndexKeySource, NullOrder, SortDir, compare_index_keys,
-    encode_index_key,
+    DecodedNumericKey, EncodedIndexKey, IndexKeyDef, IndexKeySource, NullOrder, SortDir,
+    compare_index_keys, decode_numeric_key_part, encode_index_key, is_numeric_key_tag,
+    numeric_key_part_len,
 };
+pub(crate) use key_epoch::v4_index_format_active;
+#[doc(hidden)]
+pub use key_epoch::with_v4_index_format_for_tests;
 pub use manager::CatalogManager;
 pub use names::{DbName, QualifiedName};
 pub use numeric::{int_real_cmp, sqlite_numeric_prefix, sqlite_text_is_true};

@@ -1,7 +1,8 @@
 use redlinedb_kernel::Error;
 use redlinedb_kernel::catalog::{
     ColumnConstraintSpec, ColumnSpec, ConflictAction, CreateIndexSpec, CreateTableSpec, DbName,
-    IndexColumnSpec, IndexOrigin, QualifiedName, SchemaId, SortDir, ValueRef, encode_record,
+    IndexColumnSpec, IndexOrigin, QualifiedName, SchemaId, SortDir, ValueRef, encode_index_key,
+    encode_record,
 };
 use redlinedb_kernel::engine::{CommitOutcome, Engine, EngineConfig};
 use redlinedb_kernel::format::{Csn, RelId, RowId};
@@ -88,7 +89,7 @@ fn storage_stats_snapshot_reports_core_counters() {
 }
 
 #[test]
-fn engine_rebuilds_v1_index_meta_on_open() {
+fn engine_rebuilds_v1_index_from_the_heap_after_open() {
     let (temp, engine) = test_engine();
     let mut tx = engine.begin(Isolation::Snapshot).unwrap();
     let table = engine
@@ -187,20 +188,49 @@ fn engine_rebuilds_v1_index_meta_on_open() {
         },
     )
     .unwrap();
-    let migrated = reopened
-        .schema_snapshot()
-        .indexes
-        .iter()
-        .find(|idx| idx.name.as_ref() == "ix_t_migrate_v")
-        .unwrap()
-        .clone();
-    let new_meta = migrated.meta_page_id.unwrap();
+    let migrated = |engine: &Engine| {
+        engine
+            .schema_snapshot()
+            .indexes
+            .iter()
+            .find(|idx| idx.name.as_ref() == "ix_t_migrate_v")
+            .unwrap()
+            .clone()
+    };
+    // An index at an older epoch gets no handle at open. It is rebuilt from
+    // the heap once recovery has finished: rebuilding inside recovery ran
+    // before the row directory was loaded and dropped the checkpointed row.
+    let stale = migrated(&reopened);
+    assert_eq!(stale.meta_page_id, Some(old_meta));
+    assert_eq!(
+        reopened.indexes_needing_rebuild().unwrap(),
+        vec![stale.index_id]
+    );
+    assert!(reopened.index_handle(stale.index_id).is_none());
+    assert_eq!(reopened.rebuild_stale_indexes().unwrap(), 1);
+
+    let rebuilt = migrated(&reopened);
+    let new_meta = rebuilt.meta_page_id.unwrap();
     assert_ne!(old_meta, new_meta);
     assert_eq!(
         BtreeIndex::format_version(reopened.buffer_pool_for_tests(), new_meta).unwrap(),
         INDEX_VERSION
     );
-    assert!(reopened.index_handle(migrated.index_id).is_some());
+    assert!(reopened.indexes_needing_rebuild().unwrap().is_empty());
+    let handle = reopened.index_handle(rebuilt.index_id).unwrap();
+    let mut buf = Vec::new();
+    let key = encode_index_key(&[ValueRef::Text("alpha")], &[SortDir::Asc], &mut buf).bytes;
+    let rows: Vec<RowId> = handle
+        .point_lookup(&key)
+        .unwrap()
+        .iter()
+        .map(|entry| entry.row_id)
+        .collect();
+    assert_eq!(
+        rows,
+        vec![row],
+        "the rebuilt index lost the checkpointed row"
+    );
 }
 
 #[test]

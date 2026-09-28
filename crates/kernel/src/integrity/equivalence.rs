@@ -114,8 +114,13 @@ fn probe_record_offset(
         by_row.insert(*row_id, payload.as_slice());
     }
 
+    // Count the matches under each layout and keep the better one. Taking
+    // the first layout with any match picked the wrong column whenever a
+    // neighbouring column happened to hold an equal key (INTEGER 1 in one
+    // column and REAL 1.0 in the next are the same key).
+    let mut best: Option<(usize, usize)> = None;
     for offset in [0_usize, 1_usize] {
-        let mut matched_any = false;
+        let mut matches = 0_usize;
         for (key_bytes, row_id) in durable {
             let Some(payload) = by_row.get(row_id) else {
                 continue;
@@ -125,15 +130,14 @@ fn probe_record_offset(
                 Err(_) => continue,
             };
             if candidate.as_slice() == key_bytes.as_slice() {
-                matched_any = true;
-                break;
+                matches += 1;
             }
         }
-        if matched_any {
-            return Ok(Some(offset));
+        if matches > 0 && best.is_none_or(|(_, most)| matches > most) {
+            best = Some((offset, matches));
         }
     }
-    Ok(None)
+    Ok(best.map(|(offset, _)| offset))
 }
 
 fn derive_key_bytes(

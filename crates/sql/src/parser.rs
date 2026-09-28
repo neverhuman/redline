@@ -61,6 +61,7 @@ pub(crate) use templates::{bind_statement, template};
 mod collation_stmt;
 mod matview_stmt;
 mod pg_fn_stmt;
+mod reindex_stmt;
 mod rewrite;
 #[allow(unused_imports)]
 pub(crate) use rewrite::{
@@ -295,7 +296,7 @@ fn parse_prepared_template_impl(conn: &Connection, sql: &str) -> Result<Prepared
     if let Some(template) = parse_attach_template(trimmed, schema_epoch) {
         return Ok(template);
     }
-    if let Some(template) = templates::parse_reindex_template(trimmed, schema_epoch)? {
+    if let Some(template) = reindex_stmt::parse_reindex_template(trimmed, schema_epoch)? {
         return Ok(template);
     }
     if let Some(template) = templates::parse_vacuum_into_template(trimmed, schema_epoch)? {

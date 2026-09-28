@@ -678,22 +678,6 @@ fn bind_create_virtual_table(
     ))
 }
 
-pub(crate) fn parse_reindex_template(
-    sql: &str,
-    schema_epoch: SchemaEpoch,
-) -> Result<Option<PreparedTemplate>> {
-    let trimmed = sql.trim().trim_end_matches(';').trim();
-    if trimmed.eq_ignore_ascii_case("reindex") {
-        return Ok(Some(template(
-            trimmed,
-            schema_epoch,
-            false,
-            PreparedKind::Reindex,
-        )));
-    }
-    Ok(None)
-}
-
 pub(crate) fn parse_vacuum_into_template(
     sql: &str,
     schema_epoch: SchemaEpoch,

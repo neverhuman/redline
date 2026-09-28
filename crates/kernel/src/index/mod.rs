@@ -37,7 +37,34 @@ pub use locks::{UniqueKeyGuard, UniqueKeyLockTable, poly_hash_u64};
 
 pub const INDEX_SPECIAL_LEN: usize = 256;
 const INDEX_MAGIC: u32 = 0x5244_4958; // "RDIX"
-pub const INDEX_VERSION: u16 = 2;
+/// The index-format epoch this build writes and reads: the `u16` at offset 4
+/// of every B-tree page's special area.
+///
+/// The epoch changes whenever the bytes of an index key change meaning.
+/// Epoch 3 (RedlineDB v5) puts INTEGER and REAL in one numeric key space;
+/// epoch 2 (v4.x) kept them apart; epoch 1 predates v4. At open an index at
+/// an older epoch is not opened: the SQL layer rebuilds it from the heap at
+/// this epoch before the database is handed out (see
+/// `Engine::indexes_needing_rebuild`). An index at a newer epoch is refused
+/// with `UnsupportedVersion`, and that refusal is how older builds keep away
+/// from newer databases: v4.x accepts only epoch 2 (and rebuilds epoch 1),
+/// so it fails to open a v5 database that has any index with
+/// `unsupported format version: 3` instead of misreading its keys.
+pub const INDEX_VERSION: u16 = 3;
+/// The epoch RedlineDB v4.x wrote.
+pub const V4_INDEX_VERSION: u16 = 2;
+
+/// The epoch new pages are stamped with: [`INDEX_VERSION`], or
+/// [`V4_INDEX_VERSION`] inside
+/// `catalog::with_v4_index_format_for_tests`.
+#[inline]
+pub fn current_index_version() -> u16 {
+    if crate::catalog::v4_index_format_active() {
+        V4_INDEX_VERSION
+    } else {
+        INDEX_VERSION
+    }
+}
 const PAGE_META_KIND: u8 = 1;
 pub(crate) const PAGE_LEAF_KIND: u8 = 2;
 pub(crate) const PAGE_INTERNAL_KIND: u8 = 3;
@@ -319,13 +346,23 @@ impl BtreeIndex {
     }
 
     pub fn format_version(buffer: &BufferPool, meta_page_id: PageId) -> Result<u16> {
+        Self::meta_identity(buffer, meta_page_id).map(|(version, _)| version)
+    }
+
+    /// The index-format epoch and the physical index id stored in the meta
+    /// page at `meta_page_id`, read without validating the rest of the
+    /// B-tree. The physical id tags every WAL record the B-tree writes; it
+    /// equals the catalog index id unless the index was rebuilt, which gives
+    /// the new B-tree a fresh id so recovery never replays the old B-tree's
+    /// records into it.
+    pub fn meta_identity(buffer: &BufferPool, meta_page_id: PageId) -> Result<(u16, IndexId)> {
         let guard = buffer.pin(meta_page_id)?;
         guard.with_page(|page| {
             let special = page.special_bytes()?;
             if read_u32(special, 0)? != INDEX_MAGIC {
                 return Err(Error::CorruptPage("index magic mismatch"));
             }
-            read_u16(special, 4)
+            Ok((read_u16(special, 4)?, IndexId(read_u64(special, 8)?)))
         })
     }
 
@@ -702,7 +739,7 @@ impl BtreeIndex {
         let special = page.special_bytes_mut()?;
         special.fill(0);
         crate::format::bytes::write_u32(special, 0, INDEX_MAGIC)?;
-        crate::format::bytes::write_u16(special, 4, INDEX_VERSION)?;
+        crate::format::bytes::write_u16(special, 4, current_index_version())?;
         special[6] = header.kind;
         special[7] = 0;
         write_u16(special, PAGE_LEVEL_OFF, header.level)?;
@@ -726,7 +763,7 @@ impl BtreeIndex {
 
     pub(super) fn read_meta(page: &Page) -> Result<MetaHeader> {
         let special = page.special_bytes()?;
-        if read_u16(special, 4)? != INDEX_VERSION {
+        if read_u16(special, 4)? != current_index_version() {
             return Err(Error::UnsupportedVersion(read_u16(special, 4)?));
         }
         let index_id = IndexId(read_u64(special, 8)?);
@@ -749,7 +786,7 @@ impl BtreeIndex {
         let special = page.special_bytes_mut()?;
         special.fill(0);
         write_u32(special, 0, INDEX_MAGIC)?;
-        write_u16(special, 4, INDEX_VERSION)?;
+        write_u16(special, 4, current_index_version())?;
         special[6] = PAGE_META_KIND;
         special[7] = 0;
         write_u64(special, 8, meta.index_id.0)?;

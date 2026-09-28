@@ -7,10 +7,10 @@ use std::sync::atomic::{AtomicU64, Ordering as AtomicOrdering};
 use std::time::{SystemTime, UNIX_EPOCH};
 
 use redlinedb_kernel::catalog::{
-    ColumnStats, ConstraintKind, EvalScratch, HistogramBucket, IndexDef, IndexStats,
-    MostCommonValue, OwnedValue, RecordRef, RecordScratch, RowValueSource, SchemaSnapshot,
-    SqliteSchemaRow, StatsEpoch, StatsSnapshot, TableDef, TableStats, ValueRef, apply_affinity,
-    encode_record, eval_expr,
+    ColumnStats, ConstraintKind, EvalScratch, HistogramBucket, IndexStats, MostCommonValue,
+    OwnedValue, RecordRef, RecordScratch, RowValueSource, SchemaSnapshot, SqliteSchemaRow,
+    StatsEpoch, StatsSnapshot, TableDef, TableStats, ValueRef, apply_affinity, encode_record,
+    eval_expr,
 };
 use redlinedb_kernel::engine::{CommitDurability, CommitOutcome, Engine, Txn};
 use redlinedb_kernel::format::RowId;
@@ -43,6 +43,7 @@ pub(crate) mod index_partial;
 pub(crate) mod index_predicate;
 mod join_probe;
 pub(crate) mod policy;
+pub(crate) mod reindex;
 mod tail;
 use tail::*;
 pub(crate) use tail::{collect_table_rowids, load_table_row_by_rowid};
@@ -425,6 +426,13 @@ pub fn execute_prepared(
             runtime: RuntimeState::Done,
             affected_rows: 0,
         }),
+        PreparedKind::ReindexIndexes(target) => {
+            reindex::execute_reindex(conn, target)?;
+            Ok(ExecutionResult {
+                runtime: RuntimeState::Done,
+                affected_rows: 0,
+            })
+        }
         PreparedKind::Vacuum => {
             conn.vacuum()?;
             Ok(ExecutionResult {
@@ -482,7 +490,7 @@ pub fn execute_prepared(
                 };
                 let index = conn.engine().create_index(tx, spec.clone())?;
                 if requires_sql_backfill && !existed_before {
-                    backfill_sql_index(conn, tx, &index)?;
+                    reindex::backfill_sql_index(conn, tx, &index)?;
                 }
                 Ok(())
             })?;
@@ -1206,6 +1214,7 @@ fn template_writes(kind: &PreparedKind) -> bool {
         | PreparedKind::CreateTempTable(_)
         | PreparedKind::CreateTableAsSelect(_)
         | PreparedKind::CreateIndex(_)
+        | PreparedKind::ReindexIndexes(_)
         | PreparedKind::CreateVirtualTable(_)
         | PreparedKind::CreateView(_)
         | PreparedKind::CreateTrigger(_)
@@ -1363,39 +1372,6 @@ fn create_index_existed_before(
     Ok(snapshot
         .lookup_index(schema_id, spec.name.folded())
         .is_some())
-}
-
-fn backfill_sql_index(conn: &Connection, tx: &mut Txn, index: &Arc<IndexDef>) -> Result<()> {
-    let Some(handle) = index_dml::open_index_handle_for_tx(conn.engine(), tx, index) else {
-        return Ok(());
-    };
-    let snapshot = conn.engine().schema_snapshot_for_tx(tx);
-    let table = snapshot
-        .table_by_id(index.table_id)
-        .ok_or(redlinedb_kernel::Error::ObjectNotFound)?;
-    for row in collect_table_rows(conn.engine(), tx, &table)? {
-        if let Some(pred_sql) = index.predicate_sql.as_deref()
-            && !index_predicate::eval_index_predicate(&table, pred_sql, &row.values)?
-        {
-            continue;
-        }
-        let key = index_dml::build_index_key(&table, index, &row.values)?;
-        let _unique_guard = if index.unique && !key.contains_null {
-            let (guard, hit) =
-                index_dml::probe_unique_for_conflict(conn.engine(), &handle, tx, None, &key)?;
-            if hit.is_some() {
-                return Err(Error::ConstraintViolation(format!(
-                    "UNIQUE constraint failed: {}",
-                    table.name
-                )));
-            }
-            Some(guard)
-        } else {
-            None
-        };
-        handle.insert_tx(tx.id(), &key.bytes, index_dml::synthetic_row_ref(row.rowid))?;
-    }
-    Ok(())
 }
 
 /// Returns `Some(value)` when the given PRAGMA SET plan must echo a row

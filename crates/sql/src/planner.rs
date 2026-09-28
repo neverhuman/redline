@@ -324,7 +324,9 @@ pub(crate) fn build_plan(
         | PreparedKind::CrossDbInsertSelect(_) => {
             simple_node(PhysicalKind::Constant, "ATTACH/DETACH".to_owned())
         }
-        PreparedKind::Reindex => simple_node(PhysicalKind::Constant, "REINDEX".to_owned()),
+        PreparedKind::Reindex | PreparedKind::ReindexIndexes(_) => {
+            simple_node(PhysicalKind::Constant, "REINDEX".to_owned())
+        }
         PreparedKind::Vacuum => simple_node(PhysicalKind::Constant, "VACUUM".to_owned()),
         PreparedKind::VacuumInto { .. } => {
             simple_node(PhysicalKind::Constant, "VACUUM INTO".to_owned())

@@ -29,7 +29,8 @@ into `CHANGELOG.md`.
 
 Upgrade note: a partial index whose WHERE clause reads a TEXT or BLOB value
 as a truth value (for example `WHERE flag` with `flag = '1abc'`) was built
-with the old truthiness. Run `REINDEX` on such indexes after upgrading.
+with the old truthiness. Opening a 4.x database rebuilds every index (see the
+index-format epoch below), so such an index is rebuilt at the first open.
 
 ## `sum()` overflow on every route (S9-06)
 
@@ -47,3 +48,47 @@ with the old truthiness. Run `REINDEX` on such indexes after upgrading.
 - A window frame that ends before the partition starts (`ROWS BETWEEN 1
   PRECEDING AND 1 PRECEDING` on the first row) is empty; it used to read
   row 0.
+
+## One numeric index key space, index-format epoch 3, and REINDEX (IDX-EPOCH)
+
+- Index keys put INTEGER and REAL in one key space ordered by numeric value,
+  the way SQLite compares them. Through an index, `x < 2` no longer loses a
+  stored `1.5`, `x = 2` finds a stored `2.0`, `ORDER BY x LIMIT 3` no longer
+  returns every INTEGER before any REAL, and a UNIQUE index rejects `1.0`
+  when `1` is present (4.x accepted both in a column without affinity).
+- The index-format epoch is the `u16` at offset 4 of every B-tree page:
+  2 in 4.x, 3 now. Opening a database written by RedlineDB 4.x rebuilds every
+  index from the heap, expression and partial indexes included, in one
+  transaction, before the database is handed out. A rebuilt index gets a new
+  B-tree, so the 4.x B-tree's WAL records are never replayed into it. If a
+  UNIQUE index now holds two rows with one key (such as `1` and `1.0`), the
+  open fails with `UNIQUE constraint failed: ...` naming the index and
+  changes nothing; delete the duplicates with 4.x and open again.
+- Downgrade: RedlineDB 4.x refuses a database that has any index at epoch 3
+  instead of misreading its keys. Checked with the v4.1.0 release binary
+  (`target/version-history/v4.1.0/redlinedb`, source af2082631): it prints
+  `Error: 1: kernel error: unsupported format version: 3` and exits 1. The
+  refusal is 4.x's own gate in `rehydrate_index_handles`
+  (`crates/kernel/src/engine/catalog_ops/index.rs`, identical since v4.0.3):
+  epoch 2 opens, epoch 1 is rebuilt, anything else fails `Engine::open`. A
+  database with no index has no epoch to check and still opens in 4.x. This
+  build refuses an index from a newer epoch the same way.
+- `REINDEX` rebuilds indexes; it was a no-op, and only the bare statement
+  parsed. `REINDEX`, `REINDEX table`, `REINDEX index`, `REINDEX main.name`,
+  `REINDEX temp.name` and `REINDEX collation` resolve names as SQLite does
+  (collation first, then table, then index, otherwise `unable to identify
+  the object to be reindexed`). A rebuild takes effect at COMMIT. REINDEX of
+  an attached database is not supported yet, and a custom collation is
+  recognized only when some index uses it.
+- A leading DESC index key took its value bounds in ascending byte order, so
+  `WHERE x > 1` through a DESC index returned no rows, and an ordered LIMIT
+  walked a DESC key in the wrong direction. An index range with no lower
+  bound started at the NULL keys, so `WHERE x < 5 ORDER BY x LIMIT 1` spent
+  its row on a NULL and returned nothing.
+- Index-only (covering) scans take the storage class of a whole number from
+  the column affinity, and read the heap for a column without affinity and
+  for a NOCASE key (which returned the text lower-cased).
+- `PRAGMA redline_full_check` picks the record layout that matches the most
+  index entries; it used to take the first layout that matched any entry and
+  then report a neighbouring column's values as mismatches.
+- A rebuild leaves the old B-tree's pages allocated, as `DROP INDEX` does.

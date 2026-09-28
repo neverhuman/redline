@@ -90,6 +90,21 @@ pub struct PreparedTemplate {
     pub kind: PreparedKind,
 }
 
+/// What a `REINDEX` statement names, resolved against the catalog when it
+/// runs.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum ReindexTarget {
+    /// Bare `REINDEX`: every index.
+    All,
+    /// `REINDEX name` or `REINDEX schema.name`. As in SQLite, an unqualified
+    /// name is tried as a collation first (every index with a key column
+    /// using it), then as a table (all of its indexes), then as an index.
+    Named {
+        schema: Option<Arc<str>>,
+        name: Arc<str>,
+    },
+}
+
 #[allow(clippy::large_enum_variant)]
 #[derive(Debug, Clone)]
 pub enum PreparedKind {
@@ -97,7 +112,11 @@ pub enum PreparedKind {
     Commit,
     Rollback,
     Pragma(PragmaPlan),
+    /// A statement that runs as a no-op: the dml-order-limit rewrite
+    /// PRAGMAs (which act at prepare time) and `VACUUM REINDEX`.
     Reindex,
+    /// `REINDEX [target]`: rebuild indexes from the heap.
+    ReindexIndexes(ReindexTarget),
     Vacuum,
     VacuumInto {
         path: Arc<str>,

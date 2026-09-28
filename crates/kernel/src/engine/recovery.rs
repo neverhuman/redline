@@ -4,9 +4,7 @@ use std::collections::{HashMap, HashSet};
 use std::path::Path;
 use std::sync::Arc;
 
-use crate::catalog::{
-    CatalogManager, CatalogStore, CatalogSyncPolicy, IndexId as CatalogIndexId, bootstrap_schema,
-};
+use crate::catalog::{CatalogManager, CatalogStore, CatalogSyncPolicy, bootstrap_schema};
 use crate::engine::lock::RowLockManager;
 use crate::engine::page_heap::PageBackedHeap;
 use crate::format::{Lsn, Page, RelId, TxId};
@@ -754,6 +752,22 @@ fn recover_indexes(
             committed.insert(tx_id);
         }
     }
+    // Index records name the B-tree that wrote them by its physical id, which
+    // a rebuilt index does not share with its old B-tree (see
+    // `Engine::rebuild_index_empty`). Records of an old or stale B-tree find
+    // no handle and are skipped.
+    let by_physical_id: HashMap<u64, std::sync::Arc<crate::index::BtreeIndex>> = engine
+        .index_handles
+        .lock()
+        .map_err(|_| Error::CorruptPage("engine index handles mutex poisoned"))?
+        .values()
+        .map(|handle| {
+            (
+                handle.descriptor().index_id.0,
+                std::sync::Arc::clone(handle),
+            )
+        })
+        .collect();
 
     for record in records {
         if record.lsn < replay_from_lsn || !filter.applies(record.lsn) {
@@ -775,11 +789,7 @@ fn recover_indexes(
                 logical_key,
                 row,
             } if record.kind == WalRecordKind::PageDelta && committed.contains(&tx_id) => {
-                let handles = engine
-                    .index_handles
-                    .lock()
-                    .map_err(|_| Error::CorruptPage("engine index handles mutex poisoned"))?;
-                if let Some(handle) = handles.get(&CatalogIndexId(index_id)) {
+                if let Some(handle) = by_physical_id.get(&index_id) {
                     handle.insert_recovered_tx(tx_id, &logical_key, row, record_end_lsn(record))?;
                 }
             }
@@ -789,11 +799,7 @@ fn recover_indexes(
                 logical_key,
                 row,
             } if record.kind == WalRecordKind::PageDelta && committed.contains(&tx_id) => {
-                let handles = engine
-                    .index_handles
-                    .lock()
-                    .map_err(|_| Error::CorruptPage("engine index handles mutex poisoned"))?;
-                if let Some(handle) = handles.get(&CatalogIndexId(index_id)) {
+                if let Some(handle) = by_physical_id.get(&index_id) {
                     handle.delete_mark_recovered_tx(
                         tx_id,
                         &logical_key,

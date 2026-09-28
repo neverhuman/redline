@@ -1336,7 +1336,9 @@ fn covering_projection_for_index(
             .iter()
             .position(|c| c.folded.as_ref().eq_ignore_ascii_case(column_name))?;
         let index_pos = *col_to_index_pos.get(&table_ord)?;
-        out.push(index_access::OutputColumnSource::IndexColumn { ordinal: index_pos });
+        out.push(index_access::covering_column_source(
+            table, index, index_pos,
+        )?);
     }
     Some(out)
 }
@@ -1371,7 +1373,10 @@ fn order_satisfied_by_index_with_prefix(
         return false;
     }
     for (item, key) in order_by.iter().zip(remaining.iter()) {
-        if matches!(item.options.asc, Some(false)) {
+        // A forward walk yields a DESC key's values in descending order.
+        if matches!(item.options.asc, Some(false))
+            != (key.sort_dir == redlinedb_kernel::catalog::SortDir::Desc)
+        {
             return false;
         }
         let Expr::Identifier(ident) = &item.expr else {
@@ -1412,7 +1417,9 @@ fn order_reverse_satisfied_by_index(
         return false;
     }
     for (item, key) in order_by.iter().zip(remaining.iter()) {
-        if !matches!(item.options.asc, Some(false)) {
+        if matches!(item.options.asc, Some(false))
+            == (key.sort_dir == redlinedb_kernel::catalog::SortDir::Desc)
+        {
             return false;
         }
         let Expr::Identifier(ident) = &item.expr else {

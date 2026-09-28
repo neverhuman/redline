@@ -30,7 +30,8 @@ use redlinedb_kernel::engine::Engine;
 use sqlparser::ast::{Expr, OrderByExpr, SelectItem};
 
 use crate::exec::index_access::{
-    IndexAccessMatch, IndexProbe, IndexProbeKind, OutputColumnSource, try_match_index_access_hinted,
+    IndexAccessMatch, IndexProbe, IndexProbeKind, OutputColumnSource, covering_column_source,
+    try_match_index_access_hinted,
 };
 use crate::statement::TableAccessHint;
 use crate::value::SqlValue;
@@ -554,7 +555,7 @@ fn compute_covering_map(
             .iter()
             .position(|c| c.folded.as_ref().eq_ignore_ascii_case(column_name))?;
         let &index_pos = col_to_index_pos.get(&table_ord)?;
-        sources.push(OutputColumnSource::IndexColumn { ordinal: index_pos });
+        sources.push(covering_column_source(table, index, index_pos)?);
     }
     Some(CoveringMap { sources })
 }

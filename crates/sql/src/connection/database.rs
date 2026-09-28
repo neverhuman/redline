@@ -219,7 +219,7 @@ impl Database {
             None => Arc::new(StatsSnapshot::default()),
         };
         let optimizer_hash = hash_optimizer(&opts.optimizer, &opts.query_memory);
-        Ok(Arc::new(Self {
+        Self::upgraded(Arc::new(Self {
             path: Arc::new(base.to_path_buf()),
             engine,
             unique_locks: UniqueLockTable::new(opts.unique_lock_shards, opts.busy_timeout),
@@ -255,7 +255,7 @@ impl Database {
             None => Arc::new(StatsSnapshot::default()),
         };
         let optimizer_hash = hash_optimizer(&opts.optimizer, &opts.query_memory);
-        Ok(Arc::new(Self {
+        Self::upgraded(Arc::new(Self {
             path: Arc::new(base.to_path_buf()),
             engine,
             unique_locks: UniqueLockTable::new(opts.unique_lock_shards, opts.busy_timeout),
@@ -273,6 +273,15 @@ impl Database {
             _ephemeral_root: None,
             private_memory: false,
         }))
+    }
+
+    /// Finish opening an existing database: rebuild every index still at an
+    /// older index-format epoch (a database written by RedlineDB 4.x) before
+    /// any connection can read one. Fails, with nothing committed, when a
+    /// rebuild fails; see `exec/reindex.rs`.
+    fn upgraded(db: Arc<Self>) -> Result<Arc<Self>> {
+        crate::exec::reindex::upgrade_stale_indexes(&db)?;
+        Ok(db)
     }
 
     pub fn connect(self: &Arc<Self>) -> Arc<Connection> {
