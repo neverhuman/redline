@@ -102,6 +102,31 @@ mod tests {
         Ok(())
     }
 
+    /// Leaf rebuilds this thread has made. Other tests run as threads of the
+    /// same process, so the process-wide count would include theirs.
+    fn rewrite_leaf_calls() -> u64 {
+        observe::thread_snapshot().rewrite_leaf_calls
+    }
+
+    #[test]
+    fn rebuild_count_ignores_rewrites_on_other_threads() {
+        let _on = ForceGuard::set(true);
+        let (_direct_dir, direct) = fresh(IndexUniqueness::NonUnique).expect("direct index");
+        let before = rewrite_leaf_calls();
+        // Rewrites on another thread, as a test running beside this one
+        // makes them, land inside this measurement.
+        std::thread::spawn(|| {
+            let _off = ForceGuard::set(false);
+            let (_dir, rewrite) = fresh(IndexUniqueness::NonUnique).expect("rewrite index");
+            fill(&rewrite, 32).expect("rewrite fill");
+        })
+        .join()
+        .expect("rewrite thread");
+        fill(&direct, 32).expect("direct fill");
+        let direct_calls = rewrite_leaf_calls() - before;
+        assert_eq!(direct_calls, 0, "direct path rebuilt the leaf");
+    }
+
     #[test]
     fn default_direct_insert_is_on_unless_zero() {
         force_direct(None);
@@ -116,16 +141,16 @@ mod tests {
     fn direct_insert_matches_rewrite_and_skips_rebuild() {
         let _off = ForceGuard::set(false);
         let (_rewrite_dir, rewrite) = fresh(IndexUniqueness::NonUnique).expect("rewrite index");
-        let before_rewrite = observe::snapshot();
+        let before_rewrite = rewrite_leaf_calls();
         fill(&rewrite, 32).expect("rewrite fill");
-        let rewrite_calls = observe::snapshot().since(before_rewrite).rewrite_leaf_calls;
+        let rewrite_calls = rewrite_leaf_calls() - before_rewrite;
         drop(_off);
 
         let _on = ForceGuard::set(true);
         let (_direct_dir, direct) = fresh(IndexUniqueness::NonUnique).expect("direct index");
-        let before_direct = observe::snapshot();
+        let before_direct = rewrite_leaf_calls();
         fill(&direct, 32).expect("direct fill");
-        let direct_calls = observe::snapshot().since(before_direct).rewrite_leaf_calls;
+        let direct_calls = rewrite_leaf_calls() - before_direct;
         drop(_on);
 
         assert!(rewrite_calls >= 32, "rewrite path rebuilt {rewrite_calls}");

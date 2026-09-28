@@ -156,7 +156,7 @@ mod tests {
         let path = dir.path().join("pages.redline");
         let page_size = 16 * 1024;
 
-        let before = crate::observe::snapshot();
+        let before = crate::observe::thread_snapshot();
         let page_file = PageFile::create(&path, page_size).expect("create");
         let page = Page::new(page_size, PageKind::Heap, PageId(1), RelId(42)).expect("page");
         page_file.write_page(&page).expect("write page");
@@ -169,7 +169,8 @@ mod tests {
             reread.header().expect("header"),
             page.header().expect("header")
         );
-        let after = crate::observe::snapshot();
-        assert!(after.page_file_mutex_acquires >= before.page_file_mutex_acquires + 2);
+        // One counted lock each for `write_page` and `read_page`.
+        let after = crate::observe::thread_snapshot();
+        assert_eq!(after.since(before).page_file_mutex_acquires, 2);
     }
 }

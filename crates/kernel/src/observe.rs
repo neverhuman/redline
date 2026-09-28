@@ -3,6 +3,11 @@
 //! Relaxed atomics. They do not change SQL results, page bytes, or
 //! durability. Callers sample [`snapshot`] around a run and subtract
 //! with [`ObserveSnapshot::since`].
+//!
+//! [`snapshot`] sums every thread, so a test that reads it while other
+//! tests run in the same process counts their work too. Kernel unit tests
+//! read `thread_snapshot` instead: test builds also count each event on the
+//! thread that made it.
 
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::Duration;
@@ -93,53 +98,125 @@ pub fn snapshot() -> ObserveSnapshot {
     }
 }
 
+/// Which [`ObserveSnapshot`] field a global counter mirrors.
+type Field = fn(&mut ObserveSnapshot) -> &mut u64;
+
+#[inline]
+fn add(global: &AtomicU64, field: Field, n: u64) {
+    global.fetch_add(n, Ordering::Relaxed);
+    #[cfg(test)]
+    this_thread::add(field, n);
+    #[cfg(not(test))]
+    let _ = field;
+}
+
 #[inline]
 pub fn add_checksum_bytes(n: u64) {
-    OBSERVE.checksum_bytes.fetch_add(n, Ordering::Relaxed);
+    add(&OBSERVE.checksum_bytes, |s| &mut s.checksum_bytes, n);
 }
 
 #[inline]
 pub fn add_rewrite_leaf() {
-    OBSERVE.rewrite_leaf_calls.fetch_add(1, Ordering::Relaxed);
+    add(
+        &OBSERVE.rewrite_leaf_calls,
+        |s| &mut s.rewrite_leaf_calls,
+        1,
+    );
 }
 
 #[inline]
 pub fn add_row_lock_probe() {
-    OBSERVE.row_lock_probes.fetch_add(1, Ordering::Relaxed);
+    add(&OBSERVE.row_lock_probes, |s| &mut s.row_lock_probes, 1);
 }
 
 #[inline]
 pub fn add_all_frames(frames: u64) {
-    OBSERVE.all_frames_calls.fetch_add(1, Ordering::Relaxed);
-    OBSERVE
-        .all_frames_frames
-        .fetch_add(frames, Ordering::Relaxed);
+    add(&OBSERVE.all_frames_calls, |s| &mut s.all_frames_calls, 1);
+    add(
+        &OBSERVE.all_frames_frames,
+        |s| &mut s.all_frames_frames,
+        frames,
+    );
 }
 
 #[inline]
 pub fn add_page_file_mutex_wait(wait: Duration) {
     let ns = u64::try_from(wait.as_nanos()).unwrap_or(u64::MAX);
-    OBSERVE
-        .page_file_mutex_wait_ns
-        .fetch_add(ns, Ordering::Relaxed);
-    OBSERVE
-        .page_file_mutex_acquires
-        .fetch_add(1, Ordering::Relaxed);
+    add(
+        &OBSERVE.page_file_mutex_wait_ns,
+        |s| &mut s.page_file_mutex_wait_ns,
+        ns,
+    );
+    add(
+        &OBSERVE.page_file_mutex_acquires,
+        |s| &mut s.page_file_mutex_acquires,
+        1,
+    );
 }
 
 #[inline]
 pub fn add_relation_get() {
-    OBSERVE.relation_gets.fetch_add(1, Ordering::Relaxed);
+    add(&OBSERVE.relation_gets, |s| &mut s.relation_gets, 1);
 }
 
 #[inline]
 pub fn add_sql_row_decode() {
-    OBSERVE.sql_row_decodes.fetch_add(1, Ordering::Relaxed);
+    add(&OBSERVE.sql_row_decodes, |s| &mut s.sql_row_decodes, 1);
 }
 
 #[inline]
 pub fn add_join_prefix_clone() {
-    OBSERVE.join_prefix_clones.fetch_add(1, Ordering::Relaxed);
+    add(
+        &OBSERVE.join_prefix_clones,
+        |s| &mut s.join_prefix_clones,
+        1,
+    );
+}
+
+/// Counts made on this thread since it started.
+///
+/// Test builds only. Tests run as threads of one process, so a test that
+/// counts with [`snapshot`] also counts every test running beside it.
+#[cfg(test)]
+pub(crate) fn thread_snapshot() -> ObserveSnapshot {
+    this_thread::snapshot()
+}
+
+#[cfg(test)]
+mod this_thread {
+    use std::cell::Cell;
+
+    use super::{Field, ObserveSnapshot};
+
+    thread_local! {
+        static COUNTS: Cell<ObserveSnapshot> = const {
+            Cell::new(ObserveSnapshot {
+                checksum_bytes: 0,
+                rewrite_leaf_calls: 0,
+                row_lock_probes: 0,
+                all_frames_calls: 0,
+                all_frames_frames: 0,
+                page_file_mutex_wait_ns: 0,
+                page_file_mutex_acquires: 0,
+                relation_gets: 0,
+                sql_row_decodes: 0,
+                join_prefix_clones: 0,
+            })
+        };
+    }
+
+    pub(super) fn add(field: Field, n: u64) {
+        COUNTS.with(|cell| {
+            let mut counts = cell.get();
+            let slot = field(&mut counts);
+            *slot = slot.wrapping_add(n);
+            cell.set(counts);
+        });
+    }
+
+    pub(super) fn snapshot() -> ObserveSnapshot {
+        COUNTS.with(Cell::get)
+    }
 }
 
 #[cfg(test)]
@@ -150,61 +227,92 @@ mod tests {
 
     use super::*;
 
+    fn add_each(checksum: u64, frames: u64, wait_ns: u64) {
+        add_checksum_bytes(checksum);
+        add_rewrite_leaf();
+        add_row_lock_probe();
+        add_all_frames(frames);
+        add_page_file_mutex_wait(Duration::from_nanos(wait_ns));
+        add_relation_get();
+        add_sql_row_decode();
+        add_join_prefix_clone();
+    }
+
+    fn each(checksum: u64, frames: u64, wait_ns: u64) -> ObserveSnapshot {
+        ObserveSnapshot {
+            checksum_bytes: checksum,
+            rewrite_leaf_calls: 1,
+            row_lock_probes: 1,
+            all_frames_calls: 1,
+            all_frames_frames: frames,
+            page_file_mutex_wait_ns: wait_ns,
+            page_file_mutex_acquires: 1,
+            relation_gets: 1,
+            sql_row_decodes: 1,
+            join_prefix_clones: 1,
+        }
+    }
+
+    /// Other tests only add to the process-wide counters, so a process-wide
+    /// delta holds at least what one thread counted.
+    fn assert_covers(total: ObserveSnapshot, part: ObserveSnapshot) {
+        let pairs = [
+            (total.checksum_bytes, part.checksum_bytes),
+            (total.rewrite_leaf_calls, part.rewrite_leaf_calls),
+            (total.row_lock_probes, part.row_lock_probes),
+            (total.all_frames_calls, part.all_frames_calls),
+            (total.all_frames_frames, part.all_frames_frames),
+            (total.page_file_mutex_wait_ns, part.page_file_mutex_wait_ns),
+            (
+                total.page_file_mutex_acquires,
+                part.page_file_mutex_acquires,
+            ),
+            (total.relation_gets, part.relation_gets),
+            (total.sql_row_decodes, part.sql_row_decodes),
+            (total.join_prefix_clones, part.join_prefix_clones),
+        ];
+        for (total_count, part_count) in pairs {
+            assert!(total_count >= part_count, "{total:?} misses {part:?}");
+        }
+    }
+
     #[test]
     fn each_counter_moves_and_a_second_call_adds() {
-        let before = snapshot();
-        add_checksum_bytes(10);
-        add_rewrite_leaf();
-        add_row_lock_probe();
-        add_all_frames(3);
-        add_page_file_mutex_wait(Duration::from_nanos(15));
-        add_relation_get();
-        add_sql_row_decode();
-        add_join_prefix_clone();
-        let mid = snapshot();
-        assert!(mid.checksum_bytes >= before.checksum_bytes + 10);
-        assert!(mid.rewrite_leaf_calls >= before.rewrite_leaf_calls + 1);
-        assert!(mid.row_lock_probes >= before.row_lock_probes + 1);
-        assert!(mid.all_frames_calls >= before.all_frames_calls + 1);
-        assert!(mid.all_frames_frames >= before.all_frames_frames + 3);
-        assert!(mid.page_file_mutex_wait_ns >= before.page_file_mutex_wait_ns + 15);
-        assert!(mid.page_file_mutex_acquires >= before.page_file_mutex_acquires + 1);
-        assert!(mid.relation_gets >= before.relation_gets + 1);
-        assert!(mid.sql_row_decodes >= before.sql_row_decodes + 1);
-        assert!(mid.join_prefix_clones >= before.join_prefix_clones + 1);
+        let process_before = snapshot();
+        let before = thread_snapshot();
+        add_each(10, 3, 15);
+        let mid = thread_snapshot();
+        assert_eq!(mid.since(before), each(10, 3, 15));
 
-        add_checksum_bytes(5);
-        add_rewrite_leaf();
-        add_row_lock_probe();
-        add_all_frames(1);
-        add_page_file_mutex_wait(Duration::from_nanos(1));
-        add_relation_get();
-        add_sql_row_decode();
-        add_join_prefix_clone();
-        let after = snapshot();
-        assert!(after.checksum_bytes >= mid.checksum_bytes + 5);
-        assert!(after.rewrite_leaf_calls >= mid.rewrite_leaf_calls + 1);
-        assert!(after.row_lock_probes >= mid.row_lock_probes + 1);
-        assert!(after.all_frames_calls >= mid.all_frames_calls + 1);
-        assert!(after.all_frames_frames >= mid.all_frames_frames + 1);
-        assert!(after.page_file_mutex_wait_ns >= mid.page_file_mutex_wait_ns + 1);
-        assert!(after.page_file_mutex_acquires >= mid.page_file_mutex_acquires + 1);
-        assert!(after.relation_gets >= mid.relation_gets + 1);
-        assert!(after.sql_row_decodes >= mid.sql_row_decodes + 1);
-        assert!(after.join_prefix_clones >= mid.join_prefix_clones + 1);
+        add_each(5, 1, 1);
+        let after = thread_snapshot();
+        assert_eq!(after.since(mid), each(5, 1, 1));
         let delta = after.since(before);
-        assert!(delta.checksum_bytes >= 15);
-        assert!(delta.rewrite_leaf_calls >= 2);
+        assert_eq!(delta.checksum_bytes, 15);
+        assert_eq!(delta.rewrite_leaf_calls, 2);
+
+        assert_covers(snapshot().since(process_before), delta);
+    }
+
+    #[test]
+    fn thread_snapshot_ignores_other_threads() {
+        let process_before = snapshot();
+        let before = thread_snapshot();
+        std::thread::spawn(|| add_each(7, 2, 9))
+            .join()
+            .expect("counting thread");
+        assert_eq!(thread_snapshot().since(before), ObserveSnapshot::default());
+        assert_covers(snapshot().since(process_before), each(7, 2, 9));
     }
 
     #[test]
     fn refresh_checksum_counts_page_bytes() {
-        let before = snapshot();
+        let before = thread_snapshot();
         let _page = Page::new(512, PageKind::Heap, PageId(1), RelId(1)).expect("page");
-        let mid = snapshot();
-        assert!(mid.checksum_bytes >= before.checksum_bytes + 512);
+        let mid = thread_snapshot();
+        assert_eq!(mid.since(before).checksum_bytes, 512);
         let _again = Page::new(512, PageKind::Heap, PageId(2), RelId(1)).expect("page");
-        let after = snapshot();
-        assert!(after.checksum_bytes >= mid.checksum_bytes + 512);
+        let after = thread_snapshot();
+        assert_eq!(after.since(mid).checksum_bytes, 512);
     }
 }
