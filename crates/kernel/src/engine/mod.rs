@@ -87,6 +87,12 @@ pub struct RecoveryReport {
     pub legacy_mutations_redone: usize,
     pub commits_recovered: usize,
     pub replay_from_lsn: Lsn,
+    /// A checksum-valid checkpoint generation newer than the one recovery
+    /// started from, which it could not use (workplan R6).
+    pub skipped_generation: Option<u64>,
+    /// What recovery found damaged or skipped and recovered around, such
+    /// as a control file that does not decode.
+    pub warnings: Vec<String>,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -104,7 +110,13 @@ struct RecoveryMetrics {
 }
 
 impl RecoveryReport {
-    fn from_scan(scan: WalScanReport, metrics: RecoveryMetrics, replay_from_lsn: Lsn) -> Self {
+    fn from_scan(
+        scan: WalScanReport,
+        metrics: RecoveryMetrics,
+        replay_from_lsn: Lsn,
+        skipped_generation: Option<u64>,
+        warnings: Vec<String>,
+    ) -> Self {
         Self {
             scanned_records: scan.records.len(),
             valid_end_lsn: scan.valid_end_lsn,
@@ -113,6 +125,8 @@ impl RecoveryReport {
             legacy_mutations_redone: metrics.legacy_mutations_redone,
             commits_recovered: metrics.commits_recovered,
             replay_from_lsn,
+            skipped_generation,
+            warnings,
         }
     }
 }

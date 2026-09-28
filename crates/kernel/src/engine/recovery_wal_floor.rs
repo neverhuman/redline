@@ -105,6 +105,9 @@ mod tests {
             valid_end_lsn: Lsn(end.unwrap_or(0)),
             records,
             torn_tail: false,
+            segments: Vec::new(),
+            first_record: None,
+            tail: None,
         }
     }
 

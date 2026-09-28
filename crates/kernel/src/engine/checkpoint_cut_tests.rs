@@ -222,9 +222,26 @@ fn checkpoint_keeps_committed_change_on_page_dirtied_past_cut_across_pruned_segm
         heap_page_of(&engine, newer)
     );
     assert!(heap_insert_lsn(&engine, newer) >= control.checkpoint_lsn);
+
+    // A checkpoint prunes only below the previous generation's checkpoint
+    // LSN, which the other control slot still names (workplan R6). So the
+    // segments holding the older rows' records go at the next checkpoint,
+    // which finds the same page dirtied past its own cut again. A
+    // checkpoint that skipped that page both times would lose every older
+    // row on it.
+    let newest = Rc::new(Cell::new(None));
+    let newest_slot = Rc::clone(&newest);
+    let writer = Arc::clone(&engine);
+    let second = checkpoint_with(&engine, move || {
+        newest_slot.set(Some(insert(&writer, 1_001)));
+    });
+    let newest = newest.get().expect("the hook never ran");
+    rows.push((newest, 1_001));
+    assert_eq!(heap_page_of(&engine, newer), heap_page_of(&engine, newest));
+    assert!(heap_insert_lsn(&engine, newest) >= second.checkpoint_lsn);
     assert!(
         segments() < before,
-        "the checkpoint pruned no segment: {before} before, {} after",
+        "the checkpoints pruned no segment: {before} before, {} after",
         segments()
     );
     drop(engine);

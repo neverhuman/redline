@@ -294,12 +294,20 @@ impl Engine {
         // on disk. A crash here forces recovery to fall back to the previous
         // generation, exercising the dual-control-file protocol.
         crate::fail_point!("engine::checkpoint");
-        let next =
-            self.control
-                .write_next(*checkpoint, checkpoint_lsn, heap_redo_lsn, page_count)?;
-        self.wal
-            .prune_segments_below_checkpoint_lsn(next.checkpoint_lsn)?;
+        let previous = *checkpoint;
+        let next = self
+            .control
+            .write_next(previous, checkpoint_lsn, heap_redo_lsn, page_count)?;
         *checkpoint = Some(next);
+        // The other control slot still holds the previous generation, and
+        // recovery falls back to it when this slot turns out corrupt
+        // (workplan R6). Keep the WAL that generation replays, and its
+        // transaction status; older generations are no longer named.
+        let retain_floor = previous.map_or(Lsn::ZERO, |control| control.checkpoint_lsn);
+        self.wal
+            .prune_segments_below_checkpoint_lsn(retain_floor.min(next.checkpoint_lsn))?;
+        self.tx_status_store
+            .remove_generations_below(next.generation.saturating_sub(1))?;
         Ok(CheckpointStats {
             control: next,
             flushed_pages: flush.flushed_pages,

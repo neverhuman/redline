@@ -2,7 +2,9 @@
 
 use redlinedb_kernel::Error;
 use redlinedb_kernel::format::Lsn;
-use redlinedb_kernel::storage::{CONTROL_LEN, CONTROL_VERSION, ControlFile, ControlStore};
+use redlinedb_kernel::storage::{
+    CONTROL_LEN, CONTROL_VERSION, ControlFile, ControlSelection, ControlStore, CorruptControlSlot,
+};
 use tempfile::TempDir;
 
 #[test]
@@ -80,6 +82,47 @@ fn control_file_with_heap_redo_below_its_checkpoint_is_corrupt() {
             "control file heap redo lsn is below its checkpoint lsn"
         ))
     );
+}
+
+#[test]
+fn a_corrupt_slot_beside_a_missing_one_is_not_a_database_never_checkpointed() {
+    // Workplan R6: that read as "no checkpoint", and recovery replayed a WAL
+    // the checkpoint may already have pruned from LSN zero.
+    let temp = TempDir::new().unwrap();
+    let store = ControlStore::new(temp.path()).unwrap();
+    store.write_next(None, Lsn(100), Lsn(150), 3).unwrap();
+    std::fs::write(temp.path().join("CONTROL_A"), [0_u8; CONTROL_LEN]).unwrap();
+
+    assert_eq!(
+        store.load_selection().unwrap(),
+        ControlSelection {
+            newest: None,
+            fallback: None,
+            corrupt_slots: vec![CorruptControlSlot {
+                name: "CONTROL_A",
+                error: Error::InvalidMagic {
+                    expected: 0x5244_4354,
+                    actual: 0
+                },
+            }],
+        }
+    );
+    assert!(store.load_latest().is_err());
+}
+
+#[test]
+fn control_selection_names_the_newest_and_its_fallback() {
+    let temp = TempDir::new().unwrap();
+    let store = ControlStore::new(temp.path()).unwrap();
+    assert_eq!(store.load_selection().unwrap(), ControlSelection::default());
+    let first = store.write_next(None, Lsn(100), Lsn(150), 3).unwrap();
+    let second = store
+        .write_next(Some(first), Lsn(200), Lsn(250), 4)
+        .unwrap();
+    let selection = store.load_selection().unwrap();
+    assert_eq!(selection.newest, Some(second));
+    assert_eq!(selection.fallback, Some(first));
+    assert!(selection.corrupt_slots.is_empty());
 }
 
 /// Recompute the checksum at bytes 8..12 over the file with that field

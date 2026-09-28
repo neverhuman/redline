@@ -334,3 +334,57 @@ Draft lines for the v5.0.0 CHANGELOG. The integrator owns `CHANGELOG.md`.
   asks for up to eight checkpoints before it fails, and a writer that
   waited on another thread's checkpoint takes none of its own.
 - Only a pool whose frames are all pinned still fails the allocation.
+
+## Recovery checks the WAL and the checkpoint it starts from
+
+- Recovery now reads the control files, the chosen generation's
+  transaction status and the catalog, and checks the scanned WAL against
+  them, before it changes any file (workplan R6, R9 steps 1-2). A check
+  that fails leaves every file as it was.
+- A length or header damaged inside the final WAL segment was taken for
+  a torn tail: recovery dropped the committed records after it and
+  truncated the segment there. The scan now looks past a tail for a whole,
+  checksum-valid record at its own position. Finding one fails the open
+  with "valid wal record after torn tail". `WalReader::
+  salvage_after_torn_tail(true)` reports the record's offset instead, for
+  inspecting such a log; the engine has no salvage mode.
+- The WAL must now hold every record recovery replays. With no checkpoint
+  it must start at LSN 0 ("wal does not start at lsn 0 and no checkpoint
+  covers the records before it"); with one, it must reach back to the
+  checkpoint LSN ("wal starts after the checkpoint redo lsn"). A segment
+  missing after the first record's segment fails the open even when no
+  later record crosses the gap. A lost WAL beside a page past LSN 0, with
+  no control file, fails too. Each of these used to replay what was left
+  and lose the rest silently.
+- A checkpoint now prunes the WAL only below the previous generation's
+  checkpoint LSN, which the other control slot still names, so falling
+  back to that slot finds its WAL. Pruning used to follow the newest
+  generation, and a fallback then lost every commit between the two. The
+  WAL kept on disk grows to about two checkpoints' worth. Transaction
+  status files older than the previous generation are deleted; they used
+  to accumulate one per checkpoint.
+- A control slot that does not decode beside a missing one used to mean
+  "never checkpointed": recovery replayed a pruned WAL from LSN 0. With no
+  valid control file, recovery now replays the whole WAL only if it starts
+  at LSN 0, and fails with "no valid control file and the wal does not
+  start at lsn 0" otherwise. A valid slot beside a corrupt one needs a
+  WAL that covers it, or the open fails with "fallback checkpoint lacks
+  required WAL".
+- When the newest valid generation cannot be used (its transaction status
+  is missing or its WAL check fails), recovery falls back to the other
+  slot and starts heap redo at the newer generation's heap redo LSN, since
+  the page file holds that generation's heap. `RecoveryReport` gains
+  `skipped_generation` and `warnings`, which name corrupt slots and any
+  generation skipped.
+- A schema file that does not decode, or is missing once a checkpoint
+  exists or the page file holds pages, now fails the open unless the WAL
+  holds a catalog snapshot. It used to load the empty bootstrap schema,
+  which dropped every table.
+- Open: a checkpoint that dies after it writes its pages and before its
+  control file is durable (or whose control write tears) leaves the page
+  file ahead of the generation recovery starts from. Heap redo then adds a
+  second copy of each row that checkpoint wrote to a page the older
+  generation already had: reads by row id are right, page scans return the
+  row twice. This was so before these changes. Closing it needs the
+  checkpoint's page state recorded before its page writes (or heap redo
+  that skips what a page already holds).

@@ -451,8 +451,18 @@ fn checkpoint_prunes_stale_wal_segments() {
     }
 
     let baseline_count = rows.len();
+    // A checkpoint prunes only below the previous generation's checkpoint
+    // LSN, which the other control slot still names and recovery falls
+    // back to when the new one is unreadable (workplan R6). The first
+    // checkpoint has no previous generation, so it prunes nothing.
     let checkpoint = engine.checkpoint().unwrap();
     assert!(checkpoint.checkpoint_lsn.0 > 0);
+    assert_eq!(
+        wal_segment_count(temp.path().join("wal").as_path()).first(),
+        Some(&1)
+    );
+    let second = engine.checkpoint().unwrap();
+    assert_eq!(second.generation, checkpoint.generation + 1);
 
     let mut tx = engine.begin(Isolation::Snapshot).unwrap();
     let fresh_row = engine
@@ -463,12 +473,8 @@ fn checkpoint_prunes_stale_wal_segments() {
 
     let segments_after = wal_segment_count(temp.path().join("wal").as_path());
     let keep_segment = checkpoint.checkpoint_lsn.0 / config.wal.segment_bytes + 1;
-    assert!(!segments_after.is_empty());
-    assert!(
-        segments_after
-            .iter()
-            .all(|segment| *segment >= keep_segment)
-    );
+    assert!(keep_segment > 1, "the test needs a segment to prune");
+    assert_eq!(segments_after.first(), Some(&keep_segment));
 
     let reopened = Engine::open(temp.path(), config).unwrap();
     let mut tx = reopened.begin(Isolation::Snapshot).unwrap();
@@ -1329,3 +1335,9 @@ fn torn_segment_below_a_resumed_wal_does_not_fail_the_next_open() {
         Some(b"after-reopen".to_vec())
     );
 }
+
+#[path = "recovery_tests/generations.rs"]
+mod generations;
+
+#[path = "recovery_tests/wal_continuity.rs"]
+mod wal_continuity;

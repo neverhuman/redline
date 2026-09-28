@@ -41,6 +41,24 @@ pub struct ControlStore {
     dir: PathBuf,
 }
 
+/// What the two control slots hold.
+#[derive(Debug, Default, PartialEq)]
+pub struct ControlSelection {
+    /// The checksum-valid control file with the highest generation.
+    pub newest: Option<ControlFile>,
+    /// The other slot's control file, when it is checksum-valid too.
+    pub fallback: Option<ControlFile>,
+    /// Slots holding a file that does not decode. Such a slot may have held
+    /// the newest generation before a torn write or damage.
+    pub corrupt_slots: Vec<CorruptControlSlot>,
+}
+
+#[derive(Debug, PartialEq)]
+pub struct CorruptControlSlot {
+    pub name: &'static str,
+    pub error: Error,
+}
+
 impl ControlStore {
     pub fn new(dir: impl AsRef<Path>) -> Result<Self> {
         fs::create_dir_all(dir.as_ref())?;
@@ -58,19 +76,42 @@ impl ControlStore {
         }
     }
 
+    /// The newest checksum-valid control file, or `None` when neither slot
+    /// holds a file. A slot that holds a file that does not decode, with no
+    /// valid slot beside it, is an error: that database was checkpointed,
+    /// and replaying as if it never was would read a pruned WAL.
     pub fn load_latest(&self) -> Result<Option<ControlFile>> {
-        let a = self.read_named(CONTROL_A);
-        let b = self.read_named(CONTROL_B);
-        match (a, b) {
-            (Ok(Some(a)), Ok(Some(b))) => {
-                Ok(Some(if a.generation >= b.generation { a } else { b }))
-            }
-            (Ok(Some(a)), _) => Ok(Some(a)),
-            (_, Ok(Some(b))) => Ok(Some(b)),
-            (Ok(None), Ok(None)) => Ok(None),
-            (Err(left), Err(_right)) => Err(left),
-            (Err(_), Ok(None)) | (Ok(None), Err(_)) => Ok(None),
+        let selection = self.load_selection()?;
+        match (selection.newest, selection.corrupt_slots.into_iter().next()) {
+            (Some(newest), _) => Ok(Some(newest)),
+            (None, Some(corrupt)) => Err(corrupt.error),
+            (None, None) => Ok(None),
         }
+    }
+
+    /// Both slots, sorted by generation, and the slots that hold a file that
+    /// does not decode. Recovery chooses among them (workplan R6): a missing
+    /// slot and a corrupt one mean different things. An error reading a
+    /// slot, other than its absence, fails the load rather than passing for
+    /// corruption.
+    pub fn load_selection(&self) -> Result<ControlSelection> {
+        let mut selection = ControlSelection::default();
+        let mut valid = Vec::with_capacity(2);
+        for name in [CONTROL_A, CONTROL_B] {
+            match self.read_named(name) {
+                Ok(Some(control)) => valid.push(control),
+                Ok(None) => {}
+                Err(Error::Io(err)) => return Err(Error::Io(err)),
+                Err(error) => selection
+                    .corrupt_slots
+                    .push(CorruptControlSlot { name, error }),
+            }
+        }
+        valid.sort_by_key(|control| std::cmp::Reverse(control.generation));
+        let mut valid = valid.into_iter();
+        selection.newest = valid.next();
+        selection.fallback = valid.next();
+        Ok(selection)
     }
 
     /// Write the generation after `previous`. Its redo LSNs may not be below

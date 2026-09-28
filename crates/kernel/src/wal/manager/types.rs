@@ -92,6 +92,9 @@ pub struct WalReader<Fs: FileSystem = StdFileSystem> {
     pub(crate) dir: PathBuf,
     pub(crate) fs: Fs,
     pub(crate) config: WalConfig,
+    /// Report a whole record found after a torn tail in
+    /// [`TornTail::valid_record_after`] instead of failing the scan.
+    pub(crate) salvage_after_torn_tail: bool,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -99,6 +102,46 @@ pub struct WalScanReport {
     pub records: Vec<WalRecord>,
     pub valid_end_lsn: Lsn,
     pub torn_tail: bool,
+    /// Every segment file the scan found, in order, with its length.
+    pub segments: Vec<WalSegmentInfo>,
+    /// Position and back link of the first record, if any.
+    pub first_record: Option<WalRecordLink>,
+    /// Where and why the scan stopped before the end of the final segment.
+    pub tail: Option<TornTail>,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct WalSegmentInfo {
+    pub number: u64,
+    pub len: u64,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct WalRecordLink {
+    pub lsn: Lsn,
+    pub prev_lsn: Lsn,
+}
+
+/// Bytes at the end of the final segment that do not hold a whole record.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct TornTail {
+    pub segment: u64,
+    pub offset: u64,
+    pub file_len: u64,
+    pub reason: TornTailReason,
+    /// The offset of a whole, checksum-valid record at its own position
+    /// after the tail. Set only by a scan that salvages; a strict scan
+    /// fails instead.
+    pub valid_record_after: Option<u64>,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum TornTailReason {
+    PartialHeader,
+    LengthOverflow,
+    LengthExceedsSegment,
+    PartialBody,
+    UndecodableRecord,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -163,8 +206,9 @@ pub(super) fn validate_record_position(
     offset: u64,
     segment_bytes: u64,
 ) -> Result<()> {
-    let expected = (segment - 1)
-        .checked_mul(segment_bytes)
+    let expected = segment
+        .checked_sub(1)
+        .and_then(|index| index.checked_mul(segment_bytes))
         .and_then(|base| base.checked_add(offset))
         .ok_or(Error::CorruptWal("lsn overflow"))?;
     if record.lsn.0 != expected {

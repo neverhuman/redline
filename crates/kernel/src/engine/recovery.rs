@@ -203,33 +203,95 @@ impl Engine {
             .map_err(|_| Error::CorruptPage("create control store failed"))?;
         let tx_status_store = TxStatusStore::new(path.as_ref())
             .map_err(|_| Error::CorruptPage("create tx status store failed"))?;
-        let checkpoint = control
-            .load_latest()
+        let selection = control
+            .load_selection()
             .map_err(|_| Error::CorruptPage("load control file failed"))?;
+        // Everything up to the first write below only reads: the generation,
+        // its transaction status, the WAL it needs and the catalog are all
+        // checked first, so a check that fails leaves the files as they were
+        // (workplan R6, R9).
+        let choice = plan::select_recoverable_generation(
+            &selection,
+            &scan_report,
+            &tx_status_store,
+            config.wal.segment_bytes,
+        )?;
+        let checkpoint = choice.checkpoint;
+        if let (Some(checkpoint), Some(tx_status)) = (checkpoint, choice.tx_status.as_ref()) {
+            // The heap pages already hold every heap record below the heap
+            // redo LSN, so no earlier LSN can be recovered to. When the heap
+            // is a newer generation's than the status, no CSN target can be
+            // checked against it.
+            let heap_is_newer = choice.plan.heap_replay_from
+                > checkpoint.checkpoint_lsn.max(checkpoint.heap_redo_lsn);
+            let too_old = match target {
+                RecoveryTarget::Latest => false,
+                RecoveryTarget::Lsn(limit) => limit < choice.plan.heap_replay_from,
+                RecoveryTarget::Csn(limit) => heap_is_newer || limit < tx_status.published_csn,
+            };
+            if too_old {
+                return Err(Error::CorruptWal(
+                    "requested recovery target is older than checkpoint base",
+                ));
+            }
+        }
         let page_path = path.as_ref().join(&config.data_file_name);
-        let page_file = if checkpoint.is_some() || page_path.exists() {
-            Arc::new(
+        let existing_page_file = if checkpoint.is_some() || page_path.exists() {
+            Some(
                 PageFile::open(&page_path, config.page_size)
                     .map_err(|_| Error::CorruptPage("open recovered page file failed"))?,
             )
         } else {
-            let created = PageFile::create(&page_path, config.page_size)
-                .map_err(|_| Error::CorruptPage("create recovered page file failed"))?;
-            sync_page_file_directory(&page_path)
-                .map_err(|_| Error::CorruptPage("sync page file directory failed"))?;
-            Arc::new(created)
+            None
         };
+        let holds_data = checkpoint.is_some()
+            || existing_page_file
+                .as_ref()
+                .map(|page_file| page_file.page_count())
+                .transpose()?
+                .is_some_and(|pages| pages > 0);
+        let catalog_store = CatalogStore::new_with_sync_policy(
+            path.as_ref(),
+            catalog_sync_policy(config.commit_durability),
+        );
+        let catalog_snapshot = plan::resolve_catalog(
+            catalog_store.load(),
+            recover_catalog_snapshot(&scan_report.records, target)?,
+            holds_data,
+        )?;
         // Never append below where recovery replays from, heap redo included,
         // nor below a page LSN, even when the WAL that reached them is gone.
         let resume = wal_resume_position(
             &scan_report,
-            checkpoint.map_or(Lsn::ZERO, |checkpoint| {
-                checkpoint.checkpoint_lsn.max(checkpoint.heap_redo_lsn)
-            }),
+            choice.plan.heap_replay_from,
             &segments_on_disk_with_bytes(&wal_dir)?,
             config.wal.segment_bytes,
-            || page_file.max_page_lsn(),
+            || {
+                existing_page_file
+                    .as_ref()
+                    .map_or(Ok(Lsn::ZERO), |page_file| page_file.max_page_lsn())
+            },
         )?;
+        // With no checkpoint the WAL must run from LSN 0. A page past that
+        // with no record left behind it means the log that wrote it is gone.
+        if checkpoint.is_none()
+            && scan_report.records.is_empty()
+            && resume.summary.valid_end_lsn > Lsn::ZERO
+        {
+            return Err(Error::CorruptWal(
+                "no checkpoint covers pages the wal no longer holds",
+            ));
+        }
+        let page_file = match existing_page_file {
+            Some(page_file) => Arc::new(page_file),
+            None => {
+                let created = PageFile::create(&page_path, config.page_size)
+                    .map_err(|_| Error::CorruptPage("create recovered page file failed"))?;
+                sync_page_file_directory(&page_path)
+                    .map_err(|_| Error::CorruptPage("sync page file directory failed"))?;
+                Arc::new(created)
+            }
+        };
         if let Some(segment) = resume.torn_segment_to_empty {
             empty_torn_segment(&wal_dir, segment)?;
         }
@@ -260,39 +322,7 @@ impl Engine {
             Some(Arc::clone(&wal)),
         )
         .map_err(|_| Error::CorruptPage("create heap failed"))?;
-        let catalog_store = CatalogStore::new_with_sync_policy(
-            path.as_ref(),
-            catalog_sync_policy(config.commit_durability),
-        );
-        let initial_catalog = match catalog_store.load().ok().flatten() {
-            Some(catalog) => catalog,
-            None => bootstrap_schema(RelId(10_000)),
-        };
-        let replay_from_lsn = if let Some(checkpoint) = checkpoint {
-            let tx_status = tx_status_store.load(checkpoint.generation)?;
-            if tx_status.generation != checkpoint.generation {
-                return Err(Error::CorruptPage(
-                    "tx status checkpoint generation mismatch",
-                ));
-            }
-            match target {
-                RecoveryTarget::Latest => {}
-                // The heap pages already hold every heap record below the
-                // heap redo LSN, so no earlier LSN can be recovered to.
-                RecoveryTarget::Lsn(limit)
-                    if limit < checkpoint.checkpoint_lsn.max(checkpoint.heap_redo_lsn) =>
-                {
-                    return Err(Error::CorruptWal(
-                        "requested recovery target is older than checkpoint base",
-                    ));
-                }
-                RecoveryTarget::Csn(limit) if limit < tx_status.published_csn => {
-                    return Err(Error::CorruptWal(
-                        "requested recovery target is older than checkpoint base",
-                    ));
-                }
-                RecoveryTarget::Lsn(_) | RecoveryTarget::Csn(_) => {}
-            }
+        if let Some(tx_status) = choice.tx_status {
             for (tx_id, csn) in tx_status.entries {
                 txs.publish_recovered_commit(tx_id, csn);
             }
@@ -301,17 +331,13 @@ impl Engine {
                 tx_status.next_csn,
                 tx_status.published_csn,
             );
-            checkpoint.checkpoint_lsn
-        } else {
-            // LSN sentinel: legit init. No checkpoint exists yet, so recovery
-            // replays the entire WAL starting from the very beginning.
-            Lsn::ZERO
-        };
+        }
+        // LSN sentinel: with no checkpoint, recovery replays the entire WAL
+        // starting from the very beginning.
+        let replay_from_lsn = choice.plan.replay_from_lsn;
         // The checkpoint wrote heap pages holding every heap record below its
         // heap redo LSN and none above it.
-        let heap_replay_from = checkpoint.map_or(replay_from_lsn, |checkpoint| {
-            checkpoint.heap_redo_lsn.max(replay_from_lsn)
-        });
+        let heap_replay_from = choice.plan.heap_replay_from;
         // Heap redo writes each row once; the page file must not already
         // hold a copy that an earlier, interrupted recovery wrote.
         replayed_pages::clear_heap_pages_past_checkpoint(
@@ -319,7 +345,7 @@ impl Engine {
             &buffer,
             &heap,
             config.rel_id,
-            checkpoint.map_or(0, |checkpoint| checkpoint.page_count),
+            choice.plan.heap_page_count,
         )?;
         reserve_ids_named_in_wal(&scan_report.records, &txs, &heap)?;
         recover_index_page_images(&scan_report.records, replay_from_lsn, target, &buffer)?;
@@ -329,8 +355,7 @@ impl Engine {
         crate::fail_point!("engine::recovery::after_heap_replay");
         #[cfg(test)]
         replayed_pages::run_after_heap_replay_hook()?;
-        let recovered_catalog = recover_catalog_snapshot(&scan_report.records, target)?;
-        let catalog = CatalogManager::new(recovered_catalog.unwrap_or(initial_catalog));
+        let catalog = CatalogManager::new(catalog_snapshot);
         let phase11_counters = Arc::new(Phase11Counters::default());
         let locks = Arc::new(RowLockManager::new(config.lock_shards, config.busy_timeout));
         // Wave 1A-F: same telemetry pipe on the open path.
@@ -380,7 +405,13 @@ impl Engine {
         }
         Ok((
             engine,
-            RecoveryReport::from_scan(scan_report, metrics, replay_from_lsn),
+            RecoveryReport::from_scan(
+                scan_report,
+                metrics,
+                replay_from_lsn,
+                choice.skipped_generation,
+                choice.warnings,
+            ),
         ))
     }
 }
@@ -751,6 +782,9 @@ fn sync_page_file_directory(path: &Path) -> Result<()> {
 
 #[path = "recovery_wal_floor.rs"]
 mod wal_floor;
+
+#[path = "recovery_plan.rs"]
+mod plan;
 
 #[path = "recovery_replayed_pages.rs"]
 mod replayed_pages;

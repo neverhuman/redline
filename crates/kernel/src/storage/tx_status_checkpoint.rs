@@ -64,9 +64,43 @@ impl TxStatusStore {
         Ok(())
     }
 
+    /// Remove the status file of every generation below `keep`. A checkpoint
+    /// calls this once its control file names a newer generation, keeping
+    /// the files the two control slots name. Returns how many it removed.
+    pub fn remove_generations_below(&self, keep: u64) -> Result<usize> {
+        let mut removed = 0_usize;
+        for entry in fs::read_dir(&self.dir)? {
+            let entry = entry?;
+            let Some(generation) = entry
+                .file_name()
+                .to_str()
+                .and_then(parse_generation_file_name)
+            else {
+                continue;
+            };
+            if generation >= keep {
+                continue;
+            }
+            match fs::remove_file(entry.path()) {
+                Ok(()) => removed += 1,
+                Err(err) if err.kind() == std::io::ErrorKind::NotFound => {}
+                Err(err) => return Err(err.into()),
+            }
+        }
+        Ok(removed)
+    }
+
     fn path_for_generation(&self, generation: u64) -> PathBuf {
         self.dir.join(format!("TX_STATUS_{generation:020}"))
     }
+}
+
+fn parse_generation_file_name(name: &str) -> Option<u64> {
+    let digits = name.strip_prefix("TX_STATUS_")?;
+    if digits.len() != 20 || !digits.bytes().all(|byte| byte.is_ascii_digit()) {
+        return None;
+    }
+    digits.parse().ok()
 }
 
 impl TxStatusCheckpoint {
