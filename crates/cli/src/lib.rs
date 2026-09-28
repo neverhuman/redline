@@ -13,6 +13,21 @@ fn sql_error_exit() -> i32 {
     SQL_ERROR_EXIT.load(Ordering::Relaxed)
 }
 
+/// PG-09: the shell reads `REDLINEDB_RESULT_DIALECT` once, when it starts,
+/// and passes the result to every database it opens. Rendering reads the
+/// same value, so the engine and the renderer cannot disagree.
+static CLI_DIALECT: std::sync::OnceLock<redlinedb::Dialect> = std::sync::OnceLock::new();
+
+pub(crate) fn cli_dialect() -> redlinedb::Dialect {
+    *CLI_DIALECT.get_or_init(redlinedb::Dialect::from_env)
+}
+
+/// Open options for a database the shell opens: the defaults plus the
+/// dialect chosen at startup.
+pub(crate) fn cli_open_options() -> OpenOptions {
+    OpenOptions::default().with_dialect(cli_dialect())
+}
+
 use clap::Parser;
 use redlinedb::{Database, OpenOptions, OwnedStep, RqlProgram, RqlStatement};
 
@@ -210,6 +225,7 @@ struct Cli {
 }
 
 pub fn run() {
+    let _ = cli_dialect();
     let mut args: Vec<String> = env::args().collect();
     let raw_args = args.iter().skip(1).cloned().collect::<Vec<_>>();
     if args.len() >= 2 {
@@ -420,17 +436,17 @@ pub fn run() {
         && !filename.is_empty()
         && readonly_sidecar_path(std::path::Path::new(&filename)).exists();
     let db_res = if filename == ":memory:" || filename.is_empty() || use_deserialize_sidecar {
-        Database::create_in_memory(OpenOptions::default())
+        Database::create_in_memory(cli_open_options())
     } else if cli.readonly {
         Database::open_with_options(
             &filename,
-            OpenOptions::default()
+            cli_open_options()
                 .with_read_only(true)
                 .with_create(false)
                 .with_process_owner_lock(false),
         )
     } else {
-        Database::open(&filename)
+        Database::open_with_options(&filename, cli_open_options())
     };
     let db = match db_res {
         Ok(db) => db,
@@ -845,7 +861,7 @@ fn run_readonly_sidecar(
     if !sidecar.exists() {
         return Ok(false);
     }
-    let db = Database::create_in_memory(OpenOptions::default()).map_err(|err| err.to_string())?;
+    let db = Database::create_in_memory(cli_open_options()).map_err(|err| err.to_string())?;
     let mut state = CliState::new(
         db,
         PathBuf::from(filename),

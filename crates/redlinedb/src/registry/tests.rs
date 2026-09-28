@@ -189,3 +189,33 @@ fn volatile_root_from_existing_unwritable_candidate_uses_process_scratch() {
     std::fs::set_permissions(&candidate, Permissions::from_mode(0o700))
         .expect("restore candidate permissions");
 }
+
+/// PG-09: the dialect is part of a live database's identity. A second
+/// open of the same live session under the other dialect is refused rather
+/// than silently handed the first open's dialect.
+#[test]
+fn reopening_a_live_database_under_another_dialect_is_refused() {
+    let session_name = format!(
+        "registry-dialect-test-{}-{}",
+        std::process::id(),
+        EPHEMERAL_SESSION_COUNTER.fetch_add(1, Ordering::Relaxed)
+    );
+    let sqlite = OpenOptions {
+        process_owner_lock: false,
+        ..OpenOptions::default()
+    }
+    .with_dialect(crate::Dialect::Sqlite);
+    let postgres = sqlite.clone().with_dialect(crate::Dialect::PostgresSubset);
+
+    let first = create_ephemeral_database(&session_name, &sqlite).expect("first open");
+    let again = create_ephemeral_database(&session_name, &sqlite).expect("same dialect reuses");
+    assert!(Arc::ptr_eq(&first, &again));
+    let err = match create_ephemeral_database(&session_name, &postgres) {
+        Ok(_) => panic!("another dialect must not share the live database"),
+        Err(err) => err,
+    };
+    assert!(
+        err.to_string().contains("incompatible options"),
+        "unexpected error: {err}"
+    );
+}

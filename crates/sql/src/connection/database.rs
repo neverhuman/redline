@@ -20,7 +20,7 @@ use crate::error::{Error, Result};
 use crate::session::{SessionState, UniqueLockTable};
 
 use super::cache::StatementCache;
-use super::options::{DbOptions, OptimizerConfig, QueryMemoryConfig, StatsConfig};
+use super::options::{DbOptions, Dialect, OptimizerConfig, QueryMemoryConfig, StatsConfig};
 use super::session::Connection;
 
 pub(super) const USER_VERSION_FILE: &str = "user_version.redline";
@@ -38,6 +38,9 @@ pub struct Database {
     pub(super) query_memory: QueryMemoryConfig,
     pub(super) temp_dir: Option<PathBuf>,
     pub(super) optimizer: OptimizerConfig,
+    /// Resolved once at open from [`DbOptions::dialect`] (or the environment
+    /// when that is `None`); never re-read.
+    pub(super) dialect: Dialect,
     pub(super) user_version: Mutex<i64>,
     sqlite_sequences: Mutex<BTreeMap<String, i64>>,
     metadata_sync_policy: MetadataSyncPolicy,
@@ -197,6 +200,7 @@ impl Database {
             query_memory: opts.query_memory,
             temp_dir: opts.temp_dir.clone(),
             optimizer: opts.optimizer,
+            dialect: opts.dialect.unwrap_or_else(Dialect::from_env),
             user_version: Mutex::new(user_version_init),
             sqlite_sequences: Mutex::new(BTreeMap::new()),
             metadata_sync_policy,
@@ -231,6 +235,7 @@ impl Database {
             query_memory: opts.query_memory,
             temp_dir: opts.temp_dir.clone(),
             optimizer: opts.optimizer,
+            dialect: opts.dialect.unwrap_or_else(Dialect::from_env),
             user_version: Mutex::new(user_version),
             sqlite_sequences: Mutex::new(BTreeMap::new()),
             metadata_sync_policy,
@@ -267,6 +272,7 @@ impl Database {
             query_memory: opts.query_memory,
             temp_dir: opts.temp_dir.clone(),
             optimizer: opts.optimizer,
+            dialect: opts.dialect.unwrap_or_else(Dialect::from_env),
             user_version: Mutex::new(user_version),
             sqlite_sequences: Mutex::new(BTreeMap::new()),
             metadata_sync_policy,
@@ -282,6 +288,11 @@ impl Database {
     fn upgraded(db: Arc<Self>) -> Result<Arc<Self>> {
         crate::exec::reindex::upgrade_stale_indexes(&db)?;
         Ok(db)
+    }
+
+    /// The SQL dialect every connection to this database speaks.
+    pub fn dialect(&self) -> Dialect {
+        self.dialect
     }
 
     pub fn connect(self: &Arc<Self>) -> Arc<Connection> {

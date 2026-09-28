@@ -211,6 +211,9 @@ pub(crate) fn with_correlated_lookup_tracking<T>(f: impl FnOnce() -> T) -> (T, b
 }
 
 pub(crate) fn with_current_connection<T>(conn: &Connection, f: impl FnOnce() -> T) -> T {
+    // PG-09: the connection's dialect travels with it, so two connections
+    // with different dialects can run side by side in one process.
+    let _dialect = crate::value::DialectScope::for_dialect(conn.dialect());
     CURRENT_CONNECTION.with(|cell| {
         let prev = cell.replace(conn as *const Connection);
         if prev.is_null() {

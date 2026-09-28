@@ -27,7 +27,8 @@ pub mod value;
 mod virtual_module;
 
 pub use connection::{
-    Connection, Database, DbOptions, OptimizerConfig, QueryMemoryConfig, RqlStats, StatsConfig,
+    Connection, Database, DbOptions, Dialect, OptimizerConfig, QueryMemoryConfig, RqlStats,
+    StatsConfig,
 };
 pub use error::{Error, Result};
 pub use parser::{first_statement_complete, is_blank_sql, split_first_statement, split_statements};

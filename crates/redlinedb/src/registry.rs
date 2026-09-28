@@ -26,6 +26,10 @@ pub(crate) struct OpenFingerprint {
     pub process_owner_lock: bool,
     pub temp_dir: Option<PathBuf>,
     pub lean_ephemeral: bool,
+    /// Resolved the way `redlinedb_sql::Database` resolves it, so a second
+    /// open of a live path under another dialect is refused instead of
+    /// silently sharing the first open's dialect.
+    pub dialect: crate::Dialect,
 }
 
 impl OpenFingerprint {
@@ -46,6 +50,7 @@ impl OpenFingerprint {
             // the right value for both the file-backed and the volatile
             // paths.
             lean_ephemeral: options.effective_lean_ephemeral(false),
+            dialect: options.dialect.unwrap_or_else(crate::Dialect::from_env),
         }
     }
 
@@ -59,6 +64,7 @@ impl OpenFingerprint {
             && self.process_owner_lock == other.process_owner_lock
             && self.temp_dir == other.temp_dir
             && self.lean_ephemeral == other.lean_ephemeral
+            && self.dialect == other.dialect
     }
 }
 

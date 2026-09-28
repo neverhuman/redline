@@ -115,6 +115,11 @@ impl Connection {
         self.db.publish_sqlite_sequence_entries(sequences, dirty);
     }
 
+    /// The SQL dialect of this connection's database.
+    pub fn dialect(&self) -> super::Dialect {
+        self.db.dialect
+    }
+
     pub fn rql_stats(&self) -> RqlStats {
         self.rql_stats.snapshot()
     }
@@ -165,6 +170,7 @@ impl Connection {
     /// side-effects fire during preparation and the returned statement is a
     /// fully-completed no-op (`step` immediately yields `Step::Done`).
     pub fn prepare_v2<'a>(self: &Arc<Self>, sql: &'a str) -> Result<(Option<Statement>, &'a str)> {
+        let _dialect = crate::value::DialectScope::for_dialect(self.dialect());
         match catch_unwind(AssertUnwindSafe(|| {
             let (head, tail) = crate::parser::split_first_statement(sql);
             if crate::parser::is_blank_sql(head) {
@@ -263,6 +269,7 @@ impl Connection {
         options: crate::rql::PrepareOptions,
     ) -> Result<Arc<PreparedTemplate>> {
         let key = StatementCacheKey {
+            dialect: self.dialect(),
             schema_epoch: self.schema_epoch().0,
             stats_epoch: self.stats_epoch().0,
             optimizer_hash: self.optimizer_hash(),
@@ -1214,6 +1221,7 @@ impl Connection {
             return Ok(Arc::new(template));
         }
         let key = StatementCacheKey {
+            dialect: self.dialect(),
             schema_epoch: self.schema_epoch().0,
             stats_epoch: self.stats_epoch().0,
             optimizer_hash: self.optimizer_hash(),

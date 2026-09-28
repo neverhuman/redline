@@ -53,6 +53,7 @@ pub use phase8::{
 pub use redlinedb_kernel::engine::CommitDurability;
 pub use redlinedb_kernel::format::{BackupId, Csn, DbId, Lsn, TimelineId, WalSegmentNo};
 pub use redlinedb_sql::BeginMode;
+pub use redlinedb_sql::Dialect;
 pub use redlinedb_sql::RecoveryTarget;
 pub use redlinedb_sql::{
     RqlBeginMode, RqlBinaryOp, RqlColumnDef, RqlColumnRef, RqlCreateIndex, RqlCreateTable,

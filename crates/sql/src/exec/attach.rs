@@ -167,8 +167,18 @@ impl AttachMap {
 }
 
 fn open_or_create(path: &Path) -> Result<Arc<Database>> {
+    // An attached database speaks the dialect of the statement that
+    // attached it, not whatever the environment says now.
+    let options = DbOptions {
+        dialect: Some(if crate::value::postgres_result_dialect() {
+            crate::connection::Dialect::PostgresSubset
+        } else {
+            crate::connection::Dialect::Sqlite
+        }),
+        ..DbOptions::default()
+    };
     if path == Path::new(":memory:") {
-        return Database::create_in_memory(DbOptions::default());
+        return Database::create_in_memory(options);
     }
     // Ensure the parent directory exists so `Database::create` can lay
     // out the on-disk engine directory underneath it. ATTACH targets
@@ -198,9 +208,9 @@ fn open_or_create(path: &Path) -> Result<Arc<Database>> {
         let _ = std::fs::remove_file(path);
     }
     if path.is_dir() {
-        Database::open(path, DbOptions::default())
+        Database::open(path, options)
     } else {
-        Database::create(path, DbOptions::default())
+        Database::create(path, options)
     }
 }
 

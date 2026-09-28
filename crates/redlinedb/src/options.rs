@@ -88,6 +88,11 @@ pub struct OpenOptions {
     /// pin the value regardless of the open flavour, preserving the
     /// historical opt-in surface.
     pub lean_ephemeral: Option<bool>,
+    /// SQL dialect of the database's connections. `None` (default) reads
+    /// `REDLINEDB_RESULT_DIALECT` once when the database opens; see
+    /// [`crate::Dialect`]. The CLI reads that variable at startup and
+    /// passes the result here.
+    pub dialect: Option<crate::Dialect>,
 }
 
 /// Buffer pool capacity, in pages, when `lean_ephemeral = true`.
@@ -121,6 +126,7 @@ impl Default for OpenOptions {
             temp_dir: None,
             rayon_threads: None,
             lean_ephemeral: None,
+            dialect: None,
         }
     }
 }
@@ -190,6 +196,12 @@ impl OpenOptions {
     #[must_use]
     pub fn with_read_only(mut self, read_only: bool) -> Self {
         self.read_only = read_only;
+        self
+    }
+
+    #[must_use]
+    pub fn with_dialect(mut self, dialect: crate::Dialect) -> Self {
+        self.dialect = Some(dialect);
         self
     }
 

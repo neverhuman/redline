@@ -32,7 +32,7 @@ There is no `load_extension` entry point in the engine. A statement that asks fo
 
 ## Two dialects, one flag
 
-Agents often emit Postgres even when the file is local. `REDLINEDB_RESULT_DIALECT=postgres` switches result rendering and the Postgres-oriented rewrites the shell corpus uses. Booleans come back as `t` and `f`. Schema-qualified names stay distinct, so `auth.users` and `public.users` do not collapse into one table. `CREATE TYPE ... AS ENUM` compares labels in declaration order. `CREATE DOMAIN ... CHECK (VALUE > n)` accepts a value that passes the check and rejects one that fails. `int4range` is half-open. `point` distance uses `<->`. A value cast with `::citext` compares without case and preserves the spelling you stored; a column declared `citext` does not, so treat `citext` as partial.
+Agents often emit Postgres even when the file is local. `REDLINEDB_RESULT_DIALECT=postgres` (read once when the shell starts; `DbOptions::dialect` in Rust) switches result rendering and the Postgres-oriented rewrites the shell corpus uses. Booleans come back as `t` and `f`. Schema-qualified names stay distinct, so `auth.users` and `public.users` do not collapse into one table. `CREATE TYPE ... AS ENUM` compares labels in declaration order. `CREATE DOMAIN ... CHECK (VALUE > n)` accepts a value that passes the check and rejects one that fails. `int4range` is half-open. `point` distance uses `<->`. A value cast with `::citext` compares without case and preserves the spelling you stored; a column declared `citext` does not, so treat `citext` as partial.
 
 That flag does not turn the process into Postgres. The corpus subset of `plpgsql` runs. `RAISE EXCEPTION` aborts with `ERROR: boom`. `CREATE EXTENSION vector` fails with `extension "vector" is not available`. Text search, trigram, and the GIN/GiST forms in the corpus return rows; those indexes are ordinary indexes. `LISTEN` records a channel on this connection and restores the set on rollback. It is not a cross-process notification bus, and `NOTIFY`, advisory locks, transaction ids and WAL LSNs are stand-ins. There is no PostgreSQL wire protocol, TLS, roles or SQLSTATE. The Postgres chapter and its capability matrix are the list.
 
@@ -55,7 +55,7 @@ When a statement fails, read the error. `UnsupportedSql` and `UnsupportedIsolati
 A useful system prompt for this database is short:
 
 - Prefer parameters, or prefer RQL, when the agent authors the query.
-- Leave `REDLINEDB_RESULT_DIALECT` unset for SQLite scripts. Set it to `postgres` only for Postgres scripts.
+- Leave the dialect at SQLite (`REDLINEDB_RESULT_DIALECT` unset for the shell, `DbOptions::dialect` at its default in Rust) for SQLite scripts. Choose the Postgres subset only for Postgres scripts.
 - Do not claim FTS5, R-tree, `dbstat`, full `plpgsql`, `vector`, or the Postgres wire protocol.
 - Treat `Strict` as the default. Say so when you report that a commit succeeded.
 - On `UnsupportedSql`, stop and consult the ledger. Do not loop.

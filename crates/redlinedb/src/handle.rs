@@ -404,6 +404,7 @@ pub(crate) fn sql_options(options: &OpenOptions) -> redlinedb_sql::DbOptions {
     db.stats.sample_rows = options.stats.sample_rows;
     db.stats.mcv_capacity = options.stats.mcv_capacity;
     db.stats.histogram_buckets = options.stats.histogram_buckets;
+    db.dialect = options.dialect;
     db
 }
 

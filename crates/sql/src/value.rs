@@ -1,5 +1,8 @@
+use std::cell::Cell;
 use std::cmp::Ordering;
 use std::sync::Arc;
+
+use crate::connection::Dialect;
 
 #[allow(unused_imports)]
 pub use redlinedb_kernel::catalog::{
@@ -48,10 +51,55 @@ pub fn compare_values(left: &SqlValue, right: &SqlValue) -> Ordering {
     }
 }
 
-/// The beyond-SQLite runner sets this so boolean results render as `t`/`f`
-/// and `::text` of a boolean renders as `true`/`false`. SQLite runs leave it unset.
+const THREAD_DIALECT_UNSET: u8 = 0;
+const THREAD_DIALECT_SQLITE: u8 = 1;
+const THREAD_DIALECT_POSTGRES: u8 = 2;
+
+thread_local! {
+    /// The dialect of the connection whose statement this thread is running.
+    /// Installed by `exec::with_current_connection` (every prepare and step);
+    /// a thread outside any statement reads as the SQLite dialect. SQL
+    /// evaluation does not leave the statement's thread: the parallel heap
+    /// scan runs kernel code only, and a parallel sort compares values
+    /// without reading the dialect.
+    static THREAD_DIALECT: Cell<u8> = const { Cell::new(THREAD_DIALECT_UNSET) };
+}
+
+/// Restores the previous thread dialect when dropped, so a panic that
+/// unwinds out of a statement does not leave the slot set.
+pub(crate) struct DialectScope {
+    previous: u8,
+}
+
+impl DialectScope {
+    fn enter(state: u8) -> Self {
+        Self {
+            previous: THREAD_DIALECT.with(|cell| cell.replace(state)),
+        }
+    }
+
+    pub(crate) fn for_dialect(dialect: Dialect) -> Self {
+        Self::enter(if dialect.is_postgres() {
+            THREAD_DIALECT_POSTGRES
+        } else {
+            THREAD_DIALECT_SQLITE
+        })
+    }
+}
+
+impl Drop for DialectScope {
+    fn drop(&mut self) {
+        THREAD_DIALECT.with(|cell| cell.set(self.previous));
+    }
+}
+
+/// True while this thread runs a statement for a connection whose database
+/// speaks [`Dialect::PostgresSubset`]: boolean results render as `t`/`f` and
+/// `::text` of a boolean renders as `true`/`false`. The dialect is a
+/// per-database option ([`crate::DbOptions::dialect`]); this reads a
+/// thread-local slot and never the environment.
 pub fn postgres_result_dialect() -> bool {
-    std::env::var("REDLINEDB_RESULT_DIALECT").ok().as_deref() == Some("postgres")
+    THREAD_DIALECT.with(Cell::get) == THREAD_DIALECT_POSTGRES
 }
 
 /// Boolean result for the active result dialect: `t`/`f` under Postgres, else `1`/`0`.

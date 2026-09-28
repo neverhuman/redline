@@ -11,6 +11,9 @@ use crate::statement::PreparedTemplate;
 
 #[derive(Debug, Clone, Hash, Eq, PartialEq)]
 pub(super) struct StatementCacheKey {
+    /// Parse-time rewrites and constant folding depend on the dialect, so a
+    /// template prepared under one dialect is never reused under another.
+    pub(super) dialect: super::Dialect,
     pub(super) schema_epoch: u64,
     pub(super) stats_epoch: u64,
     pub(super) optimizer_hash: u64,

@@ -92,3 +92,21 @@ index-format epoch below), so such an index is rebuilt at the first open.
   index entries; it used to take the first layout that matched any entry and
   then report a neighbouring column's values as mismatches.
 - A rebuild leaves the old B-tree's pages allocated, as `DROP INDEX` does.
+
+## The dialect is a per-database option (PG-09)
+
+- `DbOptions::dialect` (`redlinedb_sql::Dialect::{Sqlite, PostgresSubset}`)
+  and `OpenOptions::with_dialect` (`redlinedb`) choose a database's SQL
+  dialect. It is fixed when the database opens and every connection to it
+  speaks it, so a Postgres-dialect database and a SQLite-dialect database
+  can be used side by side in one process.
+- The engine no longer reads `REDLINEDB_RESULT_DIALECT` while it evaluates a
+  statement (it used to read it on every boolean result, comparison and
+  truth test). When the option is `None`, the variable is read once, as the
+  database opens; changing it afterwards has no effect on an open database.
+  The shell reads it once at startup and passes it to every database it
+  opens, so `REDLINEDB_RESULT_DIALECT=postgres redlinedb` behaves as before.
+- Prepared-statement cache keys include the dialect. An attached database
+  takes the dialect of the statement that attaches it. Opening a path that
+  is already live in the process under the other dialect fails with
+  `database already open with incompatible options`.

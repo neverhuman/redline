@@ -166,6 +166,7 @@ fn statement_cache_insert_and_lookup() {
     for i in 0..128 {
         let sql_str = format!("SELECT {i}");
         let key = StatementCacheKey {
+            dialect: super::Dialect::Sqlite,
             schema_epoch: 0,
             stats_epoch: 0,
             optimizer_hash: 0,
@@ -182,6 +183,7 @@ fn statement_cache_insert_and_lookup() {
 
     // Absent key returns None.
     let missing = StatementCacheKey {
+        dialect: super::Dialect::Sqlite,
         schema_epoch: 0,
         stats_epoch: 0,
         optimizer_hash: 0,

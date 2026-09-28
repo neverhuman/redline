@@ -6,8 +6,7 @@ use std::io::Write;
 use std::path::PathBuf;
 
 use redlinedb::{
-    BackupOptions, Database, OpenOptions as DbOpenOptions, OwnedStatement, OwnedStep,
-    RestoreOptions, Step, ValueRef,
+    BackupOptions, Database, OwnedStatement, OwnedStep, RestoreOptions, Step, ValueRef,
 };
 
 use super::{CliState, DotOutcome, OutputTarget};
@@ -141,7 +140,7 @@ pub fn restore(state: &mut CliState, args: &[&str]) -> Result<DotOutcome, String
         state.reconnect()?;
         return Ok(DotOutcome::Ok);
     }
-    match Database::open(&src_path) {
+    match Database::open_with_options(&src_path, crate::cli_open_options()) {
         Ok(db) => {
             state.db = db;
             state.db_path = src_path;
@@ -151,7 +150,8 @@ pub fn restore(state: &mut CliState, args: &[&str]) -> Result<DotOutcome, String
             let dst = state.db_path.clone();
             Database::restore_from_backup(&src_path, dst.clone(), RestoreOptions::default())
                 .map_err(|err| format!("Error: {err}; open backup failed: {open_err}"))?;
-            state.db = Database::open(&dst).map_err(|err| format!("Error: {err}"))?;
+            state.db = Database::open_with_options(&dst, crate::cli_open_options())
+                .map_err(|err| format!("Error: {err}"))?;
             state.reconnect()?;
         }
     }
@@ -597,11 +597,12 @@ fn is_simple_ident(name: &str) -> bool {
 
 fn open_shell_database(path: &str) -> Result<(Database, PathBuf), String> {
     if path == ":memory:" || path.is_empty() {
-        let db = Database::create_in_memory(DbOpenOptions::default())
+        let db = Database::create_in_memory(crate::cli_open_options())
             .map_err(|err| format!("Error: {err}"))?;
         Ok((db, PathBuf::from(":memory:")))
     } else {
-        let db = Database::open(path).map_err(|err| format!("Error: {err}"))?;
+        let db = Database::open_with_options(path, crate::cli_open_options())
+            .map_err(|err| format!("Error: {err}"))?;
         Ok((db, PathBuf::from(path)))
     }
 }

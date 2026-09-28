@@ -2,16 +2,18 @@
 
 Most statements look like the engine you already know. The surprises are small, and they are where bugs hide.
 
-## Pick a dialect for the whole process
+## Pick a dialect for each database
 
-The dialect is an environment variable, `REDLINEDB_RESULT_DIALECT`.
+The dialect belongs to a database and is fixed when the database opens. Every connection to that database speaks it.
 
-| Value | Use it for |
+| Dialect | Use it for |
 | --- | --- |
-| unset | SQLite scripts, the official SQLite corpus, and Rust examples in this book |
-| `postgres` | Scripts you would run in `psql`, and the beyond-SQLite corpus |
+| `Dialect::Sqlite` (default) | SQLite scripts, the official SQLite corpus, and Rust examples in this book |
+| `Dialect::PostgresSubset` | Scripts you would run in `psql`, and the beyond-SQLite corpus |
 
-One process should stick to one value. A connection opened under the Postgres dialect stores Postgres session state (enums, domains, citext, listen channels, schemas). Mixing the two in one directory is how a later `SELECT` sees a name or a boolean you did not expect.
+In Rust, set `DbOptions::dialect` (`redlinedb_sql`) or call `OpenOptions::with_dialect` (`redlinedb`). When the option is left at `None`, the database reads the environment variable `REDLINEDB_RESULT_DIALECT` once, as it opens: `postgres` selects the Postgres subset, anything else SQLite. Changing the variable later does not change a database that is already open. The shell reads the variable once at startup and passes the result to every database it opens, so `REDLINEDB_RESULT_DIALECT=postgres redlinedb app.db` still works. Two databases with different dialects can be open in one process at the same time.
+
+Keep one dialect per database file. A connection opened under the Postgres dialect stores Postgres session state (enums, domains, citext, listen channels, schemas). Opening the same directory under the other dialect is how a later `SELECT` sees a name or a boolean you did not expect.
 
 ## Types that differ by dialect
 

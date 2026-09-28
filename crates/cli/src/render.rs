@@ -1055,8 +1055,10 @@ fn format_real(value: f64) -> String {
     redlinedb::format_real_sqlite(value)
 }
 
+/// The dialect the shell chose at startup (PG-09); never an environment
+/// read per value.
 fn postgres_result_dialect() -> bool {
-    std::env::var("REDLINEDB_RESULT_DIALECT").ok().as_deref() == Some("postgres")
+    crate::cli_dialect().is_postgres()
 }
 
 fn format_blob_text(bytes: &[u8]) -> String {
