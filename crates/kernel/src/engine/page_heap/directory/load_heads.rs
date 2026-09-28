@@ -13,10 +13,13 @@
 //!   another tied version replaced it. Otherwise the later position wins,
 //!   pages in ascending order and slots in ascending order within a page.
 //!
-//! The last rule can still pick the wrong version when one transaction
-//! wrote two versions of a row without an undo link between them, such as a
-//! delete followed by a new insert of the same row id, and the later one
-//! landed on a reused page with a lower id.
+//! Every version that replaces another links to its before-image: updates,
+//! deletes, and an insert of a row id that already has a version, such as a
+//! delete followed by a new insert of the same row id. The position rule
+//! decides only between versions without such a link. Files written before
+//! reinserts were linked can still hold a delete and a reinsert of one
+//! transaction whose reinsert landed on a reused page with a lower id; for
+//! those the last rule picks the tombstone.
 
 use std::collections::HashMap;
 use std::collections::hash_map::DefaultHasher;

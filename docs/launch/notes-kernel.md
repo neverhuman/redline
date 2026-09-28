@@ -245,3 +245,20 @@ Draft lines for the v5.0.0 CHANGELOG. The integrator owns `CHANGELOG.md`.
   there is left as it was, because its kind cannot be read.
 - Builds with the `failpoints` feature can stop recovery once heap redo is
   done through `engine::recovery::after_heap_replay`.
+
+## A reinserted row links to the version it replaces
+
+- Inserting a row id that already has a version (a delete, then an insert
+  of the same row id) appended the new version with no undo link. Two
+  things went wrong. A snapshot taken before the delete saw the row vanish
+  once the reinsert committed, because the new version's undo chain was
+  empty. And when a transaction deleted and reinserted a row and the new
+  version landed on a reused page with a lower id than the tombstone, a
+  reopen that rebuilt the row directory from the pages picked the
+  tombstone, so the row was gone.
+- The reinsert now links to a before-image of the version it replaces, as
+  an update does. Older snapshots reach the tombstone and the original row
+  through it, and the directory rebuild follows the link.
+- Not changed: files written before this change can still hold an
+  unlinked delete and reinsert of one transaction; for those the rebuild
+  still picks by page position.

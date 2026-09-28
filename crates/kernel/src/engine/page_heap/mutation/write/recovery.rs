@@ -1,6 +1,7 @@
 use super::PageBackedHeap;
 use crate::engine::page_heap::advance_atomic_past;
 use crate::format::{Lsn, RelId, RowId, TUPLE_FLAG_DELETED, TxId};
+use crate::txn::{UndoKind, UndoRecord};
 use crate::wal::WalPayload;
 use crate::{Result, format::TupleVersion};
 
@@ -56,8 +57,11 @@ impl PageBackedHeap {
         } else {
             rel_id
         };
-        if let Some(ptr) = self.head_for_relation(rel_id, row_id)?
-            && let Ok(existing) = self.read_tuple(ptr)
+        let current = match self.head_for_relation(rel_id, row_id)? {
+            Some(ptr) => self.read_tuple(ptr).ok(),
+            None => None,
+        };
+        if let Some(existing) = &current
             && existing.begin_tx == tx_id
             && existing.row_id == row_id
             && existing.payload == payload
@@ -75,7 +79,30 @@ impl PageBackedHeap {
         } else {
             None
         };
-        let tuple = TupleVersion::new(row_id, rel_id, tx_id, payload);
+        let mut tuple = TupleVersion::new(row_id, rel_id, tx_id, payload);
+        if let Some(current) = current {
+            // The row id is taken again, usually after a delete. The new
+            // version replaces the current one, a tombstone then, as an update
+            // would, so link it to that version's before-image. Older
+            // snapshots then still reach the versions under it, and when the
+            // row directory is rebuilt from pages the link says which of one
+            // transaction's versions came last; their page positions cannot,
+            // once a version lands on a reused page with a lower id.
+            let mut before = current.clone();
+            before.end_tx = tx_id;
+            tuple.undo_head = self.append_undo(
+                tx_id,
+                row_id,
+                UndoRecord {
+                    kind: UndoKind::UpdateBeforeImage,
+                    tx_id,
+                    row_id,
+                    prev_undo: current.undo_head,
+                    before_image: before.encode()?,
+                },
+                lsn,
+            )?;
+        }
         let ptr = self.append_tuple(tx_id, row_id, tuple, lsn, wal_payload)?;
         self.set_head(row_id, ptr)?;
         self.set_relation_head(rel_id, row_id, ptr)
