@@ -26,6 +26,7 @@ pub(super) fn wal_writer_loop(
         let mut flush_target = Lsn::ZERO;
         let mut should_flush = false;
         let shutdown;
+        let settle_tail;
 
         {
             let mut state = match shared.state.lock() {
@@ -36,6 +37,7 @@ pub(super) fn wal_writer_loop(
             while !state.write_requested
                 && state.flush_requested_lsn <= state.durable_lsn
                 && !state.shutdown
+                && !matches!(state.tail_settle, TailSettle::Requested)
             {
                 state = match shared.cvar.wait(state) {
                     Ok(state) => state,
@@ -83,6 +85,24 @@ pub(super) fn wal_writer_loop(
                 should_flush = true;
             }
             shutdown = state.shutdown;
+            settle_tail = matches!(state.tail_settle, TailSettle::Requested);
+            shared.cvar.notify_all();
+        }
+
+        if settle_tail {
+            // Recovery has succeeded and asks for the torn tail to be kept
+            // and cut off now, before anything else can scan the log.
+            if let Err(err) = wal.settle_torn_tail() {
+                publish_wal_failure(
+                    &shared,
+                    WalFailure::new(WalFailureStage::Write, &err, wal.written_lsn()),
+                );
+                return;
+            }
+            let Ok(mut state) = shared.state.lock() else {
+                return;
+            };
+            state.tail_settle = TailSettle::Done(wal.salvaged.clone());
             shared.cvar.notify_all();
         }
 

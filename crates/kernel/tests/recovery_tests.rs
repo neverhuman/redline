@@ -1341,3 +1341,9 @@ mod generations;
 
 #[path = "recovery_tests/wal_continuity.rs"]
 mod wal_continuity;
+
+#[path = "recovery_tests/torn_tail.rs"]
+mod torn_tail;
+
+#[path = "recovery_tests/pitr.rs"]
+mod pitr;

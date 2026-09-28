@@ -9,21 +9,22 @@ use crate::catalog::{
 };
 use crate::engine::lock::RowLockManager;
 use crate::engine::page_heap::PageBackedHeap;
-use crate::format::{Csn, Lsn, Page, RelId};
+use crate::format::{Lsn, Page, RelId, TxId};
 use crate::io::{StdFileSystem, create_dir_all_durable};
 use crate::storage::{BufferPool, ControlStore, PageFile, TxStatusStore};
 use crate::telemetry::Phase11Counters;
 use crate::wal::{
-    WalCoordinator, WalPayload, WalReader, WalRecord, WalRecordKind, empty_torn_segment,
-    segments_on_disk_with_bytes,
+    WalCoordinator, WalPayload, WalReader, WalRecord, WalRecordKind,
+    salvage_and_empty_torn_segment, segments_on_disk_with_bytes,
 };
 use crate::{Error, Result};
 
+use self::timeline::{PlannedFork, ReplayFilter};
 use self::wal_floor::wal_resume_position;
 
 use super::{
-    CommitDurability, ConcurrentTxStatus, Engine, EngineConfig, RecoveryMetrics, RecoveryReport,
-    RecoveryTarget,
+    CommitDurability, ConcurrentTxStatus, Engine, EngineConfig, RecoveryMetrics, RecoveryOutcome,
+    RecoveryReport, RecoveryTarget, TimelineForkReport,
 };
 
 impl Engine {
@@ -165,6 +166,7 @@ impl Engine {
             checkpoint_serial: std::sync::Mutex::new(()),
             checkpoint: std::sync::Mutex::new(checkpoint),
             index_handles: std::sync::Mutex::new(HashMap::new()),
+            recovery_report: std::sync::Mutex::new(None),
         });
         Ok(engine)
     }
@@ -196,6 +198,9 @@ impl Engine {
         let wal_dir = path.as_ref().join("wal");
         let mut reader = WalReader::new(&wal_dir, config.wal.clone());
         let scan_report = reader.scan_report()?;
+        // Which records apply: those below the target, off every timeline
+        // an earlier targeted recovery abandoned (workplan R9, step 5).
+        let filter = ReplayFilter::new(&scan_report.records, target)?;
         let txs = ConcurrentTxStatus::new();
         create_dir_all_durable(&StdFileSystem, path.as_ref())
             .map_err(|_| Error::CorruptPage("create engine directory failed"))?;
@@ -256,7 +261,7 @@ impl Engine {
         );
         let catalog_snapshot = plan::resolve_catalog(
             catalog_store.load(),
-            recover_catalog_snapshot(&scan_report.records, target)?,
+            recover_catalog_snapshot(&scan_report.records, &filter)?,
             holds_data,
         )?;
         // Never append below where recovery replays from, heap redo included,
@@ -292,8 +297,13 @@ impl Engine {
                 Arc::new(created)
             }
         };
+        // The one change to existing WAL bytes before replay: a torn segment
+        // below where the log resumes would fail the next scan once the
+        // resumed segment exists. Its bytes are kept under `wal/salvage/`
+        // first. Any other torn tail stays in place until recovery succeeds.
+        let mut salvage = Vec::new();
         if let Some(segment) = resume.torn_segment_to_empty {
-            empty_torn_segment(&wal_dir, segment)?;
+            salvage.push(salvage_and_empty_torn_segment(&wal_dir, segment)?);
         }
         let wal_open_summary = resume.summary;
         let buffer = Arc::new(
@@ -348,8 +358,8 @@ impl Engine {
             choice.plan.heap_page_count,
         )?;
         reserve_ids_named_in_wal(&scan_report.records, &txs, &heap)?;
-        recover_index_page_images(&scan_report.records, replay_from_lsn, target, &buffer)?;
-        let metrics = recover_heap(&scan_report.records, heap_replay_from, target, &txs, &heap)?;
+        recover_index_page_images(&scan_report.records, replay_from_lsn, &filter, &buffer)?;
+        let metrics = recover_heap(&scan_report.records, heap_replay_from, &filter, &txs, &heap)?;
         // Every commit recovery will publish is published now. A CSN below
         // them that the WAL lacks was given up before the crash.
         txs.seal_recovered_frontier();
@@ -387,9 +397,10 @@ impl Engine {
             checkpoint_serial: std::sync::Mutex::new(()),
             checkpoint: std::sync::Mutex::new(checkpoint),
             index_handles: std::sync::Mutex::new(HashMap::new()),
+            recovery_report: std::sync::Mutex::new(None),
         });
         engine.rehydrate_index_handles()?;
-        recover_indexes(&scan_report.records, replay_from_lsn, target, &engine)?;
+        recover_indexes(&scan_report.records, replay_from_lsn, &filter, &engine)?;
         if checkpoint.is_some() {
             let page_count = engine.heap.page_count()?;
             engine
@@ -397,26 +408,61 @@ impl Engine {
                 .load_row_directory_from_pages(page_count, &engine.txs)?;
             engine.heap.load_reusable_pages_from_pages(page_count)?;
         }
-        if target == RecoveryTarget::Latest {
-            // Replay puts heap rows into new versions on new pages, and
-            // eviction may write those pages. The next recovery would replay
-            // the same records again next to the copies already in the file,
-            // so once replay has written a page, checkpoint past it.
-            if engine.buffer.stats().writes > 0 {
-                engine.checkpoint_with_stats()?;
-            }
+        // Recovery has succeeded. Only now is a torn tail copied to
+        // `wal/salvage/` and cut from the log (workplan R9, step 3).
+        salvage.extend(engine.wal.settle_torn_tail()?);
+        let timeline_fork = match filter.fork_to_record(&scan_report.records) {
+            Some(planned) => Some(record_timeline_fork(&engine, planned)?),
+            None => None,
+        };
+        // Replay puts heap rows into new versions on new pages, and eviction
+        // may write those pages. The next recovery would replay the same
+        // records again next to the copies already in the file, so once
+        // replay has written a page, checkpoint past it. After a targeted
+        // recovery the fork record is durable by now, so the next open
+        // cannot publish a commit past the target from below the checkpoint.
+        if engine.buffer.stats().writes > 0 {
+            engine.checkpoint_with_stats()?;
         }
-        Ok((
-            engine,
-            RecoveryReport::from_scan(
-                scan_report,
+        let report = RecoveryReport::from_scan(
+            &scan_report,
+            config.wal.segment_bytes,
+            RecoveryOutcome {
                 metrics,
                 replay_from_lsn,
-                choice.skipped_generation,
-                choice.warnings,
-            ),
-        ))
+                target,
+                checkpoint_generation: checkpoint.map(|control| control.generation),
+                skipped_generation: choice.skipped_generation,
+                warnings: choice.warnings,
+                salvage,
+                timeline_fork,
+                abandoned_wal: filter.abandoned().to_vec(),
+            },
+        );
+        *engine
+            .recovery_report
+            .lock()
+            .map_err(|_| Error::CorruptPage("engine recovery report mutex poisoned"))? =
+            Some(report.clone());
+        Ok((engine, report))
     }
+}
+
+/// Append and flush the fork record that keeps later recoveries at this
+/// one's target.
+fn record_timeline_fork(engine: &Engine, planned: PlannedFork) -> Result<TimelineForkReport> {
+    let append = engine.wal.append(
+        WalRecordKind::TimelineFork,
+        TxId::ZERO,
+        planned.payload().encode()?,
+    )?;
+    engine.wal.flush_until(append.end_lsn)?;
+    Ok(TimelineForkReport {
+        fork_lsn: planned.fork_lsn,
+        record_lsn: append.start_lsn,
+        parent: planned.parent,
+        child: planned.child,
+    })
 }
 
 pub(super) fn catalog_sync_policy(durability: CommitDurability) -> CatalogSyncPolicy {
@@ -444,8 +490,9 @@ fn commit_durability_initial_u8(durability: CommitDurability) -> u8 {
     }
 }
 
-/// Move the next transaction id past every id the scanned WAL names, and
-/// the next row id past every heap row id it names, committed or not.
+/// Move the next transaction id past every id the scanned WAL names, the
+/// next row id past every heap row id it names, and the next CSN past every
+/// commit record's CSN, committed or not.
 ///
 /// Rollback and abandonment log nothing, so a rolled-back transaction's
 /// records stay in the WAL under its id. If a transaction after the reopen
@@ -458,7 +505,9 @@ fn commit_durability_initial_u8(durability: CommitDurability) -> u8 {
 /// the orphaned tuples still carry.
 ///
 /// This walks every record, whatever the replay start and recovery target:
-/// an id is spent once it is logged, even where replay does not apply it.
+/// an id is spent once it is logged, even where replay does not apply it. A
+/// commit past a recovery target, or on a timeline a fork abandoned, keeps
+/// its CSN, so a CSN names at most one commit in the log.
 fn reserve_ids_named_in_wal(
     records: &[WalRecord],
     txs: &ConcurrentTxStatus,
@@ -480,6 +529,7 @@ fn reserve_ids_named_in_wal(
             WalPayload::HeapInsert { row_id, .. }
             | WalPayload::HeapUpdate { row_id, .. }
             | WalPayload::HeapDelete { row_id, .. } => heap.reserve_recovered_row_id(row_id),
+            WalPayload::Commit { csn, .. } => txs.advance_next_csn_past(csn),
             _ => {}
         }
     }
@@ -489,7 +539,7 @@ fn reserve_ids_named_in_wal(
 fn recover_heap(
     records: &[WalRecord],
     replay_from_lsn: Lsn,
-    target: RecoveryTarget,
+    filter: &ReplayFilter,
     txs: &ConcurrentTxStatus,
     heap: &PageBackedHeap,
 ) -> Result<RecoveryMetrics> {
@@ -499,7 +549,7 @@ fn recover_heap(
         if record.kind == WalRecordKind::Commit {
             match WalPayload::decode(&record.payload)? {
                 WalPayload::Commit { tx_id, csn } => {
-                    if commit_visible(record.lsn, csn, target) {
+                    if filter.commit_visible(record.lsn, csn) {
                         committed.insert(tx_id, csn);
                         txs.publish_recovered_commit(tx_id, csn);
                         metrics.commits_recovered += 1;
@@ -511,10 +561,7 @@ fn recover_heap(
     }
 
     for record in records {
-        if record.lsn < replay_from_lsn {
-            continue;
-        }
-        if matches!(target, RecoveryTarget::Lsn(limit) if record.lsn >= limit) {
+        if record.lsn < replay_from_lsn || !filter.applies(record.lsn) {
             continue;
         }
         if record.kind == WalRecordKind::Commit {
@@ -606,14 +653,11 @@ fn recover_heap(
 fn recover_index_page_images(
     records: &[WalRecord],
     replay_from_lsn: Lsn,
-    target: RecoveryTarget,
+    filter: &ReplayFilter,
     buffer: &Arc<BufferPool>,
 ) -> Result<()> {
     for record in records {
-        if record.lsn < replay_from_lsn {
-            continue;
-        }
-        if matches!(target, RecoveryTarget::Lsn(limit) if record.lsn >= limit) {
+        if record.lsn < replay_from_lsn || !filter.applies(record.lsn) {
             continue;
         }
         if record.kind == WalRecordKind::Commit {
@@ -642,13 +686,13 @@ fn recover_index_page_images(
 
 fn recover_catalog_snapshot(
     records: &[WalRecord],
-    target: RecoveryTarget,
+    filter: &ReplayFilter,
 ) -> Result<Option<Arc<crate::catalog::SchemaSnapshot>>> {
     let mut committed = HashSet::new();
     for record in records {
         if record.kind == WalRecordKind::Commit
             && let WalPayload::Commit { tx_id, csn } = WalPayload::decode(&record.payload)?
-            && commit_visible(record.lsn, csn, target)
+            && filter.commit_visible(record.lsn, csn)
         {
             committed.insert(tx_id);
         }
@@ -656,7 +700,10 @@ fn recover_catalog_snapshot(
 
     let mut latest: Option<(Lsn, Arc<crate::catalog::SchemaSnapshot>)> = None;
     for record in records {
-        if record.kind != WalRecordKind::Logical || !committed.contains(&record.tx_id) {
+        if record.kind != WalRecordKind::Logical
+            || !committed.contains(&record.tx_id)
+            || !filter.applies(record.lsn)
+        {
             continue;
         }
         let WalPayload::CatalogSnapshot {
@@ -680,24 +727,21 @@ fn recover_catalog_snapshot(
 fn recover_indexes(
     records: &[WalRecord],
     replay_from_lsn: Lsn,
-    target: RecoveryTarget,
+    filter: &ReplayFilter,
     engine: &Arc<Engine>,
 ) -> Result<()> {
     let mut committed = HashSet::new();
     for record in records {
         if record.kind == WalRecordKind::Commit
             && let WalPayload::Commit { tx_id, csn } = WalPayload::decode(&record.payload)?
-            && commit_visible(record.lsn, csn, target)
+            && filter.commit_visible(record.lsn, csn)
         {
             committed.insert(tx_id);
         }
     }
 
     for record in records {
-        if record.lsn < replay_from_lsn {
-            continue;
-        }
-        if matches!(target, RecoveryTarget::Lsn(limit) if record.lsn >= limit) {
+        if record.lsn < replay_from_lsn || !filter.applies(record.lsn) {
             continue;
         }
         if record.kind == WalRecordKind::Commit {
@@ -761,14 +805,6 @@ fn recover_indexes(
     Ok(())
 }
 
-fn commit_visible(record_lsn: Lsn, csn: Csn, target: RecoveryTarget) -> bool {
-    match target {
-        RecoveryTarget::Latest => true,
-        RecoveryTarget::Lsn(limit) => record_lsn < limit,
-        RecoveryTarget::Csn(limit) => csn <= limit,
-    }
-}
-
 fn record_end_lsn(record: &WalRecord) -> Lsn {
     Lsn(record.lsn.0 + record.encoded_len() as u64)
 }
@@ -788,6 +824,9 @@ mod wal_floor;
 
 #[path = "recovery_plan.rs"]
 mod plan;
+
+#[path = "recovery_timeline.rs"]
+mod timeline;
 
 #[path = "recovery_replayed_pages.rs"]
 mod replayed_pages;

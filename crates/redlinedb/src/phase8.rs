@@ -262,19 +262,6 @@ pub fn restore_from_backup(
     for rel in &manifest.files {
         bytes_copied += copy_file(src, dst, &PathBuf::from(rel))?;
     }
-    let mut restored_identity = load_identity_or_init(dst)?;
-    restored_identity.db_id = next_db_id();
-    if !options.preserve_timeline {
-        restored_identity.parent_timeline = Some(manifest.timeline);
-        restored_identity.timeline = next_timeline_id(manifest.timeline).0;
-        restored_identity.fork_lsn = match options.target {
-            SqlRecoveryTarget::Latest => Some(manifest.stop_lsn),
-            SqlRecoveryTarget::Lsn(lsn) => Some(lsn.0),
-            SqlRecoveryTarget::Csn(csn) => Some(csn.0),
-        };
-    }
-    write_json_atomic(&identity_path(dst), &restored_identity)?;
-
     let recovery_target = match options.target {
         SqlRecoveryTarget::Latest => RecoveryTarget::Latest,
         SqlRecoveryTarget::Lsn(lsn) => RecoveryTarget::Lsn(Lsn(lsn.0)),
@@ -284,8 +271,32 @@ pub fn restore_from_backup(
     sql_opts.engine.page_size = manifest.page_size;
     sql_opts.engine.wal.segment_bytes = manifest.wal_segment_bytes;
     sql_opts.engine.data_file_name = "data.redline".to_owned();
-    let _reopened =
+    // A targeted recovery records a timeline fork in the WAL before it
+    // returns, so later ordinary opens stay at the target instead of
+    // replaying the log past it.
+    let reopened =
         redlinedb_sql::Database::open_with_recovery_target(dst, sql_opts, recovery_target)?;
+    // The LSN the restore stopped at: where the fork cut the log, or its
+    // end when nothing lay past the target. A CSN target is not an LSN.
+    let stopped_at = reopened.last_recovery_report().map(|report| {
+        report
+            .timeline_fork
+            .map_or(report.valid_end_lsn.0, |fork| fork.fork_lsn.0)
+    });
+    drop(reopened);
+
+    let mut restored_identity = load_identity_or_init(dst)?;
+    restored_identity.db_id = next_db_id();
+    if !options.preserve_timeline {
+        restored_identity.parent_timeline = Some(manifest.timeline);
+        restored_identity.timeline = next_timeline_id(manifest.timeline).0;
+        restored_identity.fork_lsn = match options.target {
+            SqlRecoveryTarget::Latest => Some(manifest.stop_lsn),
+            SqlRecoveryTarget::Lsn(lsn) => Some(lsn.0),
+            SqlRecoveryTarget::Csn(_) => stopped_at,
+        };
+    }
+    write_json_atomic(&identity_path(dst), &restored_identity)?;
 
     write_text_atomic(&phase8_path(dst).join(RESTORE_COMPLETE_FILE), "ok\n")?;
     Ok(RestoreStats {
@@ -295,7 +306,7 @@ pub fn restore_from_backup(
         target_lsn: match options.target {
             SqlRecoveryTarget::Latest => manifest.stop_lsn,
             SqlRecoveryTarget::Lsn(lsn) => lsn.0,
-            SqlRecoveryTarget::Csn(csn) => csn.0,
+            SqlRecoveryTarget::Csn(_) => stopped_at.unwrap_or(manifest.stop_lsn),
         },
         target_csn: match options.target {
             SqlRecoveryTarget::Latest => manifest.stop_csn,

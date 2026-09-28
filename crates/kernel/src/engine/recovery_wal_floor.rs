@@ -17,8 +17,9 @@ pub(super) struct WalResume {
     pub(super) summary: WalOpenScanSummary,
     /// Set when no record survives, the highest segment on disk still holds
     /// bytes, and the log resumes past that segment. The scan read those
-    /// bytes as a torn tail, which recovery discards anyway. Left in a
-    /// segment that is no longer the last, they would fail the next scan.
+    /// bytes as a torn tail, which recovery does not replay. Left in a
+    /// segment that is no longer the last, they would fail the next scan,
+    /// so recovery copies them to `wal/salvage/` and empties the segment.
     pub(super) torn_segment_to_empty: Option<u64>,
 }
 
@@ -214,7 +215,8 @@ mod tests {
 
     #[test]
     fn a_torn_segment_the_wal_resumes_in_is_left_to_the_open() {
-        // Opening at the start of that segment truncates it already.
+        // Opening at the start of that segment leaves its bytes pending, and
+        // the writer salvages and cuts them before it writes there.
         let resume =
             wal_resume_position(&scan(None), Lsn(SEGMENT), &[(2, true)], SEGMENT, no_pages)
                 .unwrap();

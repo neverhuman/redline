@@ -438,3 +438,52 @@ Draft lines for the v5.0.0 CHANGELOG. The integrator owns `CHANGELOG.md`.
 - Not changed: `CommitMaybeCommitted` carries no transaction id or LSN at
   the SQL layer; the kernel error does. After a WAL failure the database
   stays open for reads, and writes keep failing until it is reopened.
+
+## Torn WAL tails are kept, recovery says what it did, and a restore stays at its target
+
+- Opening the WAL truncated a torn tail at once, before replay, so a
+  recovery that then failed had already changed the log, and the bytes cut
+  off were gone (workplan R9, step 3). The open now leaves them in place.
+  Once recovery has succeeded, the WAL writer copies them to
+  `wal/salvage/<segment>-<offset>.torn` (both zero-padded to 20 digits),
+  fsyncs the copy and the directory, and only then truncates the segment;
+  a raw `WalManager` does the same before its first append. A copy that
+  already holds the same bytes is reused; one holding other bytes is kept
+  and the new copy takes `<segment>-<offset>.<n>.torn`. A tail the writer
+  left in the segment after the one the log resumes in (it rotated, then
+  died writing) is now salvaged and emptied too; it used to stay in place.
+- The one tail recovery still cuts before replay is a torn segment below a
+  WAL that resumes past it (no record survived); its bytes now go to
+  `wal/salvage/` first as well.
+- The WAL scan opens segments read-only (`FileSystem::open_ro`).
+- `Engine::last_recovery_report()` keeps the recovery report (it used to be
+  dropped by `Engine::open`). `RecoveryReport` gains `target`,
+  `checkpoint_generation`, `tail` (segment, offset, LSN, size, reason and
+  the salvage files), `timeline_fork` and `abandoned_wal`. SQL: `PRAGMA
+  redline_recovery_report` returns one row with those fields, and no row
+  for a database this process created.
+- `integrity_check` now reports a torn WAL tail that lies below the end of
+  what the running writer has written (those bytes held whole records).
+  A tail at or past that end, a write in flight or the crash tail recovery
+  salvages, is not reported; `PRAGMA redline_recovery_report` shows the
+  latter.
+- Recovery to an LSN or CSN target left the WAL past the target in place,
+  and the next ordinary open replayed it, so `redlinedb restore
+  --target-lsn/--target-csn` came back at the latest state after a reopen
+  (workplan R9, step 5). A targeted recovery that leaves records past its
+  target now appends a `TimelineFork` record naming the LSN it cut at and
+  flushes it before the open returns. Every later recovery skips the
+  records from that LSN to the fork record: no replay, no commit, no
+  catalog snapshot. Their transaction ids, row ids and CSNs stay spent. A
+  CSN target cuts at the first commit record past it and fails the open
+  ("recovery target csn does not end a prefix of the wal") if a later
+  commit is not past it. Index page images past a CSN target's cut are no
+  longer replayed, so the targeted open and the reopen agree.
+- A targeted recovery that wrote pages now checkpoints at the end, as a
+  latest recovery does, so the next open does not replay the same heap
+  records a second time.
+- `restore_from_backup` records the LSN the restore stopped at as the
+  identity's fork LSN and `RestoreStats::target_lsn` for a CSN target; it
+  used to store the CSN there.
+- Compatibility: a binary older than this one ignores the fork record and
+  replays past the target.

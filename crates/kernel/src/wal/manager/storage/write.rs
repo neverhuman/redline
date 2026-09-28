@@ -5,6 +5,7 @@ use crate::io::{FileHandle, FileSystem, StdFileSystem, create_dir_all_durable};
 use crate::wal::{WAL_HEADER_LEN, WalRecord, WalRecordKind};
 use crate::{Error, Result};
 
+use super::salvage;
 use super::*;
 
 impl WalManager<StdFileSystem> {
@@ -77,6 +78,8 @@ impl<Fs: FileSystem> WalManager<Fs> {
             durable_lsn: Lsn::ZERO,
             prev_lsn: Lsn::ZERO,
             sync_counters: None,
+            pending_tails: Vec::new(),
+            salvaged: Vec::new(),
         })
     }
 
@@ -119,7 +122,11 @@ impl<Fs: FileSystem> WalManager<Fs> {
         // name left by a run that died before its directory sync may not be
         // durable either. Sync the directory before any record lands here.
         sync_wal_dir(&fs, &dir)?;
-        active_file.set_len(active_offset)?;
+        // Bytes past the resume point are a torn tail. Recovery may still
+        // fail after this open, so leave them in place: the writer copies
+        // them to `wal/salvage/` and cuts them off before it writes.
+        let pending_tails =
+            salvage::pending_tails(&fs, &dir, active_segment, active_offset, active_file.len()?)?;
 
         Ok(Self {
             dir,
@@ -132,6 +139,8 @@ impl<Fs: FileSystem> WalManager<Fs> {
             durable_lsn: Lsn::ZERO,
             prev_lsn,
             sync_counters: None,
+            pending_tails,
+            salvaged: Vec::new(),
         })
     }
 
@@ -144,6 +153,7 @@ impl<Fs: FileSystem> WalManager<Fs> {
         let encoded_len = WAL_HEADER_LEN
             .checked_add(payload.len())
             .ok_or(Error::CorruptWal("record length overflow"))?;
+        self.settle_torn_tail()?;
         let append = self.reserve_append(encoded_len as u64)?;
         let record = WalRecord {
             lsn: append.start_lsn,
@@ -223,6 +233,12 @@ impl<Fs: FileSystem> WalManager<Fs> {
         &mut self,
         records: &[QueuedWalRecord],
     ) -> std::result::Result<(), (WalFailureStage, Error)> {
+        if !records.is_empty() {
+            // A torn tail left by the last run goes to `wal/salvage/` before
+            // any record, or a rotation, lands past it.
+            self.settle_torn_tail()
+                .map_err(|err| (WalFailureStage::Write, err))?;
+        }
         let mut index = 0;
         while index < records.len() {
             self.prepare_for_record(records[index].append, records[index].encoded.len())?;

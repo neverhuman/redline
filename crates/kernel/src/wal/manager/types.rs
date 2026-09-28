@@ -36,6 +36,12 @@ pub struct WalManager<Fs: FileSystem = StdFileSystem> {
     /// recovery scans) and populated when `WalCoordinator::new`
     /// hands ownership of the manager to the writer thread.
     pub(crate) sync_counters: Option<Arc<WalSyncCounters>>,
+    /// Bytes past where the log resumes, left by a write that did not
+    /// finish. Copied to `wal/salvage/` and cut off before the first write
+    /// (see `storage/salvage.rs`), not when the WAL opens.
+    pub(crate) pending_tails: Vec<PendingTail>,
+    /// Salvage files this manager wrote or found holding its tail.
+    pub(crate) salvaged: Vec<PathBuf>,
 }
 
 #[derive(Debug)]
@@ -81,6 +87,19 @@ pub(crate) struct WalCoordinatorState {
     /// The first error the writer thread hit. The writer stops at it, so
     /// no record it had not made durable becomes durable afterwards.
     pub(crate) failure: Option<WalFailure>,
+    /// A request, made once recovery has succeeded, that the writer
+    /// salvage and cut off a torn tail now rather than at its first write.
+    pub(crate) tail_settle: TailSettle,
+}
+
+/// Where a [`WalCoordinator::settle_torn_tail`] request stands.
+#[derive(Debug, Default)]
+pub(crate) enum TailSettle {
+    #[default]
+    Idle,
+    Requested,
+    /// Settled; the salvage files the writer has written since it opened.
+    Done(Vec<PathBuf>),
 }
 
 /// The WAL writer step that failed.
@@ -201,6 +220,35 @@ pub enum TornTailReason {
     UndecodableRecord,
 }
 
+impl TornTailReason {
+    /// A short lowercase description, as reports print it.
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::PartialHeader => "partial header",
+            Self::LengthOverflow => "length overflow",
+            Self::LengthExceedsSegment => "length exceeds segment",
+            Self::PartialBody => "partial body",
+            Self::UndecodableRecord => "undecodable record",
+        }
+    }
+}
+
+impl TornTail {
+    /// The LSN the tail starts at.
+    pub fn lsn(&self, segment_bytes: u64) -> Lsn {
+        Lsn(self
+            .segment
+            .saturating_sub(1)
+            .saturating_mul(segment_bytes)
+            .saturating_add(self.offset))
+    }
+
+    /// How many bytes the tail holds.
+    pub fn bytes(&self) -> u64 {
+        self.file_len.saturating_sub(self.offset)
+    }
+}
+
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(crate) struct WalOpenScanSummary {
     pub(crate) valid_end_lsn: Lsn,
@@ -315,17 +363,6 @@ pub(crate) fn segments_on_disk_with_bytes(dir: &Path) -> Result<Vec<(u64, bool)>
             Ok((segment, len > 0))
         })
         .collect()
-}
-
-/// Truncate a segment whose bytes a scan read as a torn tail, durably.
-/// Recovery calls this only for a segment the WAL resumes past.
-pub(crate) fn empty_torn_segment(dir: &Path, segment: u64) -> Result<()> {
-    let file = std::fs::OpenOptions::new()
-        .write(true)
-        .open(segment_path(dir, segment))?;
-    file.set_len(0)?;
-    file.sync_all()?;
-    Ok(())
 }
 
 pub(super) fn parse_segment_name(name: &str) -> Option<u64> {

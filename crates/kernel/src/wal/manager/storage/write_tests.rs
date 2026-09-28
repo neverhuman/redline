@@ -22,6 +22,7 @@ enum Op {
     Write(PathBuf),
     SyncData(PathBuf),
     SyncDir(PathBuf),
+    SetLen(PathBuf, u64),
 }
 
 /// [`StdFileSystem`] plus a shared log of the operations that matter for
@@ -82,6 +83,14 @@ impl FileSystem for RecordingFs {
         })
     }
 
+    fn open_ro(&self, path: &Path) -> Result<Self::File> {
+        Ok(RecordingFile {
+            inner: StdFileSystem.open_ro(path)?,
+            path: path.to_path_buf(),
+            fs: self.clone(),
+        })
+    }
+
     fn sync_dir(&self, path: &Path) -> Result<()> {
         if self.fail_sync_dir.load(Ordering::SeqCst) {
             return Err(std::io::Error::other("injected directory fsync failure").into());
@@ -114,7 +123,9 @@ impl FileHandle for RecordingFile {
     }
 
     fn set_len(&self, len: u64) -> Result<()> {
-        self.inner.set_len(len)
+        self.inner.set_len(len)?;
+        self.fs.record(Op::SetLen(self.path.clone(), len));
+        Ok(())
     }
 }
 
@@ -283,4 +294,82 @@ fn open_at_exact_segment_boundary_syncs_new_segment() {
     manager.flush().unwrap();
 
     assert_name_synced_before_write(&fs.log(), dir.path(), &segment2);
+}
+
+#[test]
+fn a_torn_tail_is_salvaged_durably_before_the_first_append_cuts_it() {
+    let dir = TempDir::new().unwrap();
+    let mut first = WalManager::create(dir.path(), config()).unwrap();
+    append(&mut first).unwrap();
+    first.flush().unwrap();
+    drop(first);
+    // The first 20 bytes of a second record: a crash mid-write.
+    let segment = segment_path(dir.path(), 1);
+    let whole = std::fs::read(&segment).unwrap();
+    let mut torn = whole.clone();
+    torn.extend_from_slice(&whole[..20]);
+    std::fs::write(&segment, &torn).unwrap();
+
+    let fs = RecordingFs::default();
+    let mut manager = WalManager::open_with_fs(dir.path(), config(), fs.clone()).unwrap();
+    // Opening changes nothing: recovery may still fail after it.
+    assert_eq!(std::fs::read(&segment).unwrap(), torn);
+    assert!(
+        !fs.log().iter().any(|op| matches!(op, Op::SetLen(..))),
+        "{:#?}",
+        fs.log()
+    );
+
+    let next = append(&mut manager).unwrap();
+    assert_eq!(next.start_lsn, Lsn(64));
+    manager.flush().unwrap();
+
+    let salvage_dir = dir.path().join(WAL_SALVAGE_DIR);
+    let salvage = salvage_dir.join(format!("{:020}-{:020}.torn", 1, 64));
+    assert_eq!(std::fs::read(&salvage).unwrap(), whole[..20]);
+    assert_eq!(manager.salvaged_tails(), std::slice::from_ref(&salvage));
+    // The copy and its name are durable before the segment is cut, and the
+    // segment is cut before the new record goes where the tail was.
+    let log = fs.log();
+    let copied = position(&log, &Op::Write(salvage.clone()));
+    let copy_synced = position_after(&log, copied, &Op::SyncData(salvage.clone()));
+    let name_synced = position_after(&log, copy_synced, &Op::SyncDir(salvage_dir.clone()));
+    let cut = position(&log, &Op::SetLen(segment.clone(), 64));
+    let appended = position(&log, &Op::Write(segment.clone()));
+    assert!(name_synced < cut && cut < appended, "{log:#?}");
+    drop(manager);
+
+    let lsns: Vec<Lsn> = WalReader::new(dir.path(), config())
+        .scan()
+        .unwrap()
+        .iter()
+        .map(|record| record.lsn)
+        .collect();
+    assert_eq!(lsns, vec![Lsn(0), Lsn(64)]);
+}
+
+#[test]
+fn a_salvage_copy_with_other_bytes_is_kept_beside_the_new_one() {
+    let dir = TempDir::new().unwrap();
+    let mut first = WalManager::create(dir.path(), config()).unwrap();
+    append(&mut first).unwrap();
+    first.flush().unwrap();
+    drop(first);
+    let segment = segment_path(dir.path(), 1);
+    let whole = std::fs::read(&segment).unwrap();
+    let mut torn = whole.clone();
+    torn.extend_from_slice(&whole[..20]);
+    std::fs::write(&segment, &torn).unwrap();
+    // An earlier crash at the same position left a different tail.
+    let salvage_dir = dir.path().join(WAL_SALVAGE_DIR);
+    std::fs::create_dir_all(&salvage_dir).unwrap();
+    let earlier = salvage_dir.join(format!("{:020}-{:020}.torn", 1, 64));
+    std::fs::write(&earlier, b"earlier").unwrap();
+
+    let mut manager = WalManager::open(dir.path(), config()).unwrap();
+    append(&mut manager).unwrap();
+    let copy = salvage_dir.join(format!("{:020}-{:020}.1.torn", 1, 64));
+    assert_eq!(manager.salvaged_tails(), std::slice::from_ref(&copy));
+    assert_eq!(std::fs::read(&earlier).unwrap(), b"earlier");
+    assert_eq!(std::fs::read(&copy).unwrap(), whole[..20]);
 }

@@ -25,6 +25,9 @@ pub trait FileSystem {
     fn read_dir_names(&self, path: &Path) -> Result<Vec<String>>;
     fn open_rw_create(&self, path: &Path) -> Result<Self::File>;
     fn open_rw_existing(&self, path: &Path) -> Result<Self::File>;
+    /// Open an existing file for reading only. A scan that must not change
+    /// the file opens it this way, so a write through the handle fails.
+    fn open_ro(&self, path: &Path) -> Result<Self::File>;
     /// Make the entries of directory `path` durable: names created,
     /// renamed or removed in it survive power loss once this returns.
     /// A file's own `sync_data` does not cover its directory entry.
@@ -69,6 +72,11 @@ impl FileSystem for StdFileSystem {
 
     fn open_rw_existing(&self, path: &Path) -> Result<Self::File> {
         let file = OpenOptions::new().read(true).write(true).open(path)?;
+        Ok(StdFileHandle(file))
+    }
+
+    fn open_ro(&self, path: &Path) -> Result<Self::File> {
+        let file = OpenOptions::new().read(true).open(path)?;
         Ok(StdFileHandle(file))
     }
 

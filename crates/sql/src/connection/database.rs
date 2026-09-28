@@ -372,6 +372,13 @@ impl Database {
         Ok(self.engine.integrity_check()?)
     }
 
+    /// What the crash recovery that opened this database found and did,
+    /// as `PRAGMA redline_recovery_report` shows it. `None` for a database
+    /// this process created.
+    pub fn last_recovery_report(&self) -> Option<redlinedb_kernel::engine::RecoveryReport> {
+        self.engine.last_recovery_report()
+    }
+
     pub fn tx_status_stats(&self) -> redlinedb_kernel::engine::TxStatusStats {
         self.engine.tx_status_stats()
     }

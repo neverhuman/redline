@@ -16,4 +16,6 @@ mod types;
 pub use config::*;
 pub(crate) use coordinator::PageInstallFence;
 pub use counters::*;
+pub use storage::WAL_SALVAGE_DIR;
+pub(crate) use storage::{PendingTail, salvage_and_empty_torn_segment};
 pub use types::*;

@@ -242,6 +242,14 @@ impl ConcurrentTxStatus {
         Ok(())
     }
 
+    /// Keep `csn` from being handed out again. Recovery calls this for the
+    /// CSN of every commit record the WAL holds, including a commit it does
+    /// not recover because it lies past the target or on an abandoned
+    /// timeline, so a CSN names at most one commit in the log.
+    pub(crate) fn advance_next_csn_past(&self, csn: Csn) {
+        advance_atomic_past(&self.inner.next_csn, csn.0);
+    }
+
     pub fn restore_frontier(&self, next_tx: TxId, next_csn: Csn, published_csn: Csn) {
         advance_atomic_to_at_least(&self.inner.next_tx, next_tx.0.max(1));
         advance_atomic_to_at_least(&self.inner.next_csn, next_csn.0.max(1));

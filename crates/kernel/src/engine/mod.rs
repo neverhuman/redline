@@ -37,11 +37,13 @@ use std::time::Duration;
 use crate::catalog::{CatalogManager, CatalogStore, IndexId as CatalogIndexId};
 use crate::engine::lock::{RowKey, RowLockManager};
 use crate::engine::page_heap::PageBackedHeap;
-use crate::format::{Csn, DEFAULT_PAGE_SIZE, Lsn, RelId, RowId};
+use crate::format::{Csn, DEFAULT_PAGE_SIZE, Lsn, RelId, RowId, TimelineId};
 use crate::index::BtreeIndex;
 use crate::storage::{BufferPool, BufferPoolStats, ControlFile, ControlStore, TxStatusStore};
 use crate::telemetry::{Phase11Counters, Phase11CountersSnapshot};
-use crate::wal::{WalConfig, WalCoordinator, WalScanReport, WalSyncCountersSnapshot};
+use crate::wal::{
+    TornTailReason, WalConfig, WalCoordinator, WalScanReport, WalSyncCountersSnapshot,
+};
 
 const BEGIN_LOCK_KEY: RowKey = RowKey {
     rel_id: RelId::ZERO,
@@ -95,6 +97,42 @@ pub struct RecoveryReport {
     /// What recovery found damaged or skipped and recovered around, such
     /// as a control file that does not decode.
     pub warnings: Vec<String>,
+    /// The target recovery replayed to.
+    pub target: RecoveryTarget,
+    /// The checkpoint generation recovery started from.
+    pub checkpoint_generation: Option<u64>,
+    /// Where the torn tail was, and where its bytes were kept (workplan R9).
+    pub tail: Option<RecoveredTail>,
+    /// The fork this recovery recorded so the next open stays at its
+    /// target.
+    pub timeline_fork: Option<TimelineForkReport>,
+    /// `[from, to)` WAL ranges earlier forks abandoned, which recovery
+    /// skipped.
+    pub abandoned_wal: Vec<(Lsn, Lsn)>,
+}
+
+/// A torn tail recovery did not replay: bytes at the end of the log that do
+/// not hold a whole record, left by a write that did not finish.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct RecoveredTail {
+    pub segment: u64,
+    pub offset: u64,
+    pub lsn: Lsn,
+    pub bytes: u64,
+    pub reason: TornTailReason,
+    /// The files under `wal/salvage/` that hold those bytes. They were cut
+    /// from the WAL only after these were durable.
+    pub salvage: Vec<PathBuf>,
+}
+
+/// A `TimelineFork` record a targeted recovery appended: every later
+/// recovery skips the records from `fork_lsn` up to `record_lsn`.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct TimelineForkReport {
+    pub fork_lsn: Lsn,
+    pub record_lsn: Lsn,
+    pub parent: TimelineId,
+    pub child: TimelineId,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -111,14 +149,53 @@ struct RecoveryMetrics {
     commits_recovered: usize,
 }
 
+/// What recovery decided and did besides the replay counts.
+#[derive(Debug)]
+struct RecoveryOutcome {
+    metrics: RecoveryMetrics,
+    replay_from_lsn: Lsn,
+    target: RecoveryTarget,
+    checkpoint_generation: Option<u64>,
+    skipped_generation: Option<u64>,
+    warnings: Vec<String>,
+    salvage: Vec<PathBuf>,
+    timeline_fork: Option<TimelineForkReport>,
+    abandoned_wal: Vec<(Lsn, Lsn)>,
+}
+
 impl RecoveryReport {
-    fn from_scan(
-        scan: WalScanReport,
-        metrics: RecoveryMetrics,
-        replay_from_lsn: Lsn,
-        skipped_generation: Option<u64>,
-        warnings: Vec<String>,
-    ) -> Self {
+    fn from_scan(scan: &WalScanReport, segment_bytes: u64, outcome: RecoveryOutcome) -> Self {
+        let RecoveryOutcome {
+            metrics,
+            replay_from_lsn,
+            target,
+            checkpoint_generation,
+            skipped_generation,
+            mut warnings,
+            salvage,
+            timeline_fork,
+            abandoned_wal,
+        } = outcome;
+        let tail = match scan.tail {
+            Some(tail) => Some(RecoveredTail {
+                segment: tail.segment,
+                offset: tail.offset,
+                lsn: tail.lsn(segment_bytes),
+                bytes: tail.bytes(),
+                reason: tail.reason,
+                salvage,
+            }),
+            None => {
+                // Only a scan tail leaves bytes past where the log resumes;
+                // name any salvage file anyway rather than drop it.
+                warnings.extend(
+                    salvage
+                        .iter()
+                        .map(|path| format!("wal bytes salvaged to {}", path.display())),
+                );
+                None
+            }
+        };
         Self {
             scanned_records: scan.records.len(),
             valid_end_lsn: scan.valid_end_lsn,
@@ -129,6 +206,11 @@ impl RecoveryReport {
             replay_from_lsn,
             skipped_generation,
             warnings,
+            target,
+            checkpoint_generation,
+            tail,
+            timeline_fork,
+            abandoned_wal,
         }
     }
 }
@@ -247,6 +329,9 @@ pub struct Engine {
     /// catalog snapshot at open time. Lane A wires this so SQL exec lanes
     /// (B/C) can borrow handles via `Engine::index_handle`.
     index_handles: Mutex<HashMap<CatalogIndexId, Arc<BtreeIndex>>>,
+    /// What the recovery that opened this engine found and did. `None` for
+    /// an engine this process created.
+    recovery_report: Mutex<Option<RecoveryReport>>,
 }
 
 impl Engine {

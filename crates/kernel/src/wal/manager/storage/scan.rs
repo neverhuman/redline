@@ -50,7 +50,8 @@ impl<Fs: FileSystem> WalReader<Fs> {
         for (segment_index, segment) in segment_numbers.iter().enumerate() {
             let is_last_segment = segment_index + 1 == segment_numbers.len();
             let path = segment_path(&self.dir, *segment);
-            let mut file = self.fs.open_rw_existing(&path)?;
+            // Recovery scans before it decides anything; a scan never writes.
+            let mut file = self.fs.open_ro(&path)?;
             let file_len = file.len()?;
             segments.push(WalSegmentInfo {
                 number: *segment,

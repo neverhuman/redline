@@ -392,10 +392,10 @@ fn open_database_at(
     }
 
     // Take ownership before anything reads or repairs the image. Opening
-    // runs crash recovery, which truncates a torn WAL tail, creates missing
-    // files and rewrites index pages, so an open that is going to lose to
-    // another owner must fail here, before recovery. A read-only open
-    // recovers too, so it takes the same exclusive lock.
+    // runs crash recovery, which moves a torn WAL tail to `wal/salvage/`,
+    // creates missing files and rewrites index pages, so an open that is
+    // going to lose to another owner must fail here, before recovery. A
+    // read-only open recovers too, so it takes the same exclusive lock.
     let owner_lock = if options.process_owner_lock {
         Some(Arc::new(acquire_owner_lock(&path)?))
     } else {

@@ -4,6 +4,7 @@ use crate::format::Lsn;
 use crate::telemetry::Phase11Counters;
 use crate::{Error, Result};
 
+use super::helpers::check_wal_failure;
 use super::*;
 
 impl WalCoordinator {
@@ -29,6 +30,38 @@ impl WalCoordinator {
             .lock()
             .map(|state| state.reserved_lsn)
             .map_err(|_| Error::CorruptWal("wal coordinator mutex poisoned"))
+    }
+
+    /// Have the writer copy a torn tail the last run left to
+    /// `wal/salvage/` and cut it off now, instead of before its first
+    /// write, and wait until it has. Recovery calls this once it has
+    /// succeeded, so a later scan never races the truncation. Returns the
+    /// salvage files the writer has written since the WAL opened.
+    pub(crate) fn settle_torn_tail(&self) -> Result<Vec<std::path::PathBuf>> {
+        if self.volatile {
+            return Ok(Vec::new());
+        }
+        let mut state = self
+            .shared
+            .state
+            .lock()
+            .map_err(|_| Error::CorruptWal("wal coordinator mutex poisoned"))?;
+        check_wal_failure(&state)?;
+        state.tail_settle = TailSettle::Requested;
+        self.shared.cvar.notify_all();
+        loop {
+            if let TailSettle::Done(salvaged) = &mut state.tail_settle {
+                let salvaged = std::mem::take(salvaged);
+                state.tail_settle = TailSettle::Idle;
+                return Ok(salvaged);
+            }
+            check_wal_failure(&state)?;
+            state = self
+                .shared
+                .cvar
+                .wait(state)
+                .map_err(|_| Error::CorruptWal("wal coordinator wait poisoned"))?;
+        }
     }
 
     pub fn durable_lsn(&self) -> Result<Lsn> {

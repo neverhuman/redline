@@ -35,6 +35,28 @@ impl Engine {
         &self.buffer
     }
 
+    /// What the recovery that opened this engine found and did: the WAL it
+    /// scanned, what it replayed, a torn tail and the salvage files that
+    /// hold it, and a timeline fork. `None` for an engine this process
+    /// created, including every in-memory one.
+    pub fn last_recovery_report(&self) -> Option<super::RecoveryReport> {
+        self.recovery_report
+            .lock()
+            .map(|report| report.clone())
+            .unwrap_or(None)
+    }
+
+    /// Check the page file, catalog, indexes and WAL, returning one line
+    /// per problem.
+    ///
+    /// A torn WAL tail is reported when it lies below the end of what the
+    /// WAL writer has written: those bytes held whole records once, so they
+    /// were damaged. A tail at or past that end is not reported. It is
+    /// either a write still in flight or bytes past the writer's position
+    /// that the writer copies to `wal/salvage/` and cuts off before it
+    /// writes there; recovery handles the tail a crash leaves the same way,
+    /// before the engine opens, and reports it in
+    /// [`Engine::last_recovery_report`].
     pub fn integrity_check(&self) -> Result<Vec<String>> {
         let snapshot = self.catalog.current();
         let mut errors = Vec::new();
@@ -71,9 +93,28 @@ impl Engine {
             }
         }
         if !self.volatile {
+            // Read before the scan: every byte below it was written whole.
+            let written = self.wal.written_lsn()?;
             let mut wal_reader = crate::wal::WalReader::new(&self.wal_dir, self.config.wal.clone());
-            if let Err(err) = wal_reader.scan_report() {
-                errors.push(format!("wal prefix scan: {err}"));
+            match wal_reader.scan_report() {
+                Ok(scan) => {
+                    if let Some(tail) = scan.tail {
+                        let tail_lsn = tail.lsn(self.config.wal.segment_bytes);
+                        if tail_lsn < written {
+                            errors.push(format!(
+                                "wal torn tail at lsn {} (segment {}, offset {}, {} bytes, {}) \
+                                 inside the written wal, which ends at lsn {}",
+                                tail_lsn.0,
+                                tail.segment,
+                                tail.offset,
+                                tail.bytes(),
+                                tail.reason.as_str(),
+                                written.0
+                            ));
+                        }
+                    }
+                }
+                Err(err) => errors.push(format!("wal prefix scan: {err}")),
             }
         }
         let handles = self

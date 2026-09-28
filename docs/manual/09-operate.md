@@ -22,6 +22,14 @@ The first form is the shell: database path, then SQL. `stats DB --json` prints s
 
 The Rust API mirrors this with `BackupOptions`, `PhysicalBackupOptions`, and the stats structs re-exported from `redlinedb` (`DatabaseStats`, `CommitStats`, `WalBenchStats`, and the others in that `pub use`). A program that must backup on a schedule should call that API inside the process that already holds the `Database`, so the copy sees a quiescent engine rather than a file mid-write.
 
+## What crash recovery did
+
+Every open of an existing database runs crash recovery. A crash in the middle of a log write can leave the start of a record at the end of `wal/`, a torn tail. Recovery does not replay it, and it changes no log byte until it has succeeded. Then it copies the torn bytes to `wal/salvage/<segment>-<offset>.torn`, syncs that copy, and only then cuts them from the segment. An open that fails leaves `wal/` as it was. The salvage files are never read again; delete them once you no longer want them.
+
+`PRAGMA redline_recovery_report` returns one row describing the recovery that opened this database: the target, the checkpoint generation it started from, how many records it scanned and commits it recovered, the torn tail (`torn_tail`, its LSN, segment, offset, size and reason) and the `salvage` file that holds it, and any `warnings`. It returns no row for a database this process created. `PRAGMA integrity_check` does not count a torn tail that recovery handled this way. It does report a torn tail inside the part of the log the running engine has already written, because those bytes held whole records once.
+
+`redlinedb restore BACKUP DST --target-lsn N` (or `--target-csn N`) recovers only the log below the target and leaves the rest of the log in place. So that later opens stay at the target, it appends a timeline fork record naming where it cut. Every later recovery skips the log from that point to the fork record, and new writes continue after it. The skipped records stay on disk until a checkpoint prunes their segments. The fork record needs this version or later: an older binary would replay past the target.
+
 ## Checkpoints and vacuum
 
 The stats structs include checkpoint and vacuum counters. Run them when the write-ahead log has grown and you want it folded back into the database, or when you have deleted a large fraction of a table and want the file to shrink. They are maintenance, not part of a request an agent should issue on every turn. An agent that vacuums after every insert will dominate the runtime with maintenance.

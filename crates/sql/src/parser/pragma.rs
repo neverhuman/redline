@@ -486,6 +486,15 @@ pub(crate) fn parse_pragma_template(
             vec![String::from("index"), String::from("status")],
             pragma_redline_index_check_rows(conn)?,
         ),
+        "redline_recovery_report" => pragma_static_select(
+            sql,
+            schema_epoch,
+            super::pragma_recovery::COLUMNS
+                .iter()
+                .map(|column| (*column).to_owned())
+                .collect::<Vec<_>>(),
+            super::pragma_recovery::rows(conn),
+        ),
         "redline_full_check" => pragma_static_select(
             sql,
             schema_epoch,

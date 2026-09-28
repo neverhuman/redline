@@ -1018,7 +1018,7 @@ struct RowLockState {
 ```rust
 let scan = WalReader::new(&wal_dir, config).scan_report()?;
 // scan.valid_end_lsn: highest LSN with valid CRC32
-// scan.torn_tail: bytes after valid_end_lsn (truncated on re-open)
+// scan.torn_tail: bytes after valid_end_lsn (copied to wal/salvage/, then cut off, once recovery succeeds)
 ```
 
 **Step 2 — Control file:**

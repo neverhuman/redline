@@ -4,6 +4,7 @@ use std::sync::Arc;
 
 use tempfile::TempDir;
 
+use super::timeline::ReplayFilter;
 use super::{RecoveryTarget, recover_index_page_images};
 use crate::format::{Lsn, Page, PageGeneration, PageId, RelId, TuplePtr, TxId};
 use crate::index::{BtreeIndex, IndexDescriptor, IndexId, IndexRowRef, IndexUniqueness};
@@ -82,7 +83,8 @@ fn an_index_image_older_than_the_file_page_is_skipped() {
     let buffer = Arc::new(BufferPool::new(Arc::clone(&page_file), 64).unwrap());
     let records = vec![image_record(100, &older)];
 
-    recover_index_page_images(&records, Lsn::ZERO, RecoveryTarget::Latest, &buffer).unwrap();
+    let latest = ReplayFilter::new(&records, RecoveryTarget::Latest).unwrap();
+    recover_index_page_images(&records, Lsn::ZERO, &latest, &buffer).unwrap();
 
     let resident = root_page(&buffer);
     assert_eq!(resident.header().unwrap().page_lsn, Lsn(10_000));
@@ -102,7 +104,9 @@ fn an_index_image_newer_than_the_file_page_replaces_it() {
     let record = image_record(100, &older);
     let end = Lsn(record.lsn.0 + record.encoded_len() as u64);
 
-    recover_index_page_images(&[record], Lsn::ZERO, RecoveryTarget::Latest, &buffer).unwrap();
+    let records = [record];
+    let latest = ReplayFilter::new(&records, RecoveryTarget::Latest).unwrap();
+    recover_index_page_images(&records, Lsn::ZERO, &latest, &buffer).unwrap();
 
     // The resident page and the file copy both carry the image, stamped
     // with the end of its record.

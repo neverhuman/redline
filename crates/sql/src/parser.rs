@@ -47,6 +47,7 @@ pub(crate) use pragma::*;
 mod pragma_compile;
 #[allow(unused_imports)]
 pub(crate) use pragma_compile::*;
+mod pragma_recovery;
 mod prepare;
 pub(crate) mod savepoint;
 mod select;
