@@ -14,6 +14,9 @@ use crate::storage::{PageFile, PagePressureRelief};
 use crate::telemetry::Phase11Counters;
 use crate::{Error, Result};
 
+#[path = "buffer_checkpoint.rs"]
+mod checkpoint;
+
 pub const DEFAULT_CHECKPOINT_BATCH_PAGES: usize = 64;
 
 /// Minimum capacity of the prefetch worker queue. The queue size

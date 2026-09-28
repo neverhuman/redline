@@ -174,7 +174,17 @@ impl PageBackedHeap {
         // appends take no checkpoint install fence and rely on this latch. A fresh or reused page
         // is reinitialised only on the private copy, so the resident page changes only after its
         // WAL record is appended.
+        //
+        // A logged change also holds the heap checkpoint gate, taken before the frame latch, so
+        // a checkpoint writes heap pages only between whole logged changes (workplan R5). Nothing
+        // here allocates or waits for another heap change while holding it.
+        let logged = self.wal.is_some() && wal_payload.is_some() && lsn != Lsn::ZERO;
         let install = |guard: &PageGuard, reinit: bool| -> Result<Option<(u16, PageGeneration)>> {
+            let _logged_change = if logged {
+                Some(self.begin_logged_change()?)
+            } else {
+                None
+            };
             let mut frame = guard.mutable_frame()?;
             let resident = frame
                 .page

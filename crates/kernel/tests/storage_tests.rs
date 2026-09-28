@@ -412,6 +412,7 @@ fn control_file_round_trips_and_validates_checksum() {
         generation: 9,
         checkpoint_lsn: Lsn(1234),
         page_count: 44,
+        heap_redo_lsn: Lsn(1300),
     };
 
     let mut encoded = control.encode().unwrap();
@@ -429,8 +430,8 @@ fn control_store_loads_latest_generation_and_falls_back_from_corrupt_copy() {
     let temp = TempDir::new().unwrap();
     let store = ControlStore::new(temp.path()).unwrap();
 
-    let first = store.write_next(None, Lsn(10), 3).unwrap();
-    let second = store.write_next(Some(first), Lsn(20), 7).unwrap();
+    let first = store.write_next(None, Lsn(10), Lsn(10), 3).unwrap();
+    let second = store.write_next(Some(first), Lsn(20), Lsn(25), 7).unwrap();
     assert_eq!(store.load_latest().unwrap(), Some(second));
 
     let mut newer = OpenOptions::new()

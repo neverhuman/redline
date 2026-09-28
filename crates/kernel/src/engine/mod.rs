@@ -9,6 +9,8 @@ mod catalog_ops;
 #[cfg(test)]
 mod catalog_sync_tests;
 #[cfg(test)]
+mod checkpoint_cut_tests;
+#[cfg(test)]
 mod checkpoint_serial_tests;
 #[cfg(test)]
 mod directory_load_tests;

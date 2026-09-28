@@ -175,3 +175,53 @@ Draft lines for the v5.0.0 CHANGELOG. The integrator owns `CHANGELOG.md`.
 - `BtreeIndex::redo_page_image` now takes the record's end LSN, as
   `PageBackedHeap::redo_page_image` already did: a WAL image stores page
   LSN zero, so the image alone cannot say how new it is.
+
+## Checkpoints take a complete cut
+
+- A checkpoint used to write only dirty pages whose LSN was at or below
+  the LSN it recorded. A page another writer changed after the checkpoint
+  chose that LSN was skipped whole, although it still held older committed
+  rows, and the checkpoint then recorded the LSN and pruned the WAL below
+  it. Recovery started there and never saw those rows again. A clean close
+  lost them too, because closing writes no pages. The second writer did not
+  have to commit. With four writers on a 48-page pool this lost rows in
+  about one run in six.
+- A checkpoint now writes every dirty page, whatever its LSN, after making
+  the WAL durable through that page's LSN (under the page's frame lock,
+  the order a heap append takes them). The page file is synced before the
+  control file is written.
+- Heap redo appends a replayed row as a new version and cannot tell whether
+  the page file already holds it, so writing heap pages that carry changes
+  past the checkpoint LSN would have left a second copy of each such row
+  after recovery. A checkpoint therefore writes pages while no logged heap
+  change is between its WAL append and its page install (heap appends hold
+  a shared gate across that window; the checkpoint holds it exclusively
+  while it writes pages, not while it syncs). The control file records the
+  WAL position of that instant as a new `heap_redo_lsn`, and recovery
+  replays heap records only from there. Index and page-image redo already
+  skip what a page holds, so index pages may carry changes past the
+  checkpoint LSN.
+- The control file format is now version 2. Version 1 files still open
+  (their heap redo starts at the checkpoint LSN); an older build refuses a
+  version 2 file instead of replaying heap records its page file already
+  holds.
+- A new control-file generation may not record a checkpoint LSN or heap
+  redo LSN below the previous generation's, which may already have pruned
+  the WAL below them. Checkpoints were already serialized from the start.
+- Recovery to an LSN below the checkpoint's heap redo LSN now fails, as one
+  below its checkpoint LSN did; the page file already holds heap changes up
+  to the heap redo LSN.
+- Cost, measured with a release-build probe (4 writers inserting 200-byte
+  rows in Normal mode, a checkpoint every 100 ms, 4096-page pool): on NVMe,
+  about 48,000 to 50,000 rows/s against 55,000 to 56,000 before, with
+  checkpoint times unchanged (median about 85 to 100 ms) and the worst
+  single insert-and-commit 39 to 108 ms against 32 to 94 ms before; on
+  tmpfs, 59,000 to 61,000 rows/s against 60,000 to 65,000. A single
+  writer's checkpoint of 172 pages takes the same time as before.
+- Not changed: a crash in the middle of a checkpoint's page writes, before
+  its control file lands, can still leave a second copy of a heap row
+  written after the previous checkpoint on a page that existed then.
+  Recovery replays that row again from the previous generation. Reads
+  through the row directory see one version; a page scan can see both.
+  Closing this needs heap WAL records that name their page, or a
+  double-write area for checkpoint pages.

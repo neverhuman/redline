@@ -102,14 +102,12 @@ fn a_later_checkpoint_generation_never_records_an_older_lsn() {
     }
 }
 
-/// Workplan R5, open: a checkpoint writes only pages at or below the LSN it
-/// records. A page another writer changes after the checkpoint chose that
-/// LSN is skipped whole, although it still holds committed rows older than
-/// the LSN, whose WAL the checkpoint then prunes. Recovery starts at the
-/// recorded LSN and never sees those rows again. This is why the engine
-/// does not start checkpoints on its own under memory pressure.
+/// Workplan R5: a checkpoint used to write only pages at or below the LSN it
+/// records. A page another writer changed after the checkpoint chose that
+/// LSN was skipped whole, although it still held committed rows older than
+/// the LSN, whose WAL the checkpoint then pruned. Recovery started at the
+/// recorded LSN and never saw those rows again.
 #[test]
-#[ignore = "R5: a checkpoint skips a page rewritten past its LSN and loses its older rows"]
 fn checkpoint_keeps_a_committed_row_on_a_page_rewritten_past_its_lsn() {
     let temp = TempDir::new().unwrap();
     let config = EngineConfig {

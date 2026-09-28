@@ -5,11 +5,10 @@ use std::sync::Arc;
 
 use crate::catalog::IndexId as CatalogIndexId;
 use crate::engine::page_heap::{HeapScanRow, PageBackedHeap, ParallelScanDiagnostics, VacuumStats};
-use crate::format::{Csn, PageId, RelId, RowId, TuplePtr, TxId};
+use crate::format::{Csn, Lsn, PageId, RelId, RowId, TuplePtr, TxId};
 use crate::index::BtreeIndex;
 use crate::storage::{
-    BufferPool, BufferPoolStats, ControlFile, DEFAULT_CHECKPOINT_BATCH_PAGES, PageFile,
-    PagePressureRelief, TxStatusCheckpoint,
+    BufferPool, BufferPoolStats, ControlFile, PageFile, PagePressureRelief, TxStatusCheckpoint,
 };
 use crate::telemetry::{Phase11Counters, Phase11CountersSnapshot};
 use crate::txn::Snapshot;
@@ -200,6 +199,23 @@ impl Engine {
         self.checkpoint_with_stats().map(|stats| stats.control)
     }
 
+    /// Write every dirty page and record where recovery starts (workplan R5).
+    ///
+    /// The control file records two LSNs. Below `checkpoint_lsn` every WAL
+    /// record is reflected in the page file, recovery replays nothing, and
+    /// the WAL may be pruned. It stops at the first index or commit record
+    /// whose page install or publish is still in flight. Index and page-image
+    /// redo skip what a page already holds, so index pages may also carry
+    /// changes past it. Heap redo appends a replayed row as a new version and
+    /// cannot tell what the file holds, so heap pages are written while no
+    /// logged heap change is in flight, and `heap_redo_lsn` records the WAL
+    /// position of that instant: the file holds every heap record below it and
+    /// none above.
+    ///
+    /// Every dirty page is written, whatever its LSN, after the WAL is made
+    /// durable through that LSN. Before, a page changed after the checkpoint
+    /// chose its LSN was skipped whole, although it still held older changes
+    /// whose WAL the checkpoint then pruned.
     pub fn checkpoint_with_stats(&self) -> Result<CheckpointStats> {
         if self.volatile {
             return Ok(CheckpointStats {
@@ -208,6 +224,8 @@ impl Engine {
                 flush_batches: 0,
             });
         }
+        // Serialize from the start: a checkpoint that chose its LSNs later
+        // must not publish before one that chose them earlier.
         let _serial = self
             .checkpoint_serial
             .lock()
@@ -218,9 +236,24 @@ impl Engine {
         let checkpoint_lsn = self.wal.checkpoint_horizon(durable_lsn)?;
         #[cfg(test)]
         run_after_checkpoint_cut_hook();
-        let flush = self
-            .heap
-            .flush_dirty_batches(checkpoint_lsn, DEFAULT_CHECKPOINT_BATCH_PAGES)?;
+        // A page LSN past every appended record is a placeholder, such as the
+        // LSN an undo page carries; no record stands behind it.
+        let force_wal = |page_lsn: Lsn| -> Result<Lsn> {
+            let target = page_lsn.min(self.wal.reserved_lsn()?);
+            self.wal.flush_until(target)
+        };
+        let (heap_redo_lsn, flush) = {
+            let _quiesced = self.heap.quiesce_logged_changes()?;
+            let heap_redo_lsn = self.wal.reserved_lsn()?.max(checkpoint_lsn);
+            let flush = self
+                .buffer
+                .write_dirty_for_checkpoint(durable_lsn, &force_wal)?;
+            (heap_redo_lsn, flush)
+        };
+        self.buffer.sync_checkpoint_writes(flush)?;
+        // The control file names the heap redo LSN as where the next record
+        // goes. That record must never land below it after a crash.
+        self.wal.flush_until(heap_redo_lsn)?;
         let page_count = self.heap.page_count()?;
         let mut checkpoint = self
             .checkpoint
@@ -245,9 +278,9 @@ impl Engine {
         // on disk. A crash here forces recovery to fall back to the previous
         // generation, exercising the dual-control-file protocol.
         crate::fail_point!("engine::checkpoint");
-        let next = self
-            .control
-            .write_next(*checkpoint, checkpoint_lsn, page_count)?;
+        let next =
+            self.control
+                .write_next(*checkpoint, checkpoint_lsn, heap_redo_lsn, page_count)?;
         self.wal
             .prune_segments_below_checkpoint_lsn(next.checkpoint_lsn)?;
         *checkpoint = Some(next);

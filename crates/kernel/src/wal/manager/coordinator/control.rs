@@ -18,6 +18,19 @@ impl WalCoordinator {
             .map_err(|_| Error::CorruptWal("wal coordinator mutex poisoned"))
     }
 
+    /// End of the last record appended so far, durable or not. The next
+    /// record starts at or past it.
+    pub(crate) fn reserved_lsn(&self) -> Result<Lsn> {
+        if self.volatile {
+            return Ok(Lsn::ZERO);
+        }
+        self.shared
+            .state
+            .lock()
+            .map(|state| state.reserved_lsn)
+            .map_err(|_| Error::CorruptWal("wal coordinator mutex poisoned"))
+    }
+
     pub fn durable_lsn(&self) -> Result<Lsn> {
         if self.volatile {
             return Ok(Lsn::ZERO);

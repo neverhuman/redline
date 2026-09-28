@@ -10,6 +10,8 @@ use std::sync::{Arc, Mutex, RwLock};
 
 #[path = "page_heap/directory.rs"]
 mod directory;
+#[path = "page_heap/logged_changes.rs"]
+mod logged_changes;
 #[path = "page_heap/mutation.rs"]
 mod mutation;
 #[path = "page_heap/policy.rs"]
@@ -29,6 +31,9 @@ pub struct PageBackedHeap {
     buffer: Arc<BufferPool>,
     wal: Option<Arc<WalCoordinator>>,
     next_row: AtomicU64,
+    /// Held shared by each logged heap change and exclusively by a
+    /// checkpoint writing pages; see `logged_changes.rs`.
+    logged_changes: RwLock<()>,
 }
 
 #[derive(Debug, Default)]
@@ -82,6 +87,7 @@ impl PageBackedHeap {
             buffer,
             wal,
             next_row: AtomicU64::new(1),
+            logged_changes: RwLock::new(()),
         })
     }
 
@@ -115,6 +121,18 @@ impl PageBackedHeap {
 
     pub fn flush_dirty_batches(&self, durable_lsn: Lsn, batch_pages: usize) -> Result<FlushStats> {
         self.buffer.flush_dirty_batches(durable_lsn, batch_pages)
+    }
+
+    /// Write every dirty page for a checkpoint whose WAL is durable through
+    /// `durable`; see [`BufferPool::flush_dirty_for_checkpoint`]. Heap pages
+    /// form a complete cut only while no logged heap change is in flight,
+    /// which `Engine::checkpoint` arranges around this call.
+    pub fn flush_dirty_for_checkpoint(
+        &self,
+        durable: Lsn,
+        force_wal: &dyn Fn(Lsn) -> Result<Lsn>,
+    ) -> Result<FlushStats> {
+        self.buffer.flush_dirty_for_checkpoint(durable, force_wal)
     }
 
     pub fn resident_pages(&self) -> usize {

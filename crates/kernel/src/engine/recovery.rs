@@ -215,11 +215,13 @@ impl Engine {
                 .map_err(|_| Error::CorruptPage("sync page file directory failed"))?;
             Arc::new(created)
         };
-        // Never append below the checkpoint recovery replays from, nor below
-        // a page LSN, even when the WAL that reached them is gone.
+        // Never append below where recovery replays from, heap redo included,
+        // nor below a page LSN, even when the WAL that reached them is gone.
         let resume = wal_resume_position(
             &scan_report,
-            checkpoint.map_or(Lsn::ZERO, |checkpoint| checkpoint.checkpoint_lsn),
+            checkpoint.map_or(Lsn::ZERO, |checkpoint| {
+                checkpoint.checkpoint_lsn.max(checkpoint.heap_redo_lsn)
+            }),
             &segments_on_disk_with_bytes(&wal_dir)?,
             config.wal.segment_bytes,
             || page_file.max_page_lsn(),
@@ -271,7 +273,11 @@ impl Engine {
             }
             match target {
                 RecoveryTarget::Latest => {}
-                RecoveryTarget::Lsn(limit) if limit < checkpoint.checkpoint_lsn => {
+                // The heap pages already hold every heap record below the
+                // heap redo LSN, so no earlier LSN can be recovered to.
+                RecoveryTarget::Lsn(limit)
+                    if limit < checkpoint.checkpoint_lsn.max(checkpoint.heap_redo_lsn) =>
+                {
                     return Err(Error::CorruptWal(
                         "requested recovery target is older than checkpoint base",
                     ));
@@ -297,9 +303,14 @@ impl Engine {
             // replays the entire WAL starting from the very beginning.
             Lsn::ZERO
         };
+        // The checkpoint wrote heap pages holding every heap record below its
+        // heap redo LSN and none above it.
+        let heap_replay_from = checkpoint.map_or(replay_from_lsn, |checkpoint| {
+            checkpoint.heap_redo_lsn.max(replay_from_lsn)
+        });
         reserve_ids_named_in_wal(&scan_report.records, &txs, &heap)?;
         recover_index_page_images(&scan_report.records, replay_from_lsn, target, &buffer)?;
-        let metrics = recover_heap(&scan_report.records, replay_from_lsn, target, &txs, &heap)?;
+        let metrics = recover_heap(&scan_report.records, heap_replay_from, target, &txs, &heap)?;
         let recovered_catalog = recover_catalog_snapshot(&scan_report.records, target)?;
         let catalog = CatalogManager::new(recovered_catalog.unwrap_or(initial_catalog));
         let phase11_counters = Arc::new(Phase11Counters::default());
