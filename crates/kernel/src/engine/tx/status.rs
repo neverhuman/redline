@@ -233,11 +233,17 @@ impl ConcurrentTxStatus {
     /// the old transaction's logged changes and page tuples committed too.
     ///
     /// The last id has no successor to hand out next. Wrapping the counter
-    /// would reissue every id from zero, so that fails as corrupt WAL.
+    /// would reissue every id from zero, so that fails as corrupt WAL. The
+    /// last id is the index's non-transactional delete marker, never a
+    /// transaction, so an id whose successor would be the marker fails the
+    /// same way; recovery skips the marker itself.
     pub(crate) fn advance_next_tx_past(&self, tx: TxId) -> Result<()> {
-        let next = tx.0.checked_add(1).ok_or(Error::CorruptWal(
-            "wal names a transaction id with no successor",
-        ))?;
+        let next =
+            tx.0.checked_add(1)
+                .filter(|next| *next < crate::index::NON_TRANSACTIONAL_DELETE_TX.0)
+                .ok_or(Error::CorruptWal(
+                    "wal names a transaction id with no successor",
+                ))?;
         advance_atomic_to_at_least(&self.inner.next_tx, next);
         Ok(())
     }
@@ -573,14 +579,18 @@ mod tests {
         assert_eq!(txs.next_tx(), TxId(42));
         txs.advance_next_tx_past(TxId(7)).unwrap();
         assert_eq!(txs.next_tx(), TxId(42));
-        txs.advance_next_tx_past(TxId(u64::MAX - 1)).unwrap();
-        assert_eq!(txs.next_tx(), TxId(u64::MAX));
-        assert_eq!(
-            txs.advance_next_tx_past(TxId(u64::MAX)),
-            Err(Error::CorruptWal(
-                "wal names a transaction id with no successor"
-            ))
-        );
-        assert_eq!(txs.next_tx(), TxId(u64::MAX));
+        txs.advance_next_tx_past(TxId(u64::MAX - 2)).unwrap();
+        assert_eq!(txs.next_tx(), TxId(u64::MAX - 1));
+        // u64::MAX is the index's non-transactional delete marker: neither
+        // it nor an id whose successor it is may move the counter.
+        for tx in [u64::MAX - 1, u64::MAX] {
+            assert_eq!(
+                txs.advance_next_tx_past(TxId(tx)),
+                Err(Error::CorruptWal(
+                    "wal names a transaction id with no successor"
+                ))
+            );
+        }
+        assert_eq!(txs.next_tx(), TxId(u64::MAX - 1));
     }
 }

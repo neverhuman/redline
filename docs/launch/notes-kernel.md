@@ -559,3 +559,12 @@ Draft lines for the v5.0.0 CHANGELOG. The integrator owns `CHANGELOG.md`.
   redlinedb-cli` on its own. Building it in the same invocation as
   `redlinedb-bench` turns kernel failpoints on through feature
   unification, and the receipt tool rejects that binary.
+
+## Review fix-ups
+
+- `BtreeIndex::delete_mark` logs its index delete under `TxId(u64::MAX)`,
+  the non-transactional delete marker. Recovery took that for a
+  transaction id with no successor and failed every later open with
+  `CorruptWal`. Recovery now skips the marker on such a delete record, and
+  refuses any other record naming `u64::MAX - 1` or `u64::MAX`, so the
+  marker can never be handed out as a transaction id.

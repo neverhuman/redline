@@ -514,17 +514,25 @@ fn reserve_ids_named_in_wal(
     heap: &PageBackedHeap,
 ) -> Result<()> {
     for record in records {
-        txs.advance_next_tx_past(record.tx_id)?;
         if !matches!(
             record.kind,
             WalRecordKind::PageDelta | WalRecordKind::Commit
         ) {
+            txs.advance_next_tx_past(record.tx_id)?;
             continue;
         }
         // Replay trusts the transaction id inside these payloads, not the
         // header's, so reserve that one as well.
         let payload = WalPayload::decode(&record.payload)?;
-        txs.advance_next_tx_past(payload.tx_id())?;
+        // `BtreeIndex::delete_mark` logs its delete under the
+        // non-transactional marker, the last id. It names no transaction.
+        let marker = crate::index::NON_TRANSACTIONAL_DELETE_TX;
+        let marker_delete = record.tx_id == marker
+            && matches!(payload, WalPayload::IndexDelete { tx_id, .. } if tx_id == marker);
+        if !marker_delete {
+            txs.advance_next_tx_past(record.tx_id)?;
+            txs.advance_next_tx_past(payload.tx_id())?;
+        }
         match payload {
             WalPayload::HeapInsert { row_id, .. }
             | WalPayload::HeapUpdate { row_id, .. }
