@@ -19,4 +19,5 @@ redlinedb-kernel = { path = "../kernel" }
 redlinedb-sql = { path = "../sql" }
 
 [dev-dependencies]
+libc = "0.2"
 tempfile = "3"

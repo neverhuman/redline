@@ -1,6 +1,6 @@
 //! Prepared statement lifecycle (prepare/step/reset/finalize/clear_bindings).
 
-use std::ffi::{CStr, CString};
+use std::ffi::CString;
 use std::os::raw::{c_char, c_int};
 use std::ptr;
 use std::sync::atomic::Ordering;
@@ -9,8 +9,8 @@ use redlinedb_sql::Step;
 
 use crate::types::*;
 use crate::util::{
-    api, caller_buffer, flatten_code, map_error, reclaim_box, record_status_with_message,
-    refresh_text_cache, sql_result,
+    api, flatten_code, map_error, reclaim_box, record_status_with_message, refresh_text_cache,
+    sql_result,
 };
 
 #[unsafe(no_mangle)]
@@ -22,6 +22,13 @@ pub extern "C" fn rldb_prepare_v2(
     tail: *mut *const c_char,
 ) -> c_int {
     flatten_code(api(|| {
+        // SQLite contract: *out_stmt is NULL on every failure path, so clear
+        // it before any validation can return early.
+        if !out_stmt.is_null() {
+            // SAFETY: `out_stmt` non-null (checked); per redlinedb.h it is a
+            // writable rldb_stmt** owned by the caller for this call.
+            unsafe { *out_stmt = ptr::null_mut() };
+        }
         if db.is_null() || sql.is_null() || out_stmt.is_null() {
             return Err(RLDB_MISUSE);
         }
@@ -29,19 +36,7 @@ pub extern "C" fn rldb_prepare_v2(
         // not yet closed; shared borrow scoped to api() closure (we bump
         // active_statements below which gates close).
         let db_ref = unsafe { &*db };
-        // SAFETY: `sql` non-null (checked); per redlinedb.h:95 it is a
-        // NUL-terminated C string (nbytes<0) or byte buffer (nbytes>=0);
-        // CStr only reads leading bytes, we copy what we need below.
-        let sql_cstr = unsafe { CStr::from_ptr(sql) };
-        let sql_text = if nbytes < 0 {
-            sql_cstr.to_str().map_err(|_| RLDB_MISMATCH)?.to_owned()
-        } else {
-            // SAFETY: `sql` non-null (checked); per sqlite3_prepare_v2 contract when nbytes>=0 it is the explicit byte length of the caller-owned buffer; delegate to centralised helper crates/ffi/src/util.rs::caller_buffer (see its `# Safety` doc); slice copied into owned String below.
-            let bytes = unsafe { caller_buffer(sql_cstr.as_ptr() as *const u8, nbytes as usize) };
-            std::str::from_utf8(&bytes)
-                .map_err(|_| RLDB_MISMATCH)?
-                .to_owned()
-        };
+        let sql_text = read_bounded_sql(sql, nbytes)?;
         // sqlite3_prepare_v2 contract: parse only the FIRST statement in
         // `sql`, set `tail` to the byte after that statement (or to the NUL
         // terminator if it was the last). We route through
@@ -56,21 +51,17 @@ pub extern "C" fn rldb_prepare_v2(
             }
         };
         let consumed_bytes = sql_text.len() - remainder.len();
-        // Set out_stmt: NULL if input was blank/comment-only (per SQLite).
         // SAFETY: `tail` may be NULL (optional per C ABI); when non-null,
-        // caller guarantees writable *const c_char and the pointer
-        // arithmetic stays in-allocation (sql_cstr.as_ptr() + in-range).
+        // caller guarantees writable *const c_char. `consumed_bytes` never
+        // exceeds the bytes scanned from `sql`, so the result stays within
+        // (or one past) the caller's input.
         unsafe {
             if !tail.is_null() {
-                *tail = sql_cstr.as_ptr().wrapping_add(consumed_bytes);
+                *tail = sql.wrapping_add(consumed_bytes);
             }
         }
+        // Blank/comment-only input: *out_stmt stays NULL (cleared above).
         let Some(stmt) = stmt_opt else {
-            // SAFETY: `out_stmt` non-null (checked at top); per C ABI it is
-            // a writable rldb_stmt**; storing NULL for empty/comment-only.
-            unsafe {
-                *out_stmt = ptr::null_mut();
-            }
             return Ok(RLDB_OK);
         };
         // Preserve only the consumed prefix in `sql_text` so callers that
@@ -166,7 +157,7 @@ pub extern "C" fn rldb_finalize(stmt: *mut rldb_stmt) -> c_int {
             return Err(RLDB_MISUSE);
         }
         // SAFETY: matching constructor/destructor pair — `stmt` originates from
-        // Box::into_raw(boxed) at rldb_prepare_v2 (crates/ffi/src/stmt.rs:100);
+        // Box::into_raw(boxed) at rldb_prepare_v2 (crates/ffi/src/stmt.rs:92);
         // ownership invariant: the C caller may not free this pointer directly
         // per redlinedb.h:99; exclusive access because rldb_stmt is documented
         // as single-thread-owned in redlinedb.h:99; double-finalize guarded by
@@ -200,4 +191,25 @@ pub extern "C" fn rldb_clear_bindings(stmt: *mut rldb_stmt) -> c_int {
         stmt.stmt.clear_bindings();
         Ok(RLDB_OK)
     }))
+}
+
+/// Copy the SQL text the caller supplied, honouring the SQLite length rule:
+/// a negative `nbytes` reads through the first NUL; a non-negative `nbytes`
+/// reads at most that many bytes and still stops at the first NUL. Bytes are
+/// read one at a time, so no read (and no slice) ever extends past the first
+/// NUL or the bound, and `nbytes == 0` reads nothing.
+fn read_bounded_sql(sql: *const c_char, nbytes: c_int) -> Result<String, c_int> {
+    let mut bytes = Vec::new();
+    while nbytes < 0 || bytes.len() < nbytes as usize {
+        // SAFETY: `sql` non-null (checked by the caller); per the
+        // sqlite3_prepare_v2 contract the caller's buffer is readable up to
+        // the first NUL or the non-negative bound, whichever comes first, and
+        // the loop stops at both.
+        let byte = unsafe { *sql.cast::<u8>().add(bytes.len()) };
+        if byte == 0 {
+            break;
+        }
+        bytes.push(byte);
+    }
+    String::from_utf8(bytes).map_err(|_| RLDB_MISMATCH)
 }

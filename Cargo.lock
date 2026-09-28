@@ -1712,6 +1712,7 @@ version = "4.1.0"
 name = "redlinedb-ffi"
 version = "4.1.0"
 dependencies = [
+ "libc",
  "redlinedb-kernel",
  "redlinedb-sql",
  "tempfile",
