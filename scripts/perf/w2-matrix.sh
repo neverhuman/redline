@@ -168,6 +168,13 @@ write_manifest_entry() {
   if [ -n "$perf_jsonl" ]; then
     perf_jsonl_arg=(--perf-jsonl "$perf_jsonl")
   fi
+  # Only a PGO build was trained on a workload; the others record none.
+  local -a pgo_corpus_arg=()
+  case "$profile" in
+    release-pgo|release-pgo-bolt)
+      pgo_corpus_arg=(--pgo-training-corpus "full sqlite_parity corpus (in-sample)")
+      ;;
+  esac
   cargo run --quiet --locked -p redlinedb-bench --bin perf_evidence -- \
     append-w2-manifest \
     --output "$MANIFEST" \
@@ -177,6 +184,7 @@ write_manifest_entry() {
     --binary "$bin" \
     --suite "$SUITE" \
     "${perf_jsonl_arg[@]}" \
+    "${pgo_corpus_arg[@]}" \
     --base-rustflags="$REDLINE_BASE_RUSTFLAGS"
 }
 
@@ -235,7 +243,7 @@ printf 'run id:      %s\n' "$RUN_ID"
 printf 'suite:       %s\n' "$SUITE"
 printf 'profiles:    %s\n' "$PROFILES"
 printf 'allocators:  %s\n' "$ALLOCATORS"
-printf 'pgo corpus:  full (external redline-testing)\n'
+printf 'pgo corpus:  full sqlite_parity corpus, in-sample (PGO profiles only)\n'
 printf 'output dir:  %s\n' "$OUT_DIR"
 
 for profile in "${PROFILE_LIST[@]}"; do

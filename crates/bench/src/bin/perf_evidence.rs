@@ -2,7 +2,9 @@ use std::{path::PathBuf, process};
 
 use anyhow::Result;
 use clap::{Parser, Subcommand};
-use redlinedb_bench::perf_evidence::{self, W2ManifestInput, capture_w2_runtime_metadata};
+use redlinedb_bench::perf_evidence::{
+    self, SummaryOptions, W2ManifestInput, capture_w2_runtime_metadata,
+};
 
 #[derive(Debug, Parser)]
 #[command(about = "Generate performance statistics and evidence in Rust")]
@@ -13,7 +15,17 @@ struct Cli {
 
 #[derive(Debug, Subcommand)]
 enum Command {
+    /// Case-level latency statistics of a runner's raw JSONL. Every row
+    /// must parse and occur once; with --expected-repetitions (publish
+    /// mode) every executed case must have exactly that many measured
+    /// repetitions, no duration may be unusable, and some case must be
+    /// eligible.
     SummarizeJsonl {
+        #[arg(long)]
+        expected_repetitions: Option<usize>,
+        /// Print the summary as JSON instead of text.
+        #[arg(long)]
+        json: bool,
         input: PathBuf,
     },
     AssertDistinctBinaries {
@@ -35,6 +47,10 @@ enum Command {
         suite: String,
         #[arg(long)]
         perf_jsonl: Option<String>,
+        /// The workload the PGO profile was trained on; omit for a build
+        /// that used no profile.
+        #[arg(long)]
+        pgo_training_corpus: Option<String>,
         #[arg(long, allow_hyphen_values = true)]
         base_rustflags: String,
     },
@@ -42,8 +58,22 @@ enum Command {
 
 fn run(cli: Cli) -> Result<()> {
     match cli.command {
-        Command::SummarizeJsonl { input } => {
-            print!("{}", perf_evidence::summarize_jsonl_path(&input)?.render());
+        Command::SummarizeJsonl {
+            expected_repetitions,
+            json,
+            input,
+        } => {
+            let summary = perf_evidence::summarize_jsonl_path(
+                &input,
+                SummaryOptions {
+                    expected_repetitions,
+                },
+            )?;
+            if json {
+                println!("{}", serde_json::to_string_pretty(&summary)?);
+            } else {
+                print!("{}", summary.render());
+            }
         }
         Command::AssertDistinctBinaries { target, reference } => {
             perf_evidence::assert_distinct_binaries(&target, &reference)?;
@@ -56,6 +86,7 @@ fn run(cli: Cli) -> Result<()> {
             binary,
             suite,
             perf_jsonl,
+            pgo_training_corpus,
             base_rustflags,
         } => {
             let (captured_at_utc, rustc_version, host) = capture_w2_runtime_metadata()?;
@@ -68,6 +99,7 @@ fn run(cli: Cli) -> Result<()> {
                 binary_path: binary,
                 suite,
                 perf_jsonl,
+                pgo_training_corpus,
                 rustc_version,
                 base_rustflags,
                 host,

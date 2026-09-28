@@ -45,7 +45,7 @@ fn perf_evidence_cli_emits_frozen_statistics_golden() {
         Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/perf-evidence/measured.jsonl");
     let output = Command::new(env!("CARGO_BIN_EXE_perf_evidence"))
         .arg("summarize-jsonl")
-        .arg(fixture)
+        .arg(&fixture)
         .output()
         .unwrap();
 
@@ -54,11 +54,63 @@ fn perf_evidence_cli_emits_frozen_statistics_golden() {
     assert_eq!(
         String::from_utf8(output.stdout).unwrap(),
         concat!(
-            "  cases measured: 10\n",
-            "  samples:        10\n",
-            "  ratio median:   5.500\n",
-            "  ratio p90:      9.900\n",
-            "  cases faster than sqlite: 0/10\n"
+            "  estimator:                  per-case ratio of medians (RedlineDB median / SQLite median elapsed ns, lower is better); median and nearest-rank p95 across eligible cases\n",
+            "  repetitions:                not enforced (diagnostic)\n",
+            "  cases:                      12\n",
+            "  eligible cases:             10\n",
+            "  failed cases:               1\n",
+            "  skipped cases:              1\n",
+            "  incomplete cases:           0\n",
+            "  invalid rows:               0\n",
+            "  faster cases:               0/10\n",
+            "  case ratio median:          5.500\n",
+            "  case ratio p95:             10.000\n",
+            "  measured samples:           10\n",
+            "  faster samples:             0/10\n",
+            "  pooled sample ratio median: 5.500\n",
+            "  pooled sample ratio p90:    9.900\n",
         )
     );
+
+    // Publish mode with the fixture's one repetition, as JSON.
+    let output = Command::new(env!("CARGO_BIN_EXE_perf_evidence"))
+        .args(["summarize-jsonl", "--json", "--expected-repetitions", "1"])
+        .arg(&fixture)
+        .output()
+        .unwrap();
+    assert!(output.status.success());
+    let summary: serde_json::Value = serde_json::from_slice(&output.stdout).unwrap();
+    assert_eq!(summary["schema_version"], "perf-evidence-summary-v2");
+    assert_eq!(summary["expected_repetitions"], 1);
+    assert_eq!(summary["eligible_cases"], 10);
+    assert_eq!(summary["faster_cases"], 0);
+    assert_eq!(summary["measured_samples"], 10);
+    assert_eq!(summary["faster_samples"], 0);
+    assert_eq!(summary["invalid_rows"], 0);
+    assert_eq!(summary["incomplete_cases"], 0);
+    assert_eq!(summary["case_ratio_median"], 5.5);
+}
+
+#[test]
+fn perf_evidence_cli_rejects_a_malformed_row() {
+    let directory = tempfile::tempdir().unwrap();
+    let input = directory.path().join("raw.jsonl");
+    let fixture = fs::read_to_string(
+        Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/perf-evidence/measured.jsonl"),
+    )
+    .unwrap();
+    let mut lines = fixture.lines().collect::<Vec<_>>();
+    lines.insert(1, "this malformed line used to be skipped silently");
+    fs::write(&input, lines.join("\n")).unwrap();
+
+    let output = Command::new(env!("CARGO_BIN_EXE_perf_evidence"))
+        .arg("summarize-jsonl")
+        .arg(&input)
+        .output()
+        .unwrap();
+
+    assert_eq!(output.status.code(), Some(2));
+    assert!(output.stdout.is_empty());
+    let stderr = String::from_utf8(output.stderr).unwrap();
+    assert!(stderr.contains("JSONL line 2: not JSON"), "{stderr}");
 }

@@ -1,115 +1,27 @@
 //! Performance JSONL statistics and W2 manifest generation.
 
+mod records;
+mod summary;
+
 use std::{
-    collections::BTreeSet,
     fs::{self, File, OpenOptions},
-    io::{BufRead, BufReader, Read, Write},
+    io::{BufReader, Read, Write},
     path::{Path, PathBuf},
     process::Command,
 };
 
 use anyhow::{Context, Result, anyhow, bail};
 use serde::Serialize;
-use serde_json::Value;
 use sha2::{Digest, Sha256};
 
-#[derive(Clone, Debug, PartialEq)]
-pub struct JsonlSummary {
-    pub cases: usize,
-    pub samples: usize,
-    pub median: Option<f64>,
-    pub p90: Option<f64>,
-    pub faster_samples: usize,
-}
+pub use summary::{
+    ESTIMATOR, JsonlSummary, SUMMARY_SCHEMA, SummaryOptions, summarize_jsonl, summarize_jsonl_with,
+};
 
-impl JsonlSummary {
-    pub fn render(&self) -> String {
-        let mut output = format!(
-            "  cases measured: {}\n  samples:        {}\n",
-            self.cases, self.samples
-        );
-        if let Some(median) = self.median {
-            output.push_str(&format!("  ratio median:   {median:.3}\n"));
-            if let Some(p90) = self.p90 {
-                output.push_str(&format!("  ratio p90:      {p90:.3}\n"));
-            }
-            output.push_str(&format!(
-                "  cases faster than sqlite: {}/{}\n",
-                self.faster_samples, self.samples
-            ));
-        }
-        output
-    }
-}
-
-pub fn summarize_jsonl_path(path: &Path) -> Result<JsonlSummary> {
+pub fn summarize_jsonl_path(path: &Path, options: SummaryOptions) -> Result<JsonlSummary> {
     let file = File::open(path).with_context(|| format!("open JSONL input {}", path.display()))?;
-    summarize_jsonl(BufReader::new(file))
-}
-
-pub fn summarize_jsonl(reader: impl BufRead) -> Result<JsonlSummary> {
-    let mut case_ids = BTreeSet::new();
-    let mut ratios = Vec::new();
-
-    for (index, line) in reader.lines().enumerate() {
-        let line = line.with_context(|| format!("read JSONL line {}", index + 1))?;
-        let Ok(row) = serde_json::from_str::<Value>(&line) else {
-            continue;
-        };
-        let Some(row) = row.as_object() else {
-            continue;
-        };
-        let measured = row.get("status").and_then(Value::as_str) == Some("passed")
-            && row
-                .get("sample_role")
-                .and_then(Value::as_str)
-                .is_some_and(|role| role.starts_with("measured"));
-        if !measured {
-            continue;
-        }
-        let Some(ratio) = row
-            .get("latency_ratio")
-            .and_then(Value::as_f64)
-            .filter(|ratio| *ratio > 0.0)
-        else {
-            continue;
-        };
-        let case_id = row
-            .get("case_id")
-            .ok_or_else(|| anyhow!("measured JSONL row {} is missing case_id", index + 1))?;
-        case_ids.insert(serde_json::to_string(case_id)?);
-        ratios.push(ratio);
-    }
-
-    ratios.sort_by(f64::total_cmp);
-    Ok(JsonlSummary {
-        cases: case_ids.len(),
-        samples: ratios.len(),
-        median: median(&ratios),
-        p90: (ratios.len() >= 10).then(|| exclusive_decile_p90(&ratios)),
-        faster_samples: ratios.iter().filter(|ratio| **ratio < 1.0).count(),
-    })
-}
-
-fn median(sorted: &[f64]) -> Option<f64> {
-    match sorted.len() {
-        0 => None,
-        count if count % 2 == 1 => Some(sorted[count / 2]),
-        count => Some((sorted[count / 2 - 1] + sorted[count / 2]) / 2.0),
-    }
-}
-
-/// Match `statistics.quantiles(values, n=10)[-1]` from the retired reference.
-fn exclusive_decile_p90(sorted: &[f64]) -> f64 {
-    const QUANTILES: usize = 10;
-    const INDEX: usize = 9;
-
-    let sample_boundaries = sorted.len() + 1;
-    let scaled = INDEX * sample_boundaries;
-    let boundary = (scaled / QUANTILES).clamp(1, sorted.len() - 1);
-    let remainder = scaled - boundary * QUANTILES;
-    (sorted[boundary - 1] * (QUANTILES - remainder) as f64 + sorted[boundary] * remainder as f64)
-        / QUANTILES as f64
+    summarize_jsonl_with(BufReader::new(file), options)
+        .with_context(|| format!("summarize {}", path.display()))
 }
 
 pub fn assert_distinct_binaries(target: &Path, reference: &Path) -> Result<()> {
@@ -129,6 +41,9 @@ pub struct W2ManifestInput {
     pub binary_path: PathBuf,
     pub suite: String,
     pub perf_jsonl: Option<String>,
+    /// The workload a PGO profile was trained on; `None` for a build that
+    /// used no profile.
+    pub pgo_training_corpus: Option<String>,
     pub rustc_version: String,
     pub base_rustflags: String,
     pub host: HostMetadata,
@@ -166,7 +81,7 @@ struct BinaryMetadata<'a> {
 struct PerfMetadata<'a> {
     suite: &'a str,
     jsonl: Option<&'a str>,
-    pgo_training_corpus: &'static str,
+    pgo_training_corpus: Option<&'a str>,
 }
 
 #[derive(Serialize)]
@@ -218,7 +133,7 @@ pub fn w2_manifest_line(input: &W2ManifestInput) -> Result<String> {
         .with_context(|| format!("stat W2 binary {}", input.binary_path.display()))?
         .len();
     let manifest = W2Manifest {
-        schema_version: "w2-matrix/1",
+        schema_version: "w2-matrix/2",
         captured_at_utc: &input.captured_at_utc,
         profile: &input.profile,
         allocator: &input.allocator,
@@ -231,7 +146,7 @@ pub fn w2_manifest_line(input: &W2ManifestInput) -> Result<String> {
         perf: PerfMetadata {
             suite: &input.suite,
             jsonl: input.perf_jsonl.as_deref(),
-            pgo_training_corpus: "full",
+            pgo_training_corpus: input.pgo_training_corpus.as_deref(),
         },
         build: BuildMetadata {
             rustc: &input.rustc_version,
@@ -298,27 +213,68 @@ mod tests {
 
     use super::*;
 
+    /// The frozen golden: ten cases at 1x..10x with one measured sample
+    /// each keep the retired reference's pooled median 5.5 and
+    /// exclusive-decile p90 9.9, now printed under their own names beside
+    /// the per-case statistics; a failed case and a skipped case are
+    /// counted, not measured, and warmups are not samples.
     #[test]
     fn summary_matches_frozen_exclusive_decile_golden() {
         let input = include_str!("../tests/fixtures/perf-evidence/measured.jsonl");
         let summary = summarize_jsonl(Cursor::new(input)).unwrap();
+        assert_eq!(summary.render(), GOLDEN_RENDER);
+        assert_eq!(summary.pooled_sample_ratio_p90, Some(9.9));
         assert_eq!(
-            summary.render(),
-            concat!(
-                "  cases measured: 10\n",
-                "  samples:        10\n",
-                "  ratio median:   5.500\n",
-                "  ratio p90:      9.900\n",
-                "  cases faster than sqlite: 0/10\n"
-            )
+            (summary.cases, summary.eligible_cases, summary.failed_cases),
+            (12, 10, 1)
+        );
+        // In publish mode the same run qualifies with one repetition ...
+        let publish = SummaryOptions {
+            expected_repetitions: Some(1),
+        };
+        assert_eq!(
+            summarize_jsonl_with(Cursor::new(input), publish)
+                .unwrap()
+                .expected_repetitions,
+            Some(1)
+        );
+        // ... and not with three.
+        let publish = SummaryOptions {
+            expected_repetitions: Some(3),
+        };
+        let error = summarize_jsonl_with(Cursor::new(input), publish).unwrap_err();
+        assert!(
+            format!("{error:#}").contains("expected measured repetitions 1..=3"),
+            "{error:#}"
         );
     }
 
+    pub(super) const GOLDEN_RENDER: &str = concat!(
+        "  estimator:                  per-case ratio of medians (RedlineDB median / SQLite median elapsed ns, lower is better); median and nearest-rank p95 across eligible cases\n",
+        "  repetitions:                not enforced (diagnostic)\n",
+        "  cases:                      12\n",
+        "  eligible cases:             10\n",
+        "  failed cases:               1\n",
+        "  skipped cases:              1\n",
+        "  incomplete cases:           0\n",
+        "  invalid rows:               0\n",
+        "  faster cases:               0/10\n",
+        "  case ratio median:          5.500\n",
+        "  case ratio p95:             10.000\n",
+        "  measured samples:           10\n",
+        "  faster samples:             0/10\n",
+        "  pooled sample ratio median: 5.500\n",
+        "  pooled sample ratio p90:    9.900\n",
+    );
+
     #[test]
     fn measured_row_without_case_id_is_rejected() {
-        let input = r#"{"status":"passed","sample_role":"measured","latency_ratio":1.0}"#;
+        let input = r#"{"status":"passed","sample_role":"measured:1","latency_ratio":1.0}"#;
         let error = summarize_jsonl(Cursor::new(input)).unwrap_err();
-        assert!(error.to_string().contains("missing case_id"));
+        assert!(
+            format!("{error:#}").contains("line 1: missing case_id"),
+            "{error:#}"
+        );
     }
 
     #[test]
@@ -335,6 +291,7 @@ mod tests {
             binary_path: binary.clone(),
             suite: "full".to_owned(),
             perf_jsonl: Some("target/perf/fixture.jsonl".to_owned()),
+            pgo_training_corpus: None,
             rustc_version: "rustc 1.95.0 (fixture)".to_owned(),
             base_rustflags: "-Ctarget-cpu=x86-64-v3".to_owned(),
             host: HostMetadata {
@@ -346,7 +303,7 @@ mod tests {
         };
         let expected = format!(
             concat!(
-                "{{\"schema_version\":\"w2-matrix/1\",",
+                "{{\"schema_version\":\"w2-matrix/2\",",
                 "\"captured_at_utc\":\"2026-07-12T12:34:56Z\",",
                 "\"profile\":\"release\",\"allocator\":\"mimalloc\",",
                 "\"label\":\"w2-release-mimalloc-fixture\",",
@@ -355,7 +312,7 @@ mod tests {
                 "27ae41e4649b934ca495991b7852b855\",\"size_bytes\":0}},",
                 "\"perf\":{{\"suite\":\"full\",",
                 "\"jsonl\":\"target/perf/fixture.jsonl\",",
-                "\"pgo_training_corpus\":\"full\"}},",
+                "\"pgo_training_corpus\":null}},",
                 "\"build\":{{\"rustc\":\"rustc 1.95.0 (fixture)\",",
                 "\"base_rustflags\":\"-Ctarget-cpu=x86-64-v3\"}},",
                 "\"host\":{{\"node\":\"fixture-node\",\"machine\":\"x86_64\",",
@@ -382,6 +339,7 @@ mod tests {
             binary_path: PathBuf::from("definitely-missing-redlinedb-binary"),
             suite: "none".to_owned(),
             perf_jsonl: None,
+            pgo_training_corpus: Some("full sqlite_parity corpus (in-sample)".to_owned()),
             rustc_version: "rustc fixture".to_owned(),
             base_rustflags: String::new(),
             host: HostMetadata {

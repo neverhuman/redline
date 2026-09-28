@@ -112,9 +112,9 @@ perf_run_jsonl() {
       --output       "$out"
 }
 
-# Print a compact summary of a JSONL file. Used by the runner scripts so
-# the user sees results inline.
+# Print the case-level summary of a JSONL file (perf_evidence
+# summarize-jsonl; extra arguments such as --expected-repetitions pass
+# through). Used by the runner scripts so the user sees results inline.
 perf_summarize_jsonl() {
-  local jsonl="$1"
-  perf_evidence summarize-jsonl "$jsonl"
+  perf_evidence summarize-jsonl "$@"
 }

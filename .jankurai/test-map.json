@@ -462,6 +462,11 @@
       "purpose": "prove JSONL statistics, artifact hashing, and W2 manifest serialization are implemented in Rust",
       "proof_lane": "fast"
     },
+    "crates/bench/src/perf_evidence/": {
+      "command": "rtk cargo test -p redlinedb-bench --locked --lib perf_evidence",
+      "purpose": "prove strict raw-row parsing and case-level latency statistics: malformed and duplicate rows fail, cases are the unit, publish mode enforces repetitions",
+      "proof_lane": "fast"
+    },
     "crates/bench/src/bin/perf_evidence.rs": {
       "command": "rtk cargo test -p redlinedb-bench --test automation_tools --locked",
       "purpose": "prove performance evidence CLI output matches golden fixtures",
