@@ -302,3 +302,39 @@ fn subquery_parameters_keep_the_statement_numbering() {
         .expect("bind b");
     assert_eq!(rows_of(&mut held), vec![vec![int(1), int(11), int(1)]]);
 }
+
+/// A data-modifying CTE writes while its statement is bound (Postgres
+/// dialect). Binding it again at execution would write twice, so such a
+/// statement keeps the rows of its preparation and writes once per
+/// preparation (beyond-SQLite cases 20108 and 20109). A reset and re-step
+/// returns those rows again without writing again; PostgreSQL would run the
+/// UPDATE again, a limit recorded in docs/launch/notes-sql2.md.
+#[test]
+fn a_data_modifying_cte_writes_once() {
+    use redlinedb_sql::{Database, DbOptions, Dialect};
+    let dir = tempfile::tempdir().expect("tempdir");
+    let options = DbOptions {
+        dialect: Some(Dialect::PostgresSubset),
+        ..DbOptions::default()
+    };
+    let db = Database::create(dir.path().join("pg.db"), options).expect("db");
+    let conn = db.connect();
+    conn.execute("CREATE TABLE d(id int, n int)")
+        .expect("create");
+    conn.execute("INSERT INTO d VALUES (1, 10), (2, 20)")
+        .expect("insert");
+    let mut stmt = conn
+        .prepare("WITH upd AS (UPDATE d SET n = n * 2 RETURNING *) SELECT * FROM upd ORDER BY id")
+        .expect("prepare");
+    let expected = vec![vec![int(1), int(20)], vec![int(2), int(40)]];
+    assert_eq!(rows_of(&mut stmt), expected);
+    stmt.reset().expect("reset");
+    assert_eq!(rows_of(&mut stmt), expected);
+    drop(stmt);
+    let mut check = conn.prepare("SELECT n FROM d ORDER BY id").expect("check");
+    assert_eq!(rows_of(&mut check), vec![vec![int(20)], vec![int(40)]]);
+    let mut count = conn
+        .prepare("WITH del AS (DELETE FROM d WHERE id > 1 RETURNING *) SELECT count(*) FROM del")
+        .expect("prepare delete");
+    assert_eq!(rows_of(&mut count), vec![vec![int(1)]]);
+}

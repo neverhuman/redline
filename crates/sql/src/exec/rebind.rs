@@ -175,7 +175,8 @@ pub(crate) fn canonical_placeholders(sql: &str, layout: &ParamLayout) -> Option<
                 } else {
                     let slot = seen.push_anonymous();
                     out.push_str(&sql[copied..start]);
-                    out.push_str(&format!("?{slot}"));
+                    out.push('?');
+                    out.push_str(&slot.to_string());
                     copied = i;
                 }
             }
@@ -196,7 +197,8 @@ pub(crate) fn canonical_placeholders(sql: &str, layout: &ParamLayout) -> Option<
                 }
                 let slot = seen.push_named(sql[start..i].to_owned());
                 out.push_str(&sql[copied..start]);
-                out.push_str(&format!("?{slot}"));
+                out.push('?');
+                out.push_str(&slot.to_string());
                 copied = i;
             }
             _ => i += 1,

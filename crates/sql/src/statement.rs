@@ -1035,6 +1035,7 @@ impl Statement {
                     let hazards = crate::replay::HazardScope::begin();
                     let capture = crate::exec::bind_env::Capture::begin();
                     let materializations = crate::exec::bind_env::materializations();
+                    let bind_writes = crate::exec::bind_env::bind_writes();
                     let new_template = if rebind {
                         let _bindings =
                             crate::exec::rebind::BindTimeBindings::install(&self.bindings);
@@ -1042,8 +1043,9 @@ impl Statement {
                     } else {
                         self.conn.prepare_cached(self.template.sql.as_ref())?
                     };
-                    self.materialized =
-                        crate::exec::bind_env::materializations() != materializations;
+                    self.materialized = crate::exec::bind_env::materializations()
+                        != materializations
+                        && crate::exec::bind_env::bind_writes() == bind_writes;
                     self.bind_env = capture.finish();
                     self.bind_hazard = hazards.finish();
                     let mut new_bindings =

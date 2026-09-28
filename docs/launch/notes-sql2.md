@@ -101,3 +101,7 @@ them into `CHANGELOG.md`.
 - Declared deviation: every CTE is materialized when the statement is
   bound, so an unused CTE that names a missing table is an error; SQLite
   ignores it.
+- Limit: a statement with a data-modifying CTE (`WITH u AS (UPDATE ...
+  RETURNING *) SELECT ...`, Postgres dialect) writes when it is prepared
+  and is not bound again, so a reset and re-step returns the same rows
+  without writing again; PostgreSQL runs the UPDATE on every execution.

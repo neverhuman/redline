@@ -1245,9 +1245,12 @@ impl Connection {
         let hazards = crate::replay::HazardScope::begin();
         let capture = crate::exec::bind_env::Capture::begin();
         let materializations = crate::exec::bind_env::materializations();
+        let bind_writes = crate::exec::bind_env::bind_writes();
         let published_csn = crate::exec::rebind::DataVersion::published_csn(self.as_ref());
         let template = self.prepare_cached(sql)?;
-        let materialized = crate::exec::bind_env::materializations() != materializations;
+        // A binding that wrote (a data-modifying CTE) is not repeated.
+        let materialized = crate::exec::bind_env::materializations() != materializations
+            && crate::exec::bind_env::bind_writes() == bind_writes;
         let bind_env = capture.finish();
         let hazard = hazards.finish();
         let prepared_at = if materialized {

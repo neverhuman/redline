@@ -322,6 +322,9 @@ pub(crate) fn run_query_to_rows(
 ) -> Result<(Vec<Vec<SqlValue>>, Vec<String>)> {
     let template = super::super::parser::bind_query(conn, schema, schema_epoch, sql, query)?;
     super::bind_env::note_materialization();
+    if !template.readonly {
+        super::bind_env::note_bind_write();
+    }
     let columns: Vec<String> = if !declared_columns.is_empty() {
         declared_columns.to_vec()
     } else {

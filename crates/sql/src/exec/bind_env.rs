@@ -68,6 +68,8 @@ thread_local! {
     static SCRATCH: RefCell<Option<BindEnv>> = const { RefCell::new(None) };
     /// Bumped by every bind-time materialization; see [`materializations`].
     static MATERIALIZATIONS: Cell<u64> = const { Cell::new(0) };
+    /// Bumped when binding runs a statement that writes; see [`bind_writes`].
+    static BIND_WRITES: Cell<u64> = const { Cell::new(0) };
 }
 
 /// Synthetic relation ids come from one process-wide counter and are never
@@ -92,6 +94,19 @@ pub(crate) fn materializations() -> u64 {
 /// them (a view or CTE inlined as a row source).
 pub(crate) fn note_materialization() {
     MATERIALIZATIONS.with(|count| count.set(count.get().wrapping_add(1)));
+}
+
+/// How many statements that write this thread's bindings have run: a
+/// data-modifying CTE (`WITH u AS (UPDATE ... RETURNING *) ...`) writes
+/// while its statement is bound. Binding such a statement again would write
+/// again, so it keeps the rows of its preparation (Q5-08).
+pub(crate) fn bind_writes() -> u64 {
+    BIND_WRITES.with(Cell::get)
+}
+
+/// Record that binding ran a statement that writes.
+pub(crate) fn note_bind_write() {
+    BIND_WRITES.with(|count| count.set(count.get().wrapping_add(1)));
 }
 
 /// Run `f` on the innermost capture, or on the scratch area when nothing
