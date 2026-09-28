@@ -63,7 +63,11 @@ fn release_security_surfaces_have_no_active_soft_gate() {
     assert!(audit.contains(".jankurai/baselines/main.repo-score.json"));
     assert!(!audit.contains("--mode advisory"));
     assert!(workflow.contains("RedlineDB/required"));
-    assert!(workflow.contains("all(.value.result == \"success\")"));
+    // Every job must succeed; durability-receipt may only be skipped on a
+    // run without a release tag (ci_durability_receipt.rs).
+    assert!(workflow.contains(
+        "all(.value.result == \"success\" or ($tag == \"\" and .key == \"durability-receipt\" and .value.result == \"skipped\"))"
+    ));
     assert!(!workflow.contains("cargo-deny --locked --version 0.18.0"));
 
     let security_marker = read("tools/security-lane.sh");
