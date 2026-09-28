@@ -97,6 +97,27 @@ against the v5 headers. There is no v4 compatibility alias.
 - `rldb_backup_init` refuses a non-NULL `dst_config` with `RLDB_MISUSE`; v4
   ignored it.
 
+## API stability
+
+- New `docs/api-stability.md` states what each interface promises: the Rust
+  crates are unstable and not published; `rldb_*` and `redlinedb.h` are stable
+  within ABI major 5; the `sqlite3_*` subset is experimental, with a
+  per-symbol status table; the database format is native and versioned; the
+  shell's option names are kept within 5.x; panics abort.
+  `crates/ffi/tests/api_stability.rs` keeps the table and the `rldb_*` header
+  in step with the exports.
+- Every workspace crate now has `publish = false`. RedlineDB is not on
+  crates.io; depend on a git tag
+  (`redlinedb = { git = "https://github.com/neverhuman/redline", tag = "v5.0.0" }`).
+  `scripts/check-publish-policy.sh` runs in the CI preflight.
+- The `redlinedb-tokio` and `redlinedb-sqlx` manifests point `repository` at
+  `https://github.com/neverhuman/redline`.
+- For the integrator (not a release-note line): `README.md` still says
+  "Existing crates.io versions remain available" (there are none) and uses
+  the legacy `neverhuman/RedlineDB` URL with tag `v4.1.0` in its Rust
+  dependency snippet. The README rewrite should use the snippet above and
+  link `docs/api-stability.md`.
+
 ## Safety contract and panics
 
 - The caller contract for handles, pointers and input lengths, and the panic

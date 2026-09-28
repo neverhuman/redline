@@ -7,6 +7,7 @@ rust-version.workspace = true
 # The package ships several binaries; the proof lanes run
 # `cargo run -p redlinedb-bench -- <subcommand>`, which needs a default.
 default-run = "redlinedb-bench"
+publish.workspace = true
 
 [dependencies]
 anyhow = "1.0.103"

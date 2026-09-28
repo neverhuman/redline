@@ -19,6 +19,8 @@ exclude = ["subrepos/redline-testing", "subrepos/redline-web", "subrepos/redline
 edition = "2024"
 license = "Apache-2.0"
 rust-version = "1.95"
+# RedlineDB is not published to crates.io; see docs/api-stability.md.
+publish = false
 
 [profile.release]
 opt-level = 3

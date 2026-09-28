@@ -4,8 +4,9 @@ version = "4.1.0"
 edition.workspace = true
 license.workspace = true
 rust-version.workspace = true
+publish.workspace = true
 description = "Tokio async adapter for RedlineDB — a sqlx::Pool-shaped surface over the sync Database core. Lets async tokio crates use RedlineDB without writing spawn_blocking by hand."
-repository = "https://github.com/neverhuman/RedlineDB"
+repository = "https://github.com/neverhuman/redline"
 keywords = ["database", "async", "tokio", "redlinedb", "sqlite"]
 categories = ["database", "asynchronous"]
 
