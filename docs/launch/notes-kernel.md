@@ -49,3 +49,35 @@ Draft lines for the v5.0.0 CHANGELOG. The integrator owns `CHANGELOG.md`.
   are recovered from the WAL, so every acknowledged row reads back exactly,
   but `integrity_check` reads the raw page file and reports "invalid magic".
   A clean shutdown without a checkpoint shows the same errors.
+
+## Database ownership
+
+- An open now takes `owner.lock` before it reads or recovers the database
+  image. It used to run full crash recovery first and check the lock
+  afterwards, so an open that was about to fail with `Busy` could already
+  have truncated the owner's write-ahead log tail or written recovered
+  pages. A rejected open now leaves the image untouched.
+- Read-only opens take the same exclusive lock whenever
+  `process_owner_lock` is on. They used to skip it while still running
+  recovery. A read-only open now gets `Busy` while another process has the
+  database open, including another read-only open.
+- `read_only` now belongs to each `Database` handle. A read-only open in a
+  process that already had the database open for writing used to share the
+  writable handle's setting and could write.
+- The lock uses `File::try_lock`, which is still `flock` on Linux and
+  macOS, so it excludes older builds too. The old code skipped the lock on
+  every non-Unix platform. On Windows `std` now takes a `LockFileEx` lock
+  (not tested in this change), and a platform without file locking fails
+  the open with `Unsupported`. A directory where
+  `owner.lock` cannot be created (read-only media, no write permission)
+  fails with an error that says so.
+- Not changed: the CLI `-readonly` flag and the sqlx `mode=ro` attach open
+  with `process_owner_lock(false)`, so they still run recovery against a
+  database another process may be writing.
+- `Database::create` on a directory that holds only a stale `owner.lock`
+  creates a fresh database.
+- A named ephemeral session (`Database::create_ephemeral`) takes its
+  session directory's `owner.lock` before it clears a leftover directory. It
+  used to delete the directory first, which could remove a live session of
+  the same name in another process sharing the temp root; that now fails
+  with `Busy`.

@@ -6,7 +6,6 @@ license.workspace = true
 rust-version.workspace = true
 
 [dependencies]
-libc = "0.2"
 num_cpus = "1"
 rayon = "1"
 serde = { version = "1", features = ["derive"] }

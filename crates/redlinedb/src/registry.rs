@@ -1,5 +1,6 @@
 use std::collections::HashMap;
-use std::fs::{self, File, OpenOptions as FsOpenOptions};
+use std::fs::{self, File, OpenOptions as FsOpenOptions, TryLockError};
+use std::io::ErrorKind;
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::{Arc, Mutex, OnceLock, Weak};
@@ -67,11 +68,6 @@ struct OwnedTempRoot {
 }
 
 impl OwnedTempRoot {
-    fn new(path: PathBuf) -> Result<Self> {
-        fs::create_dir_all(&path)?;
-        Ok(Self { path })
-    }
-
     /// A24 fast-path: when the caller has guaranteed the parent directory
     /// already exists (e.g. `:memory:` opens, where the parent is
     /// `standard_volatile_root()` cached process-wide on first use), a
@@ -100,6 +96,11 @@ impl OwnedTempRoot {
             Err(err) => Err(err.into()),
         }
     }
+
+    /// Take over a directory the caller has already created and cleared.
+    fn adopt(path: PathBuf) -> Self {
+        Self { path }
+    }
 }
 
 impl Drop for OwnedTempRoot {
@@ -111,8 +112,11 @@ impl Drop for OwnedTempRoot {
 pub(crate) struct DatabaseEntry {
     pub db: Arc<redlinedb_sql::Database>,
     pub fingerprint: OpenFingerprint,
-    pub _owner_lock: Option<Arc<File>>,
+    // Fields drop in declaration order: the engine closes first, then an
+    // owned volatile root is removed, and only then is `owner.lock` released,
+    // so no other process can take the directory while it is still in use.
     _temp_root: Option<OwnedTempRoot>,
+    pub _owner_lock: Option<Arc<File>>,
     pub path: PathBuf,
     pub interrupt: Arc<AtomicBool>,
     pub busy_timeout: Mutex<Duration>,
@@ -257,20 +261,32 @@ fn create_ephemeral_database_inner(
         }
     }
 
-    // A24: skip the pre-existence statx for `:memory:` opens. Their session
-    // names are counter-derived (`memory-{pid}-{id}`) so they can never
-    // collide with a prior session in the same process, and the inner
-    // `OwnedTempRoot::new_with_seeded_parent` falls back gracefully if a
-    // stale dir from a crashed prior process is still there. Named
-    // ephemeral sessions keep the cleanup behaviour because they CAN
-    // collide (e.g. a previous run of the same harness).
-    let temp_root = if private_memory {
-        OwnedTempRoot::new_with_seeded_parent(path.clone())?
+    // Bind the lock before the root: locals drop in reverse order, so a
+    // failed create below removes the directory while the lock is still held.
+    let (owner_lock, temp_root) = if private_memory {
+        // A24: skip the pre-existence statx for `:memory:` opens. Their
+        // session names are counter-derived (`memory-{pid}-{id}`) so they can
+        // never collide with a live session, and the inner
+        // `OwnedTempRoot::new_with_seeded_parent` falls back gracefully if a
+        // stale dir from a crashed prior process is still there.
+        let temp_root = OwnedTempRoot::new_with_seeded_parent(path.clone())?;
+        let owner_lock = if options.process_owner_lock {
+            Some(acquire_owner_lock(&path)?)
+        } else {
+            None
+        };
+        (owner_lock, temp_root)
     } else {
-        if path.exists() {
-            fs::remove_dir_all(&path)?;
-        }
-        OwnedTempRoot::new(path.clone())?
+        // A named session CAN collide: another process sharing the temp root
+        // may be running a session of the same name, or a crashed run left
+        // its directory behind. Take the session's owner lock whatever
+        // `process_owner_lock` says (volatile opens always turn it off), so
+        // a live session makes this open fail with `Busy`, and only then
+        // clear what a dead session left.
+        fs::create_dir_all(&path)?;
+        let owner_lock = acquire_owner_lock(&path)?;
+        clear_stale_session(&path)?;
+        (Some(owner_lock), OwnedTempRoot::adopt(path.clone()))
     };
     let db = if private_memory {
         redlinedb_sql::Database::create_private_in_memory_at(
@@ -280,11 +296,7 @@ fn create_ephemeral_database_inner(
     } else {
         redlinedb_sql::Database::create(&path, crate::sql_options(options))?
     };
-    let owner_lock = if options.process_owner_lock && !options.read_only {
-        Some(Arc::new(acquire_owner_lock(&path)?))
-    } else {
-        None
-    };
+    let owner_lock = owner_lock.map(Arc::new);
 
     let rayon_pool = build_rayon_pool(options)?;
     let entry = Arc::new(DatabaseEntry {
@@ -372,23 +384,29 @@ fn open_database_at(
         ));
     }
 
+    // Take ownership before anything reads or repairs the image. Opening
+    // runs crash recovery, which truncates a torn WAL tail, creates missing
+    // files and rewrites index pages, so an open that is going to lose to
+    // another owner must fail here, before recovery. A read-only open
+    // recovers too, so it takes the same exclusive lock.
+    let owner_lock = if options.process_owner_lock {
+        Some(Arc::new(acquire_owner_lock(&path)?))
+    } else {
+        None
+    };
+
     let sql_options = crate::sql_options(options);
     // `OpenOptions::create` means "create when absent", not "replace an
     // existing image". `normalize_path` creates a missing directory before
     // the path lock is acquired, so decide from the directory contents while
-    // holding that lock. A non-empty directory must go through recovery and
-    // fail closed if its durable image is incomplete or corrupt.
-    let create_new = create && fs::read_dir(&path)?.next().transpose()?.is_none();
+    // holding the owner lock; the lock file itself is not an image. A
+    // directory with anything else in it goes through recovery and fails
+    // closed if its durable image is incomplete or corrupt.
+    let create_new = create && holds_no_image(&path)?;
     let db = if create_new {
         redlinedb_sql::Database::create(&path, sql_options)?
     } else {
         redlinedb_sql::Database::open(&path, sql_options)?
-    };
-
-    let owner_lock = if options.process_owner_lock && !options.read_only {
-        Some(Arc::new(acquire_owner_lock(&path)?))
-    } else {
-        None
     };
 
     let rayon_pool = build_rayon_pool(options)?;
@@ -464,39 +482,128 @@ fn ephemeral_session_path(temp_dir: Option<&Path>, session_name: &str) -> PathBu
     root.join(format!("redlinedb-ephemeral-{digest:x}"))
 }
 
-fn acquire_owner_lock(path: &Path) -> Result<File> {
-    let lock_path = path.join("owner.lock");
+const OWNER_LOCK_FILE: &str = "owner.lock";
+
+/// True when `dir` holds nothing but (possibly) `owner.lock`.
+fn holds_no_image(dir: &Path) -> Result<bool> {
+    for entry in fs::read_dir(dir)? {
+        if entry?.file_name() != OWNER_LOCK_FILE {
+            return Ok(false);
+        }
+    }
+    Ok(true)
+}
+
+/// Remove everything a dead session left in `dir` except `owner.lock`,
+/// which the caller holds.
+fn clear_stale_session(dir: &Path) -> Result<()> {
+    for entry in fs::read_dir(dir)? {
+        let entry = entry?;
+        if entry.file_name() == OWNER_LOCK_FILE {
+            continue;
+        }
+        if entry.file_type()?.is_dir() {
+            fs::remove_dir_all(entry.path())?;
+        } else {
+            fs::remove_file(entry.path())?;
+        }
+    }
+    Ok(())
+}
+
+/// Take `dir/owner.lock` exclusively without waiting.
+///
+/// `File::try_lock` is `flock(LOCK_EX | LOCK_NB)` on Unix, so it excludes
+/// builds that called `flock` directly. The lock belongs to the open file
+/// description and lasts until the returned `File` is dropped.
+fn acquire_owner_lock(dir: &Path) -> Result<File> {
+    let lock_path = dir.join(OWNER_LOCK_FILE);
     let file = FsOpenOptions::new()
         .create(true)
         .read(true)
         .write(true)
         .truncate(false)
-        .open(lock_path)?;
-    lock_owner_file(&file)?;
+        .open(&lock_path)
+        .map_err(|err| owner_lock_create_error(&lock_path, err))?;
+    match file.try_lock() {
+        Ok(()) => {}
+        Err(TryLockError::WouldBlock) => {
+            return Err(Error::new(
+                ErrorCode::Busy,
+                format!(
+                    "database already open: another owner holds {}",
+                    lock_path.display()
+                ),
+            ));
+        }
+        Err(TryLockError::Error(err)) if err.kind() == ErrorKind::Unsupported => {
+            return Err(Error::with_source(
+                ErrorCode::Unsupported,
+                format!(
+                    "cannot lock {}: file locking is not supported here. Open with \
+                     process_owner_lock(false) only if nothing else can open this database",
+                    lock_path.display()
+                ),
+                err,
+            ));
+        }
+        Err(TryLockError::Error(err)) => {
+            return Err(Error::with_source(
+                ErrorCode::IoErr,
+                format!("cannot lock {}: {err}", lock_path.display()),
+                err,
+            ));
+        }
+    }
+    ensure_lock_file_still_linked(&file, &lock_path)?;
     Ok(file)
 }
 
+/// A session directory is removed while its owner still holds the lock. A
+/// racing opener may have opened that lock file just before the removal and
+/// win the lock just after it, holding a lock on a file that is no longer at
+/// `lock_path`. It must not treat the path as its own.
 #[cfg(unix)]
-fn lock_owner_file(file: &File) -> Result<()> {
-    use std::os::unix::io::AsRawFd;
+fn ensure_lock_file_still_linked(file: &File, lock_path: &Path) -> Result<()> {
+    use std::os::unix::fs::MetadataExt;
 
-    // `file.as_raw_fd()` returns a valid open file descriptor owned by `file`
-    // and valid for the duration of this call (the `&File` borrow prevents the
-    // descriptor from being closed concurrently). `LOCK_NB` ensures the call
-    // never blocks while we hold no other locks.
-    // SAFETY: valid fd held via `&File`, libc::flock is the only syscall.
-    let rc = unsafe { libc::flock(file.as_raw_fd(), libc::LOCK_EX | libc::LOCK_NB) };
-    if rc == 0 {
-        Ok(())
-    } else {
-        Err(Error::new(
+    let held = file.metadata()?;
+    let current = match fs::metadata(lock_path) {
+        Ok(meta) => Some(meta),
+        Err(err) if err.kind() == ErrorKind::NotFound => None,
+        Err(err) => return Err(err.into()),
+    };
+    match current {
+        Some(meta) if meta.dev() == held.dev() && meta.ino() == held.ino() => Ok(()),
+        _ => Err(Error::new(
             ErrorCode::Busy,
-            format!("database already open: {}", std::io::Error::last_os_error()),
-        ))
+            format!(
+                "database already open: {} was replaced while it was being locked",
+                lock_path.display()
+            ),
+        )),
     }
 }
 
 #[cfg(not(unix))]
-fn lock_owner_file(_file: &File) -> Result<()> {
+fn ensure_lock_file_still_linked(_file: &File, _lock_path: &Path) -> Result<()> {
     Ok(())
+}
+
+fn owner_lock_create_error(lock_path: &Path, err: std::io::Error) -> Error {
+    let code = match err.kind() {
+        ErrorKind::ReadOnlyFilesystem => ErrorCode::ReadOnly,
+        ErrorKind::PermissionDenied => ErrorCode::Permission,
+        _ => return err.into(),
+    };
+    Error::with_source(
+        code,
+        format!(
+            "cannot create {}: {err}. An open takes ownership through this file before \
+             recovery, so the database directory must be writable; databases on read-only \
+             media are not supported",
+            lock_path.display()
+        ),
+        err,
+    )
 }

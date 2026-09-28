@@ -31,6 +31,11 @@ use crate::statement::Prepared;
 /// from the same `Database` see the same state.
 pub struct Database {
     pub(crate) inner: Arc<registry::DatabaseEntry>,
+    /// `OpenOptions::read_only` of the open that made this handle. It lives
+    /// on the handle, not the shared entry: a read-only open of a database
+    /// this process already has open for writing shares that engine, and
+    /// only this handle's connections must refuse writes.
+    read_only: bool,
 }
 
 impl Database {
@@ -50,7 +55,10 @@ impl Database {
 
     pub fn open_with_options(path: impl AsRef<Path>, options: OpenOptions) -> Result<Self> {
         let inner = registry::open_database(path, &options, options.create)?;
-        Ok(Self { inner })
+        Ok(Self {
+            inner,
+            read_only: options.read_only,
+        })
     }
 
     /// Create a private ephemeral database rooted under the directory
@@ -64,7 +72,10 @@ impl Database {
     pub fn create_in_memory(options: OpenOptions) -> Result<Self> {
         let options = volatile_open_options(options);
         let inner = registry::create_in_memory_database(&options)?;
-        Ok(Self { inner })
+        Ok(Self {
+            inner,
+            read_only: options.read_only,
+        })
     }
 
     /// Create or reopen a process-local ephemeral database identified by
@@ -77,7 +88,10 @@ impl Database {
     pub fn create_ephemeral(session_name: &str, options: OpenOptions) -> Result<Self> {
         let options = volatile_open_options(options);
         let inner = registry::create_ephemeral_database(session_name, &options)?;
-        Ok(Self { inner })
+        Ok(Self {
+            inner,
+            read_only: options.read_only,
+        })
     }
 
     pub fn connect(&self) -> Result<Connection> {
@@ -88,7 +102,7 @@ impl Database {
             .expect("busy timeout poisoned");
         Ok(Connection {
             inner: self.inner.db.connect(),
-            read_only: self.inner.fingerprint.read_only,
+            read_only: self.read_only,
             busy_timeout,
             interrupted: Arc::clone(&self.inner.interrupt),
             _sync_marker: Cell::new(()),
@@ -341,6 +355,7 @@ impl Clone for Database {
     fn clone(&self) -> Self {
         Self {
             inner: Arc::clone(&self.inner),
+            read_only: self.read_only,
         }
     }
 }

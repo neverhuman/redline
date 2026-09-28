@@ -144,14 +144,6 @@ proof_lane = "just fast"
 test = "crates/redlinedb/src/registry.rs::tests::registry_concurrent_open_returns_shared_handles"
 
 [[entries]]
-file = "crates/redlinedb/src/registry.rs"
-line = 280
-owner = "rust-public-api"
-invariant = "libc::flock called with a valid open fd borrowed from `&File` for the call's duration; LOCK_NB ensures non-blocking advisory lock. The descriptor cannot be closed concurrently because we hold a `&File`."
-proof_lane = "just fast"
-test = "crates/redlinedb/tests/* (integration: process_owner_lock paths)"
-
-[[entries]]
 file = "crates/sql/src/statement.rs"
 line = 307
 owner = "sql-parser-planner-executor"

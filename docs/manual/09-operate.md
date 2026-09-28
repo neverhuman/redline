@@ -28,7 +28,11 @@ The stats structs include checkpoint and vacuum counters. Run them when the writ
 
 ## One writer process, many connections
 
-Open the file from one `Database` and hand out connections. Two processes opening the same path for write depend on the process owner lock (`OpenOptions.process_owner_lock`, default on). That lock exists so a second process does not treat the file as its own. If you need two operating-system processes, run `redlinedb-server` in one of them and let the other speak `RLDB`. Two uncoordinated `Database::create` calls on one path are not the multi-agent design. A pool inside one process is.
+Open the file from one `Database` and hand out connections. Two processes opening the same path depend on the process owner lock (`OpenOptions.process_owner_lock`, default on). That lock exists so a second process does not treat the file as its own. If you need two operating-system processes, run `redlinedb-server` in one of them and let the other speak `RLDB`. Two uncoordinated `Database::create` calls on one path are not the multi-agent design. A pool inside one process is.
+
+The owner lock is `owner.lock` in the database directory. An open takes it, exclusively and without waiting, before it reads the image or runs crash recovery, and holds it until the last `Database` handle drops. A second process that finds it held gets `ErrorCode::Busy` and has not changed the database image. A symlink to the directory is the same database. The directory must be writable: on read-only media the open fails because `owner.lock` cannot be created. Where the platform has no file locking the open fails with `ErrorCode::Unsupported`; `process_owner_lock(false)` then opens without the lock, and you must make sure nothing else opens that directory.
+
+A read-only open (`OpenOptions.read_only`) is not a shared reader. It takes the same exclusive lock, so it gets `Busy` while another process has the database open, read-only or not, and it still runs crash recovery, which can repair the write-ahead log. Read-only means that its connections reject statements that write. Inside one process, a read-only open of a database that is already open for writing shares that engine, and only the read-only handle's connections refuse writes. The shell's `-readonly` flag and the sqlx `mode=ro` URL open with `process_owner_lock(false)`: they do not exclude a live owner and still run recovery, so point them only at a database that no process has open.
 
 ## Install layout
 

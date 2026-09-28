@@ -36,6 +36,16 @@ pub enum Durability {
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct OpenOptions {
     pub create: bool,
+    /// Make connections from the opened handle refuse statements that
+    /// write, with `ErrorCode::ReadOnly`.
+    ///
+    /// This is not a shared-reader mode. With `process_owner_lock` on, a
+    /// read-only open takes the same exclusive owner lock as a writable one,
+    /// so it fails with `ErrorCode::Busy` while another process has the
+    /// database open, and it still runs crash recovery, which can repair the
+    /// write-ahead log. In one process, a read-only open of a database that
+    /// is already open for writing shares that engine; only the read-only
+    /// handle refuses writes.
     pub read_only: bool,
     pub durability: Durability,
     pub memory: MemoryOptions,
@@ -44,6 +54,16 @@ pub struct OpenOptions {
     pub stats: AnalyzeOptions,
     pub statement_cache_capacity: usize,
     pub busy_timeout: Duration,
+    /// Take `owner.lock` in the database directory, exclusively and without
+    /// waiting, before the open reads or recovers the image, and hold it
+    /// until the last handle drops. A second owner gets `ErrorCode::Busy`
+    /// and has changed nothing on disk. The directory must be writable;
+    /// read-only media are not supported.
+    ///
+    /// Default on. Where the platform has no file locking the open fails
+    /// with `ErrorCode::Unsupported`; set this to `false` only when nothing
+    /// else can open the directory, because without the lock an open runs
+    /// recovery against whatever another process is writing.
     pub process_owner_lock: bool,
     pub temp_dir: Option<std::path::PathBuf>,
     /// Size of the per-`Database` Rayon thread pool used by future
