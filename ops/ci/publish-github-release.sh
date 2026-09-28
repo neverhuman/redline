@@ -25,7 +25,7 @@ notes=docs/releases/${TAG%%-rc.*}.md
 # Every durability claim tag in README.md and docs/ needs a passing receipt
 # whose source is this commit, or an ancestor with the same binary inputs
 # (docs/manual/durability.md#receipts). Needs cargo when any tag exists.
-bash ops/ci/durability-claim-gate.sh --at "$TAG"
+bash "$here/durability-claim-gate.sh" --root "$PWD" --at "$TAG"
 
 # Exactly one archive and one checksum file per package and platform.
 assets=()
