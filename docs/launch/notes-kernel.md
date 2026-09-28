@@ -81,3 +81,43 @@ Draft lines for the v5.0.0 CHANGELOG. The integrator owns `CHANGELOG.md`.
   used to delete the directory first, which could remove a live session of
   the same name in another process sharing the temp root; that now fails
   with `Busy`.
+
+## Directory durability
+
+- A new write-ahead log segment's name is now durable before any record in
+  it is acknowledged. Creating the first segment, rotating to the next one,
+  and opening a log whose valid end sits exactly on a segment boundary each
+  fsync the `wal` directory before a record goes into the segment. The
+  open path used to skip that sync, so a Strict commit written to that
+  segment could be acknowledged while the file's name was not yet on disk.
+- Every open of the log now fsyncs the `wal` directory, not only when it
+  creates a segment. A segment name left by a run that died between the
+  create and its directory sync is made durable before new records go
+  into it.
+- Rotation used to switch to the new segment before the directory sync. If
+  that sync failed, the log kept writing into a file whose name might not
+  survive a power loss. The switch now happens only after the sync
+  succeeds. A failed sync fails the append; in the engine it stops the WAL
+  writer, so the Strict commit waiting on it returns an error and stays
+  invisible.
+- Creating the `wal` directory now fsyncs the database root, so the `wal`
+  entry is durable too. Before, the root was fsynced once when the page
+  file was created, before `wal/` existed.
+- A newly created database root is durable in its parent directory, and so
+  is each missing ancestor that was created with it. This covers
+  `Database::create`, opens with `OpenOptions::create`, and
+  `Engine::create`/`Engine::open`. A root that already existed is left to
+  whoever created it.
+- Directory fsync is part of the kernel's `FileSystem` trait
+  (`sync_dir`). On non-Unix targets the standard implementation does
+  nothing, so the kernel claims directory-entry durability only on Unix.
+  Builds with the `failpoints` feature can fail it through
+  `wal::sync_dir`.
+- Cost: one extra directory fsync per segment rotation, per log open, and
+  per new directory at create time.
+- Not changed: the opt-in multi-lane WAL (`wal/lanes.rs`) and the
+  feature-gated WAL pipeline (`wal/pipeline.rs`) still create files and
+  directories without a directory fsync. Neither is used by the default
+  engine. Removing old segments after a checkpoint does not fsync the
+  directory either, so after a crash a removed segment can reappear. This
+  change does not test how recovery handles one.

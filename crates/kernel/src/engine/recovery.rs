@@ -10,6 +10,7 @@ use crate::catalog::{
 use crate::engine::lock::RowLockManager;
 use crate::engine::page_heap::PageBackedHeap;
 use crate::format::{Csn, Lsn, Page, RelId};
+use crate::io::{StdFileSystem, create_dir_all_durable};
 use crate::storage::{BufferPool, ControlStore, PageFile, TxStatusStore};
 use crate::telemetry::Phase11Counters;
 use crate::wal::{WalCoordinator, WalPayload, WalReader, WalRecord, WalRecordKind};
@@ -49,7 +50,8 @@ impl Engine {
         // here so that explicit test configs (e.g. buffer_pool_pages=16 with
         // heap_lanes=4) are respected as-written.
         if !volatile {
-            std::fs::create_dir_all(path)?;
+            // A new root is a new name in its parent.
+            create_dir_all_durable(&StdFileSystem, path)?;
         }
         let data_path = path.join(&config.data_file_name);
         let wal_dir = path.join("wal");
@@ -187,7 +189,7 @@ impl Engine {
         let scan_report = reader.scan_report()?;
         let wal_open_summary = scan_report.open_summary();
         let txs = ConcurrentTxStatus::new();
-        std::fs::create_dir_all(path.as_ref())
+        create_dir_all_durable(&StdFileSystem, path.as_ref())
             .map_err(|_| Error::CorruptPage("create engine directory failed"))?;
         let control = ControlStore::new(path.as_ref())
             .map_err(|_| Error::CorruptPage("create control store failed"))?;
@@ -685,6 +687,10 @@ fn sync_page_file_directory(path: &Path) -> Result<()> {
     }
     crate::storage::sync_parent_dir(parent)
 }
+
+#[cfg(test)]
+#[path = "recovery_dir_sync_tests.rs"]
+mod dir_sync_tests;
 
 #[cfg(test)]
 mod tests {

@@ -339,15 +339,22 @@ fn normalize_path(path: &Path, create: bool) -> Result<PathBuf> {
         return Ok(fs::canonicalize(path)?);
     }
     if create {
-        if let Some(parent) = path.parent()
-            && !parent.as_os_str().is_empty()
-        {
-            fs::create_dir_all(parent)?;
-        }
-        fs::create_dir_all(path)?;
+        create_dir_all_durable(path)?;
         return Ok(fs::canonicalize(path)?);
     }
     Ok(path.to_path_buf())
+}
+
+/// Create a new database root and any missing ancestors, and fsync the
+/// parent of each directory created so the root is still found after power
+/// loss. The kernel only syncs directories that it creates itself.
+fn create_dir_all_durable(path: &Path) -> Result<()> {
+    use redlinedb_kernel::io::StdFileSystem;
+    match redlinedb_kernel::io::create_dir_all_durable(&StdFileSystem, path) {
+        Ok(()) => Ok(()),
+        Err(redlinedb_kernel::Error::Io(err)) => Err(err.into()),
+        Err(other) => Err(Error::new(ErrorCode::IoErr, other.to_string())),
+    }
 }
 
 fn open_database_at(

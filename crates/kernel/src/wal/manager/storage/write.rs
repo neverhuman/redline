@@ -1,7 +1,7 @@
 use std::path::Path;
 
 use crate::format::{Lsn, TxId};
-use crate::io::{FileHandle, FileSystem, StdFileSystem};
+use crate::io::{FileHandle, FileSystem, StdFileSystem, create_dir_all_durable};
 use crate::wal::{WAL_HEADER_LEN, WalRecord, WalRecordKind};
 use crate::{Error, Result};
 
@@ -58,13 +58,14 @@ impl<Fs: FileSystem> WalManager<Fs> {
     pub fn create_with_fs(path: impl AsRef<Path>, config: WalConfig, fs: Fs) -> Result<Self> {
         validate_config(&config)?;
         let dir = path.as_ref().to_path_buf();
-        fs.create_dir_all(&dir)?;
+        // A new WAL directory is a new name in the database root.
+        create_dir_all_durable(&fs, &dir)?;
         let active_segment = 1;
         let active_offset = 0;
         let active_file = fs.open_rw_create(&segment_path(&dir, active_segment))?;
         // The first segment name has to survive power loss before any record
         // is treated as durable. Data fsync does not cover the directory entry.
-        crate::io::sync_dir(&dir)?;
+        sync_wal_dir(&fs, &dir)?;
         Ok(Self {
             dir,
             fs,
@@ -82,7 +83,7 @@ impl<Fs: FileSystem> WalManager<Fs> {
     pub fn open_with_fs(path: impl AsRef<Path>, config: WalConfig, fs: Fs) -> Result<Self> {
         validate_config(&config)?;
         let dir = path.as_ref().to_path_buf();
-        fs.create_dir_all(&dir)?;
+        create_dir_all_durable(&fs, &dir)?;
         let mut scan = WalReader::new_with_fs(&dir, config.clone(), fs);
         let report = scan.scan_report()?;
         let summary = report.open_summary();
@@ -98,7 +99,7 @@ impl<Fs: FileSystem> WalManager<Fs> {
     ) -> Result<Self> {
         validate_config(&config)?;
         let dir = path.as_ref().to_path_buf();
-        fs.create_dir_all(&dir)?;
+        create_dir_all_durable(&fs, &dir)?;
         Self::open_prepared(dir, config, fs, summary)
     }
 
@@ -113,6 +114,11 @@ impl<Fs: FileSystem> WalManager<Fs> {
         let active_segment = segment_for_lsn(written_lsn, config.segment_bytes);
         let active_offset = offset_for_lsn(written_lsn, config.segment_bytes);
         let active_file = fs.open_rw_create(&segment_path(&dir, active_segment))?;
+        // Appends go into this segment, and this open may just have created
+        // it: an empty WAL, or a valid end exactly on a segment boundary. A
+        // name left by a run that died before its directory sync may not be
+        // durable either. Sync the directory before any record lands here.
+        sync_wal_dir(&fs, &dir)?;
         active_file.set_len(active_offset)?;
 
         Ok(Self {
@@ -299,12 +305,18 @@ impl<Fs: FileSystem> WalManager<Fs> {
         if let Some(counters) = &self.sync_counters {
             counters.bump_fdatasync();
         }
-        self.active_segment += 1;
-        self.active_offset = 0;
-        self.active_file = self
+        // The next segment's name has to be durable before any record goes
+        // into it. Move to it only after the directory sync succeeds, so a
+        // failure leaves the manager on the old segment and a retry creates
+        // and syncs again.
+        let next_segment = self.active_segment + 1;
+        let next_file = self
             .fs
-            .open_rw_create(&segment_path(&self.dir, self.active_segment))?;
-        crate::io::sync_dir(&self.dir)?;
+            .open_rw_create(&segment_path(&self.dir, next_segment))?;
+        sync_wal_dir(&self.fs, &self.dir)?;
+        self.active_segment = next_segment;
+        self.active_offset = 0;
+        self.active_file = next_file;
         Ok(())
     }
 
@@ -341,41 +353,22 @@ impl<Fs: FileSystem> WalManager<Fs> {
     }
 }
 
-#[cfg(test)]
-mod tests {
-    use tempfile::TempDir;
-
-    use crate::format::TxId;
-    use crate::io::take_dir_syncs;
-    use crate::wal::{WalConfig, WalManager, WalRecordKind};
-
-    #[test]
-    fn creating_and_rotating_a_segment_syncs_the_directory() {
-        let dir = TempDir::new().unwrap();
-        let _ = take_dir_syncs();
-        let mut manager = WalManager::create(
-            dir.path(),
-            WalConfig {
-                segment_bytes: 128,
-                ..WalConfig::default()
-            },
-        )
-        .unwrap();
-        assert_eq!(take_dir_syncs(), 1);
-
-        // Header is 48 bytes. Payload 16 makes each record 64 bytes.
-        // Two records fill the segment; the third rotates.
-        let payload = vec![b'x'; 16];
-        manager
-            .append(WalRecordKind::PageDelta, TxId(1), payload.clone())
-            .unwrap();
-        manager
-            .append(WalRecordKind::PageDelta, TxId(1), payload.clone())
-            .unwrap();
-        assert_eq!(take_dir_syncs(), 0);
-        manager
-            .append(WalRecordKind::PageDelta, TxId(1), payload)
-            .unwrap();
-        assert_eq!(take_dir_syncs(), 1);
-    }
+/// Fsync the WAL directory so a segment name created in it is durable.
+///
+/// The `wal::sync_dir` failpoint injects an I/O error here. `return` fails
+/// every WAL directory sync. `return(<text>)` fails only directories whose
+/// path contains `<text>` and syncs the others, so a test can confine the
+/// fault to its own temp directory while other tests share the process.
+fn sync_wal_dir<Fs: FileSystem>(fs: &Fs, dir: &Path) -> Result<()> {
+    crate::fail_point!("wal::sync_dir", |only_under: Option<String>| {
+        match only_under {
+            Some(text) if !dir.to_string_lossy().contains(text.as_str()) => fs.sync_dir(dir),
+            _ => Err(std::io::Error::other("wal::sync_dir failpoint").into()),
+        }
+    });
+    fs.sync_dir(dir)
 }
+
+#[cfg(test)]
+#[path = "write_tests.rs"]
+mod tests;

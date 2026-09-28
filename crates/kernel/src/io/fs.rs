@@ -2,9 +2,6 @@ use std::fs::{self, File, OpenOptions};
 use std::io::{self, ErrorKind};
 use std::path::Path;
 
-#[cfg(test)]
-use std::cell::Cell;
-
 #[cfg(unix)]
 use std::os::unix::fs::FileExt;
 
@@ -28,6 +25,10 @@ pub trait FileSystem {
     fn read_dir_names(&self, path: &Path) -> Result<Vec<String>>;
     fn open_rw_create(&self, path: &Path) -> Result<Self::File>;
     fn open_rw_existing(&self, path: &Path) -> Result<Self::File>;
+    /// Make the entries of directory `path` durable: names created,
+    /// renamed or removed in it survive power loss once this returns.
+    /// A file's own `sync_data` does not cover its directory entry.
+    fn sync_dir(&self, path: &Path) -> Result<()>;
 }
 
 #[derive(Clone, Copy, Debug, Default)]
@@ -70,6 +71,34 @@ impl FileSystem for StdFileSystem {
         let file = OpenOptions::new().read(true).write(true).open(path)?;
         Ok(StdFileHandle(file))
     }
+
+    /// On unix this opens the directory and calls `fsync` on it.
+    ///
+    /// On other targets it returns `Ok(())` without doing anything: there
+    /// is no portable way to fsync a directory there, so directory-entry
+    /// durability is only claimed on unix.
+    fn sync_dir(&self, path: &Path) -> Result<()> {
+        #[cfg(unix)]
+        File::open(path)?.sync_all()?;
+        #[cfg(not(unix))]
+        let _ = path;
+        #[cfg(test)]
+        SYNCED_DIRS.with(|dirs| dirs.borrow_mut().push(path.to_path_buf()));
+        Ok(())
+    }
+}
+
+#[cfg(test)]
+thread_local! {
+    static SYNCED_DIRS: std::cell::RefCell<Vec<std::path::PathBuf>> =
+        const { std::cell::RefCell::new(Vec::new()) };
+}
+
+/// Directories this thread synced through [`StdFileSystem::sync_dir`], in
+/// order, since the last call. Per thread so parallel tests do not mix.
+#[cfg(test)]
+pub(crate) fn take_synced_dirs() -> Vec<std::path::PathBuf> {
+    SYNCED_DIRS.with(|dirs| std::mem::take(&mut *dirs.borrow_mut()))
 }
 
 #[derive(Debug)]
@@ -99,23 +128,32 @@ impl FileHandle for StdFileHandle {
     }
 }
 
-/// Make a directory entry durable. File data `fsync` does not.
-pub(crate) fn sync_dir(path: &Path) -> Result<()> {
-    let dir = File::open(path)?;
-    dir.sync_all()?;
-    #[cfg(test)]
-    DIR_SYNCS.with(|count| count.set(count.get().saturating_add(1)));
+/// Create `path` and any missing ancestors, then make every new name
+/// durable by syncing the parent of each directory this call created,
+/// outermost first.
+///
+/// A directory that already existed is left alone: whoever created it was
+/// responsible for its name. Which directories are missing is checked on
+/// the real file system. A relative path's outermost new directory is
+/// synced through `.`.
+pub fn create_dir_all_durable<Fs: FileSystem + ?Sized>(fs: &Fs, path: &Path) -> Result<()> {
+    let mut created = Vec::new();
+    let mut cursor = Some(path);
+    while let Some(dir) = cursor {
+        if dir.as_os_str().is_empty() || dir.try_exists()? {
+            break;
+        }
+        created.push(dir);
+        cursor = dir.parent();
+    }
+    fs.create_dir_all(path)?;
+    for dir in created.iter().rev() {
+        match dir.parent() {
+            Some(parent) if !parent.as_os_str().is_empty() => fs.sync_dir(parent)?,
+            _ => fs.sync_dir(Path::new("."))?,
+        }
+    }
     Ok(())
-}
-
-#[cfg(test)]
-thread_local! {
-    static DIR_SYNCS: Cell<u64> = const { Cell::new(0) };
-}
-
-#[cfg(test)]
-pub(crate) fn take_dir_syncs() -> u64 {
-    DIR_SYNCS.with(|count| count.replace(0))
 }
 
 #[cfg(unix)]

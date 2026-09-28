@@ -253,3 +253,116 @@ fn strict_commit_retains_visibility_and_locks_until_flush() {
     engine.update(&mut fresh, row, b"after".to_vec()).unwrap();
     engine.rollback(fresh).unwrap();
 }
+
+/// A Strict commit whose WAL records need a new segment must not be
+/// acknowledged when the fsync that makes the segment's name durable fails.
+/// Otherwise power loss can drop the file with the acknowledged commit in it.
+///
+/// Failpoints are process-global. The scenario stays held through the
+/// reopen so no other test here arms a failpoint meanwhile, and
+/// `return(<dir>)` limits the injected failure to this test's directory.
+#[test]
+fn strict_commit_fails_when_wal_dir_sync_fails() {
+    use redlinedb_kernel::engine::{CommitDurability, CommitOutcome, Engine, EngineConfig};
+    use redlinedb_kernel::txn::Isolation;
+    use redlinedb_kernel::wal::WalConfig;
+
+    let scenario = fail::FailScenario::setup();
+    let tmp = tempfile::tempdir().expect("tempdir");
+    let wal_dir = tmp.path().join("wal");
+    let config = EngineConfig {
+        commit_durability: CommitDurability::Strict,
+        wal: WalConfig {
+            segment_bytes: 64 * 1024,
+            ..WalConfig::default()
+        },
+        ..EngineConfig::default()
+    };
+    let segments = || {
+        std::fs::read_dir(&wal_dir)
+            .expect("read wal dir")
+            .filter(|entry| {
+                entry
+                    .as_ref()
+                    .expect("wal dir entry")
+                    .file_name()
+                    .to_string_lossy()
+                    .ends_with(".wal")
+            })
+            .count()
+    };
+    let engine = Engine::create(tmp.path(), config.clone()).expect("create engine");
+    assert_eq!(segments(), 1);
+    failpoints::cfg(
+        "wal::sync_dir",
+        &format!("return({})", tmp.path().display()),
+    )
+    .expect("configure wal dir sync failpoint");
+
+    // Commit one row at a time until the WAL has to rotate. Every commit
+    // before that is acknowledged; the one that needs segment 2 is not.
+    let mut acked = Vec::new();
+    let mut failed = None;
+    for index in 0..100_000 {
+        let value = format!("row-{index:06}-{}", "v".repeat(64)).into_bytes();
+        let mut tx = engine.begin(Isolation::Snapshot).expect("begin");
+        let row = match engine.insert(&mut tx, value.clone()) {
+            Ok(row) => row,
+            Err(err) => {
+                failed = Some((None, err));
+                break;
+            }
+        };
+        match engine.commit(tx) {
+            Ok(CommitOutcome::Committed(_)) => acked.push((row, value)),
+            Ok(other) => panic!("unexpected commit outcome {other:?}"),
+            Err(err) => {
+                failed = Some((Some(row), err));
+                break;
+            }
+        }
+        assert_eq!(
+            segments(),
+            1,
+            "commit {index} was acknowledged although its WAL rotated and \
+             the directory sync failed"
+        );
+    }
+    let (failed_row, err) = failed.expect("the WAL never rotated; lower segment_bytes");
+    assert!(!acked.is_empty(), "the first commit already rotated");
+    assert_eq!(segments(), 2, "the failure should come from rotation");
+    let stage = if failed_row.is_some() {
+        "commit"
+    } else {
+        "insert"
+    };
+    eprintln!("{stage} after {} acked rows failed: {err:?}", acked.len());
+
+    if let Some(row) = failed_row {
+        let mut observer = engine.begin(Isolation::Snapshot).expect("begin observer");
+        assert_eq!(
+            engine.get(&mut observer, row).expect("read failed row"),
+            None,
+            "a commit that failed its durability barrier must stay invisible"
+        );
+    }
+    drop(engine);
+    failpoints::cfg("wal::sync_dir", "off").expect("disable wal dir sync failpoint");
+
+    // Every acknowledged row survives a reopen; the failed one does not.
+    let engine = Engine::open(tmp.path(), config).expect("reopen engine");
+    let mut reader = engine.begin(Isolation::Snapshot).expect("begin reader");
+    for (row, value) in &acked {
+        assert_eq!(
+            engine
+                .get(&mut reader, *row)
+                .expect("read acked row")
+                .as_ref(),
+            Some(value)
+        );
+    }
+    if let Some(row) = failed_row {
+        assert_eq!(engine.get(&mut reader, row).expect("read failed row"), None);
+    }
+    drop(scenario);
+}

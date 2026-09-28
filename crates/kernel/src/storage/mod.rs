@@ -14,19 +14,18 @@ pub use page_file::*;
 pub use page_pressure::*;
 pub use tx_status_checkpoint::*;
 
-use std::fs::File;
 use std::path::Path;
 
 use crate::Result;
+use crate::io::{FileSystem, StdFileSystem};
 
-/// Open the directory at `path` and `sync_data` it so a preceding rename
-/// or create-and-close becomes durable on POSIX. Shared by every storage
-/// submodule that touches the database directory atomically; prior to the
-/// dedup pass each submodule carried its own private copy of this body.
+/// Fsync the directory at `path` so a preceding rename or create-and-close
+/// becomes durable on POSIX. Shared by every storage submodule that touches
+/// the database directory atomically; it is [`FileSystem::sync_dir`] on the
+/// standard file system.
 #[inline]
 pub(crate) fn sync_parent_dir(path: &Path) -> Result<()> {
-    let file = File::open(path)?;
-    file.sync_data()?;
+    StdFileSystem.sync_dir(path)?;
     #[cfg(test)]
     PARENT_DIR_SYNCS.with(|count| count.set(count.get().saturating_add(1)));
     Ok(())
