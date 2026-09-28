@@ -45,6 +45,7 @@ pub(crate) mod index_predicate;
 mod join_probe;
 pub(crate) mod policy;
 pub(crate) mod reindex;
+mod reindex_collation;
 mod tail;
 use tail::*;
 pub(crate) use tail::{collect_table_rowids, load_table_row_by_rowid};

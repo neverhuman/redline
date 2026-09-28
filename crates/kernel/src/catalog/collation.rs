@@ -81,6 +81,13 @@ pub fn inherit_key_collations(table: &TableDef, keys: &mut [IndexKeyDef]) {
 /// [`inherit_key_collations`] over a column list that is not in a
 /// `TableDef` yet.
 pub fn inherit_key_collations_from(columns: &[ColumnDef], keys: &mut [IndexKeyDef]) {
+    if v4_key_collations_active() {
+        return;
+    }
+    inherit_into(columns, keys);
+}
+
+fn inherit_into(columns: &[ColumnDef], keys: &mut [IndexKeyDef]) {
     for key in keys {
         if key.collation.is_some() {
             continue;
@@ -110,7 +117,7 @@ pub fn check_index_key_collations(keys: &[IndexKeyDef]) -> crate::Result<()> {
     }
 }
 
-/// Integration hook for existing databases (workplan Q5-10 step 4).
+/// Existing databases (workplan Q5-10 step 4).
 ///
 /// An index built before key collations were inherited has keys whose
 /// collation is only what its CREATE INDEX text names. When a key of
@@ -118,20 +125,60 @@ pub fn check_index_key_collations(keys: &[IndexKeyDef]) -> crate::Result<()> {
 /// named no collation for it, this returns the key collations the index
 /// should have; `None` means it already has them. Such an index still
 /// answers correctly under the collation it was built with (the planner
-/// uses it only for BINARY predicates), but UNIQUE on it compares binary. Rebuilding it with the
-/// returned collations can find two rows that now share a key; the rebuild
-/// must fail on that, never pick one.
+/// uses it only for BINARY comparisons), but UNIQUE on it compares
+/// binary. The open-time upgrade rebuilds it with the returned collations
+/// (`Engine::indexes_needing_rebuild`) and fails when two rows then share
+/// a key, never keeping one of them. A column collation an index key cannot
+/// use is not inherited here: such an index keeps its BINARY keys.
 pub fn index_keys_needing_inherited_collation(
     table: &TableDef,
     index: &IndexDef,
 ) -> Option<Vec<Option<Box<str>>>> {
     let mut keys = index.keys.clone();
-    inherit_key_collations(table, &mut keys);
+    inherit_into(&table.columns, &mut keys);
+    for (inherited, built) in keys.iter_mut().zip(&index.keys) {
+        if built.collation.is_none() && !is_index_key_collation(inherited.collation.as_deref()) {
+            inherited.collation = None;
+        }
+    }
     let changed = keys
         .iter()
         .zip(&index.keys)
         .any(|(inherited, built)| inherited.collation != built.collation);
     changed.then(|| keys.into_iter().map(|key| key.collation).collect())
+}
+
+thread_local! {
+    static V4_KEY_COLLATIONS: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
+}
+
+/// How many threads are inside [`with_v4_key_collations_for_tests`]; the
+/// DDL path reads this counter before it consults the thread-local.
+static V4_KEY_COLLATIONS_ARMED: std::sync::atomic::AtomicUsize =
+    std::sync::atomic::AtomicUsize::new(0);
+
+/// Run `f` with this thread creating index keys as RedlineDB 4.x did: with
+/// only the collation an index names, never its column's. Test-only: a
+/// database written inside `f` is what an upgrade from 4.x must bring in
+/// line.
+#[doc(hidden)]
+pub fn with_v4_key_collations_for_tests<R>(f: impl FnOnce() -> R) -> R {
+    use std::sync::atomic::Ordering;
+    struct Reset(bool);
+    impl Drop for Reset {
+        fn drop(&mut self) {
+            V4_KEY_COLLATIONS.with(|flag| flag.set(self.0));
+            V4_KEY_COLLATIONS_ARMED.fetch_sub(1, Ordering::SeqCst);
+        }
+    }
+    V4_KEY_COLLATIONS_ARMED.fetch_add(1, Ordering::SeqCst);
+    let _reset = Reset(V4_KEY_COLLATIONS.with(|flag| flag.replace(true)));
+    f()
+}
+
+fn v4_key_collations_active() -> bool {
+    V4_KEY_COLLATIONS_ARMED.load(std::sync::atomic::Ordering::Relaxed) != 0
+        && V4_KEY_COLLATIONS.with(std::cell::Cell::get)
 }
 
 fn unquote(name: &str) -> &str {

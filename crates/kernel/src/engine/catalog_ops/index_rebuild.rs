@@ -18,16 +18,21 @@ impl Engine {
     /// Catalog indexes whose B-tree was written at an older index-format
     /// epoch. They have no open handle; the SQL layer rebuilds them before it
     /// hands the database out.
+    ///
+    /// Also listed: an index with a B-tree whose keys should inherit a
+    /// NOCASE or RTRIM its columns declare (Q5-10); a rebuild gives it
+    /// those collations.
     pub fn indexes_needing_rebuild(&self) -> Result<Vec<CatalogIndexId>> {
         let snapshot = self.catalog.current();
         let current = current_index_version();
+        let recollate = self.indexes_needing_inherited_collation();
         let mut outdated = Vec::new();
         for index in &snapshot.indexes {
             let Some(meta_page_id) = index.meta_page_id else {
                 continue;
             };
             let version = BtreeIndex::format_version(&self.buffer, meta_page_id)?;
-            if version < current {
+            if version < current || recollate.contains(&index.index_id) {
                 outdated.push(index.index_id);
             }
         }
@@ -114,7 +119,11 @@ impl Engine {
                 "the kernel cannot rebuild an expression or partial index; rebuild it through the SQL layer",
             ));
         }
-        let mut next = (*snapshot).clone();
+        // Every rebuild also gives the keys the collations their columns
+        // declare (Q5-10), so an index built without them is brought in line.
+        let mut next =
+            crate::catalog::apply_inherited_index_key_collations((*snapshot).clone(), index_id)?;
+        let index = next.index_by_id(index_id).ok_or(Error::ObjectNotFound)?;
         // A fresh object id, never reused, keeps the old B-tree's WAL
         // records out of the new one during recovery.
         let physical_id = PhysicalIndexId(next.meta.next_object_id.0);

@@ -678,32 +678,22 @@ Draft lines for the v5.0.0 CHANGELOG. The integrator owns `CHANGELOG.md`.
   build then refuses it rather than dropping the collations); a database
   without collations keeps its format.
 
-### For the integrator (Q5-10, existing databases)
+### Existing databases (Q5-10)
 
 - An index created before this change on a column that declares NOCASE or
-  RTRIM (and names no COLLATE itself) keeps the BINARY keys it was built
-  with: format-7 catalogs load its key collation from its CREATE INDEX
-  text only. Its answers stay correct (the planner uses it only for
-  BINARY comparisons, and a declared-NOCASE comparison scans), but its
-  UNIQUE stays binary until it is rebuilt.
-- Hook: `redlinedb_kernel::catalog::collation::
-  index_keys_needing_inherited_collation(table, index)` returns
-  `Some(key collations)` for exactly such an index. To connect it to
-  lane/sql's rebuild at open (commit 4c5141381, `index_rebuild.rs` and
-  `Database::open`'s rebuild of older-epoch indexes): when choosing the
-  indexes to rebuild, also take every index for which the hook returns
-  `Some`, set `index.keys[i].collation` to the returned values in the
-  catalog entry the rebuild installs, and rebuild it from the heap with the
-  SQL key builder (`index_dml::build_index_key`, which applies the key
-  collation). A UNIQUE index whose rows now share a key must fail the
-  open naming the index, as lane/sql's rebuild already does for the
-  INTEGER/REAL key change; never keep one row. The rebuilt catalog is
-  saved as format 8, so the hook returns `None` for it afterwards.
-- Merge conflicts to expect with lane/sql: `exec/expr/coerce/binary.rs`
-  (the collation choice is now one call, `comparison_collation`),
-  `exec/index_access.rs` (each matcher takes the index key and checks
-  `index_collation::key_answers`), `exec/index_dml.rs`
-  (`apply_index_key_collation`) and `engine/catalog_ops/index.rs` (the
-  backfill normalizes with `catalog::collation::normalize_key_text`).
-- Not done here: `x IN (SELECT ...)` still compares BINARY, and views and
-  CTEs do not carry a column's collation to their output columns.
+  RTRIM (and naming no COLLATE itself) was built with BINARY keys. Opening
+  such a database now gives it the column's collation, in the same
+  transaction as the index-format upgrade that rebuilds indexes written
+  by RedlineDB 4.x: an index with a B-tree is rebuilt from the heap
+  (`Engine::indexes_needing_rebuild` lists it, and every rebuild, REINDEX
+  included, applies the inherited collations); a column or table UNIQUE /
+  PRIMARY KEY constraint, which has no B-tree, gets its catalog entry
+  changed after every row's key is checked. When two rows then share a key
+  of a UNIQUE index (such as 'x' and 'X' under NOCASE), the open fails
+  naming the index, nothing is committed, and the next open fails the same
+  way; no row is ever dropped. The catalog is then saved as format 8, so
+  a later open has nothing to upgrade. A column collation an index key
+  cannot use is not inherited; such an index keeps its BINARY keys.
+- `x IN (list)` and `x IN (SELECT ...)` compare under the collation of
+  `x` (after the comparison affinity). Not done: views and CTEs do not
+  carry a column's collation to their output columns.

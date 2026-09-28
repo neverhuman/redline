@@ -88,13 +88,27 @@ pub(crate) fn upgrade_stale_indexes(db: &Arc<Database>) -> Result<()> {
     let conn = db.connect();
     let engine = Arc::clone(conn.engine());
     let outdated = engine.indexes_needing_rebuild()?;
-    if outdated.is_empty() {
+    // Q5-10: UNIQUE and PRIMARY KEY constraints without a B-tree whose keys
+    // should inherit a declared collation (those with one are in
+    // `outdated`).
+    let recollate = super::reindex_collation::constraint_indexes_to_recollate(&engine);
+    if outdated.is_empty() && recollate.is_empty() {
         return Ok(());
     }
+    let before = engine.schema_snapshot();
     let mut tx = engine.begin(Isolation::Snapshot)?;
     for &index_id in &outdated {
         if let Err(err) = rebuild_index(&conn, &mut tx, index_id) {
-            let described = describe_upgrade_failure(&engine.schema_snapshot(), index_id, err);
+            let described = describe_upgrade_failure(&before, index_id, err);
+            engine.rollback(tx)?;
+            return Err(described);
+        }
+    }
+    for &index_id in &recollate {
+        if let Err(err) =
+            super::reindex_collation::recollate_constraint_index(&conn, &mut tx, index_id)
+        {
+            let described = describe_upgrade_failure(&before, index_id, err);
             engine.rollback(tx)?;
             return Err(described);
         }
@@ -127,11 +141,19 @@ fn describe_upgrade_failure(snapshot: &SchemaSnapshot, index_id: IndexId, err: E
     } else {
         ""
     };
+    let collation = if super::reindex_collation::inherits_collation(snapshot, index_id) {
+        format!(
+            ", or because {}",
+            super::reindex_collation::COLLATION_DUPLICATE
+        )
+    } else {
+        String::new()
+    };
     Error::ConstraintViolation(format!(
         "{detail}: cannot rebuild UNIQUE index {name} for index format {INDEX_VERSION}: \
          two rows have one key, because this format gives numerically equal INTEGER and \
-         REAL values (such as 1 and 1.0) one key{partial}; the database was not changed; \
-         delete the duplicate rows with RedlineDB 4.x, then open it again"
+         REAL values (such as 1 and 1.0) one key{partial}{collation}; the database was not \
+         changed; delete the duplicate rows with RedlineDB 4.x, then open it again"
     ))
 }
 

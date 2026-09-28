@@ -503,6 +503,41 @@ pub fn apply_set_index_meta_page_id(
     Ok(snapshot)
 }
 
+/// Give index `index_id` the key collations its columns declare
+/// ([`super::collation::index_keys_needing_inherited_collation`]); a no-op
+/// for an index that has them. The caller rebuilds or re-checks the index's
+/// entries under the new collations in the same transaction (Q5-10).
+pub fn apply_inherited_index_key_collations(
+    mut snapshot: SchemaSnapshot,
+    index_id: IndexId,
+) -> Result<SchemaSnapshot> {
+    let Some(slot) = snapshot
+        .tables
+        .iter_mut()
+        .find(|table| table.indexes.iter().any(|idx| idx.index_id == index_id))
+    else {
+        return Err(Error::ObjectNotFound);
+    };
+    let mut table = (**slot).clone();
+    let position = table
+        .indexes
+        .iter()
+        .position(|idx| idx.index_id == index_id)
+        .ok_or(Error::ObjectNotFound)?;
+    let Some(collations) =
+        super::collation::index_keys_needing_inherited_collation(&table, &table.indexes[position])
+    else {
+        return Ok(snapshot);
+    };
+    for (key, collation) in table.indexes[position].keys.iter_mut().zip(collations) {
+        key.collation = collation;
+    }
+    *slot = Arc::new(table);
+    snapshot.meta.schema_epoch = SchemaEpoch(snapshot.meta.schema_epoch.0.saturating_add(1));
+    snapshot.rebuild_indexes();
+    Ok(snapshot)
+}
+
 pub fn apply_drop_index(
     mut snapshot: SchemaSnapshot,
     spec: DropIndexSpec,

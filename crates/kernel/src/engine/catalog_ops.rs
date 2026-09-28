@@ -20,6 +20,8 @@ use super::{CommitOutcome, Engine, Txn};
 
 #[path = "catalog_ops/index.rs"]
 mod index;
+#[path = "catalog_ops/index_collation.rs"]
+mod index_collation;
 #[path = "catalog_ops/index_rebuild.rs"]
 mod index_rebuild;
 #[path = "catalog_ops/schema.rs"]

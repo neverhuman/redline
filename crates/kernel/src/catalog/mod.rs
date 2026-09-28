@@ -48,8 +48,9 @@ pub use names::{DbName, QualifiedName};
 pub use numeric::{int_real_cmp, sqlite_numeric_prefix, sqlite_text_is_true};
 pub use ops::{
     apply_alter_table, apply_create_index, apply_create_table, apply_drop_index, apply_drop_table,
-    apply_rename_index, apply_set_index_meta_page_id, legacy_alter_table_active_for_tests,
-    lookup_index, lookup_table, resolve_schema_id, set_legacy_alter_table,
+    apply_inherited_index_key_collations, apply_rename_index, apply_set_index_meta_page_id,
+    legacy_alter_table_active_for_tests, lookup_index, lookup_table, resolve_schema_id,
+    set_legacy_alter_table,
 };
 pub use record::{RecordRef, RecordScratch, encode_record};
 pub use schema::{
