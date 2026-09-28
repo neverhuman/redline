@@ -488,11 +488,11 @@ fn run(root: PathBuf) -> Result<PathBuf> {
         let raw_path = validated[name]["raw_path"]
             .as_str()
             .ok_or_else(|| anyhow!("suite {name} has no raw_path"))?;
-        let raw_failed = sqlite_known_failures::raw_failed_case_ids(&root.join(raw_path))?;
-        known_failures.check_suite(name, &suites[name], &raw_failed)?;
+        let raw_failures = sqlite_known_failures::raw_failures(&root.join(raw_path))?;
+        known_failures.check_suite(name, &suites[name], &raw_failures)?;
         validated.get_mut(name).expect("validated suite").insert(
             "failed_case_ids".to_owned(),
-            raw_failed.into_iter().collect(),
+            raw_failures.into_keys().collect(),
         );
     }
     // Published SQLite skips are exactly the committed scope policy's.

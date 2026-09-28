@@ -3,8 +3,11 @@
 //! `sqlite_parity` and `memory` publish their failures. A run is accepted
 //! only when each suite's failed cases, recomputed from its raw records,
 //! are exactly the cases `metadata/sqlite_parity/known-failures.json` lists
-//! for it, and the run recorded that same baseline file. An unlisted
-//! failure and a listed case that passed are both rejected.
+//! for it, each failing with exactly the verdict_reason the baseline lists
+//! as its stage, and the run recorded that same baseline file. An unlisted
+//! failure, a listed case that passed and a listed case that failed another
+//! way are all rejected: the runner writes its evidence before its own gate
+//! judges it, so evidence from a run that gate rejected must not pass here.
 
 use std::{
     collections::{BTreeMap, BTreeSet},
@@ -20,11 +23,20 @@ pub(crate) const BASELINE_PATH: &str = "metadata/sqlite_parity/known-failures.js
 const BASELINE_SCHEMA: &str = "redline-testing-sqlite-known-failures-v1";
 pub(crate) const BASELINE_SUITES: [&str; 2] = ["sqlite_parity", "memory"];
 
-/// The committed baseline: its hash and the case ids it lists per suite.
+/// The stages a baseline entry may list: target failures only.
+const BASELINE_STAGES: [&str; 2] = ["target_semantic_failure", "differential_mismatch"];
+
+/// Each failed case of a raw file and the verdict_reasons its failed
+/// records carry (`unrecorded` for a record with none).
+pub(crate) type RawFailures = BTreeMap<String, BTreeSet<String>>;
+
+/// The committed baseline: its hash, the case ids it lists per suite, and
+/// the stage of each.
 #[derive(Debug)]
 pub(crate) struct Baseline {
     pub(crate) sha256: String,
     pub(crate) by_suite: BTreeMap<String, BTreeSet<String>>,
+    stages: BTreeMap<(String, String), String>,
 }
 
 impl Baseline {
@@ -46,6 +58,7 @@ impl Baseline {
             .iter()
             .map(|suite| ((*suite).to_owned(), BTreeSet::new()))
             .collect::<BTreeMap<_, _>>();
+        let mut stages = BTreeMap::new();
         let failures = value["failures"]
             .as_array()
             .ok_or_else(|| anyhow!("failures is not an array"))?;
@@ -59,8 +72,14 @@ impl Baseline {
             };
             let suite = field("suite")?;
             let case_id = field("case_id")?;
-            for name in ["name", "stage", "reason", "owner"] {
+            for name in ["name", "reason", "owner"] {
                 field(name)?;
+            }
+            let stage = field("stage")?;
+            if !BASELINE_STAGES.contains(&stage) {
+                bail!(
+                    "{suite} case {case_id} lists stage {stage:?}, not one of {BASELINE_STAGES:?}"
+                );
             }
             let listed = by_suite
                 .get_mut(suite)
@@ -68,10 +87,12 @@ impl Baseline {
             if !listed.insert(case_id.to_owned()) {
                 bail!("{suite} case {case_id} is listed twice");
             }
+            stages.insert((suite.to_owned(), case_id.to_owned()), stage.to_owned());
         }
         Ok(Self {
             sha256: format!("{:x}", Sha256::digest(bytes)),
             by_suite,
+            stages,
         })
     }
 
@@ -97,13 +118,15 @@ impl Baseline {
     }
 
     /// The suite's failures, as its raw records show them, the runner's
-    /// summary declares them and the baseline lists them, are one set.
+    /// summary declares them and the baseline lists them, are one set, and
+    /// every failed record of a listed case carries the listed stage.
     pub(crate) fn check_suite(
         &self,
         suite: &str,
         entry: &Value,
-        raw_failed: &BTreeSet<String>,
+        raw_failures: &RawFailures,
     ) -> Result<()> {
+        let raw_failed = &raw_failures.keys().cloned().collect::<BTreeSet<_>>();
         let listed = self.listed(suite);
         let declared = id_set(entry, "failed_case_ids")?;
         let recorded_listed = id_set(entry, "known_failure_ids")?;
@@ -133,6 +156,17 @@ impl Baseline {
                 "suite {suite} failures differ from {BASELINE_PATH}: failed but not listed {unlisted:?}; listed but not failed {passing:?} (remove those from the baseline)"
             );
         }
+        for (case_id, reasons) in raw_failures {
+            let stage = self
+                .stages
+                .get(&(suite.to_owned(), case_id.clone()))
+                .ok_or_else(|| anyhow!("suite {suite} case {case_id} has no listed stage"))?;
+            if reasons.len() != 1 || !reasons.contains(stage) {
+                bail!(
+                    "suite {suite} case {case_id} is listed as {stage}, but its raw records fail as {reasons:?}"
+                );
+            }
+        }
         Ok(())
     }
 
@@ -160,10 +194,11 @@ fn id_set(entry: &Value, key: &str) -> Result<BTreeSet<String>> {
         .collect()
 }
 
-/// The case ids with a failed record in a raw JSONL file.
-pub(crate) fn raw_failed_case_ids(path: &Path) -> Result<BTreeSet<String>> {
+/// The case ids with a failed record in a raw JSONL file, each with the
+/// verdict_reasons of its failed records.
+pub(crate) fn raw_failures(path: &Path) -> Result<RawFailures> {
     let text = fs::read_to_string(path).with_context(|| format!("read {}", path.display()))?;
-    let mut failed = BTreeSet::new();
+    let mut failed = RawFailures::new();
     for (index, line) in text.lines().enumerate() {
         if line.trim().is_empty() {
             continue;
@@ -174,7 +209,11 @@ pub(crate) fn raw_failed_case_ids(path: &Path) -> Result<BTreeSet<String>> {
             let case_id = record["case_id"]
                 .as_str()
                 .ok_or_else(|| anyhow!("{} line {} has no case_id", path.display(), index + 1))?;
-            failed.insert(case_id.to_owned());
+            let reason = record["verdict_reason"].as_str().unwrap_or("unrecorded");
+            failed
+                .entry(case_id.to_owned())
+                .or_default()
+                .insert(reason.to_owned());
         }
     }
     Ok(failed)
@@ -205,10 +244,26 @@ mod tests {
         ids.iter().map(|id| (*id).to_owned()).collect()
     }
 
+    /// Raw failures, each failing with the given verdict_reasons.
+    fn failures(cases: &[(&str, &[&str])]) -> RawFailures {
+        cases
+            .iter()
+            .map(|(case_id, reasons)| ((*case_id).to_owned(), ids(reasons)))
+            .collect()
+    }
+
+    /// Raw failures, each a target semantic failure (the fixture stage).
+    fn failed(case_ids: &[&str]) -> RawFailures {
+        case_ids
+            .iter()
+            .map(|case_id| ((*case_id).to_owned(), ids(&["target_semantic_failure"])))
+            .collect()
+    }
+
     #[test]
     fn sqlite_failures_must_equal_the_known_failures_baseline() {
         let known = baseline(&[("sqlite_parity", "10547"), ("memory", "10547")]);
-        let raw = ids(&["10547"]);
+        let raw = failed(&["10547"]);
         known
             .check_suite("sqlite_parity", &entry(&["10547"], &["10547"]), &raw)
             .expect("listed failure");
@@ -216,7 +271,7 @@ mod tests {
             .check_suite("memory", &entry(&["10547"], &["10547"]), &raw)
             .expect("listed failure");
         // A failure the baseline does not list.
-        let raw = ids(&["10547", "00076"]);
+        let raw = failed(&["10547", "00076"]);
         let error = known
             .check_suite(
                 "sqlite_parity",
@@ -230,7 +285,7 @@ mod tests {
         );
         // A listed case that passed.
         let error = known
-            .check_suite("sqlite_parity", &entry(&[], &["10547"]), &ids(&[]))
+            .check_suite("sqlite_parity", &entry(&[], &["10547"]), &failed(&[]))
             .expect_err("listed pass");
         assert!(
             format!("{error:#}").contains("remove those from the baseline"),
@@ -243,7 +298,11 @@ mod tests {
         let known = baseline(&[("sqlite_parity", "10547")]);
         // The summary hides a failure the raw records show.
         let error = known
-            .check_suite("sqlite_parity", &entry(&[], &["10547"]), &ids(&["10547"]))
+            .check_suite(
+                "sqlite_parity",
+                &entry(&[], &["10547"]),
+                &failed(&["10547"]),
+            )
             .expect_err("hidden failure");
         assert!(
             format!("{error:#}").contains("raw records fail 1"),
@@ -251,7 +310,11 @@ mod tests {
         );
         // The run was gated with a different list than the committed one.
         let error = known
-            .check_suite("sqlite_parity", &entry(&["10547"], &[]), &ids(&["10547"]))
+            .check_suite(
+                "sqlite_parity",
+                &entry(&["10547"], &[]),
+                &failed(&["10547"]),
+            )
             .expect_err("different baseline");
         assert!(
             format!("{error:#}").contains("was gated with known failures"),
@@ -260,7 +323,7 @@ mod tests {
         // No declared lists at all.
         assert!(
             known
-                .check_suite("sqlite_parity", &json!({"failed": 1}), &ids(&["10547"]))
+                .check_suite("sqlite_parity", &json!({"failed": 1}), &failed(&["10547"]))
                 .is_err()
         );
     }
@@ -283,9 +346,12 @@ mod tests {
             json!([{"suite": "rql_phase1", "case_id": "1", "name": "N", "stage": "s", "reason": "r", "owner": "o"}]),
             json!([{"suite": "memory", "case_id": "1", "name": "N", "stage": "s", "reason": "", "owner": "o"}]),
             json!([
-                {"suite": "memory", "case_id": "1", "name": "N", "stage": "s", "reason": "r", "owner": "o"},
-                {"suite": "memory", "case_id": "1", "name": "N", "stage": "s", "reason": "r", "owner": "o"}
+                {"suite": "memory", "case_id": "1", "name": "N", "stage": "differential_mismatch", "reason": "r", "owner": "o"},
+                {"suite": "memory", "case_id": "1", "name": "N", "stage": "differential_mismatch", "reason": "r", "owner": "o"}
             ]),
+            // A reference contract failure is a corpus defect, never a
+            // baseline entry.
+            json!([{"suite": "memory", "case_id": "1", "name": "N", "stage": "reference_contract_failure", "reason": "r", "owner": "o"}]),
         ] {
             let text = json!({"schema_version": BASELINE_SCHEMA, "failures": failures});
             assert!(
@@ -306,19 +372,61 @@ mod tests {
     }
 
     #[test]
+    fn a_listed_failure_must_fail_at_its_listed_stage() {
+        // 10547 is listed as target_semantic_failure. A run that fails it
+        // another way was rejected by the runner's gate, but its evidence
+        // was written first, so the processor must reject it too.
+        let known = baseline(&[("sqlite_parity", "10547")]);
+        let entry = entry(&["10547"], &["10547"]);
+        known
+            .check_suite(
+                "sqlite_parity",
+                &entry,
+                &failures(&[("10547", &["target_semantic_failure"])]),
+            )
+            .expect("listed stage");
+        for reasons in [
+            &["reference_contract_failure"][..],
+            &["differential_mismatch"],
+            &["target_semantic_failure", "execution_failure"],
+            &["unrecorded"],
+        ] {
+            let error = known
+                .check_suite("sqlite_parity", &entry, &failures(&[("10547", reasons)]))
+                .expect_err("another stage");
+            assert!(
+                format!("{error:#}").contains(
+                    "suite sqlite_parity case 10547 is listed as target_semantic_failure, but its raw records fail as"
+                ),
+                "{reasons:?}: {error:#}"
+            );
+        }
+    }
+
+    #[test]
     fn raw_failures_come_from_failed_records() {
         let dir = tempfile::tempdir().expect("tempdir");
         let path = dir.path().join("raw.jsonl");
         fs::write(
             &path,
             concat!(
-                "{\"case_id\":\"00001\",\"status\":\"passed\"}\n",
-                "{\"case_id\":\"00002\",\"status\":\"failed\"}\n",
-                "{\"case_id\":\"00002\",\"status\":\"passed\"}\n",
-                "{\"case_id\":\"00003\",\"status\":\"skipped\"}\n",
+                "{\"case_id\":\"00001\",\"status\":\"passed\",\"verdict_reason\":\"passed\"}\n",
+                "{\"case_id\":\"00002\",\"status\":\"failed\",\"verdict_reason\":\"differential_mismatch\"}\n",
+                "{\"case_id\":\"00002\",\"status\":\"passed\",\"verdict_reason\":\"passed\"}\n",
+                "{\"case_id\":\"00003\",\"status\":\"skipped\",\"verdict_reason\":\"skipped\"}\n",
+                "{\"case_id\":\"00004\",\"status\":\"failed\",\"verdict_reason\":\"target_semantic_failure\"}\n",
+                "{\"case_id\":\"00004\",\"status\":\"failed\",\"verdict_reason\":\"execution_failure\"}\n",
+                "{\"case_id\":\"00005\",\"status\":\"failed\"}\n",
             ),
         )
         .expect("write raw");
-        assert_eq!(raw_failed_case_ids(&path).expect("raw"), ids(&["00002"]));
+        assert_eq!(
+            raw_failures(&path).expect("raw"),
+            failures(&[
+                ("00002", &["differential_mismatch"]),
+                ("00004", &["execution_failure", "target_semantic_failure"]),
+                ("00005", &["unrecorded"]),
+            ])
+        );
     }
 }
