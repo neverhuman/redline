@@ -132,3 +132,30 @@ index-format epoch below), so such an index is rebuilt at the first open.
 - New error variant `Error::UnsupportedCapability { feature, detail }`
   (`unsupported capability: {feature}: {detail}`); the facade maps it to
   `ErrorCode::Unsupported`.
+
+## TEXT operands follow SQLite unless an expression says Postgres (Q5-05)
+
+- `||`, `-`, `+`, `*`, `/` and `%` read TEXT operands as jsonb, dates, exact
+  decimals or trigram strings only when the dialect is Postgres or an
+  operand is a Postgres value: a `::` cast to `numeric`, `decimal`, `date`,
+  `timestamp`, `timestamptz`, `interval`, `json` or `jsonb`, a jsonb-returning
+  function (`to_jsonb`, `jsonb_build_object`, `jsonb_set`, ...), or an
+  operator over such an operand. Date subtraction needs a Postgres value on
+  both sides. In the default SQLite dialect `'[1]'||'[2]'` is now `[1][2]`
+  (was `[1, 2]`), `'2025-01-02'-'2025-01-01'` is 0 (was `1 day`),
+  `'[1,2]'-0` is 0 (was `[2]`), `'7'%'4'` is 3 (was 0) and `'abc'%'abd'` is
+  NULL (was 1). `0.1::numeric + 0.2::numeric`, `'[1]'::jsonb || '[2]'` and
+  `'2025-01-02'::timestamp - '2025-01-01'::timestamp` keep their Postgres
+  answers; the constant folder no longer folds those casts away.
+- Arithmetic reads TEXT and BLOB operands the way SQLite does
+  (`computeNumericType`): `'1'+2` is INTEGER 3 (was TEXT), `'7'/'2'` is 3
+  (was 3.5), `'1.5'*2` is REAL 3.0, `'1abc'+1` is 2, `'1e2'+1` is 101.0 and
+  `'abc'+1` is 1 (the last three failed with `datatype mismatch`); unary
+  minus reads them the same way (`-'5'` is -5). The Postgres dialect still
+  refuses non-numeric TEXT in arithmetic.
+- Standard `CAST(x AS type)` in the SQLite dialect follows SQLite's type
+  affinity rules: `DATE`, `TIMESTAMP`, `BOOLEAN`, `UUID`, `JSON` and `MONEY`
+  are NUMERIC casts (`CAST('2025-01-02' AS DATE)` is INTEGER 2025), and
+  `CAST(... AS NUMERIC)` follows `sqlite3VdbeMemNumerify` (`'1.0'` is
+  INTEGER 1, `'inf'` and `'nan'` are 0). `::` casts and the Postgres dialect
+  keep the Postgres readings.

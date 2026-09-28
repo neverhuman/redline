@@ -730,20 +730,41 @@ fn jsonb_hash_minus_path_delete() {
 #[test]
 fn jsonb_concat_object_and_array() {
     let (_d, c) = open();
+    // Q5-05: the jsonb merge needs a jsonb operand; `::jsonb` gives one.
     assert_eq!(
-        q1(&c, "SELECT '{\"a\":1}' || '{\"b\":2}'"),
+        q1(&c, "SELECT '{\"a\":1}'::jsonb || '{\"b\":2}'"),
         text("{\"a\": 1, \"b\": 2}")
     );
-    assert_eq!(q1(&c, "SELECT '[1,2]' || '[3,4]'"), text("[1, 2, 3, 4]"));
+    assert_eq!(
+        q1(&c, "SELECT '[1,2]'::jsonb || '[3,4]'::jsonb"),
+        text("[1, 2, 3, 4]")
+    );
+    assert_eq!(
+        q1(&c, "SELECT jsonb_build_array(1) || '[2]'"),
+        text("[1, 2]")
+    );
+    // Plain SQLite TEXT concatenates as text, whatever it looks like.
+    assert_eq!(
+        q1(&c, "SELECT '{\"a\":1}' || '{\"b\":2}'"),
+        text("{\"a\":1}{\"b\":2}")
+    );
+    assert_eq!(q1(&c, "SELECT '[1,2]' || '[3,4]'"), text("[1,2][3,4]"));
 }
 
 #[test]
 fn jsonb_minus_text_removes_object_key() {
     let (_d, c) = open();
+    // Q5-05: `jsonb - text` needs a jsonb operand.
     assert_eq!(
-        q1(&c, "SELECT '{\"a\":1,\"b\":2}' - 'a'"),
+        q1(&c, "SELECT '{\"a\":1,\"b\":2}'::jsonb - 'a'"),
         text("{\"b\": 2}")
     );
+    // Without one, `-` is SQLite arithmetic: the text reads as 0.
+    assert_eq!(
+        q1(&c, "SELECT '{\"a\":1,\"b\":2}' - 'a'"),
+        SqlValue::Integer(0)
+    );
+    assert_eq!(q1(&c, "SELECT '[1,2]' - 0"), SqlValue::Integer(0));
 }
 
 #[test]

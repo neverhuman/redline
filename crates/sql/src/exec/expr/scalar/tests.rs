@@ -90,12 +90,24 @@ fn key_values_equal_respects_length_and_values() {
 }
 
 #[test]
-fn negate_propagates_null_and_rejects_text() {
+fn negate_propagates_null_and_reads_text_as_sqlite_does() {
     assert!(matches!(negate(SqlValue::Null).unwrap(), SqlValue::Null));
     assert!(matches!(
         negate(SqlValue::Integer(3)).unwrap(),
         SqlValue::Integer(-3)
     ));
+    // Q5-05: SQLite computes `-x` as `0 - x`, reading TEXT as a number:
+    // `-'x'` is 0 and `-'5'` is -5. The Postgres dialect refuses TEXT.
+    assert_eq!(
+        negate(SqlValue::Text(Arc::from("x"))).unwrap(),
+        SqlValue::Integer(0)
+    );
+    assert_eq!(
+        negate(SqlValue::Text(Arc::from("5"))).unwrap(),
+        SqlValue::Integer(-5)
+    );
+    let _postgres =
+        crate::value::DialectScope::for_dialect(crate::connection::Dialect::PostgresSubset);
     assert!(negate(SqlValue::Text(Arc::from("x"))).is_err());
 }
 

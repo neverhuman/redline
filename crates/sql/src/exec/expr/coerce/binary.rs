@@ -24,7 +24,12 @@ pub(crate) fn eval_binary(
     if matches!(op, BinaryOperator::Modulo) {
         let left_value = eval_scalar(left, row, bindings)?;
         let right_value = eval_scalar(right, row, bindings)?;
-        if let Some(flag) = crate::pg_search::text_similarity_match(&left_value, &right_value) {
+        // Q5-05: `text % text` is pg_trgm similarity only for Postgres
+        // values; in SQLite `'7' % '4'` is 3.
+        if both_text(&left_value, &right_value)
+            && pg_semantics(left, right)
+            && let Some(flag) = crate::pg_search::text_similarity_match(&left_value, &right_value)
+        {
             return Ok(flag);
         }
         return crate::numeric::arith(ArithOp::Rem, left_value, right_value);
@@ -65,8 +70,11 @@ pub(crate) fn eval_binary(
             (Some(false), Some(false)) => crate::value::postgres_bool(false),
             _ => SqlValue::Null,
         },
+        // Q5-05: the jsonb, date and exact-decimal readings of TEXT operands
+        // need Postgres provenance (`pg_semantics`); the check runs only
+        // when an operand is TEXT, so numeric arithmetic never pays for it.
         BinaryOperator::Plus => {
-            match try_pg_decimal_arith(&left_value, &right_value, PgDecimalOp::Add) {
+            match pg_decimal(left, right, &left_value, &right_value, PgDecimalOp::Add) {
                 Some(v) => v,
                 None => {
                     if let Some(v) = try_float4_add(&left_value, &right_value) {
@@ -77,27 +85,41 @@ pub(crate) fn eval_binary(
                 }
             }
         }
-        BinaryOperator::Minus => match try_json_delete(&left_value, &right_value) {
-            Some(v) => v,
-            None => {
-                if let Some(v) = try_timestamp_diff(&left_value, &right_value) {
-                    v
+        BinaryOperator::Minus => {
+            let json_delete =
+                if matches!(left_value, SqlValue::Text(_)) && pg_semantics(left, right) {
+                    try_json_delete(&left_value, &right_value)
                 } else {
-                    match try_pg_decimal_arith(&left_value, &right_value, PgDecimalOp::Sub) {
-                        Some(v) => v,
-                        None => crate::numeric::arith(ArithOp::Sub, left_value, right_value)?,
+                    None
+                };
+            match json_delete {
+                Some(v) => v,
+                None => {
+                    let diff =
+                        if both_text(&left_value, &right_value) && pg_semantics_both(left, right) {
+                            try_timestamp_diff(&left_value, &right_value)
+                        } else {
+                            None
+                        };
+                    if let Some(v) = diff {
+                        v
+                    } else {
+                        match pg_decimal(left, right, &left_value, &right_value, PgDecimalOp::Sub) {
+                            Some(v) => v,
+                            None => crate::numeric::arith(ArithOp::Sub, left_value, right_value)?,
+                        }
                     }
                 }
             }
-        },
+        }
         BinaryOperator::Multiply => {
-            match try_pg_decimal_arith(&left_value, &right_value, PgDecimalOp::Mul) {
+            match pg_decimal(left, right, &left_value, &right_value, PgDecimalOp::Mul) {
                 Some(v) => v,
                 None => crate::numeric::arith(ArithOp::Mul, left_value, right_value)?,
             }
         }
         BinaryOperator::Divide => {
-            match try_pg_decimal_arith(&left_value, &right_value, PgDecimalOp::Div) {
+            match pg_decimal(left, right, &left_value, &right_value, PgDecimalOp::Div) {
                 Some(v) => v,
                 None => crate::numeric::arith(ArithOp::Div, left_value, right_value)?,
             }
@@ -128,7 +150,13 @@ pub(crate) fn eval_binary(
         BinaryOperator::StringConcat => {
             if matches!(left_value, SqlValue::Null) || matches!(right_value, SqlValue::Null) {
                 SqlValue::Null
-            } else if let Some(merged) = try_json_concat(&left_value, &right_value) {
+            } else if let Some(merged) =
+                if both_text(&left_value, &right_value) && pg_semantics(left, right) {
+                    try_json_concat(&left_value, &right_value)
+                } else {
+                    None
+                }
+            {
                 merged
             } else {
                 SqlValue::Text(Arc::from(format!(
@@ -188,6 +216,27 @@ pub(crate) fn eval_binary(
             )));
         }
     })
+}
+
+fn both_text(left: &SqlValue, right: &SqlValue) -> bool {
+    matches!((left, right), (SqlValue::Text(_), SqlValue::Text(_)))
+}
+
+/// `try_pg_decimal_arith` when an operand is TEXT and the operator has
+/// Postgres semantics.
+fn pg_decimal(
+    left: &Expr,
+    right: &Expr,
+    left_value: &SqlValue,
+    right_value: &SqlValue,
+    op: PgDecimalOp,
+) -> Option<SqlValue> {
+    let any_text =
+        matches!(left_value, SqlValue::Text(_)) || matches!(right_value, SqlValue::Text(_));
+    if !any_text || !pg_semantics(left, right) {
+        return None;
+    }
+    try_pg_decimal_arith(left_value, right_value, op)
 }
 
 fn match_result(

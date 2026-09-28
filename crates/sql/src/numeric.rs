@@ -24,6 +24,8 @@ pub(crate) use redlinedb_kernel::catalog::{int_real_cmp, sqlite_text_is_true};
 #[path = "numeric/sum_acc.rs"]
 mod sum_acc;
 pub(crate) use sum_acc::SumAcc;
+#[path = "numeric/text_number.rs"]
+pub(crate) mod text_number;
 
 /// A binary arithmetic operator.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -153,10 +155,30 @@ fn real_value(op: ArithOp, a: f64, b: f64) -> SqlValue {
 }
 
 /// Binary arithmetic over two SQL values. NULL propagates; INTEGER pairs
-/// use [`int_arith`]; any REAL operand switches to REAL arithmetic. Two
-/// TEXT operands are read as REAL numbers (unchanged behaviour); other
-/// TEXT/BLOB mixes are a datatype mismatch.
+/// use [`int_arith`]; any REAL operand switches to REAL arithmetic.
+///
+/// A TEXT or BLOB operand is read the way SQLite reads it
+/// ([`text_number::arith_operand`]): `'1' + 2` is INTEGER 3, `'1abc' + 1`
+/// is 2, `'1e2' + 1` is REAL 101.0 and `'abc' + 1` is 1. Under the Postgres
+/// dialect two TEXT operands are read as REAL and any other TEXT/BLOB mix is
+/// a datatype mismatch, as before (Postgres refuses `'abc' + 1`).
 pub(crate) fn arith(op: ArithOp, left: SqlValue, right: SqlValue) -> Result<SqlValue> {
+    if !crate::value::postgres_result_dialect() {
+        return arith_numbers(op, sqlite_operand(left), sqlite_operand(right));
+    }
+    arith_numbers(op, left, right)
+}
+
+/// A TEXT or BLOB operand as the number SQLite's arithmetic reads it.
+fn sqlite_operand(value: SqlValue) -> SqlValue {
+    match value {
+        SqlValue::Text(text) => text_number::arith_operand(text.as_bytes()),
+        SqlValue::Blob(bytes) => text_number::arith_operand(&bytes),
+        other => other,
+    }
+}
+
+fn arith_numbers(op: ArithOp, left: SqlValue, right: SqlValue) -> Result<SqlValue> {
     match (left, right) {
         (SqlValue::Null, _) | (_, SqlValue::Null) => Ok(SqlValue::Null),
         (SqlValue::Integer(a), SqlValue::Integer(b)) => int_arith(op, a, b),
@@ -178,8 +200,15 @@ pub(crate) fn arith(op: ArithOp, left: SqlValue, right: SqlValue) -> Result<SqlV
     }
 }
 
-/// Unary minus: `-MIN` does not fit, so SQLite answers REAL 2^63.
+/// Unary minus: `-MIN` does not fit, so SQLite answers REAL 2^63. SQLite
+/// computes `-x` as `0 - x`, so a TEXT or BLOB operand is read as a number
+/// first (`-'5'` is -5, `-'abc'` is 0); the Postgres dialect still refuses it.
 pub(crate) fn negate(value: SqlValue) -> Result<SqlValue> {
+    let value = if crate::value::postgres_result_dialect() {
+        value
+    } else {
+        sqlite_operand(value)
+    };
     match value {
         SqlValue::Integer(v) => match v.checked_neg() {
             Some(n) => Ok(SqlValue::Integer(n)),

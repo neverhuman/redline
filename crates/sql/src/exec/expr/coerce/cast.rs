@@ -34,6 +34,11 @@ pub(crate) fn cast_value(
     // now use `type_name_contains_ci`, and exact matches use
     // `.eq_ignore_ascii_case(...)`.
     let type_name = data_type.to_string();
+    if !matches!(kind, sqlparser::ast::CastKind::DoubleColon)
+        && !crate::value::postgres_result_dialect()
+    {
+        return Ok(sqlite_cast(value, &type_name));
+    }
     if let Some(casted) = crate::pg_type::cast_registered(&type_name, &value)? {
         return Ok(casted);
     }
@@ -146,6 +151,41 @@ pub(crate) fn cast_value(
     }
 
     Ok(value)
+}
+
+/// Q5-05: `CAST(x AS type)` in the SQLite dialect is SQLite's cast
+/// (`sqlite3VdbeMemCast`). The type name picks an affinity by SQLite's rules
+/// (`sqlite3AffinityType`: INT, then CHAR/CLOB/TEXT, then BLOB, then
+/// REAL/FLOA/DOUB, else NUMERIC), so `DATE`, `TIMESTAMP`, `BOOLEAN`, `UUID`,
+/// `JSON` and `MONEY` are NUMERIC casts: `CAST('2025-01-02' AS DATE)` is
+/// INTEGER 2025, as in SQLite. The Postgres readings of those type names
+/// stay available through `::` and under the Postgres dialect.
+fn sqlite_cast(value: SqlValue, type_name: &str) -> SqlValue {
+    use redlinedb_kernel::catalog::Affinity;
+    match redlinedb_kernel::catalog::derive_affinity(Some(type_name)) {
+        Affinity::Integer => SqlValue::Integer(cast_to_integer(&value)),
+        Affinity::Real => SqlValue::Real(cast_to_real(&value)),
+        Affinity::Text => match value {
+            SqlValue::Integer(v) => SqlValue::Text(Arc::from(v.to_string())),
+            SqlValue::Real(v) => SqlValue::Text(Arc::from(
+                crate::exec::expr::scalar::value::format_real_sqlite(v),
+            )),
+            SqlValue::Blob(v) => {
+                SqlValue::Text(Arc::from(String::from_utf8_lossy(&v).into_owned()))
+            }
+            other => other,
+        },
+        Affinity::Blob => match value {
+            SqlValue::Text(s) => SqlValue::Blob(Arc::from(s.as_bytes())),
+            SqlValue::Blob(_) | SqlValue::Null => value,
+            other => SqlValue::Blob(Arc::from(value_to_string(&other).into_bytes())),
+        },
+        Affinity::Numeric => match value {
+            SqlValue::Text(text) => crate::numeric::text_number::numerify(text.as_bytes()),
+            SqlValue::Blob(bytes) => crate::numeric::text_number::numerify(&bytes),
+            other => other,
+        },
+    }
 }
 
 fn cast_to_money(value: &SqlValue) -> SqlValue {

@@ -991,9 +991,17 @@ fn expr_is_foldable(expr: &Expr) -> bool {
         Expr::BinaryOp { left, right, .. } => expr_is_foldable(left) && expr_is_foldable(right),
         Expr::Collate { .. } => false,
         Expr::Cast {
-            expr, data_type, ..
+            kind,
+            expr,
+            data_type,
+            ..
         } => {
-            if crate::pg_type::is_registered(&data_type.to_string()) {
+            // Q5-05: a `::numeric`/`::date`/`::jsonb` cast is what gives the
+            // enclosing operator its Postgres meaning; a folded literal
+            // would be plain TEXT.
+            if crate::pg_type::is_registered(&data_type.to_string())
+                || crate::exec::expr::is_pg_value_cast(kind, data_type)
+            {
                 false
             } else {
                 expr_is_foldable(expr)
