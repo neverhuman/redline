@@ -35,6 +35,8 @@ mod generators;
 mod pinned_sqlite;
 mod repo_ops;
 mod sqlite_runner;
+#[cfg(all(test, unix))]
+mod test_support;
 
 use std::fs;
 use std::path::{Path, PathBuf};

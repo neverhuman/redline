@@ -113,44 +113,30 @@ fn verify(path: &Path) -> Result<PinnedSqlite> {
 #[cfg(test)]
 mod tests {
     use std::fs;
-    use std::os::unix::fs::PermissionsExt;
     use std::path::{Path, PathBuf};
-    use std::sync::atomic::{AtomicU64, Ordering};
 
     use super::{PINNED_SQLITE_VERSION, STAMP_FILE, default_path, resolve};
+    use crate::test_support::{ScratchDir, write_executable};
 
-    static NEXT: AtomicU64 = AtomicU64::new(0);
-
-    struct Fixture(PathBuf);
+    struct Fixture(ScratchDir);
 
     impl Fixture {
         fn new() -> Self {
-            let path = std::env::temp_dir().join(format!(
-                "xtask-pinned-sqlite-{}-{}",
-                std::process::id(),
-                NEXT.fetch_add(1, Ordering::Relaxed)
-            ));
-            fs::create_dir_all(&path).unwrap();
-            Self(path)
+            Self(ScratchDir::new("xtask-pinned-sqlite"))
         }
-    }
 
-    impl Drop for Fixture {
-        fn drop(&mut self) {
-            let _ = fs::remove_dir_all(&self.0);
+        fn root(&self) -> &Path {
+            self.0.path()
         }
     }
 
     /// A fake `sqlite3` under `<prefix>/bin` that prints `version`.
     fn fake_shell(prefix: &Path, version: &str, stamp: Option<&str>) -> PathBuf {
         let bin = prefix.join("bin/sqlite3");
-        fs::create_dir_all(bin.parent().unwrap()).unwrap();
-        fs::write(
+        write_executable(
             &bin,
-            format!("#!/bin/sh\necho '{version} 2026-05-05 fake'\n"),
-        )
-        .unwrap();
-        fs::set_permissions(&bin, fs::Permissions::from_mode(0o755)).unwrap();
+            &format!("#!/bin/sh\necho '{version} 2026-05-05 fake'\n"),
+        );
         if let Some(stamp) = stamp {
             fs::write(prefix.join(STAMP_FILE), stamp).unwrap();
         }
@@ -160,7 +146,7 @@ mod tests {
     #[test]
     fn default_is_the_reference_build_of_the_enclosing_repository() {
         let fixture = Fixture::new();
-        let root = &fixture.0;
+        let root = fixture.root();
         fs::create_dir_all(root.join("scripts/sqlite")).unwrap();
         fs::write(root.join("scripts/sqlite/build-reference.sh"), "").unwrap();
         let subrepo = root.join("subrepos/redline-testing");
@@ -178,15 +164,21 @@ mod tests {
             PathBuf::from("/opt/ref/bin/sqlite3")
         );
         // Outside a RedlineDB checkout there is no default: never PATH.
-        let lone = Fixture::new();
-        assert!(default_path(&lone.0, None).is_err());
+        // (The scratch fixtures live under this checkout's target
+        // directory, so this one is a plain temporary directory; it holds
+        // no executable.)
+        let lone = std::env::temp_dir().join(format!("xtask-pinned-lone-{}", std::process::id()));
+        fs::create_dir_all(&lone).unwrap();
+        let outside = default_path(&lone, None);
+        let _ = fs::remove_dir_all(&lone);
+        assert!(outside.is_err());
     }
 
     #[test]
     fn stamped_pinned_shell_is_accepted() {
         let fixture = Fixture::new();
-        let bin = fake_shell(&fixture.0, PINNED_SQLITE_VERSION, Some("abc\n-O2\n"));
-        let pinned = resolve(&fixture.0, Some(&bin)).unwrap();
+        let bin = fake_shell(fixture.root(), PINNED_SQLITE_VERSION, Some("abc\n-O2\n"));
+        let pinned = resolve(fixture.root(), Some(&bin)).unwrap();
         assert_eq!(pinned.stamp, "abc\n-O2");
         assert!(pinned.version.starts_with(PINNED_SQLITE_VERSION));
     }
@@ -194,18 +186,18 @@ mod tests {
     #[test]
     fn unstamped_or_other_release_shells_are_refused() {
         let fixture = Fixture::new();
-        let unstamped = fake_shell(&fixture.0.join("plain"), PINNED_SQLITE_VERSION, None);
-        let error = resolve(&fixture.0, Some(&unstamped)).unwrap_err();
+        let unstamped = fake_shell(&fixture.root().join("plain"), PINNED_SQLITE_VERSION, None);
+        let error = resolve(fixture.root(), Some(&unstamped)).unwrap_err();
         assert!(
             error.to_string().contains("refusing unstamped"),
             "{error:#}"
         );
 
-        let system = fake_shell(&fixture.0.join("system"), "3.45.1", Some("abc\n"));
-        let error = resolve(&fixture.0, Some(&system)).unwrap_err();
+        let system = fake_shell(&fixture.root().join("system"), "3.45.1", Some("abc\n"));
+        let error = resolve(fixture.root(), Some(&system)).unwrap_err();
         assert!(error.to_string().contains("3.45.1"), "{error:#}");
 
-        let missing = fixture.0.join("nowhere/bin/sqlite3");
-        assert!(resolve(&fixture.0, Some(&missing)).is_err());
+        let missing = fixture.root().join("nowhere/bin/sqlite3");
+        assert!(resolve(fixture.root(), Some(&missing)).is_err());
     }
 }
