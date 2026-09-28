@@ -580,6 +580,10 @@ pub enum SelectSource {
         alias: Option<Arc<str>>,
         columns: Arc<[String]>,
         rows: Arc<[Vec<crate::value::SqlValue>]>,
+        /// Each column's comparison affinity when the source knows it (a
+        /// view's defining expressions, VALUES literals); `None` reads every
+        /// column as BLOB (`expr::affinity::synthetic_column_affinity`).
+        affinities: Option<crate::exec::cte::registry::ColumnAffinities>,
     },
     Empty,
 }

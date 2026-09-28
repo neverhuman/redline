@@ -447,10 +447,15 @@ fn bind_derived_table(
         .as_ref()
         .map(|alias| alias.name.value.clone())
         .unwrap_or_else(|| "__derived".to_owned());
+    let affinities = crate::exec::view::defining_affinities(&template, columns.len());
     let def = crate::exec::cte::build_cte_def_from_rows(&name, columns, rows);
     let table = def
         .table_def
         .ok_or_else(|| Error::UnsupportedSql("derived table materialization failed".to_owned()))?;
+    // A subquery column has the affinity of its defining expression.
+    if let Some(affinities) = affinities {
+        crate::exec::cte::registry::register_column_affinities(table.relation_id, affinities);
+    }
     Ok(BoundTable {
         table,
         alias: alias.map(|alias| Arc::from(alias.name.value)),
@@ -686,6 +691,7 @@ fn sqlite_stat1_source(
         alias,
         columns: Arc::<[String]>::from(vec!["tbl".to_owned(), "idx".to_owned(), "stat".to_owned()]),
         rows: Arc::from(sqlite_stat1_rows(conn, schema)),
+        affinities: None,
     }
 }
 
@@ -948,6 +954,8 @@ fn try_table_valued_source(
         alias: alias_arc,
         columns: Arc::from(result.columns),
         rows: Arc::from(result.rows),
+        // A table-valued function's columns are declared without a type.
+        affinities: None,
     }))
 }
 

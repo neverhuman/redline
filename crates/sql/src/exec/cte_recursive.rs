@@ -59,7 +59,7 @@ pub(super) fn materialize_cte(
     let self_referenced = body_uses_name(&body_query, &cte_name);
 
     if !self_referenced {
-        let (rows, columns) = run_query_to_rows(
+        let (rows, columns, affinities) = run_query_to_rows(
             conn,
             Arc::clone(&schema),
             schema_epoch,
@@ -71,12 +71,15 @@ pub(super) fn materialize_cte(
         let rows_arc: Arc<Vec<Vec<SqlValue>>> = Arc::new(rows);
         register_cte_rows(table_def.relation_id, Arc::clone(&rows_arc));
         let row_slice: Arc<[Vec<SqlValue>]> = Arc::from(rows_arc.as_slice().to_vec());
-        return Ok(CteDef {
+        let def = CteDef {
             name: cte_name,
             columns: Arc::from(columns),
             rows: row_slice,
             table_def: Some(table_def),
-        });
+            affinities,
+        };
+        super::register_def_affinities(&def);
+        return Ok(def);
     }
 
     if !parent_recursive {
@@ -88,7 +91,9 @@ pub(super) fn materialize_cte(
     let (anchor_branch, recursive_branch, union_all) =
         split_recursive_body(&body_query, &cte_name)?;
 
-    let (anchor_rows, columns) = run_query_to_rows(
+    // A recursive CTE's columns read as BLOB for comparison affinity
+    // (`affinities: None`); SQLite derives them from the compound body.
+    let (anchor_rows, columns, _) = run_query_to_rows(
         conn,
         Arc::clone(&schema),
         schema_epoch,
@@ -188,6 +193,7 @@ pub(super) fn materialize_cte(
                 columns: Arc::clone(&columns_arc),
                 rows: Arc::from(working_rows.as_slice().to_vec()),
                 table_def: Some(Arc::clone(&working_table)),
+                affinities: None,
             },
         );
         push_scope(scope);
@@ -203,7 +209,7 @@ pub(super) fn materialize_cte(
         pop_scope();
         deregister_rows(working_table.relation_id);
 
-        let (new_rows, _) = recursive_result?;
+        let (new_rows, _, _) = recursive_result?;
 
         let frontier_start = accumulated.len();
         if union_all {
@@ -294,6 +300,7 @@ fn finish_cte(
         columns: columns_arc,
         rows: Arc::from(accumulated),
         table_def: Some(table_def),
+        affinities: None,
     })
 }
 

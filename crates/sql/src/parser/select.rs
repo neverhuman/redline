@@ -594,11 +594,15 @@ fn bind_values_query(
         .map(|idx| format!("column{idx}"))
         .collect();
     let output_columns = Arc::from(columns.clone());
+    // VALUES columns are literal expressions: no affinity.
+    let affinities: crate::exec::cte::registry::ColumnAffinities =
+        Arc::from(vec![None; columns.len()]);
     let source = SelectSource::Cte {
         name: Arc::from("__values"),
         alias: None,
         columns: Arc::from(columns),
         rows: Arc::from(rows),
+        affinities: Some(affinities),
     };
 
     let order_by = super::order_by::bind_order_by(order_by, &output_columns, None, params)?;

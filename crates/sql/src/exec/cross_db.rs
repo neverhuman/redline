@@ -95,6 +95,10 @@ pub(crate) fn try_resolve_cross_db_bound_table(
 
     let table_def = synth_cross_db_table_def(&table, &column_names, &rows);
     super::cte::register_external_rows(table_def.relation_id, Arc::new(rows));
+    // The attached table's columns keep their declared affinity.
+    if let Some(affinities) = super::view::defining_affinities(&template, column_names.len()) {
+        super::cte::registry::register_column_affinities(table_def.relation_id, affinities);
+    }
     Ok(Some(BoundTable {
         table: table_def,
         alias: alias.cloned(),

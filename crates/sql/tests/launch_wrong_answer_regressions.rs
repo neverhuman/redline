@@ -35,6 +35,8 @@ mod q5_02_unique_point;
 mod q5_03_recursive_limit;
 #[path = "launch_wrong_answer/q5_04_set_keys.rs"]
 mod q5_04_set_keys;
+#[path = "launch_wrong_answer/q5_05_synthetic_affinity.rs"]
+mod q5_05_synthetic_affinity;
 #[path = "launch_wrong_answer/q5_05_text_ops.rs"]
 mod q5_05_text_ops;
 #[path = "launch_wrong_answer/reindex.rs"]

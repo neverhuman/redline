@@ -25,6 +25,7 @@ use std::sync::atomic::{AtomicU64, Ordering};
 use redlinedb_kernel::format::RelId;
 
 use super::cte::CteDef;
+use super::cte::registry::ColumnAffinities;
 use crate::value::SqlValue;
 
 type Rows = Arc<Vec<Vec<SqlValue>>>;
@@ -33,6 +34,8 @@ type Rows = Arc<Vec<Vec<SqlValue>>>;
 #[derive(Default)]
 pub(crate) struct BindEnv {
     rows: HashMap<u64, Rows>,
+    /// Column affinities of the relations in `rows` whose source knows them.
+    affinities: HashMap<u64, ColumnAffinities>,
     /// CTE definitions by lowercased name.
     ctes: HashMap<String, CteDef>,
     /// A capture that CTE-name lookups do not look past: a view or trigger
@@ -162,6 +165,7 @@ fn find<T>(stop_at_barrier: bool, mut probe: impl FnMut(&BindEnv) -> Option<T>) 
 pub(crate) fn register_rows(rel: RelId, rows: Rows) {
     note_materialization();
     with_target(|env| {
+        env.affinities.remove(&rel.0);
         env.rows.insert(rel.0, rows);
     });
 }
@@ -169,6 +173,7 @@ pub(crate) fn register_rows(rel: RelId, rows: Rows) {
 /// Drop a synthetic relation (a recursive CTE's per-iteration working table).
 pub(crate) fn deregister_rows(rel: RelId) {
     with_target(|env| {
+        env.affinities.remove(&rel.0);
         env.rows.remove(&rel.0);
     });
 }
@@ -177,6 +182,18 @@ pub(crate) fn deregister_rows(rel: RelId) {
 pub(crate) fn rows_for_relation(rel: RelId) -> Option<Rows> {
     // Relation ids are unique, so rows are visible across barriers.
     find(false, |env| env.rows.get(&rel.0).cloned())
+}
+
+/// Record the column affinities of a synthetic relation.
+pub(crate) fn register_affinities(rel: RelId, affinities: ColumnAffinities) {
+    with_target(|env| {
+        env.affinities.insert(rel.0, affinities);
+    });
+}
+
+/// The column affinities recorded for a synthetic relation.
+pub(crate) fn affinities_for_relation(rel: RelId) -> Option<ColumnAffinities> {
+    find(false, |env| env.affinities.get(&rel.0).cloned())
 }
 
 /// Make a CTE name resolvable by subqueries bound after the binder's scope
@@ -331,6 +348,7 @@ mod tests {
             columns: Arc::from(Vec::<String>::new()),
             rows: Arc::from(Vec::<Vec<SqlValue>>::new()),
             table_def: None,
+            affinities: None,
         };
         let outer = Capture::begin();
         register_cte(&def("Outer"));

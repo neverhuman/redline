@@ -59,12 +59,13 @@ pub(crate) fn try_resolve_view_source(
             "view expansion requires an active connection context".to_owned(),
         ));
     };
-    let (rows, columns) = materialize_view(conn, &view)?;
+    let (rows, columns, affinities) = materialize_view(conn, &view)?;
     Ok(Some(SelectSource::Cte {
         name: Arc::from(view.name.as_ref()),
         alias: alias.cloned(),
         columns: Arc::from(columns),
         rows: Arc::from(rows),
+        affinities,
     }))
 }
 
@@ -86,13 +87,16 @@ pub(crate) fn try_resolve_view_bound_table(
             "view expansion requires an active connection context".to_owned(),
         ));
     };
-    let (rows, columns) = materialize_view(conn, &view)?;
+    let (rows, columns, affinities) = materialize_view(conn, &view)?;
     let table_def = synth_view_table_def(&view.name, &columns, &rows);
     // Register the rows under the synthesised relation_id so the join
     // executor's row-source lookup (`exec::cte::rows_for_relation`)
     // can fetch them by id. We reuse the CTE row registry: there is no
     // ambiguity because view relation_ids are tagged disjointly.
     super::cte::register_external_rows(table_def.relation_id, Arc::new(rows));
+    if let Some(affinities) = affinities {
+        super::cte::registry::register_column_affinities(table_def.relation_id, affinities);
+    }
     Ok(Some(BoundTable {
         table: table_def,
         alias: alias.cloned(),
@@ -119,10 +123,16 @@ fn lookup_in_schema(
 
 /// Re-parse the view body, execute it, and return `(rows, columns)`.
 /// The column list respects the alias-column list when non-empty.
-fn materialize_view(
-    conn: &Connection,
-    view: &ViewDef,
-) -> Result<(Vec<Vec<SqlValue>>, Vec<String>)> {
+/// A view's rows, its column names, and the comparison affinity of each
+/// column: that of its defining expression, as SQLite gives a view column
+/// (`sqlite3SubqueryColumnTypes`), when the body is a plain SELECT.
+type MaterializedView = (
+    Vec<Vec<SqlValue>>,
+    Vec<String>,
+    Option<super::cte::registry::ColumnAffinities>,
+);
+
+fn materialize_view(conn: &Connection, view: &ViewDef) -> Result<MaterializedView> {
     // The body names real tables, whatever the query around it calls a CTE.
     let _own_scope = super::cte::Isolated::enter();
     let template = crate::parser::parse_prepared_template(conn, view.body_sql.as_ref())?;
@@ -132,8 +142,24 @@ fn materialize_view(
     } else {
         template.output_columns.iter().cloned().collect()
     };
+    let affinities = defining_affinities(&template, column_names.len());
     let rows = super::materialize_prepared_rows(conn, &template, &[])?;
-    Ok((rows, column_names))
+    Ok((rows, column_names, affinities))
+}
+
+/// The affinity of each result column of a plain SELECT template.
+pub(crate) fn defining_affinities(
+    template: &crate::statement::PreparedTemplate,
+    count: usize,
+) -> Option<super::cte::registry::ColumnAffinities> {
+    let crate::statement::PreparedKind::Select(plan) = &template.kind else {
+        return None;
+    };
+    Some(
+        (0..count)
+            .map(|index| crate::exec::expr::affinity::plan_column_affinity(plan, index))
+            .collect(),
+    )
 }
 
 /// Build a synthetic `TableDef` for a view, mirroring the CTE strategy.

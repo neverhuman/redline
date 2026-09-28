@@ -224,10 +224,17 @@ index-format epoch below), so such an index is rebuilt at the first open.
 - The constant folder keeps a `CAST` node around its folded value, so
   `CAST(5 AS INTEGER) = '5'` is 1 as in SQLite (it folded to `5 = '5'`,
   which is 0).
-- Not yet: columns of views, CTEs and FROM-subqueries have no comparison
-  affinity (SQLite gives them their defining expression's), so
-  `WHERE x = '5'` over a view of an INTEGER column still finds nothing, as
-  before. CHECK constraints are evaluated by the kernel without comparison
+- Columns of views, CTEs, FROM-subqueries and VALUES have the affinity of
+  their defining expression, as SQLite gives them, and an attached table's
+  columns keep their declared affinity: `WHERE x = '5'` over a view of an
+  INTEGER column finds 5. A table-valued function's columns (`json_each`,
+  `generate_series`, `pragma_*`) are declared without a type, so they have
+  BLOB affinity: `y IN (SELECT value FROM json_each('[5]'))` over a TEXT
+  column finds nothing, as in SQLite. These columns used to have no
+  affinity, so a TEXT column compared with them converted the number to
+  text and matched. A recursive CTE's columns read as BLOB (SQLite derives
+  them from the compound body).
+- Not yet: CHECK constraints are evaluated by the kernel without comparison
   affinity (`CHECK (x = '5')` rejects INTEGER 5, as before). The general
   `x IS y` form does not parse; `IS [NOT] DISTINCT FROM` does.
 - Upgrade note: a partial index whose WHERE compares a column with a value

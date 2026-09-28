@@ -639,6 +639,7 @@ fn build_select_runtime(
                 alias,
                 columns,
                 rows,
+                affinities,
             } => {
                 // CTE rows go through the Batched path so projection /
                 // selection / order-by can resolve column names. Pre-wrap
@@ -652,6 +653,7 @@ fn build_select_runtime(
                             alias: alias.clone(),
                             columns: Arc::clone(columns),
                             values,
+                            affinities: affinities.clone(),
                         })
                     })
                     .collect();
@@ -1213,6 +1215,7 @@ pub(super) fn collect_select_rows(
             alias,
             columns,
             rows,
+            affinities,
         } => Ok(rows
             .iter()
             .cloned()
@@ -1222,6 +1225,7 @@ pub(super) fn collect_select_rows(
                     alias: alias.clone(),
                     columns: Arc::clone(columns),
                     values,
+                    affinities: affinities.clone(),
                 })
             })
             .collect()),
@@ -1284,6 +1288,7 @@ pub(super) fn wrap_compound_row(values: Vec<SqlValue>, columns: Arc<[String]>) -
         alias: None,
         columns,
         values,
+        affinities: None,
     })
 }
 

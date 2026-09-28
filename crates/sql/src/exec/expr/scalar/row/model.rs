@@ -34,6 +34,8 @@ pub(crate) struct CteRow {
     pub(crate) alias: Option<Arc<str>>,
     pub(crate) columns: Arc<[String]>,
     pub(crate) values: Vec<SqlValue>,
+    /// The source's column affinities (`SelectSource::Cte::affinities`).
+    pub(crate) affinities: Option<crate::exec::cte::registry::ColumnAffinities>,
 }
 
 #[derive(Clone)]

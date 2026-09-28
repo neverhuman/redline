@@ -204,14 +204,12 @@ fn column_affinity_in_scope(
 
 /// The affinity of `name` in `table`: a declared column, else the rowid.
 ///
-/// Tables synthesized for views, CTEs, FROM-subqueries and attached-table
-/// aliases carry affinities guessed from their first row; SQLite gives
-/// those columns the affinity of their defining expression instead, which
-/// is not tracked yet, so they report none (the behaviour before
-/// comparison affinity existed).
+/// Tables synthesized for views, attached tables, CTEs, FROM-subqueries and
+/// table-valued functions carry affinities guessed from their first row;
+/// [`synthetic_column_affinity`] answers for them instead.
 pub(crate) fn table_column_affinity(table: &TableDef, name: &str) -> Option<Affinity> {
     if crate::exec::cte::is_cte_table_def(table) {
-        return None;
+        return synthetic_column_affinity(table, name);
     }
     if let Some(column) = table
         .columns
@@ -223,6 +221,24 @@ pub(crate) fn table_column_affinity(table: &TableDef, name: &str) -> Option<Affi
     table
         .is_public_rowid_name(name)
         .then_some(Affinity::Integer)
+}
+
+/// SQLite gives a view or subquery column the affinity of its defining
+/// expression and an attached table's column its declared one; those
+/// sources register them (`cte::registry::register_column_affinities`).
+/// Any other synthetic column -- a table-valued function's (declared
+/// without a type), or a source that registered nothing -- reads as BLOB,
+/// the affinity of a column without a type: it converts nothing against
+/// TEXT or another BLOB, and yields to a numeric operand.
+fn synthetic_column_affinity(table: &TableDef, name: &str) -> Option<Affinity> {
+    let ordinal = table
+        .columns
+        .iter()
+        .position(|column| column.folded.as_ref().eq_ignore_ascii_case(name))?;
+    match crate::exec::cte::registry::column_affinities_for_relation(table.relation_id) {
+        Some(affinities) => affinities.get(ordinal).copied().flatten(),
+        None => Some(Affinity::Blob),
+    }
 }
 
 fn names_table(alias: Option<&Arc<str>>, table: &TableDef, qualifier: &str) -> bool {
@@ -297,8 +313,17 @@ fn column_affinity_local(
                     .is_some_and(|alias| alias.eq_ignore_ascii_case(q))
                     || row.name.as_ref().eq_ignore_ascii_case(q)
             });
-            (qualified_here && row.columns.iter().any(|c| c.eq_ignore_ascii_case(name)))
-                .then_some(None)
+            let ordinal = row
+                .columns
+                .iter()
+                .position(|c| c.eq_ignore_ascii_case(name));
+            match ordinal {
+                Some(ordinal) if qualified_here => Some(match &row.affinities {
+                    Some(affinities) => affinities.get(ordinal).copied().flatten(),
+                    None => Some(Affinity::Blob),
+                }),
+                _ => None,
+            }
         }
         _ => None,
     }
@@ -306,7 +331,7 @@ fn column_affinity_local(
 
 /// The affinity of result column `index` of a SELECT, resolved against the
 /// tables it reads (`sqlite3ExprAffinity` of that result expression).
-/// Compound selects, CTE sources and unresolvable expressions give `None`.
+/// Compound selects and unresolvable expressions give `None`.
 pub(crate) fn plan_column_affinity(plan: &SelectPlan, index: usize) -> Option<Affinity> {
     let tables: Vec<(Option<&Arc<str>>, &Arc<TableDef>)> = match &plan.source {
         SelectSource::Table(table) => vec![(None, table)],
@@ -318,19 +343,60 @@ pub(crate) fn plan_column_affinity(plan: &SelectPlan, index: usize) -> Option<Af
                     .map(|step| (step.right.alias.as_ref(), &step.right.table)),
             )
             .collect(),
+        SelectSource::Cte { affinities, .. } => {
+            return cte_source_column_affinity(plan, affinities.as_deref(), index);
+        }
         _ => return None,
     };
+    // `SELECT *` (or an empty projection) over one table: its columns.
+    if tables.len() == 1 && matches!(plan.projection.as_slice(), [] | [SelectItem::Wildcard(_)]) {
+        let table = tables[0].1;
+        let name = &table.columns.get(index)?.name;
+        return table_column_affinity(table, name);
+    }
     let expr = match plan.projection.get(index) {
         Some(SelectItem::UnnamedExpr(expr)) | Some(SelectItem::ExprWithAlias { expr, .. }) => expr,
-        Some(SelectItem::Wildcard(_)) if plan.projection.len() == 1 && tables.len() == 1 => {
-            return tables[0].1.columns.get(index).map(|column| column.affinity);
-        }
-        None if plan.projection.is_empty() && tables.len() == 1 => {
-            return tables[0].1.columns.get(index).map(|column| column.affinity);
-        }
         _ => return None,
     };
     static_expr_affinity(expr, &tables)
+}
+
+/// [`plan_column_affinity`] over a row-set source (a view, CTE, subquery or
+/// table-valued function): a column of the source has the source's
+/// affinity for it ([`synthetic_column_affinity`]'s rules), any other
+/// expression its own.
+fn cte_source_column_affinity(
+    plan: &SelectPlan,
+    source: Option<&[Option<Affinity>]>,
+    index: usize,
+) -> Option<Affinity> {
+    let SelectSource::Cte { columns, .. } = &plan.source else {
+        return None;
+    };
+    let column = |name: &str| {
+        let ordinal = columns.iter().position(|c| c.eq_ignore_ascii_case(name))?;
+        match source {
+            Some(affinities) => affinities.get(ordinal).copied().flatten(),
+            None => Some(Affinity::Blob),
+        }
+    };
+    let mut expr = match plan.projection.get(index) {
+        Some(SelectItem::UnnamedExpr(expr)) | Some(SelectItem::ExprWithAlias { expr, .. }) => expr,
+        Some(SelectItem::Wildcard(_)) if plan.projection.len() == 1 => {
+            return columns.get(index).and_then(|name| column(name));
+        }
+        _ => return None,
+    };
+    loop {
+        match expr {
+            Expr::Nested(inner) | Expr::Collate { expr: inner, .. } => expr = inner,
+            Expr::Identifier(ident) => return column(&ident.value),
+            Expr::CompoundIdentifier(parts) if parts.len() >= 2 => {
+                return column(&parts[parts.len() - 1].value);
+            }
+            other => return static_expr_affinity(other, &[]),
+        }
+    }
 }
 
 fn static_expr_affinity(

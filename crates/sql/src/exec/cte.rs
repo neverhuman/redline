@@ -75,6 +75,9 @@ pub(crate) struct CteDef {
     /// Synthetic TableDef; populated on demand the first time the CTE
     /// gets resolved through `try_resolve_cte_join_table`.
     pub(crate) table_def: Option<Arc<TableDef>>,
+    /// Each column's comparison affinity, from the body's result
+    /// expressions (`None`: every column reads as BLOB).
+    pub(crate) affinities: Option<registry::ColumnAffinities>,
 }
 
 thread_local! {
@@ -229,6 +232,14 @@ pub(crate) fn build_cte_def_from_rows(
         columns: Arc::from(columns),
         rows: row_slice,
         table_def: Some(table_def),
+        affinities: None,
+    }
+}
+
+/// Record `affinities` for the synthetic table of `def` (after its rows).
+pub(crate) fn register_def_affinities(def: &CteDef) {
+    if let (Some(table), Some(affinities)) = (&def.table_def, &def.affinities) {
+        registry::register_column_affinities(table.relation_id, Arc::clone(affinities));
     }
 }
 
@@ -313,6 +324,14 @@ pub(crate) fn bind_with_query(
 }
 
 /// Run a Query and materialize all output rows. Returns rows plus column names.
+/// A query's rows, its column names, and each column's comparison affinity
+/// (from its result expressions, when the query is a plain SELECT).
+pub(crate) type QueryRows = (
+    Vec<Vec<SqlValue>>,
+    Vec<String>,
+    Option<registry::ColumnAffinities>,
+);
+
 pub(crate) fn run_query_to_rows(
     conn: &Connection,
     schema: Arc<SchemaSnapshot>,
@@ -320,7 +339,7 @@ pub(crate) fn run_query_to_rows(
     sql: &str,
     query: Query,
     declared_columns: &[String],
-) -> Result<(Vec<Vec<SqlValue>>, Vec<String>)> {
+) -> Result<QueryRows> {
     let template = super::super::parser::bind_query(conn, schema, schema_epoch, sql, query)?;
     super::bind_env::note_materialization();
     if !template.readonly {
@@ -331,10 +350,11 @@ pub(crate) fn run_query_to_rows(
     } else {
         template.output_columns.iter().cloned().collect()
     };
+    let affinities = super::view::defining_affinities(&template, columns.len());
     // Q5-08: a statement bound again at execution shows its parameters.
     let bindings = super::rebind::bind_time_bindings();
     let rows = super::materialize_prepared_rows(conn, &template, &bindings)?;
-    Ok((rows, columns))
+    Ok((rows, columns, affinities))
 }
 
 /// Try to interpret a FROM table reference as a CTE. Returns a
@@ -358,6 +378,7 @@ pub(crate) fn try_resolve_cte_source(
         alias: alias.cloned(),
         columns: def.columns,
         rows: def.rows,
+        affinities: def.affinities,
     })
 }
 
@@ -409,6 +430,7 @@ pub(crate) fn from_static(
             alias: alias.map(Arc::from),
             columns: Arc::from(columns),
             rows: Arc::from(rows),
+            affinities: None,
         },
         distinct: false,
         distinct_on: Vec::new(),
