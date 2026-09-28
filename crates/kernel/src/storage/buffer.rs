@@ -17,6 +17,10 @@ use crate::{Error, Result};
 #[path = "buffer_checkpoint.rs"]
 mod checkpoint;
 
+#[cfg(test)]
+#[path = "buffer_prefetch_tests.rs"]
+mod prefetch_tests;
+
 pub const DEFAULT_CHECKPOINT_BATCH_PAGES: usize = 64;
 
 /// Minimum capacity of the prefetch worker queue. The queue size
@@ -104,7 +108,8 @@ struct BufferPoolStatsInner {
 
 thread_local! {
     /// Set while this thread runs a pressure checkpoint, so that checkpoint
-    /// never asks for another one.
+    /// never asks for another one, and for the whole life of the prefetch
+    /// worker, which never runs one.
     static RELIEVING_PRESSURE: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
 }
 
@@ -393,7 +398,11 @@ impl Drop for BufferPool {
         let handle = self.worker.lock().ok().and_then(|mut guard| guard.take());
         if let Some(handle) = handle {
             handle.thread().unpark();
-            let _ = handle.join();
+            // A thread cannot join itself (std panics on EDEADLK). The
+            // worker exits on its own once it sees `shutdown`.
+            if handle.thread().id() != thread::current().id() {
+                let _ = handle.join();
+            }
         }
     }
 }
@@ -403,6 +412,11 @@ fn prefetch_worker(
     queue: Arc<ArrayQueue<PageId>>,
     shutdown: Arc<AtomicBool>,
 ) {
+    // Prefetch is advisory: a load that needs a pressure checkpoint is
+    // dropped rather than run here. A checkpoint on this thread would hold
+    // the engine, and if the application dropped it meanwhile, the last
+    // reference would drop the pool on this thread, which joins it.
+    RELIEVING_PRESSURE.with(|flag| flag.set(true));
     loop {
         if shutdown.load(Ordering::Acquire) {
             return;

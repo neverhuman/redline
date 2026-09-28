@@ -579,3 +579,11 @@ Draft lines for the v5.0.0 CHANGELOG. The integrator owns `CHANGELOG.md`.
   and emptying them lost those rows on the first open with this build.
   Those pages now stay, with the duplicate-row risk v4.1.0 already had
   there, until the first checkpoint this build takes.
+- The advisory prefetch worker no longer runs a pressure checkpoint. With
+  pressure checkpoints on for every SQL database, a prefetch into a pool
+  full of logged dirty pages checkpointed on the worker thread, holding the
+  engine; if the application dropped the engine meanwhile, the worker
+  dropped the last reference, and the buffer pool's `Drop` joined the
+  worker from itself, which panics (an abort in release builds). Such a
+  prefetch is now dropped, and the pool's `Drop` never joins its own
+  thread.
