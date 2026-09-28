@@ -70,7 +70,7 @@ fn a_version_one_checkpoint_keeps_heap_pages_past_its_page_count() {
     rewrite_control(
         &temp.path().join(format!(
             "CONTROL_{}",
-            if checkpoint.generation % 2 == 0 {
+            if checkpoint.generation.is_multiple_of(2) {
                 "B"
             } else {
                 "A"
@@ -93,7 +93,7 @@ fn a_version_one_checkpoint_keeps_heap_pages_past_its_page_count() {
 #[test]
 fn a_control_file_from_a_newer_build_fails_the_open() {
     let (temp, _rows, checkpoint) = checkpointed_rows(20);
-    let slot = if checkpoint.generation % 2 == 0 {
+    let slot = if checkpoint.generation.is_multiple_of(2) {
         "CONTROL_B"
     } else {
         "CONTROL_A"
@@ -123,7 +123,7 @@ fn a_newer_build_slot_beside_a_known_one_fails_the_open() {
     let second = engine.checkpoint().unwrap();
     drop(engine);
     assert!(second.generation > first.generation);
-    let newest = if second.generation % 2 == 0 {
+    let newest = if second.generation.is_multiple_of(2) {
         "CONTROL_B"
     } else {
         "CONTROL_A"
