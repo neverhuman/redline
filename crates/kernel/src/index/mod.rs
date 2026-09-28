@@ -344,28 +344,13 @@ impl BtreeIndex {
             .expect("index phase11 sink poisoned") = Some(counters);
     }
 
-    pub fn redo_page_image(&self, page: Page) -> Result<()> {
-        let page_id = page.header()?.page_id;
-        let lsn = page.header()?.page_lsn;
-        if let Ok(guard) = self.inner.buffer.pin(page_id) {
-            let current =
-                guard.with_page(|resident| resident.header().map(|header| header.page_lsn))?;
-            // WAL page images store LSN 0; their order is the record LSN,
-            // which this method does not receive. A real LSN that is older
-            // than the resident page must not clobber it.
-            if lsn != crate::format::Lsn::ZERO && current > lsn {
-                return Ok(());
-            }
-        }
-        self.inner.buffer.write_page_direct(&page)?;
-        if let Ok(guard) = self.inner.buffer.pin(page_id) {
-            let current =
-                guard.with_page(|resident| resident.header().map(|header| header.page_lsn))?;
-            if current <= lsn {
-                guard.install_dirty(page, lsn)?;
-            }
-        }
-        Ok(())
+    /// Redo an image of one of this index's pages whose WAL record ends at
+    /// `lsn`. A WAL image stores page LSN zero, so its order is the record's
+    /// LSN, not the image's own. The image is skipped when the page is
+    /// already at or past `lsn`; otherwise it replaces the file copy and the
+    /// resident frame together. See [`BufferPool::redo_page_image`].
+    pub fn redo_page_image(&self, page: Page, lsn: crate::format::Lsn) -> Result<()> {
+        self.inner.buffer.redo_page_image(page, lsn).map(drop)
     }
 
     pub(super) fn record_page_image(

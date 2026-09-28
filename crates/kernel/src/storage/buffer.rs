@@ -64,7 +64,9 @@ struct Inner {
     clock_hand: AtomicUsize,
     /// Eviction writes a page without syncing the page file. Set before
     /// such a write, under the eviction mutex, and cleared by the next
-    /// checkpoint flush that syncs.
+    /// checkpoint flush that syncs. A direct write (page-image redo) sets it
+    /// too, after the write, so a checkpoint that flushes no frame still
+    /// syncs that write before it records a redo LSN past its record.
     evicted_unsynced: AtomicBool,
     /// Asked for a checkpoint when a clock pass finds no page it may evict.
     /// Weak, so the pool never keeps its engine alive.
@@ -519,6 +521,7 @@ impl Inner {
 
     fn write_page_direct(&self, page: &Page) -> Result<()> {
         self.page_file.write_page(page)?;
+        self.evicted_unsynced.store(true, Ordering::Release);
         let page_id = page.header()?.page_id;
         let next = page_id.0.saturating_add(1);
         let mut current = self.next_page_id.load(Ordering::Relaxed);

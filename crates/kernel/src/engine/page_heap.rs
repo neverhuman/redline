@@ -125,25 +125,10 @@ impl PageBackedHeap {
         self.buffer.stats()
     }
 
-    pub fn redo_page_image(&self, mut page: crate::format::Page, lsn: Lsn) -> Result<()> {
-        let page_id = page.header()?.page_id;
-        if let Ok(guard) = self.buffer.pin(page_id) {
-            let current =
-                guard.with_page(|resident| resident.header().map(|header| header.page_lsn))?;
-            if current >= lsn {
-                return Ok(());
-            }
-        }
-        page.set_page_lsn(lsn)?;
-        self.buffer.write_page_direct(&page)?;
-        if let Ok(guard) = self.buffer.pin(page_id) {
-            let current =
-                guard.with_page(|resident| resident.header().map(|header| header.page_lsn))?;
-            if current < lsn {
-                guard.install_dirty(page, lsn)?;
-            }
-        }
-        Ok(())
+    /// Redo a heap page image whose WAL record ends at `lsn`; see
+    /// [`BufferPool::redo_page_image`].
+    pub fn redo_page_image(&self, page: crate::format::Page, lsn: Lsn) -> Result<()> {
+        self.buffer.redo_page_image(page, lsn).map(drop)
     }
 
     pub fn page_count(&self) -> Result<u64> {

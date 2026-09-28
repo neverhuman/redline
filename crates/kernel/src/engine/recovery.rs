@@ -521,7 +521,8 @@ fn recover_heap(
     Ok(metrics)
 }
 
-/// Install every B-tree page image at or after the checkpoint.
+/// Redo every B-tree page image at or after the checkpoint, in LSN order,
+/// over a page that does not already hold it.
 ///
 /// A split's images describe structure, not the logging transaction's data:
 /// the split stays in memory when that transaction rolls back, and each
@@ -533,6 +534,12 @@ fn recover_heap(
 /// logged them committed. A split appends its new right page's image before
 /// the image of the page that links to it, so a replayed link never names a
 /// page whose image is missing.
+///
+/// An image replaces the page only when the page's LSN, resident or in the
+/// file, is below the end of the image's record. A page at or past it holds
+/// that image and later changes, which an older image would drop. The
+/// reopened WAL resumes past every page LSN, so a page LSN never comes from
+/// an earlier run of the log.
 fn recover_index_page_images(
     records: &[WalRecord],
     replay_from_lsn: Lsn,
@@ -560,14 +567,7 @@ fn recover_index_page_images(
                 crate::format::PageKind::BtreeMeta
                 | crate::format::PageKind::BtreeLeaf
                 | crate::format::PageKind::BtreeInternal => {
-                    buffer.write_page_direct(&page)?;
-                    if let Ok(guard) = buffer.pin(page.header()?.page_id) {
-                        guard.with_page_mut(|resident| {
-                            *resident = page.clone();
-                            Ok(())
-                        })?;
-                        guard.mark_dirty(page.header()?.page_lsn)?;
-                    }
+                    buffer.redo_page_image(page, record_end_lsn(record))?;
                 }
                 _ => {}
             }
@@ -726,6 +726,10 @@ mod wal_floor;
 #[cfg(test)]
 #[path = "recovery_dir_sync_tests.rs"]
 mod dir_sync_tests;
+
+#[cfg(test)]
+#[path = "recovery_index_image_tests.rs"]
+mod index_image_tests;
 
 #[cfg(test)]
 mod tests {

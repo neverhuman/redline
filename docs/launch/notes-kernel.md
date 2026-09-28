@@ -156,3 +156,22 @@ Draft lines for the v5.0.0 CHANGELOG. The integrator owns `CHANGELOG.md`.
   reject the WAL.
 - Not changed: a WAL that reaches the checkpoint is trusted to reach every
   page LSN too; page LSNs are read only when no record survives.
+
+## Page-image redo skips an image the page already holds
+
+- Recovery used to write every heap and B-tree page image after the
+  checkpoint over the page, even when the page in the file or in memory was
+  newer, which dropped later changes that were on the page. An image now
+  replaces a page only when the page's LSN is below the end of the image's
+  WAL record. This depends on the WAL never restarting below a page LSN
+  (above), so the two ship together.
+- An applied image replaces the file copy and any resident copy of the page
+  together, and is stamped with its record's end LSN. Before, heap image
+  redo wrote only the file, and an older resident copy could later be
+  flushed back over it.
+- A page-image redo write now makes the next checkpoint sync the page file,
+  even if that checkpoint flushes no page. Before, such a checkpoint could
+  record a redo LSN past images whose writes were never synced.
+- `BtreeIndex::redo_page_image` now takes the record's end LSN, as
+  `PageBackedHeap::redo_page_image` already did: a WAL image stores page
+  LSN zero, so the image alone cannot say how new it is.

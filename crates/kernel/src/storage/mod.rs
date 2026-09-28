@@ -6,6 +6,7 @@ pub mod numa;
 pub mod page_file;
 pub mod page_pressure;
 pub(crate) mod policy;
+mod redo_image;
 pub mod tx_status_checkpoint;
 
 pub use buffer::*;

@@ -212,6 +212,7 @@ fn index_recovery_replays_page_images_with_torn_tail() {
     .unwrap();
 
     for record in scan.records {
+        let end = Lsn::new(record.lsn.get() + record.encoded_len() as u64);
         if let WalPayload::PageImage {
             page_id: _,
             page_lsn: _,
@@ -219,7 +220,7 @@ fn index_recovery_replays_page_images_with_torn_tail() {
         } = WalPayload::decode(&record.payload).unwrap()
         {
             recovered_index
-                .redo_page_image(Page::from_bytes(page_bytes).unwrap())
+                .redo_page_image(Page::from_bytes(page_bytes).unwrap(), end)
                 .unwrap();
         }
     }
@@ -317,7 +318,8 @@ fn index_redo_page_image_restores_corruption() {
         })
         .unwrap();
 
-    index.redo_page_image(snapshot).unwrap();
+    // Redo orders by the image's record LSN, which is past the page's.
+    index.redo_page_image(snapshot, Lsn::new(2)).unwrap();
     assert_eq!(index.point_lookup(b"k001").unwrap().len(), 1);
 }
 
@@ -1051,11 +1053,11 @@ fn older_index_page_image_does_not_replace_a_newer_page() {
     let root = PageId(2);
     let mut stale = Page::new(512, PageKind::BtreeLeaf, root, RelId(1)).unwrap();
     stale.set_page_lsn(Lsn(1)).unwrap();
-    index.redo_page_image(stale).unwrap();
+    index.redo_page_image(stale, Lsn(1)).unwrap();
     assert_eq!(index.point_lookup(b"kept").unwrap().len(), 1);
     let mut newer = Page::new(512, PageKind::BtreeLeaf, root, RelId(1)).unwrap();
     newer.set_page_lsn(Lsn(u64::MAX)).unwrap();
-    index.redo_page_image(newer).unwrap();
+    index.redo_page_image(newer, Lsn(u64::MAX)).unwrap();
     assert!(index.point_lookup(b"kept").is_err());
 }
 
@@ -1085,6 +1087,7 @@ fn zero_lsn_index_image_still_restores_the_page() {
         .with_page(|page| Ok(page.clone()))
         .unwrap();
     image.set_page_lsn(Lsn::ZERO).unwrap();
+    let original_byte = image.as_bytes()[128];
     buffer
         .pin(PageId(2))
         .unwrap()
@@ -1093,6 +1096,14 @@ fn zero_lsn_index_image_still_restores_the_page() {
             Ok(())
         })
         .unwrap();
-    index.redo_page_image(image).unwrap();
+    // The image's own LSN is zero, as in the WAL; the record LSN orders it
+    // past the resident page's LSN 1.
+    index.redo_page_image(image, Lsn(2)).unwrap();
     assert_eq!(index.point_lookup(b"kept").unwrap().len(), 1);
+    let restored = buffer
+        .pin(PageId(2))
+        .unwrap()
+        .with_page(|page| Ok(page.as_bytes()[128]))
+        .unwrap();
+    assert_eq!(restored, original_byte);
 }
