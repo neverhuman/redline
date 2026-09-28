@@ -113,6 +113,7 @@ mod tests {
         let _on = ForceGuard::set(true);
         let (_direct_dir, direct) = fresh(IndexUniqueness::NonUnique).expect("direct index");
         let before = rewrite_leaf_calls();
+        let process_before = observe::snapshot();
         // Rewrites on another thread, as a test running beside this one
         // makes them, land inside this measurement.
         std::thread::spawn(|| {
@@ -123,6 +124,12 @@ mod tests {
         .join()
         .expect("rewrite thread");
         fill(&direct, 32).expect("direct fill");
+        // The other thread did rebuild leaves inside the window, so the
+        // per-thread count below is what excludes them.
+        assert!(
+            observe::snapshot().since(process_before).rewrite_leaf_calls >= 32,
+            "the rewrite thread did not rebuild leaves"
+        );
         let direct_calls = rewrite_leaf_calls() - before;
         assert_eq!(direct_calls, 0, "direct path rebuilt the leaf");
     }

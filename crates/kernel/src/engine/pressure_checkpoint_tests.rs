@@ -138,6 +138,29 @@ fn assert_committed(engine: &Engine, index_id: IndexId, committed: &Committed, w
             .unwrap_or(false)
     });
     assert_eq!(directory.len(), live, "{when}: live rows in the directory");
+    // Reads by row id cannot see a second physical copy of a row, the
+    // failure a checkpoint that wrote a heap change recovery replays again
+    // would leave. A scan of every heap page can, for rows that were only
+    // inserted: that scan also returns the superseded version of an
+    // updated row, so updated and deleted rows are left out here.
+    let copies = super::checkpoint_cut_tests::copies_on_pages(engine);
+    for (row, (tag, expected)) in committed {
+        if expected.as_deref() == Some(payload(*tag, 1).as_slice()) {
+            assert_eq!(
+                copies.get(row).copied().unwrap_or(0),
+                1,
+                "{when}: copies of inserted row {row:?} (tag {tag}) in a scan of every heap page"
+            );
+        }
+    }
+    let unexpected: Vec<&RowId> = copies
+        .keys()
+        .filter(|row| !committed.contains_key(row))
+        .collect();
+    assert!(
+        unexpected.is_empty(),
+        "{when}: a heap scan found rows no writer committed: {unexpected:?}"
+    );
     assert_eq!(
         index.validate().unwrap().errors,
         Vec::<&str>::new(),

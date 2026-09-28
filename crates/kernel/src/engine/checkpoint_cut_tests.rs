@@ -89,7 +89,7 @@ pub(super) fn heap_insert_lsn(engine: &Engine, row: RowId) -> Lsn {
 }
 
 /// How many committed copies of each row a scan of every heap page finds.
-fn copies_on_pages(engine: &Engine) -> BTreeMap<RowId, usize> {
+pub(super) fn copies_on_pages(engine: &Engine) -> BTreeMap<RowId, usize> {
     let tx = engine.begin(Isolation::Snapshot).unwrap();
     let pages = engine
         .relation_entries(engine.rel_id)
@@ -343,6 +343,14 @@ fn concurrent_checkpoints_never_regress_redo_lsn() {
         second.checkpoint_lsn,
         first.generation,
         first.checkpoint_lsn
+    );
+    assert!(
+        second.heap_redo_lsn >= first.heap_redo_lsn,
+        "generation {} recorded heap redo {:?} after generation {} recorded {:?}",
+        second.generation,
+        second.heap_redo_lsn,
+        first.generation,
+        first.heap_redo_lsn
     );
     let reloaded = engine.checkpoint_info().unwrap().unwrap();
     assert_eq!(reloaded, second);

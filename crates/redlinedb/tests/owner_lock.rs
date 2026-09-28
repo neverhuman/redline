@@ -54,6 +54,13 @@ fn rejected_open_leaves_image_unchanged() {
     drop(foreign);
     let db = Database::open(&path).expect("open after the owner releases");
     assert_eq!(count_rows(&db), 3);
+    // The fixture is live: an owning open does cut the torn tail, so the
+    // length check above would have caught a rejected open that recovered.
+    assert_eq!(
+        fs::metadata(&segment).expect("segment metadata").len(),
+        torn_len - 37,
+        "an owning open should truncate the torn tail"
+    );
 }
 
 #[cfg(unix)]

@@ -1133,7 +1133,44 @@ fn wal_tx_id_with_no_successor_fails_open() {
     drop(wal);
 
     let err = Engine::open(temp.path(), config()).unwrap_err();
-    assert!(matches!(err, Error::CorruptWal(_)), "unexpected {err:?}");
+    assert_eq!(
+        err,
+        Error::CorruptWal("wal names a transaction id with no successor")
+    );
+}
+
+/// Replay trusts the transaction id inside a payload, not the header's, so
+/// recovery must keep that one from being handed out again too.
+#[test]
+fn a_transaction_id_named_only_in_a_payload_is_not_reused() {
+    let temp = TempDir::new().unwrap();
+    let engine = Engine::create(temp.path(), config()).unwrap();
+    let mut tx = engine.begin(Isolation::Snapshot).unwrap();
+    engine.insert(&mut tx, b"base".to_vec()).unwrap();
+    engine.commit(tx).unwrap();
+    drop(engine);
+
+    let mut wal = WalManager::open(temp.path().join("wal"), config().wal).unwrap();
+    let payload = WalPayload::HeapInsert {
+        tx_id: TxId(1000),
+        rel_id: RelId(1),
+        row_id: RowId(99),
+        payload: b"never committed".to_vec(),
+    }
+    .encode()
+    .unwrap();
+    wal.append(WalRecordKind::PageDelta, TxId(2), payload)
+        .unwrap();
+    wal.flush().unwrap();
+    drop(wal);
+
+    let reopened = Engine::open(temp.path(), config()).unwrap();
+    let tx = reopened.begin(Isolation::Snapshot).unwrap();
+    assert!(
+        tx.id() > TxId(1000),
+        "transaction id {:?} was reused",
+        tx.id()
+    );
 }
 
 #[test]
