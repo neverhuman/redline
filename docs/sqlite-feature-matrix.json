@@ -1,0 +1,1078 @@
+{
+  "schema": "redlinedb.sqlite-feature-matrix/v1",
+  "description": "Source of the feature tables in docs/sqlite-parity.md (rendered between the sqlite-feature-matrix markers by scripts/parity/render-sqlite-feature-matrix.sh). status: pass | partial | fail | not-started | rejects-by-design (defined in docs/sqlite-parity.md). proof_kind: semantic_match (named tests compare RedlineDB with SQLite: the bundled rusqlite oracle, the official corpus, or values taken from SQLite), readback_only (tests show RedlineDB accepts the statement and reads back its own value; no SQLite value is claimed), intentional_reject (tests assert the explicit rejection), known_divergence (a sentinel test asserts RedlineDB differs), none (no test). tests: path::fn of a test function; artifacts: other evidence paths or globs. corpus_case_ids: official sqlite_parity case ids. open_subfeatures: documented SQLite behaviour the row does not cover; a pass row has none. scripts/parity/lint-sqlite-parity-ledger.sh checks all of it.",
+  "features": [
+    {
+      "id": "sql.select-basic",
+      "section": "SQL Surface",
+      "feature": "Basic `SELECT` projection/filter/order",
+      "status": "pass",
+      "proof_kind": "semantic_match",
+      "tests": [
+        "crates/sql/tests/smoke_select.rs::create_insert_select_round_trip",
+        "crates/sql/tests/smoke_select.rs::select_distinct_deduplicates_rows",
+        "crates/sql/tests/differential_lab.rs::diff_scalar_string_matrix",
+        "crates/sql/tests/differential_lab.rs::diff_null_semantics_matrix"
+      ],
+      "artifacts": [],
+      "corpus_case_ids": [],
+      "open_subfeatures": [],
+      "owner": "sql-parser-planner-executor",
+      "notes": "Covered for scalar values and simple predicates."
+    },
+    {
+      "id": "sql.dml-basic",
+      "section": "SQL Surface",
+      "feature": "`INSERT`, `UPDATE`, `DELETE` basics",
+      "status": "partial",
+      "proof_kind": "semantic_match",
+      "tests": [
+        "crates/sql/tests/smoke_dml.rs::insert_select_populates_target_rows",
+        "crates/sql/tests/smoke_dml.rs::update_to_indexed_column_moves_index_entry",
+        "crates/sql/tests/smoke_dml.rs::delete_removes_index_entry"
+      ],
+      "artifacts": [
+        "crates/bench/compat/**"
+      ],
+      "corpus_case_ids": [
+        "10547",
+        "10548"
+      ],
+      "open_subfeatures": [
+        "a UNIQUE or PRIMARY KEY violation is rejected with different error text (cases 10547, 10548)"
+      ],
+      "owner": "sql-parser-planner-executor",
+      "notes": "Cross-engine SQLLogicTest corpus covers representative DML."
+    },
+    {
+      "id": "sql.create-drop-table",
+      "section": "SQL Surface",
+      "feature": "`CREATE TABLE`, `DROP TABLE` basics",
+      "status": "partial",
+      "proof_kind": "semantic_match",
+      "tests": [
+        "crates/sql/tests/parity_coverage.rs::ctas_table_info_metadata_matches_sqlite"
+      ],
+      "artifacts": [
+        "crates/bench/compat/**"
+      ],
+      "corpus_case_ids": [
+        "10579",
+        "10580",
+        "10581",
+        "10582"
+      ],
+      "open_subfeatures": [
+        "SQLite metadata compatibility is not complete",
+        "duplicate column/table names and writes to sqlite_master are rejected with different error text (cases 10579-10582)"
+      ],
+      "owner": "sql-parser-planner-executor",
+      "notes": "The official sqlite_parity corpus covers basic create/drop."
+    },
+    {
+      "id": "sql.ctas",
+      "section": "SQL Surface",
+      "feature": "`CREATE TABLE AS SELECT`",
+      "status": "pass",
+      "proof_kind": "semantic_match",
+      "tests": [
+        "crates/sql/tests/parity_coverage.rs::ctas_basic_data_and_row_order_match_sqlite",
+        "crates/sql/tests/parity_coverage.rs::ctas_table_info_metadata_matches_sqlite",
+        "crates/sql/tests/parity_coverage.rs::ctas_if_not_exists_short_circuits_before_source_bind",
+        "crates/sql/tests/parity_coverage.rs::ctas_rolls_back_on_source_runtime_error"
+      ],
+      "artifacts": [],
+      "corpus_case_ids": [],
+      "open_subfeatures": [],
+      "owner": "sql-parser-planner-executor",
+      "notes": "CTAS names, declared types, row order, `IF NOT EXISTS` short-circuiting, and rollback on source-query failure are covered against `rusqlite`."
+    },
+    {
+      "id": "sql.create-drop-index",
+      "section": "SQL Surface",
+      "feature": "`CREATE INDEX`, `DROP INDEX` basics",
+      "status": "pass",
+      "proof_kind": "semantic_match",
+      "tests": [
+        "crates/sql/tests/parity_coverage.rs::create_and_drop_index",
+        "crates/sql/tests/parity_coverage.rs::drop_index_if_exists",
+        "crates/sql/tests/parity_coverage.rs::reindex_executes_after_index_creation"
+      ],
+      "artifacts": [],
+      "corpus_case_ids": [],
+      "open_subfeatures": [],
+      "owner": "sql-parser-planner-executor",
+      "notes": "Basic B-tree-backed indexes only."
+    },
+    {
+      "id": "sql.alter-rename",
+      "section": "SQL Surface",
+      "feature": "`ALTER TABLE RENAME TABLE/COLUMN`",
+      "status": "partial",
+      "proof_kind": "semantic_match",
+      "tests": [
+        "crates/sql/tests/parity_coverage.rs::alter_table_rename_to",
+        "crates/sql/tests/parity_coverage.rs::alter_table_rename_column"
+      ],
+      "artifacts": [],
+      "corpus_case_ids": [
+        "10413",
+        "10418",
+        "10425"
+      ],
+      "open_subfeatures": [
+        "ADD COLUMN and DROP COLUMN variants are outside the covered subset",
+        "a CHECK on an added column is not visible to the next INSERT (case 10413)",
+        "DROP COLUMN refusals print different error text (cases 10418, 10425)"
+      ],
+      "owner": "sql-parser-planner-executor",
+      "notes": "The official sqlite_parity corpus covers rename of tables and columns."
+    },
+    {
+      "id": "sql.returning",
+      "section": "SQL Surface",
+      "feature": "`RETURNING` expressions",
+      "status": "pass",
+      "proof_kind": "semantic_match",
+      "tests": [
+        "crates/sql/tests/parity_coverage.rs::returning_with_arithmetic_expression",
+        "crates/sql/tests/parity_coverage.rs::returning_with_function_call",
+        "crates/sql/tests/parity_coverage.rs::update_returning_with_expression"
+      ],
+      "artifacts": [],
+      "corpus_case_ids": [],
+      "open_subfeatures": [],
+      "owner": "sql-parser-planner-executor",
+      "notes": "Insert/update expressions covered."
+    },
+    {
+      "id": "sql.upsert",
+      "section": "SQL Surface",
+      "feature": "UPSERT `ON CONFLICT DO UPDATE` representative path",
+      "status": "partial",
+      "proof_kind": "semantic_match",
+      "tests": [
+        "crates/sql/tests/phase10_sqlc_conflict_matrix.rs::upsert_do_update_updates_correct_row",
+        "crates/sql/tests/phase10_sqlc_conflict_matrix.rs::upsert_do_update_with_where_predicate_applies_when_true",
+        "crates/sql/tests/phase10_sqlc_conflict_matrix.rs::upsert_do_nothing_leaves_table_unchanged"
+      ],
+      "artifacts": [
+        "crates/bench/compat/orm/migration.sqlt"
+      ],
+      "corpus_case_ids": [],
+      "open_subfeatures": [
+        "the full SQLite conflict matrix is outside the covered subset"
+      ],
+      "owner": "sql-parser-planner-executor",
+      "notes": "The official sqlite_parity corpus covers the representative `ON CONFLICT DO UPDATE` path."
+    },
+    {
+      "id": "sql.savepoints",
+      "section": "SQL Surface",
+      "feature": "Savepoints",
+      "status": "partial",
+      "proof_kind": "semantic_match",
+      "tests": [
+        "crates/sql/tests/parity_coverage.rs::nested_savepoint_basic",
+        "crates/sql/tests/parity_coverage.rs::nested_savepoint_release",
+        "crates/sql/tests/phase10_sqlb.rs::rollback_to_rewinds_post_savepoint_inserts",
+        "crates/sql/tests/phase10_sqlb.rs::nested_savepoints_independent_rewinds"
+      ],
+      "artifacts": [],
+      "corpus_case_ids": [
+        "10560"
+      ],
+      "open_subfeatures": [
+        "an unknown savepoint is rejected with different error text (case 10560)"
+      ],
+      "owner": "sql-parser-planner-executor",
+      "notes": "Nested savepoint behavior has focused coverage."
+    },
+    {
+      "id": "sql.joins",
+      "section": "SQL Surface",
+      "feature": "Joins and left joins",
+      "status": "pass",
+      "proof_kind": "semantic_match",
+      "tests": [
+        "crates/sql/tests/smoke_select.rs::left_join_null_extends_missing_rows",
+        "crates/sql/tests/smoke_select.rs::natural_using_join_merged_star_and_left_order",
+        "crates/sql/tests/differential_lab.rs::diff_outer_and_cross_join_matrix",
+        "crates/sql/tests/differential_lab.rs::diff_natural_using_join_output_shape",
+        "crates/sql/tests/parity_coverage.rs::inner_join_chain"
+      ],
+      "artifacts": [
+        "crates/bench/compat/orm/queries.sqlt"
+      ],
+      "corpus_case_ids": [
+        "10445",
+        "10451",
+        "10466"
+      ],
+      "open_subfeatures": [],
+      "owner": "sql-parser-planner-executor",
+      "notes": "Explicit join forms are covered. NATURAL JOIN and USING merged-column output semantics are implemented (W9-T9, `72b4107`); corpus cases 10445/10451/10466 pass. Cross joins, self-joins, and multi-way joins have coverage via `differential_lab`."
+    },
+    {
+      "id": "sql.row-value-in",
+      "section": "SQL Surface",
+      "feature": "Row-value `IN` subqueries",
+      "status": "pass",
+      "proof_kind": "semantic_match",
+      "tests": [
+        "crates/sql/tests/parity_coverage.rs::row_value_in_subquery_matches",
+        "crates/sql/tests/differential_lab.rs::diff_subquery_matrix"
+      ],
+      "artifacts": [],
+      "corpus_case_ids": [],
+      "open_subfeatures": [],
+      "owner": "sql-parser-planner-executor",
+      "notes": "Representative row-value `IN`/`NOT IN` covered."
+    },
+    {
+      "id": "sql.correlated-subqueries",
+      "section": "SQL Surface",
+      "feature": "Correlated subqueries",
+      "status": "partial",
+      "proof_kind": "semantic_match",
+      "tests": [
+        "crates/sql/tests/differential_lab.rs::diff_subquery_matrix",
+        "crates/sql/tests/differential_lab.rs::diff_correlated_subquery_outer_pk_is_not_inner_rowid_alias"
+      ],
+      "artifacts": [],
+      "corpus_case_ids": [
+        "10502",
+        "10585"
+      ],
+      "open_subfeatures": [
+        "a scalar subquery returning more than one column is rejected with different error text (cases 10502, 10585)"
+      ],
+      "owner": "sql-parser-planner-executor",
+      "notes": "A7: thread-local outer-row stack resolves qualified outer-scope references; correlated `EXISTS` / `NOT EXISTS` and correlated scalar subqueries in projection covered against the rusqlite oracle."
+    },
+    {
+      "id": "sql.cte",
+      "section": "SQL Surface",
+      "feature": "CTEs (`WITH`, recursive and non-recursive)",
+      "status": "pass",
+      "proof_kind": "semantic_match",
+      "tests": [
+        "crates/sql/tests/parity_cte.rs::non_recursive_cte_basic",
+        "crates/sql/tests/parity_cte.rs::recursive_cte_fibonacci_first_eight",
+        "crates/sql/tests/parity_cte.rs::recursive_cte_cycle_dedups_with_union",
+        "crates/sql/tests/parity_cte.rs::non_recursive_cte_materialized_hint_is_accepted"
+      ],
+      "artifacts": [],
+      "corpus_case_ids": [],
+      "open_subfeatures": [],
+      "owner": "sql-parser-planner-executor",
+      "notes": "A3: non-recursive + recursive (UNION / UNION ALL) materialized into thread-local row store; accepts `AS MATERIALIZED` / `AS NOT MATERIALIZED` as no-op hints and supports JOIN against CTE via synthetic TableDef. Iteration cap 10_000."
+    },
+    {
+      "id": "sql.compound-select",
+      "section": "SQL Surface",
+      "feature": "Compound `SELECT` (`UNION`, `INTERSECT`, `EXCEPT`)",
+      "status": "partial",
+      "proof_kind": "semantic_match",
+      "tests": [
+        "crates/sql/tests/parity_compound_select.rs::union_all_keeps_duplicates",
+        "crates/sql/tests/parity_compound_select.rs::intersect_returns_common_rows",
+        "crates/sql/tests/parity_compound_select.rs::except_returns_left_only_rows",
+        "crates/sql/tests/parity_compound_select.rs::mixed_set_operations_follow_sqlite_left_to_right",
+        "crates/sql/tests/parity_order_by_ordinal.rs::compound_union_all_order_by_position"
+      ],
+      "artifacts": [],
+      "corpus_case_ids": [
+        "10578"
+      ],
+      "open_subfeatures": [
+        "an ORDER BY term outside a compound result is rejected with different error text (case 10578)"
+      ],
+      "owner": "sql-parser-planner-executor",
+      "notes": "A2: UNION / UNION ALL / INTERSECT / EXCEPT all wired through the parser and exec layers; column-arity and type-class mismatches return diagnostic errors that match SQLite's error class. Parameterized compound branches and trailing wrapper `ORDER BY` / `LIMIT` share stable parameter slots, and top-level integer literals in trailing `ORDER BY` resolve as 1-based output-column references (single-branch and compound), matching SQLite."
+    },
+    {
+      "id": "sql.window",
+      "section": "SQL Surface",
+      "feature": "Window functions and frames",
+      "status": "pass",
+      "proof_kind": "semantic_match",
+      "tests": [
+        "crates/sql/tests/parity_window.rs::row_number_over_order_by",
+        "crates/sql/tests/parity_window.rs::rank_dense_rank_with_ties",
+        "crates/sql/tests/parity_window.rs::running_sum_rows_frame",
+        "crates/sql/tests/parity_window.rs::frame_exclude_group_sum"
+      ],
+      "artifacts": [],
+      "corpus_case_ids": [],
+      "open_subfeatures": [],
+      "owner": "sql-parser-planner-executor",
+      "notes": "A4: ROW_NUMBER / RANK / DENSE_RANK / NTILE / LAG / LEAD / FIRST_VALUE / LAST_VALUE / NTH_VALUE / PERCENT_RANK / CUME_DIST + aggregate-OVER (SUM/COUNT/AVG/MIN/MAX/TOTAL) with ROWS / RANGE / GROUPS frames."
+    },
+    {
+      "id": "sql.views",
+      "section": "SQL Surface",
+      "feature": "Views",
+      "status": "partial",
+      "proof_kind": "semantic_match",
+      "tests": [
+        "crates/sql/tests/parity_view.rs::create_select_drop_view_basic",
+        "crates/sql/tests/parity_view.rs::repeated_prepare_of_view_observes_base_table_changes",
+        "crates/sql/tests/parity_view.rs::insert_into_view_is_rejected",
+        "crates/sql/tests/parity_view.rs::view_survives_reopen"
+      ],
+      "artifacts": [],
+      "corpus_case_ids": [
+        "10572",
+        "10573"
+      ],
+      "open_subfeatures": [
+        "a cached prepared statement over a view does not observe rows changed after it was prepared",
+        "ALTER TABLE or DROP TABLE on a view is rejected with different error text (cases 10572, 10573)"
+      ],
+      "owner": "sql-parser-planner-executor",
+      "notes": "The official sqlite_parity corpus covers `CREATE [TEMP] VIEW [IF NOT EXISTS]` and `DROP VIEW [IF EXISTS]`. Views persist in the catalog (format_version 4) and expand at FROM-binding time. DML on a view returns a SQLite-style \"cannot modify view\" error."
+    },
+    {
+      "id": "sql.triggers",
+      "section": "SQL Surface",
+      "feature": "Triggers",
+      "status": "partial",
+      "proof_kind": "semantic_match",
+      "tests": [
+        "crates/sql/tests/parity_trigger.rs::after_insert_writes_audit_row",
+        "crates/sql/tests/parity_trigger.rs::after_update_of_column_filters_firing",
+        "crates/sql/tests/parity_trigger.rs::recursive_trigger_terminates_at_cap",
+        "crates/sql/tests/parity_trigger.rs::trigger_survives_reopen"
+      ],
+      "artifacts": [],
+      "corpus_case_ids": [
+        "10561",
+        "10570"
+      ],
+      "open_subfeatures": [
+        "INSTEAD OF triggers on views",
+        "recursion is capped at 32 in debug builds rather than SQLite's 1000",
+        "an unknown trigger and RAISE outside a trigger are rejected differently (cases 10561, 10570)"
+      ],
+      "owner": "sql-parser-planner-executor",
+      "notes": "The official sqlite_parity corpus covers `CREATE TRIGGER {BEFORE|AFTER} {INSERT|UPDATE [OF col,...]|DELETE}` plus `DROP TRIGGER`, including `OLD`/`NEW` and `UPDATE OF`."
+    },
+    {
+      "id": "sql.generated-columns",
+      "section": "SQL Surface",
+      "feature": "Generated columns",
+      "status": "pass",
+      "proof_kind": "semantic_match",
+      "tests": [
+        "crates/sql/tests/parity_generated_col.rs::generated_stored_basic_insert_select",
+        "crates/sql/tests/parity_generated_col.rs::generated_virtual_basic_insert_select",
+        "crates/sql/tests/parity_generated_col.rs::generated_stored_recomputes_on_update",
+        "crates/sql/tests/parity_generated_col.rs::generated_stored_write_block_explicit_insert"
+      ],
+      "artifacts": [],
+      "corpus_case_ids": [],
+      "open_subfeatures": [],
+      "owner": "sql-parser-planner-executor",
+      "notes": "A6 SQL-D: `STORED` and `VIRTUAL` generated columns parse, persist (catalog format_version 7), recompute on INSERT/UPDATE (STORED), and evaluate on read (VIRTUAL). Writes targeting generated columns are rejected with a SQLite-class error."
+    },
+    {
+      "id": "sql.partial-indexes",
+      "section": "SQL Surface",
+      "feature": "Partial indexes",
+      "status": "pass",
+      "proof_kind": "semantic_match",
+      "tests": [
+        "crates/sql/tests/parity_partial_index.rs::partial_index_indexes_only_matching_rows",
+        "crates/sql/tests/parity_partial_index.rs::partial_index_update_moves_in_and_out",
+        "crates/sql/tests/parity_partial_index.rs::partial_index_planner_only_uses_matching_predicate"
+      ],
+      "artifacts": [],
+      "corpus_case_ids": [],
+      "open_subfeatures": [],
+      "owner": "sql-parser-planner-executor",
+      "notes": "A6 SQL-D: `CREATE INDEX ... WHERE <predicate>` persists the predicate as verbatim SQL on `IndexDef.predicate_sql`; DML re-parses and evaluates the predicate per row (`crates/sql/src/exec/index_predicate.rs`) so partial indexes track in/out membership precisely, and reads only use the index when the query predicate implies the index predicate (`crates/sql/src/exec/index_partial.rs`)."
+    },
+    {
+      "id": "sql.expression-indexes",
+      "section": "SQL Surface",
+      "feature": "Expression indexes",
+      "status": "pass",
+      "proof_kind": "semantic_match",
+      "tests": [
+        "crates/sql/tests/parity_expr_index.rs::expression_index_lower_lookup",
+        "crates/sql/tests/parity_expr_index.rs::expression_index_update_recomputes_key",
+        "crates/sql/tests/parity_expr_index.rs::expression_index_delete_removes_key"
+      ],
+      "artifacts": [],
+      "corpus_case_ids": [],
+      "open_subfeatures": [],
+      "owner": "sql-parser-planner-executor",
+      "notes": "A6 SQL-D: `CREATE INDEX ... ON t(expr(col))` stashes the expression SQL on `IndexKeySource::Expression`; DML re-evaluates the expression to compute the index key, and UPDATE re-emits when any referenced column changes."
+    },
+    {
+      "id": "sql.foreign-keys",
+      "section": "SQL Surface",
+      "feature": "Foreign keys",
+      "status": "partial",
+      "proof_kind": "semantic_match",
+      "tests": [
+        "crates/sql/tests/parity_fk_enforce.rs::insert_into_child_with_missing_parent_errors",
+        "crates/sql/tests/parity_fk_enforce.rs::delete_parent_cascade_removes_children",
+        "crates/sql/tests/parity_fk_enforce.rs::deferred_fk_unresolved_at_commit_errors",
+        "crates/sql/tests/phase10_sqld_fk.rs::foreign_key_referential_actions_parse"
+      ],
+      "artifacts": [],
+      "corpus_case_ids": [
+        "10584"
+      ],
+      "open_subfeatures": [
+        "a foreign key to a missing table is rejected with different error text (case 10584)"
+      ],
+      "owner": "sql-parser-planner-executor",
+      "notes": "A6-fk: PRAGMA-gated enforcement on INSERT/UPDATE/DELETE; ON DELETE/UPDATE {NO ACTION, RESTRICT, CASCADE, SET NULL, SET DEFAULT}; DEFERRABLE INITIALLY DEFERRED checked at COMMIT. Cascade depth bounded."
+    },
+    {
+      "id": "sql.attach",
+      "section": "SQL Surface",
+      "feature": "ATTACH / DETACH",
+      "status": "partial",
+      "proof_kind": "semantic_match",
+      "tests": [
+        "crates/sql/tests/parity_attach.rs::attach_via_rusqlite_oracle_smoke",
+        "crates/sql/tests/parity_attach.rs::select_join_across_attached_alias_returns_rows",
+        "crates/sql/tests/parity_attach.rs::cross_db_insert_select_copies_main_rows_to_attached_database"
+      ],
+      "artifacts": [],
+      "corpus_case_ids": [
+        "10001",
+        "10002",
+        "10003",
+        "10004",
+        "10005",
+        "10006",
+        "10007",
+        "10008",
+        "10009",
+        "10010",
+        "10011",
+        "10012",
+        "10013",
+        "10014",
+        "10015",
+        "10016",
+        "10017",
+        "10018",
+        "10019",
+        "10020",
+        "10021",
+        "10384",
+        "10389"
+      ],
+      "open_subfeatures": [
+        "cross-database INSERT/UPDATE/DELETE without a SELECT subquery",
+        "cross-database transaction semantics",
+        "a reused alias and a detached qualifier are rejected with different error text (cases 10384, 10389)"
+      ],
+      "owner": "sql-parser-planner-executor",
+      "notes": "Corpus cases 10001–10021 pass for cross-database `SELECT`, JOIN, `INSERT ... SELECT`, `UPDATE`, `DELETE`, and `PRAGMA` routing."
+    },
+    {
+      "id": "expr.null-in",
+      "section": "Expressions And Functions",
+      "feature": "NULL comparison and `IN`/`NOT IN` edge cases",
+      "status": "pass",
+      "proof_kind": "semantic_match",
+      "tests": [
+        "crates/sql/tests/parity_coverage.rs::null_in_empty_list",
+        "crates/sql/tests/parity_coverage.rs::value_in_list_with_null",
+        "crates/sql/tests/parity_coverage.rs::value_not_in_list_with_null",
+        "crates/sql/tests/parity_coverage.rs::null_comparison_is_null"
+      ],
+      "artifacts": [],
+      "corpus_case_ids": [],
+      "open_subfeatures": [],
+      "owner": "sql-parser-planner-executor",
+      "notes": "SQLite three-valued logic has focused coverage."
+    },
+    {
+      "id": "expr.string-scalars",
+      "section": "Expressions And Functions",
+      "feature": "Core string scalars (`substr`, `trim`, `instr`, `replace`, case conversion, length)",
+      "status": "pass",
+      "proof_kind": "semantic_match",
+      "tests": [
+        "crates/sql/tests/parity_scalar_funcs.rs::substr_negative_start",
+        "crates/sql/tests/parity_scalar_funcs.rs::trim_custom_chars",
+        "crates/sql/tests/parity_scalar_funcs.rs::instr_empty_needle_returns_one",
+        "crates/sql/tests/parity_scalar_funcs.rs::replace_all_occurrences",
+        "crates/sql/tests/differential_lab.rs::diff_scalar_string_matrix"
+      ],
+      "artifacts": [],
+      "corpus_case_ids": [],
+      "open_subfeatures": [],
+      "owner": "sql-parser-planner-executor",
+      "notes": "Representative SQLite behavior covered."
+    },
+    {
+      "id": "expr.format-conditional",
+      "section": "Expressions And Functions",
+      "feature": "Formatting and conditional scalars (`printf`, `format`, `iif`, `sign`)",
+      "status": "pass",
+      "proof_kind": "semantic_match",
+      "tests": [
+        "crates/sql/tests/parity_scalar_funcs.rs::printf_integer_placeholder",
+        "crates/sql/tests/parity_scalar_funcs.rs::format_is_alias_for_printf",
+        "crates/sql/tests/parity_scalar_funcs.rs::iif_null_condition_returns_false_branch",
+        "crates/sql/tests/parity_scalar_funcs.rs::sign_negative"
+      ],
+      "artifacts": [],
+      "corpus_case_ids": [],
+      "open_subfeatures": [],
+      "owner": "sql-parser-planner-executor",
+      "notes": "Does not imply exhaustive SQLite format coverage."
+    },
+    {
+      "id": "expr.blob-char",
+      "section": "Expressions And Functions",
+      "feature": "Blob/character helpers (`zeroblob`, `randomblob`, `char`, `unicode`)",
+      "status": "pass",
+      "proof_kind": "semantic_match",
+      "tests": [
+        "crates/sql/tests/parity_scalar_funcs.rs::zeroblob_correct_length",
+        "crates/sql/tests/parity_scalar_funcs.rs::randomblob_correct_length",
+        "crates/sql/tests/parity_scalar_funcs.rs::char_basic_ascii",
+        "crates/sql/tests/parity_scalar_funcs.rs::unicode_multibyte_literal_returns_first_codepoint"
+      ],
+      "artifacts": [],
+      "corpus_case_ids": [],
+      "open_subfeatures": [],
+      "owner": "sql-parser-planner-executor",
+      "notes": "Randomness is shape-tested, not value-matched."
+    },
+    {
+      "id": "expr.aggregates",
+      "section": "Expressions And Functions",
+      "feature": "Aggregate functions (`count`, `sum`, `total`, `min`, `max`)",
+      "status": "partial",
+      "proof_kind": "semantic_match",
+      "tests": [
+        "crates/sql/tests/parity_agg_funcs.rs::total_vs_sum_null_difference",
+        "crates/sql/tests/parity_agg_funcs.rs::aggregate_distinct_and_filter_match_sqlite",
+        "crates/sql/tests/parity_agg_funcs.rs::group_concat_skips_nulls",
+        "crates/sql/tests/differential_lab.rs::diff_aggregate_matrix"
+      ],
+      "artifacts": [],
+      "corpus_case_ids": [
+        "10586"
+      ],
+      "open_subfeatures": [
+        "an aggregate misused in a WHERE clause is rejected with different error text (case 10586)"
+      ],
+      "owner": "sql-parser-planner-executor",
+      "notes": "Representative grouped and NULL behavior covered."
+    },
+    {
+      "id": "expr.json-aggregates",
+      "section": "Expressions And Functions",
+      "feature": "JSON aggregate functions",
+      "status": "pass",
+      "proof_kind": "semantic_match",
+      "tests": [
+        "crates/sql/tests/parity_agg_funcs.rs::json_group_array_basic",
+        "crates/sql/tests/parity_agg_funcs.rs::json_group_array_includes_nulls",
+        "crates/sql/tests/parity_agg_funcs.rs::json_group_object_basic",
+        "crates/sql/tests/parity_agg_funcs.rs::json_group_object_skips_null_keys"
+      ],
+      "artifacts": [],
+      "corpus_case_ids": [],
+      "open_subfeatures": [],
+      "owner": "phase10-json1-surface",
+      "notes": "JSON aggregate rows covered."
+    },
+    {
+      "id": "expr.json-scalars",
+      "section": "Expressions And Functions",
+      "feature": "JSON scalar functions",
+      "status": "pass",
+      "proof_kind": "semantic_match",
+      "tests": [
+        "crates/sql/tests/parity_json1.rs::parity_json_extract_object_key",
+        "crates/sql/tests/parity_json1.rs::parity_json_set_overwrites_existing_key",
+        "crates/sql/tests/parity_json1.rs::parity_json_patch_merges_objects",
+        "crates/sql/tests/parity_json1.rs::parity_arrow2_extracts_scalar_text",
+        "crates/sql/tests/phase10_j1_compat.rs::phase10_j1_json_extract_multi_path_returns_array"
+      ],
+      "artifacts": [],
+      "corpus_case_ids": [],
+      "open_subfeatures": [],
+      "owner": "phase10-json1-surface",
+      "notes": "`parity_json1.rs` runs a rusqlite-oracle differential pass over `json()` / `json_array[_length]` / `json_object` / `json_extract` / `json_type` / `json_valid` / `json_quote` / `json_set` / `json_insert` / `json_replace` / `json_remove` / `json_patch` and the `->` / `->>` arrow operators."
+    },
+    {
+      "id": "expr.datetime",
+      "section": "Expressions And Functions",
+      "feature": "Date/time functions",
+      "status": "pass",
+      "proof_kind": "semantic_match",
+      "tests": [
+        "crates/sql/tests/phase10_sqld_datetime.rs::julianday_known_value_matches_sqlite",
+        "crates/sql/tests/phase10_sqld_datetime.rs::modifier_start_of_day_matches_sqlite",
+        "crates/sql/tests/phase10_sqld_datetime.rs::modifier_minus_one_month_matches_sqlite",
+        "crates/sql/tests/phase10_sqld_datetime.rs::strftime_full_format"
+      ],
+      "artifacts": [],
+      "corpus_case_ids": [],
+      "open_subfeatures": [],
+      "owner": "phase10-datetime",
+      "notes": "A8: `date()` / `time()` / `datetime()` / `julianday()` / `unixepoch()` / `strftime()` accept the SQLite time-string formats and modifiers (`'now'`, `'+/-N {days,hours,...}'`, `'start of {day,month,year}'`, `'weekday N'`, `'utc'`, `'localtime'`) through the shared modifier pipeline in `crates/sql/src/datetime/modifiers.rs`; differential parity against the rusqlite oracle is wired and green."
+    },
+    {
+      "id": "expr.collations",
+      "section": "Expressions And Functions",
+      "feature": "Collations",
+      "status": "partial",
+      "proof_kind": "semantic_match",
+      "tests": [
+        "crates/sql/tests/parity_order_by_ordinal.rs::order_by_collate_nocase_matches_sqlite",
+        "crates/sql/tests/parity_order_by_ordinal.rs::order_by_collate_rtrim_matches_sqlite",
+        "crates/sql/tests/phase10_sqld_collation_unique_index.rs::nocase_unique_index_blocks_duplicate",
+        "crates/sql/tests/sqlite_full_parity.rs::known_full_sqlite_parity_gaps_are_explicit_failures"
+      ],
+      "artifacts": [],
+      "corpus_case_ids": [
+        "10340"
+      ],
+      "open_subfeatures": [
+        "a column declared COLLATE NOCASE does not order by that collation (sentinel known_full_sqlite_parity_gaps_are_explicit_failures)",
+        "LIKE with a NOCASE index optimization"
+      ],
+      "owner": "phase10-collations",
+      "notes": "Explicit `ORDER BY ... COLLATE NOCASE/RTRIM/BINARY` and corpus case 10340 (`CREATE UNIQUE INDEX ... COLLATE NOCASE`) pass."
+    },
+    {
+      "id": "capi.user-functions-collations",
+      "section": "Expressions And Functions",
+      "feature": "User-defined SQL functions/collations",
+      "status": "partial",
+      "proof_kind": "semantic_match",
+      "tests": [
+        "crates/ffi/tests/udf_register.rs::times_two_scalar_udf_invoked_from_select",
+        "crates/ffi/tests/udf_register.rs::aggregate_udf_sum_squares_invoked_per_group",
+        "crates/ffi/tests/udf_register.rs::window_callbacks_rejected_and_destroyed",
+        "crates/ffi/tests/collation_register.rs::reverse_nocase_orders_descending"
+      ],
+      "artifacts": [],
+      "corpus_case_ids": [],
+      "open_subfeatures": [
+        "window functions with xValue/xInverse are refused",
+        "the sqlite3_collation_needed callback is stored but never called"
+      ],
+      "owner": "c-abi",
+      "notes": "Scalar and aggregate functions (`sqlite3_create_function{,_v2,16}`, and `sqlite3_create_window_function` without `xValue`/`xInverse`) and collations (`sqlite3_create_collation{,_v2}`) are called from prepared statements. A registration belongs to its connection: replacing it, deleting it (every callback NULL) or closing the connection releases `user_data` through its destructor once. Partial because `SQLITE_DIRECTONLY` and unknown flags, and window callbacks, are refused with `SQLITE_ERROR`, and the `sqlite3_collation_needed` callback is stored per connection but never called. See `docs/security-capabilities.md`."
+    },
+    {
+      "id": "pragma.integrity-check",
+      "section": "PRAGMAs",
+      "feature": "`PRAGMA integrity_check` / `quick_check`",
+      "status": "pass",
+      "proof_kind": "semantic_match",
+      "tests": [
+        "crates/sql/tests/parity_coverage.rs::pragma_integrity_check_ok",
+        "crates/sql/tests/parity_coverage.rs::pragma_quick_check",
+        "crates/sql/tests/sqlite_full_parity.rs::reference_build_pragma_rows_match_for_supported_surfaces"
+      ],
+      "artifacts": [],
+      "corpus_case_ids": [],
+      "open_subfeatures": [],
+      "owner": "sql-parser-planner-executor",
+      "notes": "Current checks are RedlineDB-native integrity summaries."
+    },
+    {
+      "id": "pragma.auto-vacuum",
+      "section": "PRAGMAs",
+      "feature": "`PRAGMA auto_vacuum`",
+      "status": "partial",
+      "proof_kind": "known_divergence",
+      "tests": [
+        "crates/sql/tests/parity_coverage.rs::pragma_auto_vacuum",
+        "crates/sql/tests/parity_pragma_tv.rs::pragma_auto_vacuum_is_accepted_as_recall_only",
+        "crates/sql/tests/sqlite_full_parity.rs::known_gap_pragmas_are_rejected_or_diverge"
+      ],
+      "artifacts": [],
+      "corpus_case_ids": [],
+      "open_subfeatures": [
+        "RedlineDB never vacuums; the value is stored and echoed",
+        "SQLite ignores a change once the database has a table, so the readback diverges there"
+      ],
+      "owner": "sql-parser-planner-executor",
+      "notes": "Accepted. `PRAGMA auto_vacuum = N` is stored and read back. On an empty database the readback equals SQLite's."
+    },
+    {
+      "id": "pragma.wal-checkpoint",
+      "section": "PRAGMAs",
+      "feature": "`PRAGMA wal_checkpoint(MODE)`",
+      "status": "fail",
+      "proof_kind": "known_divergence",
+      "tests": [
+        "crates/sql/tests/parity_coverage.rs::pragma_wal_checkpoint_full",
+        "crates/sql/tests/parity_pragma_tv.rs::pragma_wal_checkpoint_is_accepted",
+        "crates/sql/tests/sqlite_full_parity.rs::known_gap_pragmas_are_rejected_or_diverge"
+      ],
+      "artifacts": [],
+      "corpus_case_ids": [],
+      "open_subfeatures": [
+        "answers (0, 0, 0) where SQLite reports (busy, log frames, checkpointed frames), or -1 for the frame counts outside WAL mode"
+      ],
+      "owner": "storage-and-catalog",
+      "notes": "Accepted for every mode as a no-op. RedlineDB has its own write-ahead log, not SQLite WAL frames, so there is nothing to report in SQLite's terms."
+    },
+    {
+      "id": "pragma.journal-mode",
+      "section": "PRAGMAs",
+      "feature": "`PRAGMA journal_mode` (memory/off/delete/wal)",
+      "status": "pass",
+      "proof_kind": "semantic_match",
+      "tests": [
+        "crates/sql/tests/parity_pragma_tv.rs::pragma_journal_mode_round_trips_supported_values",
+        "crates/sql/tests/parity_pragma_tv.rs::pragma_journal_mode_accepts_wal_and_reads_back_wal",
+        "crates/sql/tests/sqlite_full_parity.rs::reference_build_pragma_rows_match_for_supported_surfaces"
+      ],
+      "artifacts": [],
+      "corpus_case_ids": [],
+      "open_subfeatures": [],
+      "owner": "sql-parser-planner-executor",
+      "notes": "Round-trip on the supported subset plus RedlineDB's WAL-style `wal` mode; `truncate` and `persist` are out of scope because SQLite page-format WAL semantics are not implemented."
+    },
+    {
+      "id": "pragma.synchronous",
+      "section": "PRAGMAs",
+      "feature": "`PRAGMA synchronous`",
+      "status": "pass",
+      "proof_kind": "semantic_match",
+      "tests": [
+        "crates/sql/tests/parity_pragma_tv.rs::pragma_synchronous_round_trips_supported_values",
+        "crates/sql/tests/sqlite_full_parity.rs::reference_build_pragma_rows_match_for_supported_surfaces"
+      ],
+      "artifacts": [],
+      "corpus_case_ids": [],
+      "open_subfeatures": [],
+      "owner": "sql-parser-planner-executor",
+      "notes": "Accepts `OFF`/`NORMAL`/`FULL`/`EXTRA` plus integer aliases; stored for read-back."
+    },
+    {
+      "id": "pragma.temp-store",
+      "section": "PRAGMAs",
+      "feature": "`PRAGMA temp_store`",
+      "status": "pass",
+      "proof_kind": "semantic_match",
+      "tests": [
+        "crates/sql/tests/parity_pragma_tv.rs::pragma_temp_store_round_trips",
+        "crates/sql/tests/sqlite_full_parity.rs::reference_build_pragma_rows_match_for_supported_surfaces"
+      ],
+      "artifacts": [],
+      "corpus_case_ids": [],
+      "open_subfeatures": [],
+      "owner": "sql-parser-planner-executor",
+      "notes": "Accepts `DEFAULT`/`FILE`/`MEMORY` plus integer aliases."
+    },
+    {
+      "id": "pragma.cache-size",
+      "section": "PRAGMAs",
+      "feature": "`PRAGMA cache_size`",
+      "status": "pass",
+      "proof_kind": "semantic_match",
+      "tests": [
+        "crates/sql/tests/parity_pragma_tv.rs::pragma_cache_size_round_trips_signed_values",
+        "crates/sql/tests/sqlite_full_parity.rs::reference_build_pragma_rows_match_for_supported_surfaces"
+      ],
+      "artifacts": [],
+      "corpus_case_ids": [],
+      "open_subfeatures": [],
+      "owner": "sql-parser-planner-executor",
+      "notes": "Signed integer round-trip (negative = KiB, positive = pages)."
+    },
+    {
+      "id": "pragma.query-only",
+      "section": "PRAGMAs",
+      "feature": "`PRAGMA query_only`",
+      "status": "partial",
+      "proof_kind": "semantic_match",
+      "tests": [
+        "crates/sql/tests/parity_pragma_tv.rs::pragma_query_only_round_trips_and_blocks_writes",
+        "crates/sql/tests/sqlite_full_parity.rs::reference_build_pragma_rows_match_for_supported_surfaces"
+      ],
+      "artifacts": [],
+      "corpus_case_ids": [
+        "10253",
+        "10568"
+      ],
+      "open_subfeatures": [
+        "a write under query_only is rejected with different error text (cases 10253, 10568)"
+      ],
+      "owner": "sql-parser-planner-executor",
+      "notes": "When ON, blocks every write-side statement with a message containing `query_only`."
+    },
+    {
+      "id": "pragma.unknown-names",
+      "section": "PRAGMAs",
+      "feature": "Unknown PRAGMA names",
+      "status": "rejects-by-design",
+      "proof_kind": "intentional_reject",
+      "tests": [
+        "crates/sql/tests/parity_pragma_tv.rs::pragma_unknown_name_is_rejected",
+        "crates/sql/tests/sqlite_full_parity.rs::explicit_reject_pragmas_are_rejected_by_redline"
+      ],
+      "artifacts": [],
+      "corpus_case_ids": [],
+      "open_subfeatures": [],
+      "owner": "sql-parser-planner-executor",
+      "notes": "Unsupported PRAGMAs return `UnsupportedSql` naming the PRAGMA. `EXPLICIT_REJECT_REFERENCE_PRAGMAS` in `crates/sql/tests/sqlite_full_parity.rs` lists the ones the bundled SQLite supports."
+    },
+    {
+      "id": "pragma.foreign-keys",
+      "section": "PRAGMAs",
+      "feature": "`PRAGMA foreign_keys`",
+      "status": "pass",
+      "proof_kind": "semantic_match",
+      "tests": [
+        "crates/sql/tests/parity_fk_enforce.rs::pragma_foreign_keys_off_skips_enforcement",
+        "crates/sql/tests/parity_fk_enforce.rs::fk_disabled_via_explicit_pragma_skips_checks",
+        "crates/sql/tests/phase10_sqld_fk.rs::pragma_foreign_keys_toggle_round_trips"
+      ],
+      "artifacts": [],
+      "corpus_case_ids": [],
+      "open_subfeatures": [],
+      "owner": "sql-parser-planner-executor",
+      "notes": "A6: per-connection toggle now gates the FK enforcement layer end-to-end; OFF skips every check (matches SQLite's bundled default)."
+    },
+    {
+      "id": "pragma.table-valued",
+      "section": "PRAGMAs",
+      "feature": "Table-valued PRAGMAs",
+      "status": "partial",
+      "proof_kind": "semantic_match",
+      "tests": [
+        "crates/sql/tests/parity_pragma_tv.rs::pragma_table_info_tv_form_matches_sqlite",
+        "crates/sql/tests/parity_pragma_tv.rs::pragma_index_list_tv_form_matches_sqlite",
+        "crates/sql/tests/parity_pragma_tv.rs::pragma_index_info_tv_form_matches_sqlite",
+        "crates/sql/tests/parity_pragma_tv.rs::pragma_foreign_key_list_tv_form_shape_matches_sqlite",
+        "crates/sql/tests/sqlite_full_parity.rs::reference_build_pragma_rows_match_for_supported_surfaces",
+        "crates/sql/tests/sqlite_full_parity.rs::known_gap_pragmas_are_rejected_or_diverge"
+      ],
+      "artifacts": [],
+      "corpus_case_ids": [],
+      "open_subfeatures": [
+        "`PRAGMA index_xinfo` omits the rowid key row (`1|-1||0|BINARY|0`)"
+      ],
+      "owner": "sql-parser-planner-executor",
+      "notes": "`table_info`, `table_xinfo`, `index_list`, `index_info`, `foreign_key_list`, `database_list` and `table_list` match the rusqlite oracle on the columns `reference_build_pragma_rows_match_for_supported_surfaces` compares."
+    },
+    {
+      "id": "pragma.reference-build-set",
+      "section": "PRAGMAs",
+      "feature": "Full reference-build PRAGMA set",
+      "status": "partial",
+      "proof_kind": "semantic_match",
+      "tests": [
+        "crates/sql/tests/sqlite_full_parity.rs::reference_build_pragmas_are_fully_classified",
+        "crates/sql/tests/sqlite_full_parity.rs::reference_build_pragma_rows_match_for_supported_surfaces",
+        "crates/sql/tests/sqlite_full_parity.rs::accepted_uncompared_pragmas_are_accepted_by_redline",
+        "crates/sql/tests/sqlite_full_parity.rs::explicit_reject_pragmas_are_rejected_by_redline",
+        "crates/sql/tests/sqlite_full_parity.rs::known_gap_pragmas_are_rejected_or_diverge"
+      ],
+      "artifacts": [],
+      "corpus_case_ids": [],
+      "open_subfeatures": [
+        "PRAGMAs in `KNOWN_GAP_REFERENCE_PRAGMAS` are rejected or answer differently",
+        "PRAGMAs in `ACCEPTED_UNCOMPARED_REFERENCE_PRAGMAS` answer with RedlineDB's own stored or constant value; no SQLite value is claimed"
+      ],
+      "owner": "sql-parser-planner-executor",
+      "notes": "Every PRAGMA the bundled SQLite lists is in exactly one class in `crates/sql/tests/sqlite_full_parity.rs`, and each class is tested: row-compared with the oracle, accepted without a comparison, a known gap with a fixture that shows it, or an explicit reject."
+    },
+    {
+      "id": "file.sqlite-format",
+      "section": "File Format, Durability, C API, And CLI",
+      "feature": "SQLite database header/pages/btrees/records",
+      "status": "not-started",
+      "proof_kind": "known_divergence",
+      "tests": [
+        "crates/sql/tests/sqlite_full_parity.rs::sqlite_native_file_format_is_not_compatibility_surface"
+      ],
+      "artifacts": [],
+      "corpus_case_ids": [],
+      "open_subfeatures": [],
+      "owner": "storage-and-catalog",
+      "notes": "Current files use RedlineDB-native page/control/WAL formats, not `SQLite format 3`; the parity suite now asserts the header mismatch explicitly."
+    },
+    {
+      "id": "file.rollback-journal",
+      "section": "File Format, Durability, C API, And CLI",
+      "feature": "SQLite rollback journal compatibility",
+      "status": "not-started",
+      "proof_kind": "none",
+      "tests": [],
+      "artifacts": [],
+      "corpus_case_ids": [],
+      "open_subfeatures": [],
+      "owner": "storage-and-catalog",
+      "notes": "No SQLite rollback-journal reader/writer exists."
+    },
+    {
+      "id": "file.sqlite-wal",
+      "section": "File Format, Durability, C API, And CLI",
+      "feature": "SQLite WAL compatibility and recovery",
+      "status": "not-started",
+      "proof_kind": "none",
+      "tests": [],
+      "artifacts": [],
+      "corpus_case_ids": [],
+      "open_subfeatures": [],
+      "owner": "storage-and-catalog",
+      "notes": "RedlineDB has a native group-commit WAL, not SQLite WAL frames."
+    },
+    {
+      "id": "file.redline-to-sqlite",
+      "section": "File Format, Durability, C API, And CLI",
+      "feature": "Cross-open RedlineDB-created files with SQLite CLI",
+      "status": "not-started",
+      "proof_kind": "known_divergence",
+      "tests": [
+        "crates/sql/tests/sqlite_full_parity.rs::sqlite_native_file_format_is_not_compatibility_surface"
+      ],
+      "artifacts": [],
+      "corpus_case_ids": [],
+      "open_subfeatures": [],
+      "owner": "storage-and-catalog",
+      "notes": "Requires SQLite file-format writer."
+    },
+    {
+      "id": "file.sqlite-to-redline",
+      "section": "File Format, Durability, C API, And CLI",
+      "feature": "Cross-open SQLite-created files with RedlineDB",
+      "status": "not-started",
+      "proof_kind": "known_divergence",
+      "tests": [
+        "crates/sql/tests/sqlite_full_parity.rs::sqlite_native_file_is_not_redline_database_root"
+      ],
+      "artifacts": [],
+      "corpus_case_ids": [],
+      "open_subfeatures": [],
+      "owner": "storage-and-catalog",
+      "notes": "Requires SQLite pager/btree/record reader."
+    },
+    {
+      "id": "capi.core-aliases",
+      "section": "File Format, Durability, C API, And CLI",
+      "feature": "Covered `sqlite3_*` open/prepare/step/finalize aliases",
+      "status": "pass",
+      "proof_kind": "semantic_match",
+      "tests": [
+        "crates/ffi/tests/upstream_abi.rs::prepare_v3_upstream_order_flags_0_1_2",
+        "crates/ffi/tests/upstream_abi.rs::prepare_v3_unsupported_flag_nulls_stmt",
+        "crates/ffi/tests/value_result.rs::null_value_reports_null_type_and_zero_accessors",
+        "crates/ffi/tests/error_paths.rs::prepare_with_null_db_returns_misuse_and_leaves_out_stmt_null"
+      ],
+      "artifacts": [
+        "crates/ffi/tests/**",
+        "contracts/c-abi/redlinedb.h",
+        "scripts/compatibility/phase2-abi-probe.sh",
+        "contracts/c-abi/probe/phase2_abi_probe.c"
+      ],
+      "corpus_case_ids": [],
+      "open_subfeatures": [],
+      "owner": "c-abi",
+      "notes": "Covered ABI subset only. `crates/ffi/tests/upstream_abi.rs` and the C probe call it through upstream 3.53.1 declarations (prepare_v2/v3 bounds and tails, flags, storage classes, text conversions, `:memory:`); upstream libsqlite3 passes the same probe cases as a control. Header edits require an exception receipt."
+    },
+    {
+      "id": "capi.broad-surface",
+      "section": "File Format, Durability, C API, And CLI",
+      "feature": "Broad `sqlite3_*` API surface",
+      "status": "partial",
+      "proof_kind": "semantic_match",
+      "tests": [
+        "crates/ffi/tests/blob_io.rs::open_read_write_close_round_trip",
+        "crates/ffi/tests/hooks.rs::commit_hook_fires_and_can_veto",
+        "crates/ffi/tests/hooks.rs::authorizer_returns_decision_code",
+        "crates/ffi/tests/value_result.rs::result_setters_populate_context_slot"
+      ],
+      "artifacts": [
+        "crates/ffi/src/sqlite3_api/**",
+        "crates/ffi/tests/**"
+      ],
+      "corpus_case_ids": [],
+      "open_subfeatures": [
+        "many upstream functions are not exported; `crates/ffi/tests/symbol_allowlist.toml` lists them"
+      ],
+      "owner": "c-abi",
+      "notes": "B1-B5: 36 additional `sqlite3_*` symbols implemented across `sqlite3_api/{result,value,context,udf,collation,blob,hooks,hooks_fire,bind,column,core,exec,meta,stmt}.rs`. Covers UDF context + result family, value extraction, blob I/O, collation registration, per-connection hooks (`commit`, `rollback`, `update`, `trace`, `profile`, `busy_handler`, `set_authorizer`), and the remaining stmt/meta/exec aliases. Symbol-allowlist tests (`crates/ffi/tests/symbol_diff.rs`) enforce the surface. Partial because several hooks exist without SQLite's behaviour: `sqlite3_trace_v2` refuses a callback (`SQLITE_ERROR`) because it delivers no events; `sqlite3_trace`, `sqlite3_profile` and the commit and rollback hooks fire only from `sqlite3_exec`, and a commit hook cannot veto; the busy handler is never called; the authorizer is asked only table-level `SQLITE_SELECT`/`INSERT`/`UPDATE`/`DELETE` when a statement steps (no `SQLITE_READ` per column, DDL, PRAGMA, ATTACH, function or transaction codes), and an invalid return code fails the statement (\"authorizer malfunction\"). See `docs/security-capabilities.md`."
+    },
+    {
+      "id": "cli.one-shot",
+      "section": "File Format, Durability, C API, And CLI",
+      "feature": "CLI one-shot query/stats/backup commands",
+      "status": "partial",
+      "proof_kind": "semantic_match",
+      "tests": [
+        "crates/cli/tests/shellzero_smoke.rs::shellzero_select_one_plus_one",
+        "crates/cli/tests/shellzero_smoke.rs::without_shellzero_select_still_works",
+        "crates/cli/tests/dot_commands.rs::batch_bail_memory_mode_is_cwd_clean_and_output_exact"
+      ],
+      "artifacts": [
+        ".jankurai/test-map.json"
+      ],
+      "corpus_case_ids": [
+        "11306",
+        "11314",
+        "11322",
+        "11330",
+        "11338",
+        "11346",
+        "11354",
+        "11362"
+      ],
+      "open_subfeatures": [
+        "SQLite shell scripting beyond one-shot query, stats and backup",
+        "a BLOB byte that is not UTF-8 is printed as U+FFFD instead of the raw byte (cases 11306-11362)"
+      ],
+      "owner": "cli-shell",
+      "notes": "One-shot queries (`redlinedb DB SQL`), `stats` and `backup` run in the CLI test lanes listed in `.jankurai/test-map.json`."
+    },
+    {
+      "id": "cli.dot-commands",
+      "section": "File Format, Durability, C API, And CLI",
+      "feature": "SQLite shell dot-command compatibility",
+      "status": "partial",
+      "proof_kind": "semantic_match",
+      "tests": [
+        "crates/cli/tests/dot_commands.rs::dot_tables_lists_user_tables",
+        "crates/cli/tests/dot_commands.rs::dot_schema_prints_create_statements",
+        "crates/cli/tests/dot_commands.rs::dot_dump_round_trips_through_sqlite3",
+        "crates/cli/tests/dot_commands.rs::dot_parameter_set_binds_named_placeholders"
+      ],
+      "artifacts": [],
+      "corpus_case_ids": [
+        "00115",
+        "00117",
+        "00118",
+        "00121",
+        "00124",
+        "00128",
+        "00129",
+        "00133",
+        "00134",
+        "00140",
+        "00141",
+        "00152",
+        "00158",
+        "00159",
+        "10182"
+      ],
+      "open_subfeatures": [
+        "the official corpus fails the listed dot-command cases byte for byte; each is in `metadata/sqlite_parity/known-failures.json` with its reason"
+      ],
+      "owner": "cli-shell",
+      "notes": "25 dot-commands are wired through `crates/cli/src/dot/{mod,control,display,io_cmd,schema,parameter}.rs`, including `.fullschema`, `.once FILE` and `.parameter set|unset|init|clear|list`."
+    }
+  ]
+}

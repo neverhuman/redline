@@ -14,9 +14,13 @@ use std::fs;
 use std::sync::Arc;
 use tempfile::tempdir;
 
+/// Rows compared with the bundled SQLite in
+/// `reference_build_pragma_rows_match_for_supported_surfaces`.
 const ROW_COMPARED_REFERENCE_PRAGMAS: &[&str] = &[
+    "application_id",
     "cache_size",
     "database_list",
+    "foreign_key_list",
     "foreign_keys",
     "index_info",
     "index_list",
@@ -25,68 +29,75 @@ const ROW_COMPARED_REFERENCE_PRAGMAS: &[&str] = &[
     "query_only",
     "quick_check",
     "recursive_triggers",
-    "schema_version",
     "synchronous",
     "table_info",
+    "table_list",
     "table_xinfo",
     "temp_store",
     "user_version",
 ];
 
+/// SQLite supports these and RedlineDB rejects them or answers differently;
+/// `known_gap_pragmas_are_rejected_or_diverge` shows each gap.
 const KNOWN_GAP_REFERENCE_PRAGMAS: &[&str] = &[
+    "auto_vacuum",
+    "cache_spill",
+    "case_sensitive_like",
     "collation_list",
     "compile_options",
-    "foreign_key_list",
     "function_list",
     "index_xinfo",
     "module_list",
     "pragma_list",
-    "table_list",
+    "schema_version",
+    "trusted_schema",
+    "wal_checkpoint",
 ];
 
-const EXPLICIT_REJECT_REFERENCE_PRAGMAS: &[&str] = &[
+/// RedlineDB accepts these and answers with its own stored or constant
+/// value, which is not compared with SQLite (readback only).
+const ACCEPTED_UNCOMPARED_REFERENCE_PRAGMAS: &[&str] = &[
     "analysis_limit",
-    "application_id",
-    "auto_vacuum",
     "automatic_index",
     "busy_timeout",
-    "cache_spill",
-    "case_sensitive_like",
-    "cell_size_check",
     "checkpoint_fullfsync",
-    "count_changes",
     "data_version",
-    "default_cache_size",
     "defer_foreign_keys",
-    "empty_result_callbacks",
     "encoding",
     "foreign_key_check",
     "freelist_count",
-    "full_column_names",
     "fullfsync",
     "hard_heap_limit",
     "ignore_check_constraints",
-    "incremental_vacuum",
-    "journal_size_limit",
     "legacy_alter_table",
     "locking_mode",
     "max_page_count",
     "mmap_size",
-    "optimize",
     "page_count",
     "page_size",
-    "read_uncommitted",
     "reverse_unordered_selects",
     "secure_delete",
+    "soft_heap_limit",
+    "threads",
+    "writable_schema",
+];
+
+/// RedlineDB rejects these with `PRAGMA <name> is not supported`;
+/// `explicit_reject_pragmas_are_rejected_by_redline` checks each.
+const EXPLICIT_REJECT_REFERENCE_PRAGMAS: &[&str] = &[
+    "cell_size_check",
+    "count_changes",
+    "default_cache_size",
+    "empty_result_callbacks",
+    "full_column_names",
+    "incremental_vacuum",
+    "journal_size_limit",
+    "optimize",
+    "read_uncommitted",
     "short_column_names",
     "shrink_memory",
-    "soft_heap_limit",
     "temp_store_directory",
-    "threads",
-    "trusted_schema",
     "wal_autocheckpoint",
-    "wal_checkpoint",
-    "writable_schema",
 ];
 
 fn sqlite_pragma_list(conn: &rusqlite::Connection) -> Vec<String> {
@@ -126,6 +137,7 @@ fn classified_reference_pragmas() -> BTreeSet<String> {
     ROW_COMPARED_REFERENCE_PRAGMAS
         .iter()
         .chain(KNOWN_GAP_REFERENCE_PRAGMAS)
+        .chain(ACCEPTED_UNCOMPARED_REFERENCE_PRAGMAS)
         .chain(EXPLICIT_REJECT_REFERENCE_PRAGMAS)
         .map(|name| (*name).to_owned())
         .collect()
@@ -168,42 +180,36 @@ impl Harness {
         );
     }
 
-    #[allow(dead_code)] // Used by parity-gap fixtures that drop in or out as the ledger flips.
-    fn assert_sqlite_accepts_redline_rejects(&self, setup: &[&str], sql: &str) {
+    /// SQLite accepts `sql` after `setup`, and RedlineDB rejects it with an
+    /// error naming `fragment`. `setup` must succeed on both engines: a setup
+    /// failure is a broken fixture, never a pass.
+    fn assert_redline_rejects(&self, setup: &[&str], sql: &str, fragment: &str) {
         for stmt in setup {
             self.execute_both(stmt);
         }
-
-        self.sqlite
-            .execute_batch(sql)
-            .unwrap_or_else(|err| panic!("sqlite should accept {sql:?}: {err}"));
-
-        let redline_result = redline_accepts(&self.redline, sql);
+        query_sqlite(&self.sqlite, sql);
+        let err = match redline_accepts(&self.redline, sql) {
+            Ok(()) => panic!("redline accepted {sql:?}, which this suite lists as rejected"),
+            Err(err) => err.to_string(),
+        };
         assert!(
-            redline_result.is_err(),
-            "redline unexpectedly accepted known full-parity gap: {sql}"
+            err.contains(fragment),
+            "redline rejected {sql:?} with {err:?}, which does not name {fragment:?}"
         );
     }
 
-    #[allow(dead_code)] // Used by parity-gap fixtures that drop in or out as the ledger flips.
-    fn assert_sqlite_result_diff_or_redline_rejects(&self, setup: &[&str], sql: &str) {
+    /// After `setup` (which must succeed on both engines) both engines run
+    /// `sql` and return different rows. An error on either side is a broken
+    /// fixture, not a divergence.
+    fn assert_result_diverges(&self, setup: &[&str], sql: &str) {
         for stmt in setup {
-            self.sqlite
-                .execute_batch(stmt)
-                .unwrap_or_else(|err| panic!("sqlite setup failed for {stmt:?}: {err}"));
-            if self.redline.execute(stmt).is_err() {
-                return;
-            }
+            self.execute_both(stmt);
         }
-
         let sqlite_rows = query_sqlite(&self.sqlite, sql);
-        let redline_rows = match try_query_redline(&self.redline, sql) {
-            Ok(rows) => rows,
-            Err(_) => return,
-        };
+        let redline_rows = query_redline(&self.redline, sql);
         assert_ne!(
             redline_rows, sqlite_rows,
-            "redline unexpectedly matched known full-parity gap: {sql}"
+            "redline now matches SQLite for {sql:?}; move it out of the known gaps"
         );
     }
 }
@@ -249,7 +255,6 @@ fn try_query_redline(
     Ok(out)
 }
 
-#[allow(dead_code)] // Used by `assert_sqlite_accepts_redline_rejects` parity-gap fixtures.
 fn redline_accepts(conn: &Arc<Connection>, sql: &str) -> Result<(), redlinedb_sql::Error> {
     let trimmed = sql.trim_start();
     let upper = trimmed.to_ascii_uppercase();
@@ -327,6 +332,7 @@ fn reference_build_pragma_rows_match_for_supported_surfaces() {
     harness.execute_both("PRAGMA temp_store = MEMORY");
     harness.execute_both("PRAGMA cache_size = -256");
     harness.execute_both("PRAGMA query_only = OFF");
+    harness.execute_both("PRAGMA application_id = 42");
     harness.execute_both("CREATE TABLE t(id INTEGER PRIMARY KEY, name TEXT, n INTEGER)");
     harness.execute_both("CREATE TABLE x(a TEXT, b INTEGER)");
     harness.execute_both("CREATE TABLE parent(id INTEGER PRIMARY KEY, label TEXT)");
@@ -342,30 +348,32 @@ fn reference_build_pragma_rows_match_for_supported_surfaces() {
         "INSERT INTO child(id, parent_id, label) VALUES (10, 1, 'alpha'), (11, NULL, 'beta')",
     );
 
-    harness.assert_query_matches("PRAGMA foreign_keys");
-    harness.assert_query_matches("PRAGMA recursive_triggers");
-    harness.assert_query_matches("PRAGMA user_version");
-    harness.assert_query_matches("PRAGMA journal_mode");
-    harness.assert_query_matches("PRAGMA synchronous");
-    harness.assert_query_matches("PRAGMA temp_store");
-    harness.assert_query_matches("PRAGMA cache_size");
-    harness.assert_query_matches("PRAGMA query_only");
-    harness.assert_query_matches("PRAGMA integrity_check");
-    harness.assert_query_matches("PRAGMA quick_check");
-    harness.assert_query_matches(
+    let compared = [
+        "PRAGMA foreign_keys",
+        "PRAGMA recursive_triggers",
+        "PRAGMA user_version",
+        "PRAGMA journal_mode",
+        "PRAGMA synchronous",
+        "PRAGMA temp_store",
+        "PRAGMA cache_size",
+        "PRAGMA query_only",
+        "PRAGMA integrity_check",
+        "PRAGMA quick_check",
+        "PRAGMA application_id",
         "SELECT seq, name FROM pragma_database_list() WHERE name = 'main' ORDER BY seq",
-    );
-    harness.assert_query_matches(
         "SELECT cid, name, type, dflt_value, pk FROM pragma_table_info('t') ORDER BY cid",
-    );
-    harness.assert_query_matches("PRAGMA table_xinfo('x')");
-    harness.assert_query_matches(
+        "PRAGMA table_xinfo('x')",
         "SELECT name, \"unique\", origin FROM pragma_index_list('t') \
          WHERE name NOT LIKE 'sqlite_autoindex_%' ORDER BY name",
-    );
-    harness.assert_query_matches(
         "SELECT seqno, cid, name FROM pragma_index_info('t_name_idx') ORDER BY seqno",
-    );
+        "SELECT id, seq, \"table\", \"from\", \"to\", on_update, on_delete, \"match\" \
+         FROM pragma_foreign_key_list('child') ORDER BY id, seq",
+        "SELECT schema, name, type, ncol, wr, strict FROM pragma_table_list \
+         WHERE schema = 'main' AND name NOT LIKE 'sqlite_%' ORDER BY name",
+    ];
+    for sql in compared {
+        harness.assert_query_matches(sql);
+    }
 
     let sqlite_pragmas = sqlite_pragma_list(&harness.sqlite);
     for pragma in ROW_COMPARED_REFERENCE_PRAGMAS {
@@ -373,51 +381,99 @@ fn reference_build_pragma_rows_match_for_supported_surfaces() {
             sqlite_pragmas.iter().any(|name| name == pragma),
             "row-compared PRAGMA {pragma} is not present in bundled SQLite pragma_list"
         );
+        assert!(
+            compared.iter().any(|sql| sql.contains(pragma)),
+            "row-compared PRAGMA {pragma} is not compared by this test"
+        );
+    }
+}
+
+/// Every PRAGMA this suite lists as an explicit reject is rejected by
+/// RedlineDB with a message naming it, while SQLite accepts its read form.
+#[test]
+fn explicit_reject_pragmas_are_rejected_by_redline() {
+    for name in EXPLICIT_REJECT_REFERENCE_PRAGMAS {
+        let harness = Harness::new();
+        harness.assert_redline_rejects(
+            &[],
+            &format!("PRAGMA {name}"),
+            &format!("PRAGMA {name} is not supported"),
+        );
+    }
+}
+
+/// RedlineDB accepts the read form of these PRAGMAs and answers with its own
+/// stored or constant value. No SQLite value is claimed for them.
+#[test]
+fn accepted_uncompared_pragmas_are_accepted_by_redline() {
+    for name in ACCEPTED_UNCOMPARED_REFERENCE_PRAGMAS {
+        let harness = Harness::new();
+        let sql = format!("PRAGMA {name}");
+        query_sqlite(&harness.sqlite, &sql);
+        try_query_redline(&harness.redline, &sql)
+            .unwrap_or_else(|err| panic!("redline rejected accepted PRAGMA {name}: {err}"));
+    }
+}
+
+/// Each known-gap PRAGMA has a fixture that shows the gap: RedlineDB rejects
+/// a PRAGMA SQLite supports, or both answer and the rows differ.
+#[test]
+fn known_gap_pragmas_are_rejected_or_diverge() {
+    for name in KNOWN_GAP_REFERENCE_PRAGMAS {
+        let harness = Harness::new();
+        match *name {
+            "collation_list" | "function_list" | "module_list" | "pragma_list" => harness
+                .assert_redline_rejects(
+                    &[],
+                    &format!("PRAGMA {name}"),
+                    &format!("PRAGMA {name} is not supported"),
+                ),
+            // RedlineDB lists its own build options.
+            "compile_options" => harness.assert_result_diverges(&[], "PRAGMA compile_options"),
+            // RedlineDB omits the rowid key row (`1|-1||0|BINARY|0`).
+            "index_xinfo" => harness.assert_result_diverges(
+                &[
+                    "CREATE TABLE t(id INTEGER PRIMARY KEY, name TEXT)",
+                    "CREATE INDEX t_name_idx ON t(name)",
+                ],
+                "PRAGMA index_xinfo('t_name_idx')",
+            ),
+            // RedlineDB has no SQLite WAL and answers (0, 0, 0).
+            "wal_checkpoint" => harness.assert_result_diverges(
+                &["PRAGMA journal_mode=WAL"],
+                "PRAGMA wal_checkpoint(FULL)",
+            ),
+            // SQLite defaults to 1; RedlineDB answers 0.
+            "trusted_schema" => harness.assert_result_diverges(&[], "PRAGMA trusted_schema"),
+            // SQLite reports its computed spill threshold; RedlineDB echoes the setting.
+            "cache_spill" => {
+                harness.assert_result_diverges(&["PRAGMA cache_spill = 7"], "PRAGMA cache_spill")
+            }
+            // RedlineDB stores and echoes the setting and never vacuums;
+            // SQLite ignores a change once the database has a table.
+            "auto_vacuum" => harness.assert_result_diverges(
+                &["CREATE TABLE t(x INTEGER)", "PRAGMA auto_vacuum = FULL"],
+                "PRAGMA auto_vacuum",
+            ),
+            // RedlineDB counts schema changes differently.
+            "schema_version" => harness.assert_result_diverges(
+                &["CREATE TABLE a(x INTEGER)", "CREATE INDEX a_x ON a(x)"],
+                "PRAGMA schema_version",
+            ),
+            // SQLite's read form returns no row; RedlineDB returns one.
+            "case_sensitive_like" => {
+                harness.assert_result_diverges(&[], "PRAGMA case_sensitive_like")
+            }
+            other => panic!("known-gap PRAGMA {other} has no fixture that shows the gap"),
+        }
     }
 }
 
 #[test]
 fn known_full_sqlite_parity_gaps_are_explicit_failures() {
     let harness = Harness::new();
-    // Track C closed these PRAGMAs (auto_vacuum, page_size, encoding,
-    // application_id) — they are now accepted recall-only surfaces.
-    // Asserting acceptance here keeps the ledger honest: any
-    // regression that re-rejects them will trip the assertion above.
-    harness.execute_both("PRAGMA auto_vacuum = FULL");
-    harness.execute_both("PRAGMA application_id = 42");
-    // page_size and encoding accept the value but don't produce rows;
-    // execute through redline directly so a stray future surface
-    // change shows up here.
-    harness
-        .redline
-        .execute("PRAGMA page_size = 4096")
-        .expect("page_size accepted");
-    harness
-        .redline
-        .execute("PRAGMA encoding = 'UTF-8'")
-        .expect("encoding accepted");
-    harness.assert_sqlite_result_diff_or_redline_rejects(
-        &["PRAGMA journal_mode=WAL"],
-        "PRAGMA wal_checkpoint(FULL)",
-    );
-    harness.assert_sqlite_result_diff_or_redline_rejects(
-        &[
-            "CREATE TABLE t(id INTEGER PRIMARY KEY, name TEXT)",
-            "CREATE INDEX t_name_idx ON t(name)",
-        ],
-        "PRAGMA index_xinfo('t_name_idx')",
-    );
-    // pragma_foreign_key_list closed in Track C — both engines now
-    // return identical rows.
-    harness.execute_both("CREATE TABLE parent(id INTEGER PRIMARY KEY, label TEXT)");
-    harness.execute_both(
-        "CREATE TABLE child(id INTEGER PRIMARY KEY, parent_id INTEGER REFERENCES parent(id), label TEXT)",
-    );
-    harness.assert_query_matches(
-        "SELECT id, seq, \"table\", \"from\", \"to\", on_update, on_delete, \"match\" \
-         FROM pragma_foreign_key_list('child') ORDER BY id, seq",
-    );
-    harness.assert_sqlite_result_diff_or_redline_rejects(
+    // A column declared COLLATE NOCASE does not order by that collation.
+    harness.assert_result_diverges(
         &[
             "CREATE TABLE names(name TEXT COLLATE NOCASE)",
             "INSERT INTO names(name) VALUES ('a'), ('B')",

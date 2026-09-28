@@ -597,3 +597,35 @@ against the v5 headers. There is no v4 compatibility alias.
 - `docs/audit-rubric.md` and `docs/boundaries.md` name the header's current
   path, `contracts/c-abi/redlinedb.h`; `docs/testing.md`'s link to
   `docs/sqlite-parity.md` resolves.
+
+## SQLite feature ledger from typed proof (SQ-07)
+
+- The feature tables in `docs/sqlite-parity.md` are now rendered from
+  `docs/sqlite-feature-matrix.json` (`scripts/parity/render-sqlite-feature-matrix.sh`).
+  Each row names its status, a proof kind (`semantic_match`, `readback_only`,
+  `intentional_reject`, `known_divergence`, `none`), the test functions
+  (`path::fn`) behind it, other evidence paths, the official corpus cases it
+  covers or fails, and its open subfeatures. `scripts/parity/lint-sqlite-parity-ledger.sh`
+  (CI preflight, tested by `scripts/parity/test-lint-sqlite-parity-ledger.sh`)
+  fails on a missing test function or path, an unknown case id, a hand edit
+  of the tables, a `pass` row with an open subfeature, and typed whole-corpus
+  pass counts.
+- Corrected rows: `PRAGMA auto_vacuum` was listed as rejected; it is accepted
+  and echoes the stored value, which diverges from SQLite once a table exists
+  (partial). `PRAGMA wal_checkpoint(MODE)` was listed as rejected; it is
+  accepted as a no-op answering (0, 0, 0) (fail). Table-valued PRAGMAs are
+  partial: `index_xinfo` omits the rowid key row. Rows whose feature has a
+  failing official case now name it and are partial: DML basics (10547,
+  10548), savepoints (10560), correlated/scalar subqueries (10502, 10585),
+  compound SELECT (10578), foreign keys (10584), aggregates (10586) and
+  `PRAGMA query_only` (10253, 10568).
+- `crates/sql/tests/sqlite_full_parity.rs` classified 66 bundled-SQLite
+  PRAGMAs, but only the row-compared class was checked, and 29 of the 42
+  "explicit rejects" (including `auto_vacuum`) are in fact accepted. Every
+  class is now tested: row-compared with the oracle (`foreign_key_list`,
+  `application_id` and `table_list` added; `schema_version`, which was
+  listed but never compared, diverges), accepted without a SQLite value
+  claim, a known gap with a fixture that shows it, or rejected with
+  "PRAGMA <name> is not supported". The gap helper that returned silently
+  when setup or the query failed is split into `assert_redline_rejects` and
+  `assert_result_diverges`, both of which require setup to succeed.

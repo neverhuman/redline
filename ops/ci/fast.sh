@@ -54,6 +54,7 @@ run_preflight() {
     bash scripts/test-release-version.sh
     bash ops/ci/check-workflow-permissions.sh
     bash ops/ci/tests/workflow-permissions.sh
+    bash scripts/parity/test-lint-sqlite-parity-ledger.sh
     bash scripts/parity/lint-sqlite-parity-ledger.sh
     cargo build --locked -p redlinedb-cli --bin redlinedb
     # README.md's embedding example (test-docs-quickstart.sh keeps them equal).

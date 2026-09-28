@@ -69,8 +69,13 @@ printf 'faster than SQLite\n' >"$repo/docs/untracked.md"
 output=$(bash "$lint" --root "$repo" 2>&1) || fail "an untracked file was checked: $output"
 rm "$repo/docs/untracked.md"
 
+# An identifier that merely contains the letters is not a claim.
+printf '"id": "sql.create-drop-index"\n' >"$repo/docs/ids.md"
+expect 'drop-index is not drop-in' 0
+git -C "$repo" rm -q -f docs/ids.md
+
 # Case-insensitive, and each pattern is covered.
-for claim in 'DROP-IN' '100% sqlite' '100% Safe-Rust' 'Faster Than SQLite'; do
+for claim in 'DROP-IN' 'a drop-in-replacement' '100% sqlite' '100% Safe-Rust' 'Faster Than SQLite'; do
   printf '%s\n' "$claim" >"$repo/docs/claim.md"
   expect "pattern $claim" 1 'docs/claim.md:1: unreviewed claim'
 done

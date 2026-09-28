@@ -30,7 +30,8 @@ while [[ $# -gt 0 ]]; do
 done
 cd "$root"
 allowlist=scripts/launch-claims-allowlist.tsv
-pattern='drop-in|100% SQLite|full SQLite compat|100% safe-Rust|faster than SQLite'
+# drop-in must end the word: `create-drop-index` is not a claim.
+pattern='drop-in([^[:alnum:]_]|$)|100% SQLite|full SQLite compat|100% safe-Rust|faster than SQLite'
 
 fingerprint() {
   local text
