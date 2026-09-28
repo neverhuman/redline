@@ -139,7 +139,38 @@ copy_redline_testing_provenance() {
   fi
 }
 
+# Renders the official run where the runner left it, in official mode, into
+# a scratch directory and a scratch README: the checks `report` makes (a
+# clean source tree, identities that agree, an oracle stamp, a finished run)
+# then refuse a run before anything under benchmark-results changes.
+verify_sqlite_report_run() {
+  local redline_testing_bin="${1:?redline-testing bin required}"
+  local updated_date="${2:?updated date required}"
+  local work
+  local rc=0
+  work="$(mktemp -d "${TMPDIR:-/tmp}/sqlite-report-verify.XXXXXX")"
+  cp README.md "$work/README.md"
+  "$redline_testing_bin" report \
+    --suite sqlite_parity \
+    --input target/redline-testing/sqlite_parity.raw.jsonl \
+    "${sqlite_parity_full_select[@]}" \
+    --official-evidence target/redline-testing/official-evidence.processed.json \
+    --run-provenance target/redline-testing/provenance.json \
+    --out-dir "$work/report" \
+    --readme "$work/README.md" \
+    --updated-date "$updated_date" \
+    --expected-repetitions "$sqlite_parity_repetitions" \
+    --expected-warmup "$sqlite_parity_warmup" || rc=$?
+  rm -rf "$work"
+  if [ "$rc" -ne 0 ]; then
+    printf 'the report refuses the official run in target/redline-testing (exit %s); benchmark-results is unchanged\n' "$rc" >&2
+  fi
+  return "$rc"
+}
+
 stage_sqlite_report_official_evidence() {
+  local redline_testing_bin="${1:?redline-testing bin required}"
+  local updated_date="${2:?updated date required}"
   local sqlite_parity_root="benchmark-results/sqlite-parity/latest"
   local processed="target/redline-testing/official-evidence.processed.json"
   local run_provenance="target/redline-testing/provenance.json"
@@ -154,6 +185,8 @@ stage_sqlite_report_official_evidence() {
       "$run_provenance" "$actual" "$processed" "${expected:-nothing}" >&2
     return 1
   fi
+  # Nothing is staged for a run the report would refuse.
+  verify_sqlite_report_run "$redline_testing_bin" "$updated_date"
   mkdir -p "$sqlite_parity_root"
   cp target/redline-testing/sqlite_parity.raw.jsonl "$sqlite_parity_root/raw.jsonl"
   cp "$processed" "$sqlite_parity_root/official-evidence.processed.json"
@@ -423,11 +456,11 @@ case "$lane" in
     "$0" score
     run_sqlite_jankurai_compare "$updated_date"
     run_redline_testing_official
-    stage_sqlite_report_official_evidence
-    printf '%s\n' "$updated_date" > benchmark-results/sqlite-parity/latest/UPDATED_DATE
-    sqlite_parity_report_args "$updated_date"
     redline_testing_bin="$(ci_install_redline_testing)"
     load_redline_testing_provenance "$redline_testing_bin"
+    stage_sqlite_report_official_evidence "$redline_testing_bin" "$updated_date"
+    printf '%s\n' "$updated_date" > benchmark-results/sqlite-parity/latest/UPDATED_DATE
+    sqlite_parity_report_args "$updated_date"
     "$redline_testing_bin" report "${sqlite_parity_report_args_result[@]}"
     ;;
   sqlite-parity-report-check)
