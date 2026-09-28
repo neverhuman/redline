@@ -126,6 +126,8 @@ fn bind_redline(
 pub struct Lab {
     pub sqlite: rusqlite::Connection,
     pub redline: Arc<Connection>,
+    /// The database `redline` is connected to, for further connections.
+    pub database: Arc<Database>,
     _dir: Option<tempfile::TempDir>,
 }
 
@@ -147,6 +149,7 @@ impl Lab {
         Self {
             sqlite: rusqlite::Connection::open_in_memory().expect("open sqlite"),
             redline: db.connect(),
+            database: db,
             _dir: None,
         }
     }

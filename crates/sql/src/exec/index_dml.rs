@@ -238,9 +238,17 @@ pub(crate) fn maintain_indexes_on_delete(
     Ok(())
 }
 
-/// Reflect an UPDATE: delete-mark prior entries whose key or rowid changed,
-/// then insert the new entries. Indexes whose key column set is untouched
-/// AND whose rowid is unchanged are left alone (no churn).
+/// Reflect an UPDATE in every index. Every UPDATE path (plain, hot-row,
+/// UPSERT DO UPDATE, REPLACE of the same rowid, MERGE and foreign-key
+/// cascades) comes through here.
+///
+/// A partial index holds a row only while its WHERE clause is true, so the
+/// row's membership before and after the UPDATE decides the change:
+/// out -> out does nothing, in -> out delete-marks the old entry, out -> in
+/// inserts the new one, and in -> in replaces the entry when its key bytes
+/// or its rowid changed (the entry carries the rowid). An index without a
+/// WHERE clause holds every row. Uniqueness of the new entry was already
+/// checked against the new row's membership (`collect_unique_conflicts`).
 #[allow(clippy::too_many_arguments)]
 pub(crate) fn maintain_indexes_on_update(
     engine: &Engine,
@@ -255,25 +263,38 @@ pub(crate) fn maintain_indexes_on_update(
         let Some(handle) = open_index_handle_for_tx(engine, tx, index) else {
             continue;
         };
-        let old_key = build_index_key(table, index, old_values)?;
-        let new_key = build_index_key(table, index, new_values)?;
-        // The IndexRowRef carries the rowid into the physical entry, so a
-        // rowid move always triggers a delete+insert even when key bytes
-        // are byte-equal.
-        if old_key.bytes == new_key.bytes && old_rowid == new_rowid {
+        let (was_member, is_member) = match index.predicate_sql.as_deref() {
+            None => (true, true),
+            Some(pred_sql) => (
+                crate::exec::index_predicate::eval_index_predicate(table, pred_sql, old_values)?,
+                crate::exec::index_predicate::eval_index_predicate(table, pred_sql, new_values)?,
+            ),
+        };
+        let old_key = was_member
+            .then(|| build_index_key(table, index, old_values))
+            .transpose()?;
+        let new_key = is_member
+            .then(|| build_index_key(table, index, new_values))
+            .transpose()?;
+        if let (Some(old_key), Some(new_key)) = (&old_key, &new_key)
+            && old_key.bytes == new_key.bytes
+            && old_rowid == new_rowid
+        {
             continue;
         }
-        let old_row = synthetic_row_ref(old_rowid);
-        let new_row = synthetic_row_ref(new_rowid);
-        handle.delete_mark_tx_visible(
-            engine.tx_status(),
-            tx.snapshot(),
-            Some(tx.id()),
-            tx.id(),
-            &old_key.bytes,
-            old_row,
-        )?;
-        handle.insert_tx(tx.id(), &new_key.bytes, new_row)?;
+        if let Some(old_key) = old_key {
+            handle.delete_mark_tx_visible(
+                engine.tx_status(),
+                tx.snapshot(),
+                Some(tx.id()),
+                tx.id(),
+                &old_key.bytes,
+                synthetic_row_ref(old_rowid),
+            )?;
+        }
+        if let Some(new_key) = new_key {
+            handle.insert_tx(tx.id(), &new_key.bytes, synthetic_row_ref(new_rowid))?;
+        }
     }
     Ok(())
 }

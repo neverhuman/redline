@@ -120,6 +120,11 @@ impl IndexAccessMatch {
 
 /// A unique full-key point has one visible row, so its order cannot
 /// disagree with a table scan. The routed full scan should yield.
+///
+/// A partial index never qualifies: it holds only the rows its WHERE clause
+/// admits, so the scan stays the reference for it. (A partial index is a
+/// candidate at all only when the query repeats its WHERE clause, and that
+/// conjunct is then a residual, so this costs nothing in practice.)
 pub(crate) fn has_unique_point_probe(
     engine: &Engine,
     table: &Arc<TableDef>,
@@ -132,6 +137,7 @@ pub(crate) fn has_unique_point_probe(
         return false;
     };
     matched.index.unique
+        && matched.index.predicate_sql.is_none()
         && matched.consumed_full_predicate()
         && matches!(matched.probe, IndexProbe::Point { .. })
         && open_handle(engine, &matched.index).is_some()
@@ -242,6 +248,19 @@ pub(crate) fn try_match_index_access_hinted(
         // Otherwise we risk missing rows that exist in the heap but
         // were never inserted into the partial index.
         if !crate::exec::index_partial::query_implies_index_predicate(selection, index) {
+            continue;
+        }
+        // A key declared `COLLATE NOCASE` stores folded text (and RTRIM or a
+        // custom collation would need its own folding), but a probe is built
+        // from the raw constant and `col = value` compares with the column's
+        // collation. Through such an index `name = 'Gamma'` found nothing
+        // on a BINARY column holding 'Gamma'. Scan instead. (A table with a
+        // NOCASE column never reaches this point.)
+        if index.keys.iter().any(|key| {
+            key.collation
+                .as_deref()
+                .is_some_and(|collation| !collation.eq_ignore_ascii_case("BINARY"))
+        }) {
             continue;
         }
         let Some(first_key) = index.keys.first() else {
@@ -1355,6 +1374,24 @@ mod unique_point_route_tests {
             n += 1;
         }
         assert_eq!(n, 40);
+        assert_eq!(take_routed_full_scans(), 1);
+    }
+
+    #[test]
+    fn partial_unique_point_keeps_the_routed_scan() {
+        let (_dir, conn) = open();
+        // The query repeats the index's WHERE clause and the point consumes
+        // it, so before Q5-02 this unique point skipped the scan.
+        conn.execute("CREATE TABLE t(id INTEGER PRIMARY KEY, k INTEGER, v INTEGER)")
+            .unwrap();
+        conn.execute("CREATE UNIQUE INDEX t_k5 ON t(k) WHERE k = 5")
+            .unwrap();
+        for i in 0..40 {
+            let k = if i == 5 { 5 } else { i + 100 };
+            conn.execute(&format!("INSERT INTO t VALUES ({i}, {k}, {i})"))
+                .unwrap();
+        }
+        assert_eq!(one_integer(&conn, "SELECT v FROM t WHERE k = 5"), 5);
         assert_eq!(take_routed_full_scans(), 1);
     }
 

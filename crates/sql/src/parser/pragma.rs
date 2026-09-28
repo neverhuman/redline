@@ -188,7 +188,7 @@ pub(crate) fn parse_pragma_template(
             )
         }
         "integrity_check" => {
-            let rows = conn.integrity_check()?;
+            let rows = crate::exec::index_integrity::integrity_check(conn)?;
             let rows = if rows.is_empty() {
                 vec![vec![SqlValue::Text(Arc::from("ok"))]]
             } else {

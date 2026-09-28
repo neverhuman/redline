@@ -124,6 +124,36 @@ fn partial_index_update_moves_in_and_out() {
     lab.execute("UPDATE t SET flag = 1 WHERE id = 2");
     lab.assert_query_matches("SELECT id, k FROM t WHERE flag = 1 ORDER BY id");
     lab.assert_query_matches("SELECT id, k FROM t WHERE flag = 0 ORDER BY id");
+    // Q5-02: the indexed key itself must find the rows that moved. Row 2
+    // entered the index by UPDATE (false -> true) and row 1 left it (true ->
+    // false); the index must hold row 2 and not row 1, so each query agrees
+    // through the index, through a scan, and with SQLite.
+    for query in [
+        "SELECT id FROM t {access} WHERE flag = 1 AND k = 200 ORDER BY id",
+        "SELECT id FROM t {access} WHERE flag = 1 AND k = 100 ORDER BY id",
+        "SELECT id FROM t {access} WHERE flag = 1 AND k > 0 ORDER BY id",
+        "SELECT count(*) FROM t {access} WHERE flag = 1 AND k > 0",
+    ] {
+        let indexed = query.replace("{access}", "INDEXED BY ix_k");
+        let scanned = query.replace("{access}", "NOT INDEXED");
+        let plain = query.replace(" {access}", "");
+        lab.assert_query_matches(&indexed);
+        lab.assert_query_matches(&scanned);
+        lab.assert_query_matches(&plain);
+        assert_eq!(
+            lab.query_redline(&indexed),
+            lab.query_redline(&scanned),
+            "indexed and scanned answers differ for `{query}`"
+        );
+    }
+    assert_eq!(
+        lab.query_redline("SELECT id FROM t INDEXED BY ix_k WHERE flag = 1 AND k = 200"),
+        vec![vec![SqlValue::Integer(2)]]
+    );
+    assert_eq!(
+        lab.query_redline("SELECT count(*) FROM t INDEXED BY ix_k WHERE flag = 1 AND k > 0"),
+        vec![vec![SqlValue::Integer(1)]]
+    );
 }
 
 #[test]

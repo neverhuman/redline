@@ -251,3 +251,49 @@ index-format epoch below), so such an index is rebuilt at the first open.
   pg_listening_channels()`, an alias) fails with `unsupported capability:
   pg_listening_channels outside a bare SELECT list` instead of a parse error
   or a rewritten statement.
+
+## Partial-index membership on UPDATE, `integrity_check` reads index contents (Q5-02)
+
+- An UPDATE now keeps a partial index (`CREATE INDEX ... WHERE ...`) in step
+  with the row. It never evaluated the index's WHERE clause: a row the UPDATE
+  moved into the index (`flag` 0 to 1) got no entry, a row it moved out kept
+  its entry, and a row outside the index whose key changed got one. Reads
+  through the index missed rows (`SELECT id FROM t INDEXED BY ix_k WHERE
+  flag = 1 AND k = 200` returned nothing, `count(*)` undercounted), and a
+  partial UNIQUE index raised `UNIQUE constraint failed` for a key no member
+  held or admitted a second member. Every UPDATE path (plain, hot-row, UPSERT
+  DO UPDATE, REPLACE, MERGE, foreign-key cascades) goes through the fixed
+  maintenance.
+- `PRAGMA integrity_check` compares every index with its table: it derives
+  the entries each row should have (evaluating expression keys and
+  partial-index WHERE clauses) and reports `row N missing from index I`,
+  `non-unique entry in UNIQUE index I`, `wrong # of entries in index I` and
+  `index I has an entry for row N that the row does not produce`. It used to
+  check only pages, the WAL and B-tree structure, and answered `ok` for the
+  damaged indexes above. `PRAGMA quick_check` still skips index contents, as
+  in SQLite.
+- A point lookup on a unique partial index no longer skips the routed table
+  scan; a partial index holds only the rows its WHERE clause admits.
+- An index with a `COLLATE NOCASE` (or RTRIM or custom) key is no longer
+  probed: the probe used the raw constant against folded keys, so on a
+  BINARY column `name = 'Gamma'` found nothing through
+  `CREATE UNIQUE INDEX ... (name COLLATE NOCASE)`. Such queries scan.
+- Not yet: the new check reports two index defects this change does not fix.
+  `CREATE INDEX` on a table with rows stored before an `ALTER TABLE ... ADD
+  COLUMN` reads those rows' keys from the wrong column (the rows lack the
+  added column, and the kernel's backfill then skips no leading table id),
+  so such an index misses rows; `REINDEX` repairs it. An index keyed on a
+  VIRTUAL generated column gets NULL keys from both CREATE INDEX and DML, so
+  lookups through it find nothing. A column's declared RTRIM collation is
+  still not applied by `=` (scan or index), as before.
+
+Upgrade note: the partial indexes of a 4.x database may hold the damage
+above. Opening a 4.x database rebuilds every index from the heap
+(index-format epoch 3, see above), partial indexes included, so they are
+repaired automatically at the first open; the epoch did not need another
+bump because no released build writes epoch 3. If the old UPDATE let two
+rows share the key of a partial UNIQUE index, the open fails with `UNIQUE
+constraint failed`, names the index, says so and changes nothing; delete
+one of the rows with 4.x and open again. A database already at epoch 3
+(built from this branch before the fix) is not rebuilt at open: run
+`PRAGMA integrity_check`, and `REINDEX` any index it names.

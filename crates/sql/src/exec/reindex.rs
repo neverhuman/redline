@@ -108,21 +108,30 @@ pub(crate) fn upgrade_stale_indexes(db: &Arc<Database>) -> Result<()> {
     }
 }
 
-/// A UNIQUE conflict while upgrading means the old key format kept apart
-/// values the current one treats as equal; say so and say what to do.
+/// A UNIQUE conflict while upgrading means two rows share a key: the old
+/// key format kept apart values the current one treats as equal, or (for a
+/// partial index) an UPDATE of RedlineDB 4.x let a second row with the key
+/// into the index without checking it. Say so and say what to do.
 fn describe_upgrade_failure(snapshot: &SchemaSnapshot, index_id: IndexId, err: Error) -> Error {
     let Error::ConstraintViolation(detail) = err else {
         return err;
     };
-    let index = snapshot
-        .index_by_id(index_id)
+    let index = snapshot.index_by_id(index_id);
+    let name = index
+        .as_ref()
         .map(|index| index.name.to_string())
         .unwrap_or_else(|| format!("#{}", index_id.0));
+    let partial = if index.is_some_and(|index| index.predicate_sql.is_some()) {
+        ", or because this is a partial index and an UPDATE in RedlineDB 4.x moved a \
+         second row with the key into it"
+    } else {
+        ""
+    };
     Error::ConstraintViolation(format!(
-        "{detail}: cannot rebuild UNIQUE index {index} for index format {INDEX_VERSION}, \
-         which gives numerically equal INTEGER and REAL values (such as 1 and 1.0) one key; \
-         the database was not changed; delete the duplicate rows with RedlineDB 4.x, then \
-         open it again"
+        "{detail}: cannot rebuild UNIQUE index {name} for index format {INDEX_VERSION}: \
+         two rows have one key, because this format gives numerically equal INTEGER and \
+         REAL values (such as 1 and 1.0) one key{partial}; the database was not changed; \
+         delete the duplicate rows with RedlineDB 4.x, then open it again"
     ))
 }
 
