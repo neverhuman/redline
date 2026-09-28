@@ -110,3 +110,25 @@ index-format epoch below), so such an index is rebuilt at the first open.
   takes the dialect of the statement that attaches it. Opening a path that
   is already live in the process under the other dialect fails with
   `database already open with incompatible options`.
+
+## U+E000 is an ordinary character outside Postgres citext (PG-03)
+
+- `::citext` casts mark their value with a leading U+E000, and every text
+  comparison treated that prefix as "compare without case" in every dialect.
+  In the default SQLite dialect `char(57344)||'A' = 'a'` was true, a UNIQUE
+  TEXT column rejected `char(57344)||'A'` next to `'a'`, DISTINCT collapsed
+  values that `count(DISTINCT)` kept apart, and an indexed and a scanned
+  `WHERE x = 'a'` returned different rows. The prefix now means "without
+  case" only in a Postgres-dialect statement after `CREATE EXTENSION
+  citext`; everywhere else U+E000 compares as the character it is, as in
+  SQLite. A parallel sort carries the statement's dialect to its workers.
+- The shell printed every TEXT value without a leading U+E000. It now hides
+  the marker only in the Postgres dialect after citext was enabled.
+- The Postgres dialect refuses a column declared `citext` (CREATE TABLE,
+  ALTER TABLE ADD COLUMN, ALTER COLUMN TYPE) with
+  `unsupported capability: citext column: ...`: such a column compared with
+  case. Cast the values with `::citext` instead. The SQLite dialect keeps
+  accepting `citext` as a declared type name (TEXT affinity).
+- New error variant `Error::UnsupportedCapability { feature, detail }`
+  (`unsupported capability: {feature}: {detail}`); the facade maps it to
+  `ErrorCode::Unsupported`.

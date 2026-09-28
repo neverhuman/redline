@@ -60,6 +60,14 @@ pub enum Error {
     /// SQLite would answer REAL.
     #[error("bigint out of range")]
     BigintOutOfRange,
+
+    /// A statement the parser accepts but the engine cannot honour
+    /// faithfully, refused instead of answered with a stand-in.
+    #[error("unsupported capability: {feature}: {detail}")]
+    UnsupportedCapability {
+        feature: &'static str,
+        detail: String,
+    },
 }
 
 pub type Result<T> = std::result::Result<T, Error>;
@@ -85,6 +93,16 @@ impl PartialEq for Error {
             (Self::TriggerIgnore, Self::TriggerIgnore) => true,
             (Self::IntegerOverflow, Self::IntegerOverflow) => true,
             (Self::BigintOutOfRange, Self::BigintOutOfRange) => true,
+            (
+                Self::UnsupportedCapability {
+                    feature: fa,
+                    detail: da,
+                },
+                Self::UnsupportedCapability {
+                    feature: fb,
+                    detail: db,
+                },
+            ) => fa == fb && da == db,
             _ => false,
         }
     }

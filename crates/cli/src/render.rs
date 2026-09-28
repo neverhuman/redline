@@ -1020,7 +1020,14 @@ fn write_text_value_ref<W: Write>(
         }
         ValueRef::Real(v) => write!(out, "{}", format_real(v)).map_err(|err| err.to_string()),
         ValueRef::Text(v) => {
-            let v = v.strip_prefix('\u{E000}').unwrap_or(v);
+            // PG-03: U+E000 is the `::citext` marker only in the Postgres
+            // dialect after citext was enabled; anywhere else it is a
+            // character the user stored, and it prints.
+            let v = if postgres_result_dialect() && redlinedb::citext_marker_enabled() {
+                v.strip_prefix('\u{E000}').unwrap_or(v)
+            } else {
+                v
+            };
             if escape_symbol {
                 out.write_all(escape_symbolic(v).as_bytes())
                     .map_err(|err| err.to_string())

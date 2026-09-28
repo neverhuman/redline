@@ -132,7 +132,9 @@ impl From<redlinedb_sql::Error> for Error {
             SqlError::Parse(_) | SqlError::IntegerOverflow | SqlError::BigintOutOfRange => {
                 Self::new(ErrorCode::Error, value.to_string())
             }
-            SqlError::UnsupportedSql(_) => Self::new(ErrorCode::Unsupported, value.to_string()),
+            SqlError::UnsupportedSql(_) | SqlError::UnsupportedCapability { .. } => {
+                Self::new(ErrorCode::Unsupported, value.to_string())
+            }
             other => Self::with_source(ErrorCode::Error, other.to_string(), other),
         }
     }

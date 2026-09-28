@@ -836,10 +836,13 @@ pub(crate) fn bind_alter_table(
                 data_type,
                 using: _,
                 had_set: _,
-            } => redlinedb_kernel::catalog::AlterTableOperationSpec::SetColumnType {
-                column_name: DbName::new(column_name.value),
-                declared_type: data_type.to_string(),
-            },
+            } => {
+                crate::pg_type::reject_citext_column(&column_name.value, &data_type)?;
+                redlinedb_kernel::catalog::AlterTableOperationSpec::SetColumnType {
+                    column_name: DbName::new(column_name.value),
+                    declared_type: data_type.to_string(),
+                }
+            }
             sqlparser::ast::AlterColumnOperation::AddGenerated {
                 generated_as,
                 sequence_options,

@@ -65,6 +65,12 @@ pub use redlinedb_sql::{
 // render REAL columns with the same `%!.17g` rounding the SQL evaluator
 // uses internally — required for sqlite-parity on math-function output.
 pub use redlinedb_sql::format_real_sqlite;
+/// PG-03: true once a Postgres-dialect connection in this process has run
+/// `CREATE EXTENSION citext`, so a leading U+E000 may be a `::citext`
+/// marker. The shell hides the marker only then, and only in the Postgres
+/// dialect.
+#[doc(hidden)]
+pub use redlinedb_sql::value::citext_marker_enabled;
 pub use statement::{OwnedStatement, Prepared, Rows, Statement};
 pub use value::{Value, ValueRef};
 

@@ -91,6 +91,7 @@ pub(crate) fn convert_column_def(
     table_constraints: &mut Vec<TableConstraintSpec>,
     identities: &mut Vec<crate::identity::IdentitySpec>,
 ) -> Result<ColumnSpec> {
+    crate::pg_type::reject_citext_column(&column.name.value, &column.data_type)?;
     let mut constraints = Vec::new();
     let mut collation = None;
     let mut default_value = None;

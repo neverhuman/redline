@@ -1,6 +1,7 @@
 use std::cell::Cell;
 use std::cmp::Ordering;
 use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, Ordering as AtomicOrdering};
 
 use crate::connection::Dialect;
 
@@ -13,7 +14,35 @@ pub use redlinedb_kernel::catalog::{
 pub type SqlValue = OwnedValue;
 pub type SqlValueRef<'a> = ValueRef<'a>;
 
+/// Set (and never cleared) the first time a Postgres-dialect connection runs
+/// `CREATE EXTENSION citext`. Until then no value in the process can carry
+/// the `::citext` marker, and a leading U+E000 is an ordinary character.
+static CITEXT_MARKER_ENABLED: AtomicBool = AtomicBool::new(false);
+
+/// PG-03: record that `::citext` values may exist in this process.
+pub(crate) fn enable_citext_marker() {
+    CITEXT_MARKER_ENABLED.store(true, AtomicOrdering::Relaxed);
+}
+
+/// True once some Postgres-dialect connection in this process has enabled
+/// citext. The shell uses it (with its own dialect) to decide whether a
+/// leading U+E000 is a marker to hide or a character to print.
+pub fn citext_marker_enabled() -> bool {
+    CITEXT_MARKER_ENABLED.load(AtomicOrdering::Relaxed)
+}
+
+/// PG-03: whether a leading U+E000 means "compare without case" for the
+/// statement running on this thread. It does only under the Postgres
+/// dialect, and only after citext was enabled; a SQLite-dialect connection,
+/// or a thread outside any statement, compares U+E000 as the character it is.
+pub(crate) fn citext_marker_active() -> bool {
+    citext_marker_enabled() && postgres_result_dialect()
+}
+
 fn compare_text_maybe_citext(left: &str, right: &str) -> Ordering {
+    if !citext_marker_active() {
+        return left.cmp(right);
+    }
     let (left_ci, left_text) = split_citext(left);
     let (right_ci, right_text) = split_citext(right);
     if left_ci || right_ci {
@@ -59,10 +88,27 @@ thread_local! {
     /// The dialect of the connection whose statement this thread is running.
     /// Installed by `exec::with_current_connection` (every prepare and step);
     /// a thread outside any statement reads as the SQLite dialect. SQL
-    /// evaluation does not leave the statement's thread: the parallel heap
-    /// scan runs kernel code only, and a parallel sort compares values
-    /// without reading the dialect.
+    /// evaluation does not leave the statement's thread except for the
+    /// parallel sort's comparisons, which carry it with [`DialectState`]
+    /// (the parallel heap scan runs kernel code only).
     static THREAD_DIALECT: Cell<u8> = const { Cell::new(THREAD_DIALECT_UNSET) };
+}
+
+/// A copy of the calling thread's dialect slot, for a worker thread that
+/// compares values on behalf of a statement (a parallel sort).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) struct DialectState(u8);
+
+impl DialectState {
+    pub(crate) fn current() -> Self {
+        Self(THREAD_DIALECT.with(Cell::get))
+    }
+
+    /// Run `f` with this state installed on the calling thread.
+    pub(crate) fn install<T>(self, f: impl FnOnce() -> T) -> T {
+        let _scope = DialectScope::enter(self.0);
+        f()
+    }
 }
 
 /// Restores the previous thread dialect when dropped, so a panic that
@@ -146,4 +192,30 @@ pub fn canonicalize(value: SqlValue) -> SqlValue {
 #[allow(dead_code)]
 pub fn text_value(value: impl Into<Arc<str>>) -> SqlValue {
     OwnedValue::Text(value.into())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn text(v: &str) -> SqlValue {
+        text_value(v)
+    }
+
+    #[test]
+    fn a_leading_private_use_character_is_plain_text_outside_postgres_citext() {
+        let marked = text("\u{E000}A");
+        assert_eq!(compare_values(&marked, &text("\u{E000}A")), Ordering::Equal);
+        assert_ne!(compare_values(&marked, &text("a")), Ordering::Equal);
+        // Enabling citext somewhere in the process does not change a thread
+        // that is not running a Postgres-dialect statement.
+        enable_citext_marker();
+        assert_ne!(compare_values(&marked, &text("a")), Ordering::Equal);
+        {
+            let _sqlite = DialectScope::for_dialect(Dialect::Sqlite);
+            assert_ne!(compare_values(&marked, &text("a")), Ordering::Equal);
+        }
+        let _postgres = DialectScope::for_dialect(Dialect::PostgresSubset);
+        assert_eq!(compare_values(&marked, &text("a")), Ordering::Equal);
+    }
 }

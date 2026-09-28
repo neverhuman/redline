@@ -137,7 +137,16 @@ where
             Ordering::Equal
         };
         if self.buffer.len() >= PARALLEL_SORT_THRESHOLD {
-            self.buffer.par_sort_by(cmp);
+            if crate::value::citext_marker_enabled() {
+                // PG-03: whether U+E000 marks a `::citext` value depends on
+                // the statement's dialect, which lives in a thread-local
+                // the rayon workers do not have. Carry it into every
+                // comparison once citext exists in the process.
+                let state = crate::value::DialectState::current();
+                self.buffer.par_sort_by(|a, b| state.install(|| cmp(a, b)));
+            } else {
+                self.buffer.par_sort_by(cmp);
+            }
         } else {
             self.buffer.sort_by(cmp);
         }

@@ -172,10 +172,46 @@ pub(crate) fn is_registered(type_name: &str) -> bool {
 pub(crate) const CITEXT_MARK: char = '\u{E000}';
 
 pub(crate) fn set_citext(conn: &Connection, enabled: bool) -> Result<()> {
+    if enabled && conn.dialect().is_postgres() {
+        // PG-03: from now on a leading U+E000 can be a `::citext` marker in
+        // Postgres-dialect statements. SQLite-dialect connections never read
+        // it that way.
+        crate::value::enable_citext_marker();
+    }
     crate::exec::with_session_reentrant(conn, |session| {
         session.pg_citext = enabled;
         Ok(())
     })
+}
+
+/// PG-03: a column declared `citext` would store plain text and compare it
+/// with case, which is not what Postgres does, so the Postgres dialect
+/// refuses the declaration instead of accepting it silently. `::citext`
+/// casts stay available (partial support, see the manual).
+pub(crate) fn reject_citext_column(
+    column: &str,
+    data_type: &sqlparser::ast::DataType,
+) -> Result<()> {
+    if !crate::value::postgres_result_dialect() {
+        return Ok(());
+    }
+    let type_name = data_type.to_string();
+    let base = type_name
+        .rsplit('.')
+        .next()
+        .unwrap_or(&type_name)
+        .trim()
+        .trim_matches('"');
+    if base.eq_ignore_ascii_case("citext") {
+        return Err(Error::UnsupportedCapability {
+            feature: "citext column",
+            detail: format!(
+                "column \"{column}\" is declared citext, which would compare with case; \
+                 cast values with ::citext instead"
+            ),
+        });
+    }
+    Ok(())
 }
 
 pub(crate) fn int4range_value(lo: i64, hi: i64) -> SqlValue {

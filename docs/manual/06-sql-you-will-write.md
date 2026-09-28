@@ -23,7 +23,7 @@ Keep one dialect per database file. A connection opened under the Postgres diale
 
 **Ranges.** `int4range(1, 10)` contains every integer from 1 up to and excluding 10. A predicate copied from a closed-interval library will be off by one at the upper bound.
 
-**Citext.** Equality ignores case. The stored text keeps its original letters. If you strip case yourself before insert, you have thrown away the spelling citext was keeping.
+**Citext.** Equality between `::citext` values ignores case, and the text keeps its original letters. If you strip case yourself before insert, you have thrown away the spelling citext was keeping. Declare the column `TEXT` and cast in the comparison: a column declared `citext` is refused in the Postgres dialect, because it would compare with case.
 
 **JSON.** SQLite JSON functions that the parity corpus covers are available in the SQLite dialect. Postgres JSON rendering is only as compatible as the cases that have left the open list. When a JSON test fails, compare the text. Key order and whitespace are the usual cause.
 
