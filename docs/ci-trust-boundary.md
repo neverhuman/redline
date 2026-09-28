@@ -27,7 +27,7 @@ So code from a fork must never run on a self-hosted runner.
 
 | Event | Class | Runs on |
 | --- | --- | --- |
-| `push` to `main`, release tags, `workflow_dispatch`, `schedule` | trusted | heavy jobs self-hosted, the rest hosted |
+| `push` to `main`, release tags, `workflow_dispatch` | trusted | heavy jobs self-hosted, the rest hosted |
 | `pull_request` from a branch of this repository | trusted | heavy jobs self-hosted, the rest hosted |
 | `pull_request` from a fork (head repository is not this one, or was deleted) | untrusted | GitHub-hosted only |
 

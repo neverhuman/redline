@@ -1,9 +1,12 @@
 name: redline-testing-report
 
+# Runs only when a maintainer dispatches it. The daily schedule measured the
+# corpus with --workers auto on a shared self-hosted runner after merge and
+# rewrote the README's generated blocks from that run, not from the evidence
+# a release was accepted on. docs/release.md ("Parity report") says how the
+# report is regenerated.
 on:
   workflow_dispatch:
-  schedule:
-    - cron: '30 6 * * *'
 
 concurrency:
   group: redline-testing-report

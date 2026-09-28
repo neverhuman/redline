@@ -228,6 +228,38 @@ bash scripts/release/verify-acceptance.sh release/release-acceptance.v1.json \
 The receipts themselves stay artifacts of the run (GitHub keeps them for the
 repository's artifact retention period); the manifest keeps their digests.
 
+## Parity report
+
+The README's generated blocks (the SQLite parity badge, report and metrics,
+and the PostgreSQL parity block), `benchmark-results/sqlite-parity/latest/`
+and the report charts are written only by `redline-testing report` and
+`redline-testing check-postgres` from hash-verified evidence; never edit them
+by hand. `.github/workflows/sqlite-parity-report.yml` no longer runs on a
+schedule: its daily run measured the corpus with `--workers auto` on a shared
+self-hosted runner after merge and rewrote the README from that run, not from
+the evidence a release was accepted on. The report changes only when a
+maintainer regenerates it:
+
+- For a release, regenerate it from the candidate's own evidence, measured in
+  a clean clone of the candidate commit with the release CLI built alone:
+  `bash ops/ci/sqlite-parity-report.sh update` runs the official lane,
+  renders the blocks and checks the PostgreSQL block against the commit
+  (`--expected-source-commit`, `--require-clean`). Commit the outputs with
+  `bash ops/ci/source-inputs-sha256.sh > .github/parity-report-inputs.sha256`
+  and confirm `just sqlite-parity-report-check` reports no drift. If the
+  source inputs change after that, the evidence no longer describes the
+  candidate: measure again. `release-acceptance.v1.json` records the tag's
+  source-inputs hash, so the two can be compared.
+- When only the renderer changed, render again from the committed evidence
+  without measuring: `target/release/redline-testing report` with the
+  arguments `scripts/just/run.sh` passes for `sqlite-parity-report-update`,
+  then `just sqlite-parity-report-check`.
+- Or dispatch the bot: `gh workflow run sqlite-parity-report.yml --repo
+  neverhuman/redline`. It measures on a self-hosted runner, skips when
+  `.github/parity-report-inputs.sha256` already matches, defers while another
+  pull request is open, and otherwise opens the report pull request, which
+  `report-merge.yml` merges once `ci` passes on its exact head.
+
 ## Evidence and rollback
 
 Acceptance artifacts are attached to the CI/release run: conformance evidence,

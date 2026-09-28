@@ -502,3 +502,11 @@ against the v5 headers. There is no v4 compatibility alias.
   durability-evidence". To release without it, remove its line from
   `ops/release/acceptance-receipts` and from the download pattern in
   `release-build.yml`, and narrow the durability claim instead.
+
+## Parity report bot
+
+- `.github/workflows/sqlite-parity-report.yml` no longer runs daily; it runs
+  only when dispatched. The scheduled run re-measured the corpus with
+  `--workers auto` on a shared runner after merge and rewrote the README's
+  generated blocks from that run. `docs/release.md` ("Parity report") says
+  how the report is regenerated for a release.

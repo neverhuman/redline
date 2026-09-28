@@ -209,3 +209,25 @@ fn kernel_failpoint_tests_have_their_own_shard() {
     assert!(fast.contains("cargo nextest run -p redlinedb-kernel --features failpoints"));
     assert!(fast.contains("core|kernel|kernel-failpoints|"));
 }
+
+#[test]
+fn the_report_bot_runs_only_when_a_maintainer_dispatches_it() {
+    // A scheduled run measured the corpus with `--workers auto` on a shared
+    // self-hosted runner after merge and rewrote the README's generated
+    // blocks from that measurement. docs/release.md says how the report is
+    // regenerated instead.
+    let report = read(".github/workflows/sqlite-parity-report.yml");
+    let on = workflow_text::top_level_block(&report, "on:");
+    assert!(
+        on.iter().any(|line| line.trim() == "workflow_dispatch:"),
+        "the report workflow must stay dispatchable"
+    );
+    assert!(
+        !on.iter()
+            .any(|line| line.trim_start().starts_with("schedule") || line.contains("cron:")),
+        "sqlite-parity-report.yml must not run on a schedule"
+    );
+    let release = read("docs/release.md");
+    assert!(release.contains("## Parity report"));
+    assert!(release.contains("gh workflow run sqlite-parity-report.yml"));
+}
