@@ -339,3 +339,23 @@ against the v5 headers. There is no v4 compatibility alias.
 - For the integrator (not a release-note line): the macOS `mv -h` path and
   the `@rpath` lookup through the stable links run only on the hosted macOS
   runners of the `packages` workflow; they were not exercised locally.
+
+## Contributor doctor (DX-07)
+
+- `scripts/ci-doctor.sh --profile core|contributor|required` checks the
+  tools one lane needs. `core`: rustc as pinned by `rust-toolchain.toml`,
+  cargo, a C compiler and pkg-config. `contributor` (`just fast`) adds just,
+  cargo-nextest 0.9.133, git, jq and curl; rtk is optional. `required`
+  (`just required`) adds Node 22 and npm, Playwright's Chromium, Docker or
+  `REDLINE_TESTING_POSTGRES_URL`, the pinned jankurai binary (by SHA-256),
+  cargo-audit 0.22.1, cargo-deny 0.19.8 and gitleaks, and stops at once on
+  anything other than Linux x86_64, the only platform its pinned binaries
+  exist for. The default, and `just ci-doctor`, is `required`.
+- The doctor no longer fails on a missing `mold`; the build stopped using it.
+- The CI preflight stage runs `ci-doctor.sh --profile core` first and
+  `scripts/test-ci-doctor.sh`, which runs every profile against stand-in
+  tools.
+- `CONTRIBUTING.md` lists the prerequisites of each lane and points to the
+  doctor. It named `just security-local`, which never existed; the lane is
+  `just security`. The jankurai notes moved to
+  `docs/contributing/tooling.md`.

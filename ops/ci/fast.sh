@@ -29,6 +29,10 @@ if [ "${1:-}" = "sqlite-parity-report-publish-pr" ]; then
 fi
 
 run_preflight() {
+    # The core profile first, so a missing compiler or the wrong Rust is named
+    # here rather than discovered by a failed build.
+    bash scripts/ci-doctor.sh --profile core
+    bash scripts/test-ci-doctor.sh
     # The root invocation only reaches the root workspace. Each subrepo is its
     # own cargo workspace, so `cargo fmt --check` here reports clean while the
     # `components (<name>)` jobs run fmt inside the subrepo and fail -- a full
