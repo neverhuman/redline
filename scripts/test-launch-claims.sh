@@ -3,6 +3,10 @@
 #
 # Usage: bash scripts/test-launch-claims.sh
 set -euo pipefail
+# Point every git command at this script's fixtures, never at the caller's
+# repository: a git hook (pre-push from a linked worktree) exports GIT_DIR,
+# GIT_WORK_TREE and GIT_INDEX_FILE, and `git -C` does not override them.
+while read -r variable; do unset "$variable"; done < <(git rev-parse --local-env-vars)
 
 root=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
 lint=$root/scripts/check-launch-claims.sh

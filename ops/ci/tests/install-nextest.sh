@@ -48,6 +48,22 @@ expect_refused() {
   [[ ! -s $work/github_path ]] || fail "$label: added $(cat "$work/github_path") to GITHUB_PATH"
 }
 
+# 0. Any other platform is refused before anything is downloaded: here a
+#    uname stand-in reports macOS on arm64.
+mkdir -p "$work/other-host"
+printf '#!/bin/sh\necho "Darwin arm64"\n' >"$work/other-host/uname"
+chmod 0755 "$work/other-host/uname"
+run_installer other-platform "$work/dest0" PATH="$work/other-host:$work/planted:$PATH" \
+  CI_NEXTEST_URL="file://$work/fake.tar.gz"
+expect_refused other-platform "$work/dest0"
+grep -q "only $target is pinned" "$work/other-platform.out" \
+  || fail "other-platform: expected the platform refusal, got: $(cat "$work/other-platform.out")"
+# The cases below run the pinned platform's verification, so they need it.
+if [[ $(uname -sm) != "Linux x86_64" ]]; then
+  printf 'install-nextest tests: platform refusal checked; the rest needs Linux x86_64 (this host is %s)\n' "$(uname -sm)"
+  exit 0
+fi
+
 # 1. The downloaded archive does not match the pinned digest, and a
 #    cargo-nextest of the right version is already on PATH. The installer
 #    must not trust the planted binary and must not install the fake one.

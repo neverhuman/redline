@@ -24,7 +24,7 @@ while IFS=$'\t' read -r component config; do
   if [[ $config == - ]]; then
     printf 'cargo deny skipped for %s: %s\n' "$component" "$(security_exemption_reason "$root" "$component")"
   else
-    (cd "$component"; cargo deny check --config "$root/$config")
+    (cd "$component"; cargo deny --locked check --config "$root/$config")
   fi
 done <<<"$components"
 npm --prefix subrepos/redline-web/apps/web ci

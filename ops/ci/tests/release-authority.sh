@@ -18,6 +18,10 @@
 #
 # Usage: bash ops/ci/tests/release-authority.sh
 set -euo pipefail
+# Point every git command at this script's fixtures, never at the caller's
+# repository: a git hook (pre-push from a linked worktree) exports GIT_DIR,
+# GIT_WORK_TREE and GIT_INDEX_FILE, and `git -C` does not override them.
+while read -r variable; do unset "$variable"; done < <(git rev-parse --local-env-vars)
 
 root=$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)
 # shellcheck source=ops/release/authority.env
@@ -71,7 +75,7 @@ printf '# Changelog\n\n## [5.0.0] - 2026-10-01\n' > "$checkout/CHANGELOG.md"
 printf '# RedlineDB v5.0.0\n' > "$checkout/docs/releases/v5.0.0.md"
 git init --quiet "$checkout"
 git -C "$checkout" add -A
-git -C "$checkout" -c user.name=fixture -c user.email=fixture@example.invalid commit --quiet -m fixture
+git -C "$checkout" -c user.name=fixture -c user.email=fixture@example.invalid -c commit.gpgSign=false commit --quiet -m fixture
 git -C "$checkout" update-ref refs/remotes/origin/main HEAD
 for t in v5.0.0 "$tag"; do
   git -C "$checkout" -c user.name=fixture -c user.email=fixture@example.invalid -c tag.gpgSign=false tag -a -m "$t" "$t"
@@ -157,8 +161,9 @@ expect_published() {
   [[ $status == 0 ]] || fail "$label: publication failed: $(tail -n 3 "$work/$label.log")"
   calls=$(grep -cE '^release (create|upload|edit) ' "$work/gh.log" 2>/dev/null || true)
   [[ $calls == 3 ]] || fail "$label: expected 3 gh release changes, got ${calls:-0}"
-  if grep -v -- "--repo $REDLINE_REPO_SLUG" "$work/gh.log" 2>/dev/null | grep -q .; then
-    fail "$label: gh call without --repo $REDLINE_REPO_SLUG: $(grep -v -- "--repo $REDLINE_REPO_SLUG" "$work/gh.log" | head -n 1)"
+  # The whole argument: a look-alike such as $REDLINE_REPO_SLUG-fork must not pass.
+  if grep -vE -- "(^| )--repo ${REDLINE_REPO_SLUG//./\\.}( |$)" "$work/gh.log" 2>/dev/null | grep -q .; then
+    fail "$label: gh call without --repo $REDLINE_REPO_SLUG: $(grep -vE -- "(^| )--repo ${REDLINE_REPO_SLUG//./\\.}( |$)" "$work/gh.log" | head -n 1)"
   fi
   grep -q "^release create $release .*--notes-file docs/releases/v5.0.0.md" "$work/gh.log" 2>/dev/null ||
     fail "$label: notes are not docs/releases/v5.0.0.md: $(grep '^release create' "$work/gh.log" 2>/dev/null)"
@@ -181,6 +186,24 @@ expect_authority_refusal legacy-slug GITHUB_REPOSITORY=$legacy_slug
 expect_authority_refusal fork-slug GITHUB_REPOSITORY=someone/redline
 packages "$tag" "$legacy_id"
 expect_refusal legacy-archive "redline-testing-$tag-macos-arm64.tar.gz was not built by $REDLINE_REPO_URL"
+# repack <package> <platform>: rebuild that $tag archive and its checksum file
+# from its (edited) tree, so only the provenance is wrong.
+repack() {
+  local archive=$1-$tag-$2.tar.gz
+  tar -czf "$checkout/target/packages/$archive" -C "$work/trees/$1-$2" .
+  (cd "$checkout/target/packages" && sha256sum "$archive" > "$archive.sha256")
+}
+packages "$tag"
+provenance_file=$work/trees/redlinedb-linux-x86_64/$(package_share redlinedb)/build-provenance.json
+sed "s/\"tag\":\"$tag\"/\"tag\":\"v5.0.0-rc.6\"/" "$provenance_file" > "$work/other-tag.json"
+mv "$work/other-tag.json" "$provenance_file"
+grep -qF '"tag":"v5.0.0-rc.6"' "$provenance_file" || fail 'other-tag-provenance: the fixture edit did not apply'
+repack redlinedb linux-x86_64
+expect_refusal other-tag-provenance "redlinedb-$tag-linux-x86_64.tar.gz provenance does not name $tag"
+packages "$tag"
+rm "$work/trees/redline-web-macos-arm64/$(package_share redline-web)/build-provenance.json"
+repack redline-web macos-arm64
+expect_refusal no-provenance "redline-web-$tag-macos-arm64.tar.gz has no build provenance"
 
 # The release version policy runs first (ops/ci/release-version.sh).
 packages v4.1.0-rc.2

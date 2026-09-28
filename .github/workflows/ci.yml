@@ -28,8 +28,10 @@ concurrency:
 # Runners (CI-04): RedlineDB/required and the light jobs (lint,
 # official-evidence-guard, typecheck, test, components except integration,
 # security, audit) run on GitHub-hosted ubuntu-24.04 for every event, so the
-# required check reports even when the self-hosted runners are down or
-# cannot reach github.com. The heavy jobs (preflight, the test shards,
+# aggregate never waits for a free self-hosted slot and the light jobs do not
+# depend on the self-hosted runners' flaky links to github.com. The aggregate
+# still needs every self-hosted job: while no self-hosted runner is up those
+# stay queued and so does RedlineDB/required. The heavy jobs (preflight, the test shards,
 # parity, components (integration)) run on the self-hosted runners and check
 # the pinned toolchain offline with ops/ci/ensure-rust.sh instead of
 # downloading it in every job.
@@ -471,8 +473,8 @@ jobs:
     name: RedlineDB/required
     if: always()
     needs: [preflight, tests, parity, official-evidence-guard, test, lint, typecheck, components, components-integration, audit, security, packaging]
-    # Hosted and jq only, so the required check reports even when the
-    # self-hosted runners are down.
+    # Hosted and jq only, so it never takes a self-hosted slot; it still
+    # waits for the self-hosted jobs it needs.
     runs-on: ubuntu-24.04
     timeout-minutes: 5
     permissions: {contents: read}

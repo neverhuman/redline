@@ -22,6 +22,10 @@
 #
 # Needs bash, jq, git, cargo and npm; it builds nothing.
 set -euo pipefail
+# Point every git command at this script's fixtures, never at the caller's
+# repository: a git hook (pre-push from a linked worktree) exports GIT_DIR,
+# GIT_WORK_TREE and GIT_INDEX_FILE, and `git -C` does not override them.
+while read -r variable; do unset "$variable"; done < <(git rev-parse --local-env-vars)
 root=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
 # shellcheck source=scripts/release/package-layout.sh
 . "$root/scripts/release/package-layout.sh"
@@ -193,10 +197,20 @@ else
   elif ! grep -q 'unlicensed 0.1.0' "$work/unwaived.log" || grep -qE 'custom-licensed|reuse-licensed' "$work/unwaived.log"; then
     fail "collector did not name exactly the unlicensed dependency: $(cat "$work/unwaived.log")"
   fi
-  printf '[[waiver]]\necosystem = "cargo"\npackage = "unlicensed"\ncolour = "red"\n' > "$work/bad-waivers.toml"
-  if collect "$work/bad" "$work/bad-waivers.toml" > "$work/bad.log" 2>&1; then
-    fail "collector accepted a malformed waiver file"
-  fi
+  # Each malformed file is otherwise a valid waiver for unlicensed 0.1.0, so
+  # only the waiver parser's own refusal can fail the run: a parser that
+  # skipped the bad key or the missing one would accept the waiver and exit 0.
+  cp "$fixture_waivers" "$work/bad-key.toml"
+  printf 'colour = "red"\n' >> "$work/bad-key.toml"
+  grep -v '^reason = ' "$fixture_waivers" > "$work/no-reason.toml"
+  for bad in "bad-key:unknown waiver key colour" "no-reason:[[waiver]] is missing reason"; do
+    name=${bad%%:*} want=${bad#*:}
+    if collect "$work/$name" "$work/$name.toml" > "$work/$name.log" 2>&1; then
+      fail "collector accepted the malformed waiver file $name.toml"
+    elif ! grep -qF "$want" "$work/$name.log"; then
+      fail "collector did not refuse $name.toml with '$want': $(cat "$work/$name.log")"
+    fi
+  done
   jq '(.packages[] | select(.name == "fixture-app") | .license) = "MIT"' "$work/fixture-metadata.json" > "$work/mit-app.json"
   if collect "$work/mit" "$fixture_waivers" "$work/mit-app.json" > "$work/mit.log" 2>&1; then
     fail "collector accepted a first-party package that is not Apache-2.0"

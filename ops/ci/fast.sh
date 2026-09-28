@@ -47,20 +47,33 @@ run_preflight() {
     done
     bash scripts/check_file_sizes.sh
     bash scripts/check-publish-policy.sh
-    bash ops/ci/tests/release-authority.sh
+    # The tests that build fixture git repositories, run as a pre-push hook
+    # runs them (GIT_DIR exported) so they must also leave the calling
+    # repository alone.
+    bash ops/ci/tests/fixture-git-isolation.sh \
+        ops/ci/tests/release-authority.sh \
+        scripts/test-launch-claims.sh \
+        scripts/test-release-version.sh \
+        scripts/parity/test-lint-sqlite-parity-ledger.sh
     bash ops/ci/tests/main-protection.sh
     bash scripts/check-public-hygiene.sh
     bash scripts/release/test-package-layout.sh
-    bash scripts/test-launch-claims.sh
     bash scripts/check-launch-claims.sh
-    bash scripts/test-release-version.sh
     bash ops/ci/check-workflow-permissions.sh
     bash ops/ci/tests/workflow-permissions.sh
-    bash scripts/parity/test-lint-sqlite-parity-ledger.sh
     bash scripts/parity/lint-sqlite-parity-ledger.sh
     cargo build --locked -p redlinedb-cli --bin redlinedb
-    # README.md's embedding example (test-docs-quickstart.sh keeps them equal).
+    # README.md's embedding example (test-docs-quickstart.sh keeps them equal),
+    # run as README.md tells readers to, twice: the second run opens the
+    # database the first one left.
     cargo build --locked -p redlinedb --example readme
+    local readme_run
+    for readme_run in first second; do
+        test "$(cargo run --locked -q -p redlinedb --example readme)" = hello || {
+            printf 'preflight: the README example did not print hello on its %s run\n' "$readme_run" >&2
+            return 1
+        }
+    done
     local smoke_directory smoke_binary
     smoke_directory=$(mktemp -d)
     smoke_binary="${CARGO_TARGET_DIR:-$PWD/target}/debug/redlinedb"
@@ -104,21 +117,16 @@ run_test_stage() {
             cargo nextest run -p redlinedb --features failpoints --locked --test commit_outcome
             ;;
         kernel-failpoints)
-            # The failpoint-gated kernel tests, built with --features
-            # failpoints: the lib's failpoints:: tests and every test binary
-            # whose file is `#![cfg(feature = "failpoints")]`. The rest of the
-            # kernel suite runs in the kernel stage, without the feature.
-            local filter="kind(lib) & test(/^failpoints::/)" file
-            for file in crates/kernel/tests/*.rs; do
-                if grep -qx '#!\[cfg(feature = "failpoints")\]' "$file"; then
-                    filter+=" | binary($(basename "$file" .rs))"
-                fi
-            done
-            [[ $filter == *"binary("* ]] || {
-                printf 'kernel-failpoints: no failpoint test binaries under crates/kernel/tests\n' >&2
-                return 1
-            }
-            cargo nextest run -p redlinedb-kernel --features failpoints --locked --no-fail-fast -E "$filter"
+            # The failpoint-gated kernel tests, whole files and single tests,
+            # each built with the features it needs (ops/ci/kernel-failpoint-plan.sh
+            # lists the runs). The rest of the kernel suite runs in the kernel
+            # stage, without the feature.
+            local plan features filter
+            plan=$(bash ops/ci/kernel-failpoint-plan.sh) || return 1
+            while IFS=$'\t' read -r features filter; do
+                cargo nextest run -p redlinedb-kernel --features "$features" \
+                    --locked --no-fail-fast -E "$filter" < /dev/null || return 1
+            done <<< "$plan"
             ;;
         sql-unit)
             cargo test -p redlinedb-sql --lib --quiet --locked

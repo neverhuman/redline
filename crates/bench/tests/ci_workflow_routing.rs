@@ -2,7 +2,8 @@
 //! runners' links to github.com and static.rust-lang.org are flaky.
 //!
 //! - The aggregate and the light jobs run on GitHub-hosted runners, so the
-//!   required check reports even when no self-hosted runner is up.
+//!   aggregate never takes a self-hosted slot (it still waits for the
+//!   self-hosted jobs it needs).
 //! - Self-hosted jobs check the pinned toolchain offline
 //!   (`ops/ci/ensure-rust.sh`) instead of fetching the channel manifest with
 //!   dtolnay/rust-toolchain in every job; tool downloads retry and cache the
@@ -206,7 +207,10 @@ fn kernel_failpoint_tests_have_their_own_shard() {
     );
     let fast = read("ops/ci/fast.sh");
     assert!(fast.contains("        kernel-failpoints)\n"));
-    assert!(fast.contains("cargo nextest run -p redlinedb-kernel --features failpoints"));
+    // The runs themselves come from ops/ci/kernel-failpoint-plan.sh
+    // (checked in ci_kernel_failpoints.rs).
+    assert!(fast.contains("plan=$(bash ops/ci/kernel-failpoint-plan.sh)"));
+    assert!(fast.contains("cargo nextest run -p redlinedb-kernel --features \"$features\""));
     assert!(fast.contains("core|kernel|kernel-failpoints|"));
 }
 

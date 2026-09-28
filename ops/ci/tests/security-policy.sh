@@ -33,6 +33,10 @@
 # GITLEAKS names the gitleaks binary (default: gitleaks on PATH, else
 # target/ci/tools/gitleaks).
 set -euo pipefail
+# Point every git command at this script's fixtures, never at the caller's
+# repository: a git hook (pre-push from a linked worktree) exports GIT_DIR,
+# GIT_WORK_TREE and GIT_INDEX_FILE, and `git -C` does not override them.
+while read -r variable; do unset "$variable"; done < <(git rev-parse --local-env-vars)
 root=$(cd "${1:-$(dirname "${BASH_SOURCE[0]}")/../../..}" && pwd)
 fixtures=$root/ops/ci/tests/fixtures/security
 # shellcheck source=ops/ci/security-lib.sh
@@ -135,7 +139,12 @@ fi
 
 # ---- components ---------------------------------------------------------
 components_exclude_fixtures() {
-    ! security_components "$root" | grep -q '^ops/ci/tests/'
+    # Capture first: under pipefail, grep -q closing the pipe early would
+    # make the producer's SIGPIPE status the result, and `!` would pass it.
+    local list
+    list=$(security_components "$root") || return 1
+    [[ -n $list ]] || return 1
+    ! grep -q '^ops/ci/tests/' <<<"$list"
 }
 expect pass "components: repository list skips fixtures" components_exclude_fixtures
 

@@ -11,6 +11,10 @@
 #
 # Usage: bash ops/ci/tests/release-acceptance.sh
 set -euo pipefail
+# Point every git command at this script's fixtures, never at the caller's
+# repository: a git hook (pre-push from a linked worktree) exports GIT_DIR,
+# GIT_WORK_TREE and GIT_INDEX_FILE, and `git -C` does not override them.
+while read -r variable; do unset "$variable"; done < <(git rev-parse --local-env-vars)
 
 root=$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)
 generate=$root/ops/ci/release-acceptance.sh
@@ -183,6 +187,15 @@ run_generate missing-receipt
 grep -qF 'missing receipt artifact(s): durability-evidence' "$work/missing-receipt.log" \
   || fail "missing-receipt: unexpected output: $(tail -n 2 "$work/missing-receipt.log")"
 receipt_files
+# A stray file in the checkout: the generator records the checkout as not
+# clean, and the verifier refuses that manifest.
+printf 'stray\n' > "$checkout/stray.rs"
+run_generate dirty-checkout
+[[ $status == 0 ]] || fail "dirty-checkout: generation failed: $(tail -n 2 "$work/dirty-checkout.log")"
+jq -e '.clean == false' "$manifest" >/dev/null || fail "dirty-checkout: the manifest does not record clean = false"
+cp "$manifest" "$work/dirty-checkout.json"
+rm "$checkout/stray.rs"
+expect_refused dirty-checkout 'the accepted checkout was not clean' "$work/dirty-checkout.json"
 run_generate foreign-repository GITHUB_REPOSITORY_ID=1240106851
 [[ $status != 0 && ! -e $manifest ]] || fail "foreign-repository: wrote a manifest"
 grep -qF 'refusing' "$work/foreign-repository.log" || fail "foreign-repository: $(tail -n 1 "$work/foreign-repository.log")"
@@ -196,7 +209,7 @@ expect_generation_refused() {
 }
 expect_generation_refused bad-tag 'v5.0 is not a release tag' TAG=v5.0
 expect_generation_refused absent-tag 'tag v5.0.0-rc.8 is not in this checkout' TAG=v5.0.0-rc.8
-elsewhere=$(git -C "$checkout" commit-tree -p HEAD -m elsewhere 'HEAD^{tree}')
+elsewhere=$(git_fixture commit-tree -p HEAD -m elsewhere 'HEAD^{tree}')
 git_fixture tag -a -m v5.0.0-rc.9 v5.0.0-rc.9 "$elsewhere"
 expect_generation_refused moved-tag "tag v5.0.0-rc.9 names $elsewhere, but the checkout is at $commit" TAG=v5.0.0-rc.9
 printf '%064d  %s\n' 0 "$archive" > "$checkout/target/packages/$archive.sha256"
@@ -233,6 +246,15 @@ expect_refused inputs 'source_inputs_sha256' "$(mutate inputs ".source_inputs_sh
 expect_refused dropped-package "missing: $archive" "$(mutate dropped-package ".packages |= map(select(.name != \"$archive\"))")"
 expect_refused other-tag 'does not match --tag' "$good" --tag v5.0.0-rc.8
 expect_refused dropped-receipt 'receipts' "$(mutate dropped-receipt '.receipts |= .[1:]')"
+# A receipt's file count and digest are data: a string that bash arithmetic
+# would evaluate (running the command in its subscript) is refused as such.
+injected=$work/receipt-files-injected
+jq --arg files "BASH_VERSINFO[\$(touch $injected)]" '.receipts[0].files = $files' "$good" > "$work/injected-files.json"
+expect_refused injected-files 'no digest or no files' "$work/injected-files.json"
+[[ ! -e $injected ]] || fail "injected-files: the verifier ran a command from the manifest"
+expect_refused zero-files 'no digest or no files' "$(mutate zero-files '.receipts[0].files = 0')"
+expect_refused text-files 'no digest or no files' "$(mutate text-files '.receipts[0].files = "3"')"
+expect_refused short-digest 'no digest or no files' "$(mutate short-digest '.receipts[0].sha256 = "abc"')"
 
 printf 'tampered' >> "$checkout/target/packages/$archive"
 expect_refused tampered-package "$archive: sha256" "$good"

@@ -159,8 +159,11 @@ required=$(sed 's/#.*//' "$root/ops/release/acceptance-receipts" | awk 'NF { pri
 recorded=$(jq -r '.receipts[].name' "$manifest")
 [[ $recorded == "$required" ]] \
   || problem "receipts differ from ops/release/acceptance-receipts: recorded [$(tr '\n' ' ' <<< "$recorded")], required [$(tr '\n' ' ' <<< "$required")]"
+# The manifest is untrusted input: match the file count as text, never as a
+# bash arithmetic operand, which would evaluate (and run) whatever it holds.
+# jq passes only a positive whole JSON number through.
 while IFS=$'\t' read -r name digest files; do
-  [[ $digest =~ ^[0-9a-f]{64}$ && $files -ge 1 ]] || problem "receipt $name: no digest or no files"
+  [[ $digest =~ ^[0-9a-f]{64}$ && $files =~ ^[1-9][0-9]{0,8}$ ]] || problem "receipt $name: no digest or no files"
   [[ -n $receipts_dir ]] || continue
   dir=$receipts_dir/$name
   if [[ ! -d $dir ]]; then
@@ -171,7 +174,9 @@ while IFS=$'\t' read -r name digest files; do
     printf '%s  %s\n' "$(sha256 "$file")" "$file"
   done | { if command -v sha256sum >/dev/null 2>&1; then sha256sum; else shasum -a 256; fi; } | cut -d' ' -f1)
   [[ $actual == "$digest" ]] || problem "receipt $name: sha256 $actual is not the manifest's $digest"
-done < <(jq -r '.receipts[] | [.name, .sha256, (.files | tostring)] | @tsv' "$manifest")
+done < <(jq -r '.receipts[] | [.name, .sha256,
+  (if (.files | type) == "number" and .files >= 1 and .files == (.files | floor) then .files | tostring else "not-a-count" end)]
+  | @tsv' "$manifest")
 if [[ -n $receipts_dir ]]; then
   security=$receipts_dir/security-receipt/receipt.json
   if [[ ! -f $security ]]; then

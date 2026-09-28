@@ -82,7 +82,9 @@ while IFS=$'\t' read -r component config; do
         exemption=$(security_exemption_reason "$root" "$component")
     else
         deny_exit=0
-        (cd "$component" && cargo deny -L info check --config "$root/$config") >"$logs/$name.deny.log" 2>&1 || deny_exit=$?
+        # --locked: cargo metadata must not rewrite a stale Cargo.lock, or the
+        # receipt would record a lockfile that is not the candidate's.
+        (cd "$component" && cargo deny --locked -L info check --config "$root/$config") >"$logs/$name.deny.log" 2>&1 || deny_exit=$?
         [[ $deny_exit -eq 0 ]] || fail "cargo deny exited $deny_exit for $component"
         config_sha=$(sha256sum "$config" | cut -d' ' -f1)
         deny_urls+=$(sed -n 's/.*advisory database \([^ ]*\) fetched.*/\1/p' "$logs/$name.deny.log")$'\n'
@@ -100,6 +102,10 @@ while IFS=$'\t' read -r component config; do
                audit_exit: $audit_exit, audit_vulnerabilities: $vulnerabilities,
                audit_warnings: $warnings, deny_exit: $deny_exit}]' <<<"$lockfiles_json")
 done <<<"$components"
+# The scans must not have changed the checkout the receipt describes.
+if [[ $dirty == false && -n $(git status --porcelain --untracked-files=normal) ]]; then
+    fail "the scans changed the working tree: $(git status --porcelain --untracked-files=normal | head -n 3 | tr '\n' ' ')"
+fi
 
 # ---- advisory databases ----------------------------------------------------
 now=$(date -u +%s)
@@ -115,7 +121,9 @@ db_record() { # path, used-by; appends to $databases (no subshell, so fail() cou
     committed=$(git -C "$path" log -1 --format=%ct HEAD)
     fetched=$(stat -c %Y "$path/.git/FETCH_HEAD" 2>/dev/null || printf '%s' "$committed")
     age=$(((now - fetched) / 3600))
-    [[ $age -le $max_age_hours ]] || fail "advisory database $path was last fetched ${age}h ago (limit ${max_age_hours}h)"
+    # Compare seconds: whole hours would let a 24h59m-old database pass.
+    ((now - fetched <= max_age_hours * 3600)) ||
+        fail "advisory database $path was last fetched $(((now - fetched) / 60)) minutes ago (limit ${max_age_hours}h)"
     databases+=$(jq -nc --arg by "$2" --arg path "$path" --arg head "$head" \
         --arg url "$(git -C "$path" config --get remote.origin.url 2>/dev/null || true)" \
         --argjson committed "$committed" --argjson fetched "$fetched" --argjson age "$age" \
