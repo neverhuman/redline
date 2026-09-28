@@ -162,7 +162,9 @@ fn run_provenance_records_the_measured_identity() {
     }
     assert!(provenance["source_dirty"].is_boolean(), "{text}");
     assert!(provenance["source_dirty_paths"].is_array(), "{text}");
-    assert!(provenance.get("oracle_build_stamp").is_some(), "{text}");
+    // This sqlite3 has no build stamp beside it; official_tests covers a
+    // stamped one.
+    assert!(provenance["oracle_build_stamp"].is_null(), "{text}");
     assert!(provenance.get("redlinedb_git_dirty").is_none(), "{text}");
 }
 

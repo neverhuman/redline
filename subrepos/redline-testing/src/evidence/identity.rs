@@ -71,6 +71,10 @@ pub(crate) struct RunIdentity {
     /// source archive SHA3-256 and compile flags of
     /// scripts/sqlite/build-reference.sh. `None` for any other sqlite3.
     pub(crate) oracle_build_stamp: Option<String>,
+    /// The directory the identity was taken in, where `still_unchanged`
+    /// takes it again. Not recorded.
+    #[serde(skip)]
+    pub(crate) captured_in: PathBuf,
 }
 
 /// The run identity of the checkout that contains the working directory.
@@ -87,7 +91,13 @@ pub(crate) fn capture_in(dir: &Path, sqlite_bin: &Path) -> RunIdentity {
         corpus_sha256: crate::sqlite_parity::corpus_sha256(),
         assertion_policy_sha256: crate::sqlite_parity::assertion_policy_sha256(),
         oracle_build_stamp: oracle_build_stamp(sqlite_bin),
+        captured_in: dir.to_path_buf(),
     }
+}
+
+/// `ensure_unchanged` against the identity taken again where `start` was.
+pub(crate) fn still_unchanged(start: &RunIdentity, sqlite_bin: &Path) -> anyhow::Result<()> {
+    ensure_unchanged(start, &capture_in(&start.captured_in, sqlite_bin))
 }
 
 /// Fails when the committed source or the reference build a run started
