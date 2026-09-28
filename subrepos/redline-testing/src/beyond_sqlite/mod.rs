@@ -27,5 +27,6 @@ pub mod normalize;
 pub mod oracle;
 pub mod skip_list;
 pub mod taxonomy;
+pub mod transcript;
 
 pub use taxonomy::{Feature, FeatureStatus, RunConfig, all_features, run};

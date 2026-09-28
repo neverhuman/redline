@@ -3,7 +3,10 @@
 The execution gate and this document now say the same thing.
 
 The beyond-SQLite corpus is 265 cases, every one `ordered_rows`, compared with
-PostgreSQL 16.15 through the SQL shell. On `d5d1c57bb` the regression file
+PostgreSQL 16.15 through the SQL shell. A pass is normalized SQL-shell
+transcript agreement: cells are separated by 0x1F and NULL prints as `NULL`
+wrapped in 0x1E, so a `|` in a value or the text `'NULL'` cannot fake a match,
+but the comparison is still text, not typed rows. On `d5d1c57bb` the regression file
 `metadata/beyond_sqlite/postgres-regression.json` has an empty `failed_cases`
 list. The README block reports **265 / 265 passed, 0 failed, 0 skipped**.
 Hosted `parity (redline-testing-official)` on that tree was green.

@@ -270,6 +270,7 @@ pub fn run(config: RunConfig) -> Result<RunSummary> {
                 "reference_stdout": t.reference_stdout,
                 "target_stdout": t.target_stdout,
                 "target_stderr_head": t.target_stderr_head,
+                "comparator_version": super::transcript::COMPARATOR_VERSION,
                 "reference_elapsed_ns": t.reference_elapsed_ns,
                 "target_elapsed_ns": t.target_elapsed_ns,
                 "memory_status": "not_run",

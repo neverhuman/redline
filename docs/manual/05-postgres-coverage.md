@@ -29,7 +29,9 @@ Nine of the 265 passes are agreed rejections. Both engines exit 3, stdout matche
 
 These are in the engine on this commit, and the corpus cases that cover them are not in the open list.
 
-**Results.** Booleans render as `t` and `f`. `NULL` renders as the null marker the shell was given (the parity preamble uses `.nullvalue NULL`).
+**Results.** Booleans render as `t` and `f`. `NULL` renders as the null marker the shell was given.
+
+**What a match means.** A passing case is *normalized SQL-shell transcript agreement*: `psql` and the `redlinedb` shell print the same text once the case's normalizers run. Both shells print the ASCII unit separator (0x1F) between cells and `NULL` wrapped in ASCII record separators (0x1E) for a SQL NULL, so `('a|b','c')` and `('a','b|c')` differ, and NULL, the text `'NULL'`, and `''` differ. It is still a text comparison. A value that contains a newline prints like two rows, and the normalizers (for example `t`/`f` to `1`/`0`) act on cells without their SQL types. It is not typed-result or application parity.
 
 **Names.** A schema-qualified table stays one name. `auth.users` and `public.users` are different tables. Unqualified lookup uses the search path when that encoded name exists. Sequence names still store the bare name.
 

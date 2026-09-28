@@ -17,10 +17,11 @@
 //!      must be repaired before qualification can pass.
 //!   2. **Target compare** (`profile: beyond_sqlite_target`, opt-in via
 //!      `RunCasesOptions::target_bin`) — when a target binary is supplied,
-//!      drives it with the same stdin (plus a SQLite-style formatting
-//!      preamble) and compares normalized output to psql. Failures here are
-//!      engine gaps in redlinedb / target-under-test; these are exported to
-//!      the gap ledger for downstream agents to close.
+//!      drives it with the same stdin (plus the formatting preamble in
+//!      `transcript`) and compares normalized output to psql. Failures here
+//!      are engine gaps in redlinedb / target-under-test; these are exported
+//!      to the gap ledger for downstream agents to close. Agreement is
+//!      normalized SQL-shell transcript agreement.
 
 use std::fs;
 use std::io::Write as _;
@@ -33,22 +34,10 @@ use anyhow::{Context, Result, anyhow, bail};
 use super::case::{BeyondCase, CompareMode};
 use super::engine::{PostgresReference, ResolveOutcome, invoke_psql, resolve};
 use super::normalize::apply_chain;
+use super::transcript::target_preamble;
 
 pub(crate) const MANIFEST: &str =
     include_str!("../../corpus/beyond_sqlite/generated_manifest.json");
-
-/// SQLite-shell formatting preamble. Mirrors the `.mode list / .nullvalue NULL
-/// / .separator |` setup baked into per-case sqlite_parity stdin so target
-/// shell output is byte-comparable with psql's `-A -t -F | -P null=NULL`
-/// formatting through the normalizer pipeline.
-///
-/// `PRAGMA case_sensitive_like = 1` flips LIKE from its SQLite default
-/// (ASCII-fold) to Postgres' SQL-standard case-sensitive behaviour. The
-/// beyond-SQLite oracle compares against PG, so case-sensitive LIKE is
-/// what we want for cases like `LIKE_VS_ILIKE_ASCII`. ILIKE is
-/// independent of this pragma and continues to fold case.
-const SQLITE_FORMATTING_PREAMBLE: &str =
-    ".mode list\n.headers off\n.separator |\n.nullvalue NULL\nPRAGMA case_sensitive_like = 1;\n";
 
 #[derive(Debug, Clone, Default)]
 pub struct RunCasesOptions {
@@ -360,7 +349,7 @@ fn run_one_case_against_target(
     };
     let reference_elapsed_ns = ref_started.elapsed().as_nanos();
 
-    let target_stdin = format!("{SQLITE_FORMATTING_PREAMBLE}{stdin}");
+    let target_stdin = format!("{}{stdin}", target_preamble());
     let target_started = Instant::now();
     let target = match invoke_target(target_bin, &target_stdin, timeout) {
         Ok(out) => out,
@@ -614,7 +603,7 @@ fn classify_shared_rejection(
     // if it cannot, the combined run died before the statement the case is
     // about, and the matching exit code means nothing.
     if let Some(setup) = &case.setup_stdin {
-        let stdin = format!("{SQLITE_FORMATTING_PREAMBLE}{setup}");
+        let stdin = format!("{}{setup}", target_preamble());
         match invoke_target(target_bin, &stdin, timeout) {
             Ok(out) if out.exit_code == 0 => {}
             Ok(out) => {
@@ -726,6 +715,44 @@ mod tests {
             summary.passed, summary.total,
             "not every published case passed psql self-compare: {blockers:#?}"
         );
+    }
+}
+
+#[cfg(test)]
+mod framing_tests {
+    use super::*;
+
+    /// The `.separator` and `.nullvalue` the target preamble sets, as the
+    /// shell reads them (a single-quoted argument is taken verbatim).
+    fn preamble_framing() -> (String, String) {
+        let preamble = target_preamble();
+        let arg = |command: &str| {
+            let line = preamble
+                .lines()
+                .find_map(|line| line.strip_prefix(command))
+                .unwrap_or_else(|| panic!("preamble sets {command}"))
+                .trim();
+            line.trim_matches('\'').to_owned()
+        };
+        (arg(".separator "), arg(".nullvalue "))
+    }
+
+    #[test]
+    fn target_framing_keeps_cell_boundaries_and_nulls() {
+        let (separator, null) = preamble_framing();
+        let render = |cells: &[Option<&str>]| {
+            cells
+                .iter()
+                .map(|cell| cell.unwrap_or(&null))
+                .collect::<Vec<_>>()
+                .join(&separator)
+        };
+        assert_ne!(
+            render(&[Some("a|b"), Some("c")]),
+            render(&[Some("a"), Some("b|c")])
+        );
+        assert_ne!(render(&[None]), render(&[Some("NULL")]));
+        assert_ne!(render(&[None]), render(&[Some("")]));
     }
 }
 

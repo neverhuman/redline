@@ -185,10 +185,10 @@ pub struct PsqlOutput {
 }
 
 /// Run psql against the connection with the given SQL stdin and optional
-/// `-c` pre-commands (used for `SET timezone = 'UTC'` etc.). The unaligned
-/// + tuples-only + null-NULL formatting mirrors SQLite's `.mode list` /
-/// `.nullvalue NULL` so output is byte-comparable through the normalizer
-/// pipeline.
+/// `-c` pre-commands (used for `SET timezone = 'UTC'` etc.). The unaligned,
+/// tuples-only formatting with the `transcript` separator and NULL marker is
+/// the one the target preamble sets, so both transcripts are comparable
+/// through the normalizer pipeline.
 pub fn invoke_psql(
     psql: &std::path::Path,
     conn: &PgConnection,
@@ -203,26 +203,14 @@ pub fn invoke_psql(
         .arg("-t")
         .arg("-X")
         .arg("-v")
-        .arg("ON_ERROR_STOP=1")
-        .arg("-F")
-        .arg("|");
+        .arg("ON_ERROR_STOP=1");
     for arg in conn.as_psql_args() {
         command.arg(arg);
     }
-    // Use -P (pset option) rather than -c "\pset ..." so the formatting
+    // Use -F/-P (pset options) rather than -c "\pset ..." so the formatting
     // applies to the SQL we then feed on stdin. -c switches psql into
     // single-command mode and stops reading stdin afterwards.
-    command
-        .arg("-P")
-        .arg("null=NULL")
-        .arg("-P")
-        .arg("format=unaligned")
-        .arg("-P")
-        .arg("tuples_only=on")
-        .arg("-P")
-        .arg("fieldsep=|")
-        .arg("-P")
-        .arg("border=0");
+    command.args(super::transcript::psql_format_args());
     // NOTE: pg_settings used to be passed via `-c "SET key = value"`, but
     // psql switches into single-command mode the moment it sees any `-c`
     // argument and stops reading stdin afterwards — so the actual SELECT
@@ -312,7 +300,11 @@ pub fn identity(reference: &PostgresReference) -> Result<ReferenceIdentity> {
     };
     Ok(ReferenceIdentity {
         version: reference.version.clone(),
-        settings: out.stdout.trim().to_owned(),
+        // Recorded in the `|`-joined form the gate and the policy pin; none
+        // of the four values can contain `|`.
+        settings: super::transcript::cells(out.stdout.trim())
+            .collect::<Vec<_>>()
+            .join("|"),
         psql_sha256: hash_file(&reference.bin)?,
         image_digest: env::var("REDLINE_TESTING_POSTGRES_IMAGE").ok(),
         server_binary_sha256: env::var_os("REDLINE_TESTING_POSTGRES_SERVER_BIN")

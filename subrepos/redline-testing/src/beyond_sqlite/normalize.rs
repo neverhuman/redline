@@ -14,6 +14,8 @@ use std::collections::BTreeMap;
 
 use serde::{Deserialize, Serialize};
 
+use super::transcript::{FIELD_SEPARATOR, NULL_MARKER, SEPARATOR, cells};
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum Normalizer {
@@ -23,8 +25,10 @@ pub enum Normalizer {
     BooleanTfToInt,
     /// In psql `\pset format unaligned` mode an explicit NULL is emitted as
     /// an empty cell unless `\pset null` overrides it. Some setups omit the
-    /// `\pset null NULL` directive — this normalizer rewrites blank cells
-    /// (between `|` separators, at line start/end) to the token `NULL`.
+    /// null marker — this normalizer rewrites blank cells (between
+    /// separators, at line start/end) to the NULL marker. It erases the
+    /// difference between NULL and the empty string, so a case that uses it
+    /// cannot tell them apart; no corpus case does.
     PgNullBlankToNull,
     /// Truncate ISO-8601 timestamps to second resolution. `2025-12-31
     /// 23:59:59.123456+00` → `2025-12-31 23:59:59+00`.
@@ -80,14 +84,14 @@ pub fn apply_chain(text: &str, normalizers: &[Normalizer]) -> String {
 fn normalize_boolean_tf(text: &str) -> String {
     text.lines()
         .map(|line| {
-            line.split('|')
+            cells(line)
                 .map(|cell| match cell.trim() {
                     "t" => "1",
                     "f" => "0",
                     _ => cell,
                 })
                 .collect::<Vec<&str>>()
-                .join("|")
+                .join(SEPARATOR)
         })
         .collect::<Vec<String>>()
         .join("\n")
@@ -98,16 +102,16 @@ fn normalize_pg_null_blank(text: &str) -> String {
     text.lines()
         .map(|line| {
             let cells: Vec<String> = line
-                .split('|')
+                .split(FIELD_SEPARATOR)
                 .map(|cell| {
                     if cell.is_empty() {
-                        "NULL".to_owned()
+                        NULL_MARKER.to_owned()
                     } else {
                         cell.to_owned()
                     }
                 })
                 .collect();
-            cells.join("|")
+            cells.join(SEPARATOR)
         })
         .collect::<Vec<String>>()
         .join("\n")
@@ -162,7 +166,7 @@ fn normalize_timestamp_seconds(text: &str) -> String {
 fn normalize_numeric(text: &str) -> String {
     text.lines()
         .map(|line| {
-            line.split('|')
+            cells(line)
                 .map(|cell| {
                     let trimmed = cell.trim();
                     if trimmed.is_empty() {
@@ -176,7 +180,7 @@ fn normalize_numeric(text: &str) -> String {
                     cell.to_owned()
                 })
                 .collect::<Vec<String>>()
-                .join("|")
+                .join(SEPARATOR)
         })
         .collect::<Vec<String>>()
         .join("\n")
@@ -198,7 +202,7 @@ fn normalize_jsonb_canonical(text: &str) -> String {
     // a cell doesn't parse as JSON we leave it untouched.
     text.lines()
         .map(|line| {
-            line.split('|')
+            cells(line)
                 .map(|cell| {
                     let trimmed = cell.trim();
                     if !trimmed.starts_with('{') && !trimmed.starts_with('[') {
@@ -210,7 +214,7 @@ fn normalize_jsonb_canonical(text: &str) -> String {
                     }
                 })
                 .collect::<Vec<String>>()
-                .join("|")
+                .join(SEPARATOR)
         })
         .collect::<Vec<String>>()
         .join("\n")
@@ -244,7 +248,7 @@ fn normalize_pg_array(text: &str) -> String {
     // that can pair with JsonbCanonical.
     text.lines()
         .map(|line| {
-            line.split('|')
+            cells(line)
                 .map(|cell| {
                     let trimmed = cell.trim();
                     if trimmed.starts_with('{') && trimmed.ends_with('}') {
@@ -255,7 +259,7 @@ fn normalize_pg_array(text: &str) -> String {
                     }
                 })
                 .collect::<Vec<String>>()
-                .join("|")
+                .join(SEPARATOR)
         })
         .collect::<Vec<String>>()
         .join("\n")
@@ -281,7 +285,7 @@ fn normalize_first_line(text: &str) -> String {
 fn normalize_json_string_array_unquote(text: &str) -> String {
     text.lines()
         .map(|line| {
-            line.split('|')
+            cells(line)
                 .map(|cell| {
                     let trimmed = cell.trim();
                     if !trimmed.starts_with('[') || !trimmed.ends_with(']') {
@@ -308,7 +312,7 @@ fn normalize_json_string_array_unquote(text: &str) -> String {
                     format!("[{}]", parts.join(","))
                 })
                 .collect::<Vec<String>>()
-                .join("|")
+                .join(SEPARATOR)
         })
         .collect::<Vec<String>>()
         .join("\n")
@@ -317,18 +321,47 @@ fn normalize_json_string_array_unquote(text: &str) -> String {
 
 #[cfg(test)]
 mod tests {
+    use super::super::transcript::join;
     use super::*;
+
+    /// One transcript line: `cells` joined by the field separator.
+    fn row(cells: &[&str]) -> String {
+        join(cells)
+    }
 
     #[test]
     fn boolean_tf_to_int_rewrites_isolated_cells() {
-        let out = apply("a|t|c\nx|f|z\n", Normalizer::BooleanTfToInt);
-        assert_eq!(out, "a|1|c\nx|0|z\n");
+        let text = format!("{}\n{}\n", row(&["a", "t", "c"]), row(&["x", "f", "z"]));
+        let out = apply(&text, Normalizer::BooleanTfToInt);
+        assert_eq!(
+            out,
+            format!("{}\n{}\n", row(&["a", "1", "c"]), row(&["x", "0", "z"]))
+        );
+    }
+
+    #[test]
+    fn a_pipe_inside_a_value_is_not_a_cell_boundary() {
+        // Under the old `|` framing `a|t` split into two cells and its `t`
+        // became `1`; with the unit separator it stays one text value.
+        let out = apply(
+            &format!("{}\n", row(&["a|t", "t"])),
+            Normalizer::BooleanTfToInt,
+        );
+        assert_eq!(out, format!("{}\n", row(&["a|t", "1"])));
+        let out = apply(
+            &format!("{}\n", row(&["{\"k\":\"a|b\"}", "x"])),
+            Normalizer::JsonbCanonical,
+        );
+        assert_eq!(out, format!("{}\n", row(&["{\"k\":\"a|b\"}", "x"])));
     }
 
     #[test]
     fn pg_null_blank_to_null_fills_empty_cells() {
-        let out = apply("a||c\n", Normalizer::PgNullBlankToNull);
-        assert_eq!(out, "a|NULL|c\n");
+        let out = apply(
+            &format!("{}\n", row(&["a", "", "c"])),
+            Normalizer::PgNullBlankToNull,
+        );
+        assert_eq!(out, format!("{}\n", row(&["a", NULL_MARKER, "c"])));
     }
 
     #[test]
@@ -342,20 +375,29 @@ mod tests {
 
     #[test]
     fn numeric_normalize_canonicalizes_decimals() {
-        let out = apply("1.50|3.14|1e2\n", Normalizer::NumericNormalize);
-        assert_eq!(out, "1.5|3.14|100\n");
+        let out = apply(
+            &format!("{}\n", row(&["1.50", "3.14", "1e2"])),
+            Normalizer::NumericNormalize,
+        );
+        assert_eq!(out, format!("{}\n", row(&["1.5", "3.14", "100"])));
     }
 
     #[test]
     fn jsonb_canonical_sorts_keys() {
-        let out = apply("{\"b\":1,\"a\":2}|x\n", Normalizer::JsonbCanonical);
-        assert_eq!(out, "{\"a\":2,\"b\":1}|x\n");
+        let out = apply(
+            &format!("{}\n", row(&["{\"b\":1,\"a\":2}", "x"])),
+            Normalizer::JsonbCanonical,
+        );
+        assert_eq!(out, format!("{}\n", row(&["{\"a\":2,\"b\":1}", "x"])));
     }
 
     #[test]
     fn pg_array_brace_to_bracket() {
-        let out = apply("{1,2,3}|other\n", Normalizer::PgArrayBraceToBracket);
-        assert_eq!(out, "[1,2,3]|other\n");
+        let out = apply(
+            &format!("{}\n", row(&["{1,2,3}", "other"])),
+            Normalizer::PgArrayBraceToBracket,
+        );
+        assert_eq!(out, format!("{}\n", row(&["[1,2,3]", "other"])));
     }
 
     #[test]
@@ -376,23 +418,23 @@ mod tests {
     #[test]
     fn chain_composes_in_order() {
         let out = apply_chain(
-            "1.50|t|\n",
+            &format!("{}\n", row(&["1.50", "t", ""])),
             &[
                 Normalizer::PgNullBlankToNull,
                 Normalizer::BooleanTfToInt,
                 Normalizer::NumericNormalize,
             ],
         );
-        assert_eq!(out, "1.5|1|NULL\n");
+        assert_eq!(out, format!("{}\n", row(&["1.5", "1", NULL_MARKER])));
     }
 
     #[test]
     fn json_string_array_unquote_strips_quotes() {
         let out = apply(
-            "[\"a\",\"b\",\"c\"]|other\n",
+            &format!("{}\n", row(&["[\"a\",\"b\",\"c\"]", "other"])),
             Normalizer::JsonStringArrayUnquote,
         );
-        assert_eq!(out, "[a,b,c]|other\n");
+        assert_eq!(out, format!("{}\n", row(&["[a,b,c]", "other"])));
     }
 
     #[test]
