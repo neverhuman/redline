@@ -20,9 +20,14 @@
 #   missing-case             the last case is absent; marker; exit 0
 #   tampered-marker          complete, but the marker names another hash
 #
-# STUB_CASES     space-separated numeric case ids (default "10000 10001 10002")
+# STUB_CASES     space-separated numeric case ids (default "10000 10001 10002");
+#                `run --case-id ID` (repeatable) narrows them as the runner does
 # STUB_FAIL_CASE numeric id of the failing case (default 10002)
-# STUB_ARGS_LOG  when set, each `run` appends its arguments there
+# STUB_ARGS_LOG  when set, each `run` appends its arguments there, prefixed
+#                with the REDLINEDB_DEFAULT_DURABILITY it saw
+#
+# Every executed record names the SHA-256 of --target-bin and --sqlite-bin,
+# as the runner's records do.
 #
 # Every run also leaves a read-only directory in --tmp-root, as a
 # read-only database case does, so the fixtures can check that the perf
@@ -58,20 +63,30 @@ case "${1:-}" in
 esac
 
 if [ -n "${STUB_ARGS_LOG:-}" ]; then
-  printf '%s\n' "$*" >> "$STUB_ARGS_LOG"
+  printf 'durability=%s %s\n' "${REDLINEDB_DEFAULT_DURABILITY:-}" "$*" >> "$STUB_ARGS_LOG"
 fi
 
-out='' reps=1 warmup=0 tmp_root=''
+out='' reps=1 warmup=0 tmp_root='' target_sha='' reference_sha='' only=''
 while [ $# -gt 0 ]; do
   case "$1" in
     --output) out="$2"; shift 2 ;;
     --tmp-root) tmp_root="$2"; shift 2 ;;
     --repetitions) reps="$2"; shift 2 ;;
     --warmup) warmup="$2"; shift 2 ;;
+    --target-bin) target_sha="$(sha256sum "$2" | awk '{print $1}')"; shift 2 ;;
+    --sqlite-bin) reference_sha="$(sha256sum "$2" | awk '{print $1}')"; shift 2 ;;
+    --case-id) only="$only $((10#$2))"; shift 2 ;;
     --*) shift 2 ;;
     *) shift ;;
   esac
 done
+if [ -n "$only" ]; then
+  narrowed=''
+  for id in $cases; do
+    case " $only " in *" $id "*) narrowed="$narrowed $id" ;; esac
+  done
+  cases="${narrowed# }"
+fi
 [ -n "$out" ] || { echo "stub-redline-testing: --output is required" >&2; exit 2; }
 mkdir -p "$(dirname "$out")"
 : > "$out"
@@ -89,8 +104,8 @@ fi
 record() {
   local verdict=passed
   if [ "$5" = failed ]; then verdict=target_semantic_failure; fi
-  printf '{"case_id":"%s","name":"CASE_%s","status":"%s","verdict_reason":"%s","sample_role":"%s","sample_index":%s,"repetition_index":%s,"reference_elapsed_ns":1000,"target_elapsed_ns":900,"latency_ratio":0.9}\n' \
-    "$1" "$1" "$5" "$verdict" "$2" "$3" "$4"
+  printf '{"case_id":"%s","name":"CASE_%s","status":"%s","verdict_reason":"%s","sample_role":"%s","sample_index":%s,"repetition_index":%s,"reference_elapsed_ns":1000,"target_elapsed_ns":900,"latency_ratio":0.9,"target_executable_sha256":"%s","reference_executable_sha256":"%s"}\n' \
+    "$1" "$1" "$5" "$verdict" "$2" "$3" "$4" "$target_sha" "$reference_sha"
 }
 
 write_marker() {

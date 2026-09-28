@@ -164,3 +164,32 @@ perf_build_contract() {
 perf_summarize_jsonl() {
   perf_evidence summarize-jsonl "$@"
 }
+
+# Refuse a target that is not a release measurement (L-05): a failpoints
+# build (it carries the kernel's failpoint names) or a build with debug
+# assertions or overflow checks (it carries the standard library's
+# precondition and overflow panic messages, which a release build compiles
+# out). Exits 2 naming the marker it found.
+#
+# Usage: perf_check_release_binary <label> <binary>
+perf_check_release_binary() {
+  local label="$1" binary="$2" marker
+  if [ ! -f "$binary" ] || [ ! -x "$binary" ]; then
+    printf 'perf: %s: %s is not an executable file\n' "$label" "$binary" >&2
+    exit 2
+  fi
+  for marker in 'engine::commit::before_publish' 'wal::write_encoded'; do
+    if grep -a -q -F -- "$marker" "$binary"; then
+      printf 'perf: %s: %s contains the failpoint name %s: a failpoints build is not a release measurement\n' \
+        "$label" "$binary" "$marker" >&2
+      exit 2
+    fi
+  done
+  for marker in 'unsafe precondition(s) violated' 'attempt to add with overflow'; do
+    if grep -a -q -F -- "$marker" "$binary"; then
+      printf 'perf: %s: %s contains "%s": it was built with debug assertions or overflow checks, not as a release build\n' \
+        "$label" "$binary" "$marker" >&2
+      exit 2
+    fi
+  done
+}

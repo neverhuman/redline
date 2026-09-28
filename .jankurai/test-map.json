@@ -263,7 +263,7 @@
       "proof_lane": "audit"
     },
     "scripts/perf/lib.sh": {
-      "command": "rtk bash -n scripts/perf/lib.sh && rtk cargo test -p redlinedb-bench --test automation_tools --locked",
+      "command": "rtk bash -n scripts/perf/lib.sh && rtk cargo test -p redlinedb-bench --test automation_tools --test perf_release_bench --locked",
       "purpose": "verify performance JSONL statistics delegate to Rust and preserve the frozen exclusive-decile p90 contract",
       "proof_lane": "fast"
     },
@@ -283,8 +283,28 @@
       "proof_lane": "fast"
     },
     "scripts/perf/tests/": {
-      "command": "rtk cargo test -p redlinedb-bench --test perf_full_fail_closed --locked",
-      "purpose": "stub-runner fixtures for the full-corpus perf lane: interrupted, empty, {}, truncated, incomplete, duplicate, tampered, unexplained-exit, unlisted-failure and stale all.jsonl runs are rejected",
+      "command": "rtk cargo test -p redlinedb-bench --test perf_full_fail_closed --test perf_release_bench --locked",
+      "purpose": "stub-runner fixtures for the full-corpus perf lane (interrupted, empty, {}, truncated, incomplete, duplicate, tampered, unexplained-exit, unlisted-failure and stale all.jsonl runs are rejected) and for the release bench bundle script",
+      "proof_lane": "fast"
+    },
+    "scripts/perf/release-bench.sh": {
+      "command": "rtk bash -n scripts/perf/release-bench.sh && rtk cargo test -p redlinedb-bench --test perf_release_bench --locked",
+      "purpose": "verify the release bench bundle script refuses failpoint and debug builds, mislabelled build records, reused bundles, overloaded hosts, incomplete runs and unexplained runner exits, and writes interleaved, summarized bundles",
+      "proof_lane": "fast"
+    },
+    "scripts/perf/release-bench-readme.sh": {
+      "command": "rtk bash -n scripts/perf/release-bench-readme.sh && rtk cargo test -p redlinedb-bench --test perf_release_bench --locked",
+      "purpose": "verify the release bench bundle README is generated with its durability, tmpfs, :memory: and measurement-boundary disclosures",
+      "proof_lane": "fast"
+    },
+    "scripts/perf/build-version.sh": {
+      "command": "rtk bash -n scripts/perf/build-version.sh && rtk cargo test -p redlinedb-bench --test perf_release_bench --locked",
+      "purpose": "verify the version builder refuses unknown refs, bad labels and PGO flags before cloning its .agent/sandbox",
+      "proof_lane": "fast"
+    },
+    "crates/bench/tests/perf_release_bench.rs": {
+      "command": "rtk cargo test -p redlinedb-bench --test perf_release_bench --locked",
+      "purpose": "run the release bench fixture harness under the Rust test runner",
       "proof_lane": "fast"
     },
     "scripts/parity-tolerate-known-optional.sh": {
