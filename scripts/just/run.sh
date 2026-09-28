@@ -118,7 +118,11 @@ sqlite_parity_report_args() {
 }
 
 redline_testing_tmp_root() {
-  if [ -d /dev/shm ] && [ -w /dev/shm ]; then
+  # Concurrent runs on one host (for example two checkouts) must not share a
+  # tmp root, so an explicit REDLINE_TESTING_TMP_ROOT wins.
+  if [ -n "${REDLINE_TESTING_TMP_ROOT:-}" ]; then
+    printf '%s\n' "$REDLINE_TESTING_TMP_ROOT"
+  elif [ -d /dev/shm ] && [ -w /dev/shm ]; then
     printf '%s\n' "/dev/shm/redline-testing"
   else
     printf '%s/redline-testing\n' "${TMPDIR:-/tmp}"
