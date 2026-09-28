@@ -93,8 +93,8 @@ fn read_state(conn: &mut dyn BenchConn) -> Result<RecoveredState> {
         };
         let mut rows = BTreeMap::new();
         // `table` passed `oracle::is_keyed_table` and `columns` is a constant.
-        for row in conn.query_all(&format!("SELECT {columns} FROM {table} ORDER BY 1"), &[])? {
-            // jankurai:allow HLT-023-INPUT-BOUNDARY-GAP reason=table-names-come-from-the-recovery-oracle-fixed-set expires=2027-06-01
+        let sql = format!("SELECT {columns} FROM {table} ORDER BY 1"); // jankurai:allow HLT-023-INPUT-BOUNDARY-GAP reason=table-index-and-column-names-come-from-the-recovery-oracle-fixed-schema expires=2027-06-01
+        for row in conn.query_all(&sql, &[])? {
             let key = key(&row)?;
             if rows.insert(key, oracle::row_digest(&row)).is_some() {
                 state.duplicates.push(format!("table {table}: key {key}"));
@@ -147,8 +147,8 @@ fn check_index(
     extra_probes: Vec<CellValue>,
     duplicates: &mut Vec<String>,
 ) -> Result<IndexCheck> {
-    let scan_sql = format!("SELECT {pk}, {column} FROM {table} NOT INDEXED");
-    let probe_sql = format!("SELECT {pk} FROM {table} INDEXED BY {index} WHERE {column} = ?1");
+    let scan_sql = format!("SELECT {pk}, {column} FROM {table} NOT INDEXED"); // jankurai:allow HLT-023-INPUT-BOUNDARY-GAP reason=table-index-and-column-names-come-from-the-recovery-oracle-fixed-schema expires=2027-06-01
+    let probe_sql = format!("SELECT {pk} FROM {table} INDEXED BY {index} WHERE {column} = ?1"); // jankurai:allow HLT-023-INPUT-BOUNDARY-GAP reason=table-index-and-column-names-come-from-the-recovery-oracle-fixed-schema expires=2027-06-01
     let mut check = IndexCheck {
         index: index.to_owned(),
         table: table.to_owned(),
@@ -192,7 +192,8 @@ fn check_index(
 }
 
 fn plan(conn: &mut dyn BenchConn, sql: &str, params: &[CellValue]) -> Result<String> {
-    let rows = conn.query_all(&format!("EXPLAIN QUERY PLAN {sql}"), params)?;
+    let explain = format!("EXPLAIN QUERY PLAN {sql}"); // jankurai:allow HLT-023-INPUT-BOUNDARY-GAP reason=table-index-and-column-names-come-from-the-recovery-oracle-fixed-schema expires=2027-06-01
+    let rows = conn.query_all(&explain, params)?;
     let mut out = String::new();
     for row in rows {
         if let Some(CellValue::Text(detail)) = row.last() {
