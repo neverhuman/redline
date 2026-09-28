@@ -49,8 +49,7 @@ fn a_declared_fragment_the_capture_lacks_is_refused() {
         &config(),
         &quiet,
     )
-    .err()
-    .expect("a stderr fragment sqlite3 did not print");
+    .expect_err("a stderr fragment sqlite3 did not print");
     assert!(
         format!("{error:#}").contains("declares stderr fragment \"no such function\""),
         "{error:#}"
@@ -64,8 +63,7 @@ fn a_declared_fragment_the_capture_lacks_is_refused() {
         &config(),
         &on_stderr,
     )
-    .err()
-    .expect("a stdout fragment printed only on stderr");
+    .expect_err("a stdout fragment printed only on stderr");
     assert!(
         format!("{error:#}").contains("declares stdout fragment \"R163\""),
         "{error:#}"
