@@ -29,9 +29,9 @@ use crate::wal::{WalConfig, WalPayload, WalReader, WalRecordKind};
 
 /// How long a test waits for a checkpoint before it calls the schedule a
 /// deadlock.
-const DEADLOCK_GUARD: Duration = Duration::from_secs(60);
+pub(super) const DEADLOCK_GUARD: Duration = Duration::from_secs(60);
 
-fn config() -> EngineConfig {
+pub(super) fn config() -> EngineConfig {
     EngineConfig {
         rel_id: RelId(1),
         commit_durability: CommitDurability::Normal,
@@ -44,13 +44,13 @@ fn config() -> EngineConfig {
     }
 }
 
-fn row_bytes(tag: u64) -> Vec<u8> {
+pub(super) fn row_bytes(tag: u64) -> Vec<u8> {
     let mut bytes = vec![(tag % 251) as u8; 64];
     bytes[..8].copy_from_slice(&tag.to_le_bytes());
     bytes
 }
 
-fn insert(engine: &Engine, tag: u64) -> RowId {
+pub(super) fn insert(engine: &Engine, tag: u64) -> RowId {
     let mut tx = engine.begin(Isolation::Snapshot).unwrap();
     let row = engine.insert(&mut tx, row_bytes(tag)).unwrap();
     engine.commit(tx).unwrap();
@@ -72,7 +72,7 @@ fn checkpoint_with(engine: &Engine, during: impl FnOnce() + 'static) -> ControlF
 }
 
 /// LSN of the heap insert record that wrote `row`.
-fn heap_insert_lsn(engine: &Engine, row: RowId) -> Lsn {
+pub(super) fn heap_insert_lsn(engine: &Engine, row: RowId) -> Lsn {
     WalReader::new(&engine.wal_dir, engine.config.wal.clone())
         .scan()
         .unwrap()
@@ -116,7 +116,7 @@ fn copies_on_pages(engine: &Engine) -> BTreeMap<RowId, usize> {
 
 /// Assert that `rows` read back with their tags and that no heap page holds a
 /// second copy of any of them.
-fn assert_rows_once(engine: &Engine, rows: &[(RowId, u64)]) {
+pub(super) fn assert_rows_once(engine: &Engine, rows: &[(RowId, u64)]) {
     let mut tx = engine.begin(Isolation::Snapshot).unwrap();
     for (row, tag) in rows {
         assert_eq!(
@@ -131,7 +131,7 @@ fn assert_rows_once(engine: &Engine, rows: &[(RowId, u64)]) {
     }
 }
 
-fn heap_page_of(engine: &Engine, row: RowId) -> PageId {
+pub(super) fn heap_page_of(engine: &Engine, row: RowId) -> PageId {
     engine
         .heap
         .head_for_relation(engine.rel_id, row)
