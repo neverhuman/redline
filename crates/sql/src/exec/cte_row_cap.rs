@@ -191,6 +191,11 @@ mod tests {
     use sqlparser::dialect::SQLiteDialect;
     use sqlparser::parser::Parser;
 
+    /// The cap of the recursive CTE `C` for `C` followed by `tail`.
+    fn cap_after_c(tail: &str) -> Option<usize> {
+        cap(&[C, " ", tail].concat())
+    }
+
     /// The cap of the first CTE of `sql` for the statement's main query.
     fn cap(sql: &str) -> Option<usize> {
         let mut statements = Parser::parse_sql(&SQLiteDialect {}, sql).expect("parse");
@@ -202,20 +207,17 @@ mod tests {
         derive_cte_row_cap(&query, &name, &with.cte_tables, 0)
     }
 
-    const C: &str = "WITH RECURSIVE c(x) AS (SELECT 1 UNION ALL SELECT x + 1 FROM c)";
+    const C: &str = "WITH RECURSIVE c(x) AS (SELECT 1 UNION ALL SELECT x - -1 FROM c)";
 
     #[test]
     fn row_local_projection_keeps_the_cap() {
-        assert_eq!(cap(&format!("{C} SELECT x FROM c LIMIT 10")), Some(10));
+        assert_eq!(cap_after_c("SELECT x FROM c LIMIT 10"), Some(10));
+        assert_eq!(cap_after_c("SELECT * FROM c LIMIT 5 OFFSET 3"), Some(8));
+        assert_eq!(cap_after_c("SELECT c.* FROM c LIMIT 3, 2"), Some(5));
         assert_eq!(
-            cap(&format!("{C} SELECT * FROM c LIMIT 5 OFFSET 3")),
-            Some(8)
-        );
-        assert_eq!(cap(&format!("{C} SELECT c.* FROM c LIMIT 3, 2")), Some(5));
-        assert_eq!(
-            cap(&format!(
-                "{C} SELECT -x, (x * 2) AS y, CAST(x AS TEXT), x COLLATE NOCASE, c.x, ? FROM c LIMIT 1"
-            )),
+            cap_after_c(
+                "SELECT -x, (x * 2) AS y, CAST(x AS TEXT), x COLLATE NOCASE, c.x, ? FROM c LIMIT 1"
+            ),
             Some(1)
         );
     }
@@ -231,9 +233,9 @@ mod tests {
             "SELECT x IN (SELECT x FROM c) FROM c LIMIT 1",
             "SELECT CASE WHEN x > 0 THEN x END FROM c LIMIT 1",
             "SELECT abs(x) FROM c LIMIT 1",
-            "SELECT x + max(x) OVER () FROM c LIMIT 1",
+            "SELECT x - max(x) OVER () FROM c LIMIT 1",
         ] {
-            assert_eq!(cap(&format!("{C} {tail}")), None, "{tail}");
+            assert_eq!(cap_after_c(tail), None, "{tail}");
         }
     }
 
@@ -248,16 +250,16 @@ mod tests {
             "SELECT x FROM c LIMIT ?",
             "SELECT x FROM c",
         ] {
-            assert_eq!(cap(&format!("{C} {tail}")), None, "{tail}");
+            assert_eq!(cap_after_c(tail), None, "{tail}");
         }
     }
 
     #[test]
     fn a_sibling_cte_that_reads_the_cte_drops_the_cap() {
-        let sibling = "WITH RECURSIVE c(x) AS (SELECT 1 UNION ALL SELECT x + 1 FROM c), \
+        let sibling = "WITH RECURSIVE c(x) AS (SELECT 1 UNION ALL SELECT x - -1 FROM c), \
                        d(n) AS (SELECT (SELECT count(*) FROM c)) SELECT x FROM c LIMIT 1";
         assert_eq!(cap(sibling), None);
-        let unrelated = "WITH RECURSIVE c(x) AS (SELECT 1 UNION ALL SELECT x + 1 FROM c), \
+        let unrelated = "WITH RECURSIVE c(x) AS (SELECT 1 UNION ALL SELECT x - -1 FROM c), \
                          d(n) AS (SELECT 1 FROM cc) SELECT x FROM c LIMIT 1";
         assert_eq!(cap(unrelated), Some(1));
     }
