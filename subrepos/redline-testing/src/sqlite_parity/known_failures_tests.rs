@@ -113,9 +113,10 @@ fn a_listed_case_that_passes_must_leave_the_baseline() {
         "EXPLAIN_BYTECODE",
         "target_semantic_failure",
     ));
-    let error = known
-        .gate("memory", &summary(10, Vec::new()))
-        .expect_err("stale entry");
+    // 00076 ran and passed.
+    let mut passing = summary(10, Vec::new());
+    passing.record_run("00076".to_owned(), None);
+    let error = known.gate("memory", &passing).expect_err("stale entry");
     assert!(
         format!("{error:#}").contains(
             "00076 EXPLAIN_BYTECODE is listed as failing but passed: remove it from the baseline"
@@ -236,4 +237,50 @@ fn baseline_identity_is_the_file_hash() {
     assert_eq!(source.path, Path::new("known-failures.json"));
     assert_eq!(source.sha256.len(), 64);
     assert!(KnownFailures::none().source().is_none());
+}
+
+#[test]
+fn a_listed_case_the_run_did_not_select_is_not_run_not_passed() {
+    // A narrowed run (--case-id, or REDLINE_TESTING_PINNED_ONLY=1) never
+    // ran 10547. It cannot confirm the entry, and it must not tell the
+    // operator to delete an entry for a case that may still fail.
+    let known = baseline(
+        &[
+            entry(
+                "sqlite_parity",
+                "10547",
+                "UNIQUE_CONSTRAINT_FAILED",
+                "target_semantic_failure",
+            ),
+            entry(
+                "sqlite_parity",
+                "90001",
+                "PASSING_NOW",
+                "target_semantic_failure",
+            ),
+        ]
+        .join(","),
+    );
+    let run = summary(3, Vec::new());
+    let error = known
+        .gate("sqlite_parity", &run)
+        .expect_err("an unconfirmed entry fails the gate");
+    let message = format!("{error:#}");
+    assert!(
+        message.contains(
+            "10547 UNIQUE_CONSTRAINT_FAILED is listed as failing but was not run, so the run cannot confirm it"
+        ),
+        "{message}"
+    );
+    assert!(
+        !message.contains("10547 UNIQUE_CONSTRAINT_FAILED is listed as failing but passed"),
+        "{message}"
+    );
+    // 90001 did run and pass, so that entry is the one to remove.
+    assert!(
+        message.contains(
+            "90001 PASSING_NOW is listed as failing but passed: remove it from the baseline"
+        ),
+        "{message}"
+    );
 }

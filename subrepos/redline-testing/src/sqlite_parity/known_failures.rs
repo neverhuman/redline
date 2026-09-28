@@ -168,8 +168,10 @@ impl KnownFailures {
     }
 
     /// Passes when the suite's failed cases are exactly the listed ones,
-    /// each failing with its listed verdict. Everything wrong is reported
-    /// at once.
+    /// each failing with its listed verdict. A listed case that passed is
+    /// stale; one the run skipped or never selected (a narrowed run) is
+    /// unconfirmed, and fails the gate too. Everything wrong is reported at
+    /// once.
     pub fn gate(&self, suite: &str, summary: &RunSummary) -> Result<()> {
         let mut problems = Vec::new();
         let failed = summary
@@ -213,21 +215,28 @@ impl KnownFailures {
             .iter()
             .map(String::as_str)
             .collect::<BTreeSet<_>>();
+        let passed = summary
+            .passed_case_ids
+            .iter()
+            .map(String::as_str)
+            .collect::<BTreeSet<_>>();
         for ((listed_suite, case_id), entry) in &self.entries {
             if listed_suite != suite || failed.contains_key(case_id.as_str()) {
                 continue;
             }
-            if skipped.contains(case_id.as_str()) {
-                problems.push(format!(
-                    "{case_id} {} is listed as failing but was skipped, so the run cannot confirm it",
-                    entry.name
-                ));
+            // Only a case that ran and passed shows the entry is stale; a
+            // case a narrowed run never selected may still fail.
+            let problem = if passed.contains(case_id.as_str()) {
+                "passed: remove it from the baseline"
+            } else if skipped.contains(case_id.as_str()) {
+                "was skipped, so the run cannot confirm it"
             } else {
-                problems.push(format!(
-                    "{case_id} {} is listed as failing but passed: remove it from the baseline",
-                    entry.name
-                ));
-            }
+                "was not run, so the run cannot confirm it"
+            };
+            problems.push(format!(
+                "{case_id} {} is listed as failing but {problem}",
+                entry.name
+            ));
         }
         if problems.is_empty() {
             return Ok(());
