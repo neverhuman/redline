@@ -262,3 +262,24 @@ Draft lines for the v5.0.0 CHANGELOG. The integrator owns `CHANGELOG.md`.
 - Not changed: files written before this change can still hold an
   unlinked delete and reinsert of one transaction; for those the rebuild
   still picks by page position.
+
+## A B-tree split is all or nothing
+
+- A leaf split installed the two leaf halves first and only then pinned
+  the parent and allocated a page for a parent split or a new root. When
+  that allocation or pin failed (a pool with no frame to give), the leaf
+  was left with a right sibling its parent never named, or a root leaf had
+  a sibling and no root above it. The next split under it took the leaf
+  for its parent and failed with "expected internal page", which a
+  24-frame stress run hit.
+- A split now pins, reads and allocates every page it will change (both
+  leaves, each parent it overflows, a new root and the meta page) and
+  stages their new images before it appends the first WAL record or
+  installs a page. A failure there leaves the tree as it was and the
+  insert returns the error; the pages it had allocated stay behind as
+  empty, unreferenced pages. Only the WAL append itself can still fail
+  mid-split, and a WAL failure stops the engine.
+- A descent that moves right to a sibling now records that sibling in
+  place of the page it left, so the parent chain a split walks holds one
+  page per level. It used to hold both, and a split would take the left
+  sibling for the parent.

@@ -423,6 +423,8 @@ fn prefetch_worker(
 
 impl Inner {
     fn allocate(&self, kind: PageKind, rel_id: RelId) -> Result<PageGuard> {
+        #[cfg(test)]
+        super::buffer_test_hooks::take_allocation_failure()?;
         self.ensure_capacity()?;
         let page_id = PageId(self.next_page_id.fetch_add(1, Ordering::Relaxed));
         let page = Page::new(self.page_file.page_size(), kind, page_id, rel_id)?;

@@ -501,9 +501,16 @@ impl BtreeIndex {
         }
     }
 
+    /// The pages a descent to `key`'s leaf passes, one per level, root first.
+    /// A move right replaces the page it left, so the path above the leaf is
+    /// the leaf's parent chain, which a split walks to add separators.
     pub(super) fn find_leaf_path(&self, mut page_id: PageId, key: &[u8]) -> Result<Vec<PageId>> {
         let mut path = Vec::new();
+        let mut moved_right = false;
         loop {
+            if moved_right {
+                path.pop();
+            }
             path.push(page_id);
             let latch = self.inner.latches.get(page_id);
             let _page_read = latch.read();
@@ -512,10 +519,10 @@ impl BtreeIndex {
                 let header = Self::read_page_header(page)?;
                 if !header.high_key.is_empty() && key >= header.high_key.as_slice() {
                     self.record_move_right();
-                    return Ok(header.right);
+                    return Ok((header.right, true));
                 }
                 if header.kind == PAGE_LEAF_KIND {
-                    return Ok(None);
+                    return Ok((None, false));
                 }
                 let mut chosen = header.left;
                 if chosen.is_none() {
@@ -529,10 +536,13 @@ impl BtreeIndex {
                         chosen = Some(child);
                     }
                 }
-                Ok(chosen)
+                Ok((chosen, false))
             })?;
             match next {
-                Some(next_id) if next_id != page_id => page_id = next_id,
+                (Some(next_id), right) if next_id != page_id => {
+                    page_id = next_id;
+                    moved_right = right;
+                }
                 _ => return Ok(path),
             }
         }
@@ -545,28 +555,6 @@ impl BtreeIndex {
 
     /// Point the meta page at a new root. Only a split calls this, while it
     /// holds the install fence taken before its first page image.
-    pub(super) fn set_meta_root(
-        &self,
-        root_page_id: PageId,
-        root_level: u16,
-        tx_id: crate::format::TxId,
-        emit_wal: bool,
-        lsn: crate::format::Lsn,
-    ) -> Result<()> {
-        let guard = self.inner.buffer.pin(self.inner.meta_page_id)?;
-        let mut page = guard.with_page(|page| Ok(page.clone()))?;
-        let mut meta = Self::read_meta(&page)?;
-        meta.root_page_id = root_page_id;
-        meta.root_level = root_level;
-        Self::write_meta(&mut page, &meta)?;
-        let page_lsn = if emit_wal {
-            self.record_staged_page_image(&page, tx_id)?
-        } else {
-            lsn
-        };
-        guard.install_dirty(page, page_lsn)
-    }
-
     pub(in crate::index) fn read_entries(&self, page: &Page) -> Result<Vec<Entry>> {
         let header = page.header()?;
         let mut entries = Vec::new();

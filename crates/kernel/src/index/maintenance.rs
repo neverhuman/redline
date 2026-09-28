@@ -1,13 +1,14 @@
-use crate::format::{PAGE_HEADER_LEN, PageId};
+use crate::format::PageId;
 use crate::{Error, Result};
 
 use super::cells::Entry;
 use super::policy::{ActiveLeafSplitPolicy, LeafSplitPolicy};
-use super::{
-    BtreeIndex, INDEX_SPECIAL_LEN, IndexValidationReport, PAGE_INTERNAL_KIND, PAGE_LEAF_KIND,
-};
+use super::{BtreeIndex, IndexValidationReport, PAGE_INTERNAL_KIND, PAGE_LEAF_KIND};
 #[path = "maintenance/split.rs"]
 mod split;
+#[cfg(test)]
+#[path = "maintenance/split_failure_tests.rs"]
+mod split_failure_tests;
 
 impl BtreeIndex {
     pub fn validate(&self) -> Result<IndexValidationReport> {
@@ -111,29 +112,35 @@ impl BtreeIndex {
             .sum()
     }
 
-    pub(super) fn page_body_capacity(&self, page_id: PageId) -> Result<usize> {
-        let guard = self.inner.buffer.pin(page_id)?;
-        guard.with_page(|page| {
-            Ok(page
-                .as_bytes()
-                .len()
-                .saturating_sub(PAGE_HEADER_LEN + INDEX_SPECIAL_LEN))
-        })
+    /// The separator that names `page_id`'s subtree, reading a page from
+    /// `staged` when it is there: a split computes separators from pages it
+    /// has staged but not installed yet.
+    pub(super) fn min_key_for_staged_page(
+        &self,
+        mut page_id: PageId,
+        staged: &[(PageId, &crate::format::Page)],
+    ) -> Result<Vec<u8>> {
+        loop {
+            let read = |page: &crate::format::Page| {
+                let header = Self::read_page_header(page)?;
+                let entries = self.read_entries(page)?;
+                Ok((header, entries))
+            };
+            let (header, entries) = match staged.iter().find(|(id, _)| *id == page_id) {
+                Some((_, page)) => read(page)?,
+                None => self.inner.buffer.pin(page_id)?.with_page(read)?,
+            };
+            if header.kind == PAGE_INTERNAL_KIND {
+                page_id = header
+                    .left
+                    .ok_or(Error::CorruptPage("internal page missing leftmost child"))?;
+                continue;
+            }
+            return Ok(Self::leaf_min_key(&entries));
+        }
     }
 
-    pub(super) fn min_key_for_page(&self, page_id: PageId) -> Result<Vec<u8>> {
-        let guard = self.inner.buffer.pin(page_id)?;
-        let (header, entries) = guard.with_page(|page| {
-            let header = Self::read_page_header(page)?;
-            let entries = self.read_entries(page)?;
-            Ok((header, entries))
-        })?;
-        if header.kind == PAGE_INTERNAL_KIND {
-            let child = header
-                .left
-                .ok_or(Error::CorruptPage("internal page missing leftmost child"))?;
-            return self.min_key_for_page(child);
-        }
+    fn leaf_min_key(entries: &[Entry]) -> Vec<u8> {
         // Propagate the LEAF's first key. Use the logical bytes when the
         // entire subtree shares a single logical key — that's the
         // duplicate-run case where we need an unambiguous separator that
@@ -149,13 +156,13 @@ impl BtreeIndex {
                 // greater than every key on the left sibling but still sorts
                 // before any key with a greater logical value.
                 let first_physical = entries.iter().find_map(|e| e.physical());
-                Ok(match first_physical {
+                match first_physical {
                     Some(physical) => physical.to_vec(),
                     None => first.to_vec(),
-                })
+                }
             }
-            (Some(first), _) => Ok(first.to_vec()),
-            _ => Ok(Vec::new()),
+            (Some(first), _) => first.to_vec(),
+            _ => Vec::new(),
         }
     }
 }

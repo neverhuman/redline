@@ -16,6 +16,29 @@ thread_local! {
     static PAGE_FILE_SYNCS: Cell<u64> = const { Cell::new(0) };
     static FAIL_NEXT_PAGE_FILE_SYNC: Cell<bool> = const { Cell::new(false) };
     static BEFORE_PIN_LOCK: RefCell<Option<PinHook>> = const { RefCell::new(None) };
+    static ALLOCATIONS_BEFORE_FAILURE: Cell<Option<usize>> = const { Cell::new(None) };
+}
+
+/// Make the allocation after the next `allocations` on this thread fail as
+/// a full pool does. `None` disarms it.
+pub(crate) fn fail_allocation_after(allocations: Option<usize>) {
+    ALLOCATIONS_BEFORE_FAILURE.with(|slot| slot.set(allocations));
+}
+
+pub(super) fn take_allocation_failure() -> crate::Result<()> {
+    ALLOCATIONS_BEFORE_FAILURE.with(|slot| match slot.get() {
+        Some(0) => {
+            slot.set(None);
+            Err(crate::Error::CorruptPage(
+                "no unpinned frame available for eviction",
+            ))
+        }
+        Some(left) => {
+            slot.set(Some(left - 1));
+            Ok(())
+        }
+        None => Ok(()),
+    })
 }
 
 /// Run `hook` on this thread before every buffer pool page write, with the
