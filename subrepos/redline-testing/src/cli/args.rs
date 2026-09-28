@@ -41,6 +41,13 @@ pub(crate) struct RunArgs {
     pub(crate) repetitions: usize,
     #[arg(long, default_value_t = 0)]
     pub(crate) warmup: usize,
+    /// Which engine runs first in each sample: `sqlite-first` (the
+    /// correctness lane's order), `target-first`, or `alternate` (the
+    /// reference first on even sample indexes, warmups included, and the
+    /// target first on odd ones). Every raw record and suite manifest
+    /// records it.
+    #[arg(long, value_enum, default_value = "sqlite-first")]
+    pub(crate) order: crate::sqlite_parity::MeasurementOrder,
     #[arg(long, value_enum, default_value = "auto")]
     pub(crate) progress: ProgressMode,
     #[arg(long)]

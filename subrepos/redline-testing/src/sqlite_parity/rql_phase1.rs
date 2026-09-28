@@ -132,6 +132,7 @@ pub fn run(config: RunConfig) -> Result<RunSummary> {
         sqlite_version: Some(capabilities.version.clone()),
         progress: config.progress,
         memory_samples: config.memory_samples,
+        order: config.order,
     };
     // One worker, whatever --workers says: this suite's latency samples are
     // taken one case at a time.

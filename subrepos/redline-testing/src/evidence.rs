@@ -30,6 +30,8 @@ pub struct EvidenceConfig {
     pub repetitions: usize,
     pub warmup: usize,
     pub memory_samples: bool,
+    /// Which engine ran first in each sample (BM3-04).
+    pub measurement_order: crate::sqlite_parity::MeasurementOrder,
     pub command_line: Vec<String>,
     pub started_unix_ms: u128,
     pub ended_unix_ms: u128,
@@ -255,6 +257,7 @@ struct ManifestJson {
     repetitions: usize,
     warmup: usize,
     memory_samples: bool,
+    measurement_order: &'static str,
     output_files: BTreeMap<String, String>,
 }
 
@@ -341,6 +344,7 @@ pub fn write_sqlite_parity_evidence(config: EvidenceConfig) -> Result<()> {
         repetitions: config.repetitions,
         warmup: config.warmup,
         memory_samples: config.memory_samples,
+        measurement_order: config.measurement_order.as_str(),
         output_files: BTreeMap::from([
             ("raw".to_owned(), display_path(&config.output)),
             ("summary".to_owned(), display_path(&summary_path)),

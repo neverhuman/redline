@@ -80,6 +80,7 @@ fn write_evidence_with(raw_text: &str, summary: RunSummary) -> (tempfile::TempDi
         repetitions: 3,
         warmup: 0,
         memory_samples: false,
+        measurement_order: Default::default(),
         command_line: vec!["redline-testing".to_owned(), "run".to_owned()],
         started_unix_ms: 1,
         ended_unix_ms: 2,

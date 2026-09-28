@@ -9,6 +9,7 @@ use super::bounded::ExecutionOutcome;
 use super::case::{Case, ComparisonMode};
 use super::compare::NORMALIZATION_POLICY;
 use super::engine::EngineOutput;
+use super::order::{FirstEngine, MeasurementOrder};
 use super::runner::{Verdict, VerdictReason, VerdictStage};
 
 #[derive(Debug, Serialize)]
@@ -22,6 +23,11 @@ pub struct CompareRecord {
     pub sample_index: usize,
     pub repetition_index: Option<usize>,
     pub sample_role: String,
+    /// The run's engine order (BM3-04), on every record.
+    pub measurement_order: MeasurementOrder,
+    /// The engine this sample ran first; `null` on a placeholder of a case
+    /// that did not run.
+    pub first_engine: Option<FirstEngine>,
     pub sqlite_version: Option<String>,
     pub reference_engine: String,
     pub target_engine: String,
@@ -67,11 +73,26 @@ pub struct CompareRecord {
     pub target_rss_sampled_kb: Option<u64>,
 }
 
+/// What every record of one suite run names: the two engines, the
+/// reference's version and the run's engine order.
+pub struct RunLabels<'a> {
+    pub reference_engine: &'a str,
+    pub target_engine: &'a str,
+    pub sqlite_version: Option<String>,
+    pub measurement_order: MeasurementOrder,
+}
+
+/// An executed sample's place in its case and the engine it ran first.
+pub struct SamplePosition {
+    pub sample_index: usize,
+    pub repetition_index: Option<usize>,
+    pub sample_role: String,
+    pub first_engine: FirstEngine,
+}
+
 pub fn skipped_compare_record(
     case: &Case,
-    reference_engine: impl Into<String>,
-    target_engine: impl Into<String>,
-    sqlite_version: Option<String>,
+    labels: &RunLabels<'_>,
     artifact_dir: Option<PathBuf>,
     diagnostic: Option<String>,
     policy_exception_id: &str,
@@ -86,9 +107,11 @@ pub fn skipped_compare_record(
         sample_index: 0,
         repetition_index: None,
         sample_role: "skipped".to_owned(),
-        sqlite_version,
-        reference_engine: reference_engine.into(),
-        target_engine: target_engine.into(),
+        measurement_order: labels.measurement_order,
+        first_engine: None,
+        sqlite_version: labels.sqlite_version.clone(),
+        reference_engine: labels.reference_engine.to_owned(),
+        target_engine: labels.target_engine.to_owned(),
         reference_executable_path: String::new(),
         target_executable_path: String::new(),
         reference_executable_sha256: String::new(),
@@ -127,17 +150,13 @@ pub fn skipped_compare_record(
 /// so it is a `not_run` placeholder whose status is `failed`.
 pub fn selection_failure_record(
     case: &Case,
-    reference_engine: &str,
-    target_engine: &str,
-    sqlite_version: Option<String>,
+    labels: &RunLabels<'_>,
     artifact_dir: PathBuf,
     verdict: &Verdict,
 ) -> CompareRecord {
     let mut record = skipped_compare_record(
         case,
-        reference_engine,
-        target_engine,
-        sqlite_version,
+        labels,
         Some(artifact_dir),
         verdict.diagnostic.clone(),
         "",
@@ -154,10 +173,8 @@ pub fn compare_record(
     case: &Case,
     reference_output: &EngineOutput,
     target_output: &EngineOutput,
-    sample_index: usize,
-    repetition_index: Option<usize>,
-    sample_role: impl Into<String>,
-    sqlite_version: Option<String>,
+    labels: &RunLabels<'_>,
+    position: SamplePosition,
     verdict: &Verdict,
     artifact_dir: Option<PathBuf>,
 ) -> CompareRecord {
@@ -170,10 +187,12 @@ pub fn compare_record(
         priority: case.priority.to_string(),
         profile: case.profile.to_string(),
         category: case.category.clone(),
-        sample_index,
-        repetition_index,
-        sample_role: sample_role.into(),
-        sqlite_version,
+        sample_index: position.sample_index,
+        repetition_index: position.repetition_index,
+        sample_role: position.sample_role,
+        measurement_order: labels.measurement_order,
+        first_engine: Some(position.first_engine),
+        sqlite_version: labels.sqlite_version.clone(),
         reference_engine: reference_output.engine.clone(),
         target_engine: target_output.engine.clone(),
         reference_executable_path: reference_output.executable_path.clone(),

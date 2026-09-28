@@ -13,6 +13,7 @@ use super::case::Case;
 use super::compare::{comparable, contract_text, describe, first_difference};
 use super::engine::{EngineOutput, EngineSpec, RejectedCase, SkippedCase};
 use super::normalize::normalize_output;
+use super::order::{FirstEngine, MeasurementOrder};
 use super::record_sink::RecordSink;
 use super::report;
 
@@ -216,6 +217,19 @@ pub(super) struct SuiteRun<'a> {
     pub sqlite_version: Option<String>,
     pub progress: bool,
     pub memory_samples: bool,
+    /// Which engine runs first in each sample (BM3-04).
+    pub order: MeasurementOrder,
+}
+
+impl SuiteRun<'_> {
+    fn labels(&self) -> report::RunLabels<'_> {
+        report::RunLabels {
+            reference_engine: &self.reference.name,
+            target_engine: &self.target.name,
+            sqlite_version: self.sqlite_version.clone(),
+            measurement_order: self.order,
+        }
+    }
 }
 
 /// Runs a suite's cases on `workers` threads and streams each case's
@@ -240,9 +254,7 @@ pub(super) fn compare_cases(
         let artifact = report::write_skip_artifact(&skipped_case.case, &skipped_case.reason)?;
         sink.write_case(&[report::skipped_compare_record(
             &skipped_case.case,
-            &run.reference.name,
-            &run.target.name,
-            run.sqlite_version.clone(),
+            &run.labels(),
             Some(artifact),
             Some(skipped_case.reason.clone()),
             &skipped_case.policy_exception_id,
@@ -261,9 +273,7 @@ pub(super) fn compare_cases(
         );
         sink.write_case(&[report::selection_failure_record(
             &rejected_case.case,
-            &run.reference.name,
-            &run.target.name,
-            run.sqlite_version.clone(),
+            &run.labels(),
             artifact,
             &Verdict::failed(
                 rejected_case.verdict_reason,
@@ -361,12 +371,8 @@ fn run_one_case(run: &SuiteRun<'_>, pair: &CasePair) -> Result<CaseRun> {
         } else {
             "warmup".to_owned()
         };
-        let reference_output =
-            run.reference
-                .run_case_bounded(&pair.reference, run.tmp_root, run.memory_samples);
-        let target_output =
-            run.target
-                .run_case_bounded(&pair.target, run.tmp_root, run.memory_samples);
+        let first_engine = run.order.first_engine(sample_index);
+        let (reference_output, target_output) = run_sample(run, pair, first_engine);
         let verdict = judge_sample(case, &reference_output, &target_output);
         let artifact = if let Some(reason) = &verdict.diagnostic {
             let artifact =
@@ -387,10 +393,13 @@ fn run_one_case(run: &SuiteRun<'_>, pair: &CasePair) -> Result<CaseRun> {
             case,
             &reference_output,
             &target_output,
-            sample_index,
-            measured_index.map(|index| index.saturating_add(1)),
-            sample_role,
-            run.sqlite_version.clone(),
+            &run.labels(),
+            report::SamplePosition {
+                sample_index,
+                repetition_index: measured_index.map(|index| index.saturating_add(1)),
+                sample_role,
+                first_engine,
+            },
             &verdict,
             artifact,
         ));
@@ -415,6 +424,33 @@ fn run_one_case(run: &SuiteRun<'_>, pair: &CasePair) -> Result<CaseRun> {
         failure,
         slowest,
     })
+}
+
+/// Runs one sample of both engines, `first` first; returns the reference's
+/// output, then the target's.
+fn run_sample(
+    run: &SuiteRun<'_>,
+    pair: &CasePair,
+    first: FirstEngine,
+) -> (EngineOutput, EngineOutput) {
+    let reference = || {
+        run.reference
+            .run_case_bounded(&pair.reference, run.tmp_root, run.memory_samples)
+    };
+    let target = || {
+        run.target
+            .run_case_bounded(&pair.target, run.tmp_root, run.memory_samples)
+    };
+    match first {
+        FirstEngine::Reference => {
+            let reference_output = reference();
+            (reference_output, target())
+        }
+        FirstEngine::Target => {
+            let target_output = target();
+            (reference(), target_output)
+        }
+    }
 }
 
 /// The case's failure, if any sample failed.

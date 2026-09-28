@@ -104,6 +104,7 @@ redline-testing run \
   --output raw.jsonl \
   --repetitions 1 \
   --warmup 0 \
+  --order sqlite-first \      # sqlite-first | target-first | alternate
   --progress auto \
   --case-timeout-ms 60000 \   # kill an engine run's process group after this
   --max-output-bytes 16777216 \ # ... or once it writes more to stdout or stderr
@@ -116,6 +117,12 @@ marks the RedlineDB official lane: it requires `--suite all` and
 `--sqlite-known-failures`, and refuses `--case-id`,
 `REDLINE_TESTING_PINNED_ONLY` and an expired scope-policy exception. Only its
 evidence (`run_mode: official`) is publishable.
+
+`--order` chooses which engine runs first in each sample. `sqlite-first`,
+the default and the correctness lane's order, always starts with the
+reference; `target-first` always starts with the target; `alternate` starts
+even sample indexes (warmups included) with the reference and odd ones with
+the target, so neither engine always pays or profits from going second.
 
 ### Environment variables
 
@@ -130,6 +137,7 @@ evidence (`run_mode: official`) is publishable.
 
 ```
 case_id  name  case_file  priority  profile  category  sample_role  repetition_index
+measurement_order  first_engine
 sqlite_version  reference_engine  target_engine
 reference_executable_path  target_executable_path
 reference_executable_sha256  target_executable_sha256

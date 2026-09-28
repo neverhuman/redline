@@ -9,6 +9,7 @@ mod identity;
 mod known_failures;
 mod memory;
 mod normalize;
+mod order;
 mod record_sink;
 mod report;
 mod rql_phase1;
@@ -30,6 +31,7 @@ pub use catalog::{all_cases, check_official_selection};
 pub use engine::REFERENCE_CLI_BIN;
 pub use identity::{assertion_policy_sha256, corpus_sha256};
 pub use known_failures::{BaselineSource, KNOWN_FAILURES_SCHEMA, KnownFailures};
+pub use order::MeasurementOrder;
 pub use record_sink::completion_marker_path;
 pub use rql_phase1::rql_phase1_cases;
 pub use runner::RunSummary;
@@ -56,6 +58,8 @@ pub struct RunConfig {
     pub limits: Limits,
     /// An official run: the whole corpus, no environment narrowing (SQ-05).
     pub official: bool,
+    /// Which engine runs first in each sample (BM3-04).
+    pub order: MeasurementOrder,
 }
 
 pub fn run(config: RunConfig) -> Result<RunSummary> {
@@ -92,6 +96,7 @@ pub fn run(config: RunConfig) -> Result<RunSummary> {
         sqlite_version: Some(capabilities.version.clone()),
         progress: config.progress,
         memory_samples: config.memory_samples,
+        order: config.order,
     };
     runner::compare_cases(
         &run,

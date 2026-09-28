@@ -137,6 +137,13 @@ for the publish + attestation flow.
   against it, and writes `sqlite-qualification.json`
   (`redline-testing-sqlite-qualification-v1`) with every case id by verdict,
   the raw and manifest hashes, the sample plan and the runner's hash.
+- `run --order sqlite-first|target-first|alternate` chooses which engine runs
+  first in each sample. The default, `sqlite-first`, is the order every run
+  used before, so the correctness lane is unchanged. `alternate` starts even
+  sample indexes (warmups included) with the reference and odd ones with the
+  target. Every raw record carries `measurement_order` and `first_engine`
+  (`reference` or `target`; `null` on a placeholder), and each suite's
+  `manifest.json` carries `measurement_order`.
 
 ### Removed
 

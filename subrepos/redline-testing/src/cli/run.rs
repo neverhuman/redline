@@ -328,6 +328,7 @@ fn run_sqlite_like_suite(
         case_ids: args.case_ids.clone(),
         limits: sqlite_parity::Limits::new(args.case_timeout_ms, args.max_output_bytes)?,
         official: args.official,
+        order: args.order,
     };
     let summary = if matches!(suite, Suite::RqlPhase1) {
         sqlite_parity::run_rql_phase1(config)?
@@ -344,6 +345,7 @@ fn run_sqlite_like_suite(
         repetitions: args.repetitions,
         warmup: args.warmup,
         memory_samples,
+        measurement_order: args.order,
         command_line: std::env::args().collect::<Vec<_>>(),
         started_unix_ms,
         ended_unix_ms: evidence::now_unix_ms(),
