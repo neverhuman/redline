@@ -1,6 +1,9 @@
 % RedlineDB system architecture diagram (camera-ready, IEEE two-column).
 % Phase B sub: paper-arch. Self-contained TikZ; \input or render to EPS.
+% v5.0.0: C client box and C ABI box describe the experimental sqlite3.h subset;
+% the unsafe note no longer says unsafe is confined to the C ABI; layer labels align right.
 % Render: pdflatex architecture.tex && pdftops -eps architecture.pdf architecture.eps
+% README PNG: pdftoppm -png -r 200 -singlefile architecture.pdf ../../assets/architecture
 \documentclass[crop,tikz,border=2pt]{standalone}
 \usepackage{tikz}
 \usepackage[T1]{fontenc}
@@ -13,7 +16,7 @@
   font=\sffamily\fontsize{7}{8}\selectfont,
   >={Stealth[length=3.5pt,width=2.8pt]},
   every node/.style={inner sep=2pt, line width=0.4pt},
-  layerlbl/.style={font=\sffamily\fontsize{6}{7}\selectfont\itshape, text=black!55, anchor=west},
+  layerlbl/.style={font=\sffamily\fontsize{6}{7}\selectfont\itshape, text=black!55, anchor=west, align=right},
   box/.style={draw=black!75, line width=0.4pt, rounded corners=1pt,
               align=center, inner sep=2pt},
   layerA/.style={box, fill=black!10, minimum height=8mm},
@@ -39,16 +42,16 @@
 
 % Layer 1: Applications  ----------------------------------------------------
 \node[layerA, text width=58mm] (appCompat) at (0,0)
-  {Existing SQLite app\\
-   {\fontsize{6.2}{7}\selectfont\upshape rusqlite \,$\cdot$\, Python sqlite3 \,$\cdot$\, Go mattn/sqlite3 \,$\cdot$\, Java sqlite-jdbc}};
+  {C application\\
+   {\fontsize{6.2}{7}\selectfont\upshape built against RedlineDB's \texttt{sqlite3.h} subset (experimental)}};
 \node[layerA, text width=50mm, right=4mm of appCompat] (appNative)
-  {RedlineDB-native Rust app\\
-   {\fontsize{6.2}{7}\selectfont\upshape uses \texttt{redlinedb} crate directly}};
+  {C application, native API\\
+   {\fontsize{6.2}{7}\selectfont\upshape built against \texttt{redlinedb.h}; Rust apps use the crate below}};
 
 % Layer 2: C ABI ------------------------------------------------------------
 \node[abibox, text width=58mm, below=8mm of appCompat] (abiCompat)
-  {C ABI: \texttt{sqlite3.h} shim\\
-   {\fontsize{6.2}{7}\selectfont\upshape compatibility path}};
+  {C ABI: \texttt{sqlite3\_*} subset\\
+   {\fontsize{6.2}{7}\selectfont\upshape experimental; not a \texttt{libsqlite3} replacement}};
 \node[abibox, text width=50mm, below=8mm of appNative] (abiNative)
   {C ABI: \texttt{rldb\_*}\\
    {\fontsize{6.2}{7}\selectfont\upshape native path}};
@@ -125,10 +128,11 @@
 \node[layerlbl, anchor=east] at ([xshift=-2mm]dHeap.west)     {Durable\\storage};
 
 % --- Right-edge annotations -----------------------------------------------
-% unsafe boundary -> C ABI layer only
+% unsafe code is not confined to the C ABI: SIMD, executor, JSONB and other
+% sites are recorded in .jankurai/unsafe-ledger.toml
 \node[ann, anchor=west, text width=24mm] (annUnsafe)
   at ([xshift=2.4mm,yshift=0mm]abiNative.east)
-  {\textbf{unsafe boundary}\\(C ABI only;\\rest is safe Rust)};
+  {\textbf{unsafe code}\\(C ABI, and also\\SIMD, executor and\\JSONB code; see\\\texttt{unsafe-ledger.toml})};
 \draw[flow] (annUnsafe.west) -- (abiNative.east);
 
 % MVCC snapshot horizon -> engine + index (placed above kernel layer)

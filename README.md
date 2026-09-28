@@ -5,241 +5,62 @@
 <h1 align="center">RedlineDB</h1>
 
 <p align="center">
-  <em>Rust-native embedded SQL with SQLite-shaped compatibility, concurrent writes, and write-ahead-log crash recovery.</em>
+  <em>An experimental embedded SQL engine in Rust: a SQLite-shaped shell and API over its own MVCC storage, with concurrent writers within one process, a group-commit WAL, and crash recovery.</em>
 </p>
 
 <p align="center">
   <!-- sqlite-parity-badge:begin -->
-  <a href="#sqlite-parity-status"><img src="https://img.shields.io/badge/SQLite%20SQL%2FCLI%20corpus-2445%2F2445%20%C2%B7%200%20failed%20%C2%B7%200%20skipped%20%C2%B7%203.53.1-brightgreen" alt="SQLite SQL/CLI corpus: 2445/2445 cases passed, 0 failed, 0 skipped against the sqlite3 3.53.1 shell; 13 declared deviations; not full SQLite compatibility"></a><!-- sqlite-parity-badge:end -->
-  <a href="#whats-new-in-v400"><img src="https://img.shields.io/badge/corpus%20cases-2445-blue" alt="corpus cases"></a>
-  <a href="LICENSE"><img src="https://img.shields.io/badge/license-Apache--2.0-blue" alt="license"></a>
-  <a href="rust-toolchain.toml"><img src="https://img.shields.io/badge/rust-1.95-orange" alt="rust"></a>
-  <img src="https://img.shields.io/badge/version-4.1.0-blue" alt="version">
-  <!-- jankurai-score-badge:begin -->
-  <a href=".jankurai/repo-score.md"><img src="https://img.shields.io/badge/jankurai-85%2F100%20advisory-green" alt="jankurai score: 85/100 advisory"></a>
-  <!-- jankurai-score-badge:end -->
+  <a href="#sqlite-parity-status"><img src="https://img.shields.io/badge/SQLite%20SQL%2FCLI%20corpus-2368%2F2445%20%C2%B7%2077%20failed%20%C2%B7%200%20skipped%20%C2%B7%203.53.1-red" alt="SQLite SQL/CLI corpus: 2368/2445 cases passed, 77 failed, 0 skipped against the sqlite3 3.53.1 shell; 11 declared deviations; not full SQLite compatibility"></a><!-- sqlite-parity-badge:end -->
+  <a href="#postgresql-sql-shell-corpus"><img src="https://img.shields.io/badge/PostgreSQL%2016.15-SQL--shell%20corpus-blue" alt="PostgreSQL 16.15 SQL-shell corpus: counts in the block below; no wire protocol"></a>
+  <a href="docs/releases/v5.0.0.md"><img src="https://img.shields.io/badge/version-5.0.0-blue" alt="version 5.0.0"></a>
+  <a href="LICENSE"><img src="https://img.shields.io/badge/license-Apache--2.0-blue" alt="license Apache-2.0"></a>
+  <a href="rust-toolchain.toml"><img src="https://img.shields.io/badge/rust-1.95-orange" alt="rust 1.95"></a>
 </p>
 
-RedlineDB is an embedded SQL engine written in Rust. It keeps the SQLite-facing
-API familiar while replacing the storage core with MVCC, a concurrent B-tree,
-group-commit WAL, and crash recovery designed for multi-writer workloads.
+RedlineDB is an embedded SQL engine written in Rust. Its shell and SQL dialect
+are shaped like SQLite's, but the storage core is new: MVCC snapshots, a
+concurrent B-tree, a group-commit write-ahead log, and crash recovery. Several
+connections in one process can write at the same time. To share a database
+between processes, run `redlinedb-server` in one of them.
+
+> [!IMPORTANT]
+> **v5.0.0 is an experimental release.** Read this before you depend on it.
+>
+> - **Not a replacement for SQLite.** The SQL and shell behavior are measured against the sqlite3 3.53.1 shell on a fixed corpus. Failing cases, if any, are listed with reasons in [`known-failures.json`](metadata/sqlite_parity/known-failures.json); the badge has the count.
+> - **Its own file format.** A database is a directory (`data.redline`, `schema.redline`, `wal/`). RedlineDB cannot open SQLite database files, and SQLite cannot open RedlineDB databases. The first time v5.0.0 opens a database written by v4, it rebuilds every index; if a `UNIQUE` index would then hold two rows with one key, the open fails and changes nothing. Do not open the database with v4 afterwards: v4 refuses it when it has an index. Databases written before v4 have not been tested with v5.0.0. Back up before upgrading.
+> - **The C ABI is an experimental subset.** `libredlinedb.so.5` exports RedlineDB's native `rldb_*` API and part of the `sqlite3_*` API. It is not a replacement `libsqlite3`.
+> - **PostgreSQL support is a SQL-shell corpus only.** There is no PostgreSQL wire protocol, TLS, roles or SQLSTATE.
+> - **Durability scope.** In the default `Strict` mode, a committed transaction survives a crash of the RedlineDB process on ext4 on a local NVMe SSD (Linux 6.8.0) ([receipt](benchmark-results/durability/v5.0.0-strict-process-kill.json)). Power loss and operating-system crashes are not claimed. See [docs/manual/durability.md](docs/manual/durability.md).
+> - **Slower than SQLite today.** On the per-process CLI benchmark in the [version table](#versions-over-time), RedlineDB takes longer than SQLite on the median case.
 
 ## Compatibility qualification
 
 The SQLite 3.53.1 and PostgreSQL 16.15 compatibility programs are incomplete.
-CI executes both reference lanes and uploads their raw results and provenance.
-A passing regression gate means recorded failures have not increased; it does
-not establish full SQL, ABI, database-file, or PostgreSQL wire compatibility.
+CI runs both reference lanes and uploads their raw results and provenance. The
+regression gate passes only when the failures are exactly the listed SQLite
+known failures and the PostgreSQL baseline, in both directions. A passing gate
+does not establish full SQL, ABI, database-file, or PostgreSQL wire
+compatibility.
 
-The book for operators and for people embedding the engine is
-[docs/manual](docs/manual/README.md). It is written against a named commit
-and it says which file to trust when a badge and a report disagree.
+Some SQLite cases pass only through declared stand-ins, for example
+`USING fts5`, `USING rtree` and `USING dbstat`, which are not SQLite's modules.
+The [SQLite report](#sqlite-parity-status) lists every declared deviation and
+shared rejection. In the PostgreSQL corpus, a case can agree because both
+engines reject the statement with the declared error. Some unimplemented
+features, such as `NOTIFY` delivery, are refused with `unsupported capability:`
+and counted as declared unsupported. Others are stand-ins that agree only on
+the transcript, such as publication DDL that replicates nothing. The
+[capability matrix](docs/beyond-postgres-skips.md#capability-matrix) lists both.
 
-<!-- POSTGRES_PARITY_START -->
-PostgreSQL **16.15** SQL-shell corpus (`redlinedb` CLI, `REDLINEDB_RESULT_DIALECT=postgres`, fresh `:memory:` per case): **265/265 agree** = **253** row matches + **12** expected rejections (declared error text verified); **0** declared unsupported; **0** mismatches; **0** skipped.
+Found a difference from SQLite? Open an issue with the script and both outputs.
 
-Agreement is normalized SQL-shell transcript agreement, not typed-result or application parity. Not covered: wire protocol, TLS, roles/authorization, SQLSTATE, NOTIFY delivery, replication/CDC, extensions ([capability matrix](docs/beyond-postgres-skips.md#capability-matrix)). Source `f5f38686b09c0fcf5c030d4b1f09019b9c105f59`; corpus SHA-256 `b240a7204eeb46893ea1f06e715a144f6cd962efe8f41041582e52ca975cd5be`.
-<!-- POSTGRES_PARITY_END -->
+## Quick start
 
-## What's new in v4.0.9 → v4.1.0 (W7 startup optimization)
+### Install the binaries
 
-**W7** eliminates unnecessary syscalls from the in-memory database startup path.
-Every process invocation of `redlinedb` previously walked the Linux cgroup
-hierarchy to detect CPU parallelism — even for volatile (in-memory) databases
-that don't need it. v4.1.0 fixes both call sites.
-
-| Change | Detail |
-|---|---|
-| `EngineConfig::default()` | No longer calls `cached_available_parallelism()`. Volatile DBs use fixed shard defaults; persistent DBs call `with_detected_parallelism()` inside `Engine::create_inner`. |
-| `BufferPool::new_with_parallelism()` | New cgroup-walk-free constructor; volatile path uses it directly with a derived hint. |
-| `Engine::create_inner` split | Volatile databases skip `create_dir_all` (caller already did it), skip the cgroup walk, and get a lean shard layout. |
-
-**Startup overhead removed per process:** ~6 syscalls (`openat /proc/self/cgroup` + walk of `/sys/fs/cgroup/.../cpu.max`).
-
-### Version performance history
-
-Per-process latency ratio vs SQLite 3.53.1 — 294-case medium parity benchmark,
-882 samples (294 cases × 3 reps), memory profile. Binary: release + fat LTO;
-v4.0.9 and v4.1.0 additionally PGO-optimized (quick training set, `clang-18`).
-
-| Version | Median ratio | p95 ratio | Δ median | Δ p95 | Key change |
-|---------|:-----------:|:--------:|:-------:|:-----:|------------|
-| v4.0.8 | 1.846× | 2.429× | — | — | Release baseline |
-| v4.0.9 | 1.780× | 1.990× | −3.6% | −18.1% | PGO quick-training added |
-| **v4.1.0** | **1.749×** | **1.887×** | **−1.7%** | **−5.2%** | W7: cgroup-walk bypass |
-
-_Cumulative v4.0.8 → v4.1.0: median **−5.3%**, p95 **−22.3%**._
-
-> These are retained historical subset measurements from before the
-> external-only evidence cutover. Current release evidence uses the complete
-> corpus through the verified `redline-testing` workflow.
-
-## What's new in v4.0.1 → v4.0.8 (Phase 5 / Phase 6 release train)
-
-**Phase 5** (v4.0.1) shipped 20+ workstreams across five waves — median ratio vs SQLite **1.904× → 1.857×**, cases ≥ 2.0× slower **193 → 60 (−69%)**. **Phase 6** (v4.0.2 → v4.0.8) ships eight further releases — full per-version detail in [CHANGELOG.md](CHANGELOG.md). Highlights:
-
-| Release | Work-stream | Headline |
-|---|---|---|
-| v4.0.4 | R2 — ScalarProgram VM dispatch + parallel-scan kernel API + AccessPath IR planner wiring | +55 tests; PRAGMA toggles for opt-in |
-| v4.0.5 | R3-B — per-PreparedStatement VM compile cache | +11 tests; thread-local scoped cache |
-| v4.0.6 | R3-C + R4-A — SQL-side parallel-scan dispatch + Morsel hash-aggregator | +21 tests; AVX2 SUM(i64) **14.4× speedup** vs scalar |
-| v4.0.7 | R4-B — WAL group-commit pipeline (`wal_pipeline` feature, off in default and release builds) | **194× WAL throughput speedup**, 250× syscall reduction; not covered by recovery tests or a durability receipt ([durability contract](docs/manual/durability.md)) |
-| v4.0.8 | R3-A — `PRAGMA redline_scalar_vm` + `PRAGMA redline_planner_use_access_path` | SQL surface for the R2-A/R2-C toggles |
-
-Workspace test count: **1786 → 1990 (+204)** with zero regressions. SIMD wins gated behind runtime `is_x86_feature_detected!` dispatch + the `unsafe-ledger.toml` audit; WAL group-commit and parallel-scan dispatch are feature-flagged so default builds remain byte-identical to v4.0.3.
-
-The badge above and the block under `sqlite-parity-report:begin` are rewritten by `redline-testing report` from `benchmark-results/sqlite-parity/latest/summary.json`. The v4.0.0 ratio table in the section that follows is a historical snapshot from that release, not the current pass count.
-
-## What's new in v4.0.0
-
-**Phase 0-4 SQLite-parity speed-gap closure.** Fourteen named optimizations across the build profile, parser, scalar fast paths, and CTE/aggregate/window hot paths, measured against the external [`redline-testing v1.0.0`](https://github.com/neverhuman/redline-testing) parity harness on the full 2445-case `sqlite_parity` suite. Median per-case latency ratio against SQLite improved from **1.837× → 1.738×** with **zero parity regressions** (identical 2374/2445 pass set in v3.0.0 and v4.0.0; the 67 failures are pre-existing edge cases in `typeof()` reporting, IEEE-754 last-digit precision, fullwidth Unicode case-folding, BLOB hex encoding, and `AUTOINCREMENT` semantics). Jankurai code-health score holds at **85/100 (pass)**.
-
-> **Note on corpus size.** The redline-testing official corpus has grown from 1127 cases (prior CI snapshot) to **2445 cases** in v1.0.0. The v4.0.0 numbers in this section are that release's measurement. The current pass count is the generated block under `sqlite-parity-report:begin`.
-
-### Per-case latency distribution — RedlineDB / SQLite ratio (full 2445-case corpus, passed cases only)
-
-| Bucket | v3.0.0 (main) | v4.0.0 | Delta |
-|---|---:|---:|---:|
-| `< 1.0×` (RedlineDB faster than SQLite) | 7 | 8 | **+1** |
-| `1.0 – 1.2×` | 16 | 28 | **+12** |
-| `1.2 – 1.5×` | 173 | 292 | **+119** |
-| `1.5 – 2.0×` | 1622 | 1748 | **+126** |
-| `2.0 – 3.0×` | 555 | 297 | **−258** |
-| `≥ 3.0×` (tail outliers) | 1 | 1 | 0 |
-| **Total** | **2374** | **2374** | 0 |
-
-258 cases moved out of the `2.0–3.0×` slow band; 119 moved into the `1.2–1.5×` band. Per-case: **1410 cases (59.4%) are ≥5% faster** in v4.0.0, 386 (16.3%) are ≥5% slower, 578 (24.3%) within ±5% noise. Mean per-case target-latency change: **−6.85%** (median **−7.67%**).
-
-### Named optimizations shipped
-
-| Phase | Commit | Optimization |
-|---|---|---|
-| 1.1 | `f8ed61f` | fat LTO + `opt-level=3` + `target-cpu=native` release profile |
-| 1.2 | `b62d4ad` | parser rewrite-pass allocation elimination |
-| 1.3 | `4a89e9a` | borrow + stack-buffer function-name lowercase |
-| 1.4 | `b229f90` | cache + lighten `/dev/shm` writability probe |
-| 1.5 | `2e13dc5` | fromless `SELECT` fast path |
-| 1.6 | `a20de92` | `ahash::RandomState` for `StatementCache` |
-| 2.1–2.2 | `5bbe650` | ASCII fast paths for `LENGTH`/`UPPER`/`LOWER` + `memmem` for `INSTR` |
-| 2.3+2.5 | `9abab6c` | `value_as_str` + hot scalar fn migration to `Cow` |
-| 2.4 | `32e078d` | `itoa` for streaming i64 CLI output |
-| 4.1 | `efc9a6e` | fromless-SELECT walker covers `sqlparser` scalar variants |
-| 4.2 | `d348e0b` | dedup aggregate cache key + reuse fn-name lower |
-| 4.3 | `e569d6c` | capacity hints in per-row hot allocations |
-| 4.4 | `32200c2` | hoist CTE lowercase out of recursive iteration loop |
-| 4.5 | `2f21ea3` | reuse scratch buffer for window partition keys |
-
-### Benchmark provenance
-
-- **Harness:** [`redline-testing v1.0.0`](https://github.com/neverhuman/redline-testing) — external repository, not in-tree fixtures.
-- **SQLite reference:** `sqlite3 3.53.1` (release build, SHA-256 `fd3bdd25217a849f8f4fa295fb78199cfd69b0c4d47ba8d8c32a1aa328bd147e`).
-- **Workload:** full `sqlite_parity` suite — 2445 cases × 3 measured reps + 1 warmup, **`--workers 30`** on a 128-core Linux x86_64 host, no CPU pinning.
-- **Target binary (v4.0.0):** SHA-256 `7ae60cb513e866b4a94996968b0c6b9f01b0071776bc842f526702be33f05e56` (release profile, fat LTO, `target-cpu=native`).
-- **Baseline binary (v3.0.0):** SHA-256 `da770dfd25beeb36aa22f8ce7a09d935b4e9fd7c8b2a77c36e621c46cec69ef2`.
-- **Raw JSONL evidence (committed):** [`benchmark-results/sqlite-parity/perf-baselines/v3.0.0-baseline.jsonl`](benchmark-results/sqlite-parity/perf-baselines/v3.0.0-baseline.jsonl), [`v4.0.0-baseline.jsonl`](benchmark-results/sqlite-parity/perf-baselines/v4.0.0-baseline.jsonl), and the structured A/B summary [`v3-vs-v4-summary.json`](benchmark-results/sqlite-parity/perf-baselines/v3-vs-v4-summary.json).
-- **Reproduce:**
-  ```bash
-  cargo build --release -p redlinedb-cli
-  PERF_WORKERS=30 \
-    REDLINE_TESTING_BIN=/path/to/redline-testing \
-    SQLITE_REF_BIN=/path/to/sqlite3-3.53.1 \
-    scripts/perf/full.sh target/release/redlinedb v4.0.0-final
-  ```
-
-### RQL phase-1 local benchmark
-
-RQL is an additive, default-off typed IR path: SQL remains the compatibility
-frontend, and the existing SQLite/Postgres benchmark suites still run SQL. The
-`rql_phase1` suite in `redline-testing` rewrites the phase-1 SQL cases to RQL
-for the RedlineDB target while keeping SQLite on the original SQL reference.
-
-Measured locally on 2026-05-26 with `redline-testing v1.0.0`,
-`redlinedb v4.0.1`, `sqlite3 3.45.1`, release binaries, 1 warmup + 3 measured
-repetitions, `--workers 1`:
-
-| Comparison | Scope | Result |
-|---|---:|---:|
-| RQL phase-1 parity | 1,385 candidates | 1,129 passed, 256 skipped, 0 failed |
-| RedlineDB SQL median target latency | 1,129 shared passed cases | 3.596 ms |
-| RedlineDB RQL median target latency | 1,129 shared passed cases | 3.419 ms |
-| RQL / RedlineDB SQL median target ratio | 1,129 shared passed cases | **0.937×** |
-| RQL / RedlineDB SQL aggregate target ratio | 3,387 measured samples | **0.894×** |
-| Case movement vs RedlineDB SQL | 1,129 shared passed cases | 620 ≥5% faster, 298 within ±5%, 211 ≥5% slower |
-| P0 RQL / RedlineDB SQL median target ratio | 577 shared P0 cases | **0.925×** |
-| RQL / SQLite SQL median ratio | 1,129 RQL-passed cases | 1.822× |
-
-Read this as an early viability signal, not an upper bound. RQL already saves
-about **6.3% median target latency** versus RedlineDB's SQL frontend on the same
-phase-1 passed cases, even though v0.1 still lowers most relational work into
-the existing executor and inherits the same CLI process-per-case benchmark
-overhead. The next RQL performance work should focus on widening the direct
-lowering path and removing compatibility-only planner work that RQL no longer
-needs.
-
-Reproduce the local comparison:
-
-```bash
-cargo build --release -p redlinedb-cli
-redline-testing run --suite rql_phase1 \
-  --target-bin target/release/redlinedb \
-  --sqlite-bin sqlite3 \
-  --output target/rql-phase1-bench/rql_phase1.raw.jsonl \
-  --tmp-root /tmp/rql-phase1-bench \
-  --workers 1 --repetitions 3 --warmup 1 --progress never
-
-# Same target binary, SQL compatibility path, filtered afterward to the
-# rql_phase1 case IDs that passed both runs. This full-suite SQL command may
-# exit non-zero if unrelated sqlite_parity cases fail in the local environment.
-redline-testing run --suite sqlite_parity \
-  --target-bin target/release/redlinedb \
-  --sqlite-bin sqlite3 \
-  --output target/rql-phase1-bench/sqlite_parity.raw.jsonl \
-  --tmp-root /tmp/rql-phase1-sql-bench \
-  --workers 1 --repetitions 3 --warmup 1 --progress never
-```
-
-### Jankurai code-health score (v4.0.0)
-
-**85 / 100 — `pass` (advisory)** — unchanged from main; Phase 0-4 perf work introduced no code-health regressions. Full report at [`.jankurai/repo-score.md`](.jankurai/repo-score.md). Top dimensions: Ownership & navigation (100), Proof lanes & test routing (98), Contract & boundary integrity (88), Security & supply-chain posture (86).
-
-## Redline Mission
-
-RedlineDB keeps SQLite-shaped compatibility where that contract is valuable:
-small embedded deployments, familiar SQL, a direct Rust API, and a SQLite-shaped
-C surface for integrations that already expect it.
-
-The engine is not a SQLite wrapper. It rebuilds the storage core in Rust so
-MVCC, concurrent writes, WAL behavior, and recovery can be owned directly
-instead of treated as constraints inherited from a single-writer file engine.
-
-The codebase is also shaped for fast repair by agents and humans: smaller
-modules, local invariants, routed proof lanes, generated evidence, and audit
-metadata that point a fix at the narrowest lawful surface.
-
-## At a Glance
-
-| Area | What it is |
-|---|---|
-| Rust API | `redlinedb` for embedded use |
-| CLI | `redlinedb-cli` for shell-style workflows |
-| FFI | `crates/ffi` exports a SQLite-shaped C ABI surface |
-| SQL engine | Parser, planner, executor, pragmas, and compatibility shims |
-| Storage | Kernel-owned MVCC, WAL, catalog, and recovery layers |
-| Default proof lane | `just fast` |
-| Protected required lane | `just required` |
-| SQLite parity gate | `just redline-testing-official` |
-
-## Install
-
-[docs/install.md](docs/install.md) is the full guide: pinning a version and a
-digest, what the installer checks, the installed layout, upgrades and
-rollback, removal, and building from source.
-
-### Quick start
-
-Release packages for Linux x86_64/ARM64 (glibc 2.35 or newer) and macOS 15 or
-newer (Intel and Apple Silicon) hold the `redlinedb` shell, `redlinedb-server`,
-the C library and its headers. Running them needs no Rust, Node, just or rtk.
+Packages exist for Linux x86_64 and arm64 (glibc 2.35 or newer) and macOS 15 or
+newer on Intel and Apple Silicon. They contain the `redlinedb` shell, the
+`redlinedb-server` binary, the native library and C headers. Rust is not needed.
 
 ```bash quickstart
 curl -fsSL https://raw.githubusercontent.com/neverhuman/redline/v5.0.0/install.sh | VERSION=v5.0.0 bash
@@ -251,7 +72,29 @@ redlinedb -batch :memory: 'SELECT 1;'
 # prints: 1
 ```
 
-A path instead of `:memory:` keeps the data across processes:
+The installer checks the archive's checksum and build provenance before it
+writes anything. It installs each version under
+`~/.local/lib/redlinedb/versions/` and switches versions with one rename, so a
+failed upgrade leaves the previous version working; `REDLINEDB_ROLLBACK=1`
+switches back. Set `PREFIX` to choose another root and `REDLINEDB_SHA256` to
+require a specific archive digest. A prefix that an installer before v5.0.0
+filled is refused until you set `REDLINEDB_MIGRATE_LEGACY=1`. The installer
+installs no `sqlite3` binary or alias. It does link RedlineDB's subset
+`sqlite3.h` into `PREFIX/include`, so do not choose a prefix whose `include/`
+directory your SQLite builds read. [docs/install.md](docs/install.md) is the
+full guide. Archives and checksums are on
+[GitHub Releases](https://github.com/neverhuman/redline/releases), and each
+archive has a build provenance attestation
+(`gh attestation verify <archive> --repo neverhuman/redline`). CI runs the
+`quickstart` blocks in this README against every platform's package
+(`scripts/test-docs-quickstart.sh`).
+
+`redlinedb-server` has no authentication or TLS. Bind it to localhost or a
+trusted network.
+
+### Use a database
+
+The path is a directory that RedlineDB creates on first use.
 
 ```bash quickstart
 db="$(mktemp -d)/demo.redline"
@@ -265,44 +108,22 @@ redlinedb stats "$db" --json
 redlinedb backup "$db" "$db.bak" --physical
 ```
 
-The installer checks the archive's checksum and build provenance before it
-writes anything, installs each version under `~/.local/lib/redlinedb/versions/`
-and switches versions with one rename, so a failed upgrade leaves the previous
-version working; `REDLINEDB_ROLLBACK=1` switches back. It never installs or
-replaces a `sqlite3` command. CI runs these blocks against every platform's
-package (`scripts/test-docs-quickstart.sh`).
+`redlinedb` with no SQL argument reads statements from standard input, as the
+SQLite shell does. The maintenance subcommands are `backup`, `restore`,
+`archive-check`, `replication-slot`, `stream-wal`, `stream-logical` and `stats`.
+`redlinedb --build-info` prints the release tag and source commit a binary was
+built from.
 
-### Build from source
+### Embed it in Rust
 
-Install Rust 1.95, a C compiler and pkg-config (`scripts/ci-doctor.sh --profile core`
-checks them), then:
-
-```bash
-git clone https://github.com/neverhuman/redline
-cd redline
-git checkout v5.0.0
-./scripts/build-from-source.sh
-./scripts/install-from-source.sh
-```
-
-`install-from-source.sh` activates the build through the same installer, with
-the same layout and rollback. Add `--all` to both scripts to include the
-testing runner, release tools and web console (the console also needs Node 22
-and npm). `PREFIX` sets the installation root and `CARGO_BUILD_JOBS` limits
-build jobs.
-
-### Rust library
-
-RedlineDB is not published on crates.io. Depend on a release tag and commit
-`Cargo.lock`; the Rust API may still change between releases
+RedlineDB is not published on crates.io. Depend on the release tag and commit
+your `Cargo.lock`; the Rust API may still change between releases
 ([docs/api-stability.md](docs/api-stability.md)).
 
 ```toml
 [dependencies]
 redlinedb = { git = "https://github.com/neverhuman/redline", tag = "v5.0.0" }
 ```
-
-### Embedded use
 
 This is `crates/redlinedb/examples/readme.rs`; `cargo run -p redlinedb --example readme`
 runs it in a checkout.
@@ -327,47 +148,94 @@ fn main() -> redlinedb::Result<()> {
 }
 ```
 
-### Components and downloads
+### Build from source
 
-| Component | Source | Release package |
-|---|---|---|
-| Engine, CLI, server, adapters, FFI | `crates/` | `redlinedb-v5.0.0-<platform>.tar.gz` |
-| Conformance runner | `subrepos/redline-testing` | `redline-testing-v5.0.0-<platform>.tar.gz` |
-| Embedded web console | `subrepos/redline-web` | `redline-web-v5.0.0-<platform>.tar.gz` |
-| Rust client and database shim | `subrepos/redline-central` | source |
-| Release tooling | `subrepos/redline-split-ops` | source |
-| Historical public hub | `subrepos/redline` | source |
+Install Rust 1.95, a C/C++ compiler and pkg-config
+(`scripts/ci-doctor.sh --profile core` checks them), then:
 
-Download packages and checksums from [GitHub Releases](https://github.com/neverhuman/redline/releases).
-Platform names are `linux-x86_64`, `linux-arm64`, `macos-x86_64`, and `macos-arm64`.
-The installer installs the core package. The optional packages are archives to
-extract where you choose; start the console with
-`redline-web --target-bin "$(command -v redlinedb)"`.
+```bash
+git clone https://github.com/neverhuman/redline
+cd redline
+git checkout v5.0.0
+./scripts/build-from-source.sh
+./scripts/install-from-source.sh
+```
 
-Each package includes dependency notices, an SBOM and build provenance naming
-the repository, tag and commit. GitHub Releases also attach build provenance
-attestations. [subrepos.toml](subrepos.toml) records the initial component
-identities; [migration records](docs/migration/README.md) explain preserved
-histories and the unfinished work kept outside the release.
+`install-from-source.sh` activates the build through the same installer, with
+the same layout and rollback. Add `--all` to both scripts to include the
+conformance runner, release tools and web console (the console also needs
+Node 22 and npm).
 
-## SQLite Parity Status
+### Read more
 
-The official parity lane builds `subrepos/redline-testing` and the engine from
-this same checkout. Its processed evidence binds raw results to the runner's
-SHA-256 and enforces the declared suites and compatibility baselines. The report
-below is a dated historical measurement from
-`benchmark-results/sqlite-parity/latest/`. Its raw data and run evidence
-(`official-evidence.processed.json`) are unchanged; the report files were
-re-rendered offline from that raw data as unfloored latency ratios.
-Current acceptance evidence is attached to the GitHub CI run.
+[docs/manual](docs/manual/README.md) is the book for operators and for people
+embedding the engine. It was written against commit `8ae3a8b79` (crate version
+4.1.0); where it differs from the generated blocks in this README, the blocks
+are the measurement.
+
+## Versions over time
+
+Every row is a build of that version's commit, re-run on today's corpus against
+SQLite. A lower ratio is better, and the note under the table says how it was
+measured. Older versions are judged by today's stricter comparator, so their
+pass counts are not comparable with the counts they published at the time.
+
+<!-- version-history:begin -->
+<!-- Generated by `redline-testing version-history` from benchmark-results/sqlite-parity/releases/v5.0.0/summary.json; do not edit by hand. -->
+
+| Version | Commit | SQLite corpus passed (of 2445, today's corpus) | Median latency ratio vs SQLite (lower is better) | p95 | Δ median vs previous |
+| --- | --- | ---: | ---: | ---: | --- |
+| v2.0.5 | `c02050824` | 1911 | 2.014× (2.013–2.020) | 2.282× (2.268–2.291) | — |
+| v4.0.3 | `89a55f466` | 2305 | 2.183× (2.182–4.098) | 2.513× (2.513–9.045) | +8.4% |
+| v4.0.8 | `fb9ef60ad` | 2305 | 2.200× (2.198–4.710) | 2.541× (2.522–6.107) | within noise |
+| v4.0.9 | `02e297fd1` | 2305 | 2.217× (2.205–3.033) | 2.549× (2.536–12.091) | within noise |
+| v4.1.0 | `af2082631` | 2364 | 2.112× (2.086–2.190) | 2.439× (2.416–5.288) | -4.7% |
+| v5.0.0 | `55637d088` | 2368 | 2.246× (2.224–2.280) | 2.880× (2.563–5.617) | +6.3% |
+
+Each ratio compares RedlineDB with SQLite on the same case, and lower is better. The time is per-case CLI process wall time (`cli_case_wall_time`): every sample starts a fresh `redlinedb` or `sqlite3` shell, so process start-up is included. A case's ratio is RedlineDB's median over SQLite's median across 3 measured repetitions after 1 warmup. The table shows the median and nearest-rank p95 of those ratios over the 1899 cases every version passed in every run (the common pass set). Each version ran 3 time(s), interleaved with the others. The figure is the median run, and the parentheses give the min–max across runs. A change is shown only when the two versions' ranges do not overlap; otherwise it reads "within noise". "Passed" counts the corpus cases a version passed in every run.
+
+Measured 2026-09-28 on AMD Ryzen Threadripper PRO 3995WX 64-Cores (128 CPUs, Linux 6.8.0-139-generic x86_64), pinned to CPUs 2-5, 1 worker(s), `--order alternate`, temp roots on tmpfs, each version's built-in default durability. SQLite reference 3.53.1 (`fd3bdd25217a`); runner redline-testing 1.0.1. Every version was built with the release profile and RUSTFLAGS `""`, without PGO. Bundle: [`benchmark-results/sqlite-parity/releases/v5.0.0`](benchmark-results/sqlite-parity/releases/v5.0.0/).
+<!-- version-history:end -->
+
+Older published figures, most of which cannot be reproduced, are kept with
+their caveats in [docs/performance-history.md](docs/performance-history.md).
+
+## What's new in v5.0.0
+
+Full notes: [docs/releases/v5.0.0.md](docs/releases/v5.0.0.md) and [CHANGELOG.md](CHANGELOG.md).
+
+- **Crash recovery and WAL fixes.** A checkpoint writes every dirty page, so it no longer drops committed rows that another writer's page held. Recovery checks the WAL against the checkpoint before it changes any file and fails the open instead of silently losing commits, never hands out a transaction id the log already used, keeps a torn log tail in `wal/salvage/`, and reports what it did (`PRAGMA redline_recovery_report`). A commit whose log write fails after its record was queued reports an uncertain outcome instead of a rollback, and `COMMIT` returns only once a new transaction sees it. The database root, the `wal` directory and new segment names are fsynced before a commit that depends on them is acknowledged. An open takes `owner.lock` before it recovers anything.
+- **A durability contract.** [docs/manual/durability.md](docs/manual/durability.md) states what each durability mode survives, and a release is published only with a receipt for its one claim: `Strict` survives a process kill. `PRAGMA redline_durability` reads back the mode in force.
+- **SQL correctness fixes.** SQLite's comparison affinity, integer overflow (`SUM` overflow is an error; integer arithmetic overflow becomes REAL), exact INTEGER/REAL comparison, declared column collations (`NOCASE`, `RTRIM`) in comparisons, sorting, grouping, indexes and `UNIQUE`, set operations and `GROUP BY` on SQLite value equality, positional `ORDER BY`, partial indexes kept in step on `UPDATE`, CTE scoping and statements that re-read views and CTEs at execution, recursive CTEs under `LIMIT`, trigger chains, `SAVEPOINT`/`ROLLBACK TO`, and `REINDEX`, which used to do nothing.
+- **Index-format epoch.** v5.0.0 rebuilds the indexes of a v4 database once, when it first opens it, and fails without changing anything if a `UNIQUE` index would then hold duplicates; v4 refuses the database afterwards when it has an index.
+- **C ABI v5.** `sqlite3_prepare_v3` takes upstream's argument order, `SQLITE_NULL` is 5, column text and types follow each value's storage class, `:memory:` opens an ephemeral database, registrations and flags that RedlineDB cannot honour are refused instead of ignored, and the library is `libredlinedb.so.5` (`libredlinedb.5.dylib` on macOS).
+- **Install and release.** The canonical repository is `neverhuman/redline`. Release archives carry checksums, build provenance bound to this repository and tag, and attestations; the installer keeps each version in its own directory and switches with one rename, so a failed install leaves the previous version working. `LICENSE` is the full Apache-2.0 text, with a `NOTICE`.
+- **Stricter, published evidence.** Each SQLite case is held to its declared exit code, error text and byte-exact output against the pinned sqlite3 3.53.1 shell, and every failing case is published with its reason. PostgreSQL results are split by outcome, and the version table is rendered from a committed bench bundle. Pass counts are therefore not comparable with those published before v5.0.0.
+
+## Evidence
+
+The official lane (`just redline-testing-official`) builds the release shell
+and the `subrepos/redline-testing` runner from this checkout, runs every case
+against a reference, and records the source commit, binary digests and oracle
+identity. The SQLite oracle is the sqlite3 3.53.1 shell built by
+[`scripts/sqlite/build-reference.sh`](scripts/sqlite/build-reference.sh); the
+PostgreSQL oracle is `psql` against a digest-pinned `postgres:16.15` image. The
+lane runs RedlineDB with `REDLINEDB_DEFAULT_DURABILITY=normal` on a tmpfs
+temporary root (`/dev/shm` where available), not the `Strict` default, because
+it checks SQL behavior, not fsync. The blocks below are written by the runner
+from that evidence, never by hand. That run executes many cases in parallel on
+a shared host, so the SQLite block reports correctness only; latency is in the
+version table above.
+
+### SQLite SQL/CLI corpus
 
 <a id="sqlite-parity-status"></a>
 <!-- sqlite-parity-report:begin -->
-**SQLite SQL/CLI corpus** (redline-testing `sqlite_parity`, sqlite3 3.53.1 shell): **2445 / 2445** cases passed, **0** failed, **0** skipped. Updated 2026-09-24.
+**SQLite SQL/CLI corpus** (redline-testing `sqlite_parity`, sqlite3 3.53.1 shell): **2368 / 2445** cases passed, **77** failed, **0** skipped. Updated 2026-09-28.
 
 **Scope** (`sqlite_sql_cli`): each case runs one SQL or dot-command script through the `redlinedb` and `sqlite3` shells and compares their output and exit status. It does not test C ABI semantics, the database file format, or prepared-statement state.
 
-**Evidence:** qualified: official evidence run `daac7524c769` records the same 2445 total, 2445 passed, 0 failed, 0 skipped. Corpus `sqlite_parity` from redline-testing 1.0.1 (runner SHA-256 `b28c41d40009`), corpus SHA-256 unrecorded; oracle sqlite3 3.53.1 (binary SHA-256 `e99d817b62f1`), build stamp unrecorded. Historical run: it predates run provenance, so its source tree is unrecorded, and its run provenance `8de6a8483536` was not retained.
+**Evidence:** qualified: official evidence run `5f6c42e912bc` records the same 2445 total, 2368 passed, 77 failed, 0 skipped. Corpus `sqlite_parity` from redline-testing 1.0.1 (runner SHA-256 `3b80deab9435`), corpus SHA-256 `542cf3afd9c5`; oracle sqlite3 3.53.1 (binary SHA-256 `fd3bdd25217a`), build stamp `36ca143645cf`. Run provenance `b60481753254`: source tree `c1ea9c92e57e` (clean), source inputs `1a8563b6f9c8`, assertion policy `537c7df9f5d1`.
 
 **Declared deviations (6):** these cases pass, but RedlineDB produces the compared output without the SQLite feature behind it.
 
@@ -378,11 +246,9 @@ Current acceptance evidence is attached to the GitHub CI run.
 - `10405` PRAGMA_MODULE_LIST_FILTER: `pragma_module_list` prints SQLite's module names, including `fts3`, `fts4`, `fts3tokenize`, `fts4aux` and `fts5vocab`, which create no table.
 - `12023` PRAGMA_COMPILE_OPTIONS: `PRAGMA compile_options` prints a fixed copy of the reference build's option list, not how RedlineDB was built.
 
-**Declared shared rejections (6):** the pinned sqlite3 build lacks the feature, so these cases declare its error; a pass means RedlineDB rejected the statement too, not that the feature works.
+**Declared shared rejections (4):** the pinned sqlite3 build lacks the feature, so these cases declare its error; a pass means RedlineDB rejected the statement too, not that the feature works.
 
 - `00167` DOT_UNMODULE_CATALOG: The pinned sqlite3 is not an `SQLITE_DEBUG` build, and the 3.53.1 shell compiles `.unmodule` only under `SQLITE_DEBUG`, so `.unmodule fts5` is `unknown command or invalid arguments` and `.unmodule` itself is not tested.
-- `00219` UPDATE_LIMIT_OPTIONAL: The 3.53.1 amalgamation parser is generated without SQLITE_UDL_CAPABLE_PARSER, so `UPDATE ... ORDER BY ... LIMIT` is `near "ORDER": syntax error` even though the reference build passes `-DSQLITE_ENABLE_UPDATE_DELETE_LIMIT`.
-- `00220` DELETE_LIMIT_OPTIONAL: As 00219, for `DELETE ... ORDER BY ... LIMIT`.
 - `11437` STRING_SOUNDEX_ROBERT: The pinned sqlite3 is built without `SQLITE_SOUNDEX`, so `soundex()` is `no such function` and `soundex()` itself is not tested.
 - `11438` STRING_SOUNDEX_RUPERT: As 11437.
 - `11439` STRING_SOUNDEX_X: As 11437.
@@ -393,146 +259,105 @@ Current acceptance evidence is attached to the GitHub CI run.
 
 **Performance:** this lane runs every case at once on a shared host to check correctness, so its timings are not a benchmark. Latency is measured separately on a quiet host; see [Versions over time](#versions-over-time).
 
-**Run metadata:** RedlineDB target version **redlinedb v4.1.0 (SQLite 3.45.1 compatibility)**, SQLite reference version **3.53.1 2026-05-05 10:34:17 c88b22011a54b4f6fbd149e9f8e4de77658ce58143a1af0e3785e4e6475127e9 (64-bit)**, redline-testing runner version **redline-testing 1.0.1**.
+**Run metadata:** RedlineDB target version **redlinedb v5.0.0 (tested against SQLite 3.53.1)**, SQLite reference version **3.53.1 2026-05-05 10:34:17 c88b22011a54b4f6fbd149e9f8e4de77658ce58143a1af0e3785e4e6475127e9 (64-bit)**, redline-testing runner version **redline-testing 1.0.1**.
 
 <!-- sqlite-parity-report:end -->
 
-## RQL Phase 1
+Every failing case, with the reason it fails and the phase that owns the fix,
+is in [`metadata/sqlite_parity/known-failures.json`](metadata/sqlite_parity/known-failures.json).
 
-RedlineDB exposes a native **Relational Query Language (RQL)** interface — a
-structured, JSON-serialisable protocol that bypasses the SQL text parser and
-speaks directly to the planner. Phase 1 covers the full DML + query surface:
-`SELECT`, `INSERT`, `UPDATE`, `DELETE`, DDL (`CREATE/DROP TABLE/INDEX`),
-transactions, JSON operations, and advanced aggregates.
+### PostgreSQL 16.15 SQL-shell corpus
 
-### Conformance
+<a id="postgresql-sql-shell-corpus"></a>
+<!-- POSTGRES_PARITY_START -->
+PostgreSQL **16.15** SQL-shell corpus (`redlinedb` CLI, `REDLINEDB_RESULT_DIALECT=postgres`, fresh `:memory:` per case): **254/265 agree** = **242** row matches + **12** expected rejections (declared error text verified); **11** declared unsupported; **0** mismatches; **0** skipped.
 
-The `rql_phase1` suite in `redline-testing` exercises **1 385 cases** drawn
-from the same categories as `sqlite_parity` (`GEN_SQL_AGGREGATE`, `GEN_SQL_DML`,
-`GEN_SQL_JOIN_SUBQUERY`, `GEN_SQL_JSON`, `GEN_SQL_SCALAR`, `SQL_AGGREGATE`,
-`SQL_AGGREGATE_ADV`, `SQL_AGGREGATE_NULL`, …). Results against
-`redlinedb v4.0.1`:
+Agreement is normalized SQL-shell transcript agreement, not typed-result or application parity. Not covered: wire protocol, TLS, roles/authorization, SQLSTATE, NOTIFY delivery, replication/CDC, extensions ([capability matrix](docs/beyond-postgres-skips.md#capability-matrix)). Source `55637d0887935e8be0202ed699ffb47e10a5eef2`; corpus SHA-256 `b240a7204eeb46893ea1f06e715a144f6cd962efe8f41041582e52ca975cd5be`.
+<!-- POSTGRES_PARITY_END -->
 
-| Metric | Value |
-|---|---|
-| Cases passed | **1 129 / 1 385** |
-| Cases skipped (optional capability) | 256 |
-| Cases failed | 0 |
-
-### RQL vs SQL interface latency (same cases, same engine)
-
-Running identical workloads through the RQL protocol vs the SQL text path shows
-the parser elimination benefit directly:
-
-| Metric | RQL / SQL ratio |
-|---|---|
-| Median per-case latency | **0.937×** (RQL 6.3 % faster) |
-| P90 per-case latency | 1.131× |
-| P95 per-case latency | 1.192× |
-| Aggregate wall-time (1 129 cases) | **0.894×** (RQL 10.6 % faster) |
-| Cases where RQL is faster | **800 / 1 129 (70.9 %)** |
-| Cases within 5 % of SQL | 298 / 1 129 (26.4 %) |
-| Cases ≥ 5 % slower via RQL | 211 / 1 129 (18.7 %) |
-
-**RQL vs SQLite reference:** median per-case ratio **1.822×** (vs SQLite
-3.45.1), consistent with the SQL-interface parity gap.
-
-### Benchmark provenance
-
-- **Harness:** `redline-testing rql_phase1` suite (`--suite rql_phase1`).
-- **SQLite reference:** `sqlite3 3.53.1` (SHA-256 pinned, built from source via
-  `scripts/sqlite/build-reference.sh`).
-- **Workload:** 1 129 passing cases × 3 measured reps + 1 warmup, 10 workers.
-- **Raw JSONL evidence:** `target/rql-phase1-bench/rql_phase1.raw.jsonl` (CI
-  artifact `redlinedb-rql-benchmark-evidence`).
-- **Reproduce:**
-  ```bash
-  cargo build --release -p redlinedb-cli
-  bash scripts/sqlite/build-reference.sh
-  redline-testing run \
-    --target-bin target/release/redlinedb \
-    --sqlite-bin target/sqlite-reference/3.53.1/bin/sqlite3 \
-    --suite rql_phase1 \
-    --workers 10 --repetitions 3 --warmup 1 \
-    --output target/perf/rql-phase1.jsonl
-  ```
+More detail: [docs/sqlite-parity.md](docs/sqlite-parity.md) (reference build
+and deviations), [docs/beyond-postgres-skips.md](docs/beyond-postgres-skips.md)
+(PostgreSQL capability matrix) and [`metadata/`](metadata/) (known failures and
+the PostgreSQL regression baseline).
 
 ## Architecture
 
 <p align="center">
-  <img src="assets/architecture.png" alt="RedlineDB architecture" width="95%">
+  <img src="assets/architecture.png" alt="Architecture layers, top to bottom: applications; the C ABI (the experimental sqlite3_* subset and the native rldb_* API); the redlinedb Rust API; the SQL engine (parser, planner, executor); the kernel (catalog, index, MVCC engine, WAL, storage); and the files on disk" width="95%">
 </p>
 
 <p align="center">
-  <img src="assets/dataflow.png" alt="INSERT data flow" width="95%">
+  <img src="assets/dataflow.png" alt="INSERT path: Connection.execute, parser, planner, executor, B-tree index insert with heap append and undo record, engine commit, WAL append and fsync, then the commit is published" width="95%">
 </p>
 
-RedlineDB is a layered Rust workspace:
+RedlineDB is a layered Rust workspace. Lower layers never depend on higher ones.
 
-- `crates/redlinedb` is the public embedded facade.
-- `crates/sql` owns the parser, planner, executor, and SQLite compatibility.
-- `crates/kernel` owns storage, catalog, WAL, MVCC, and recovery.
-- `crates/ffi` exports the SQLite-shaped C ABI for compatibility testing.
-- `crates/cli` provides the shell and administrative commands.
-- `crates/bench` keeps engine-local tests and non-official harness code only.
-- The official conformance corpus, memory suite, beyond-SQLite coverage, benchmark gate, and report authority live in `subrepos/redline-testing`.
-
-The dependency graph stays one-way: lower layers do not depend on higher layers.
-That keeps the engine testable, replaceable, and easy to reason about in the
-agent routing model used by this repository.
-
-## Repository Layout
+- `crates/redlinedb` is the public embedded API (`Database`, `Connection`, RQL entry points).
+- `crates/redlinedb-tokio` is a Tokio adapter; `crates/redlinedb-sqlx` bridges SQLx's `Any` driver to RedlineDB URLs.
+- `crates/sql` owns the parser, planner, executor, the SQLite and PostgreSQL dialect shims, and RQL lowering.
+- `crates/kernel` owns storage: pages, B-trees, MVCC, the WAL, checkpoints, the catalog, and recovery.
+- `crates/domain` holds shared, policy-free types such as the typed domain error.
+- `crates/ffi` builds `libredlinedb`, which exports the native `rldb_*` C ABI ([`redlinedb.h`](contracts/c-abi/redlinedb.h)) and an experimental `sqlite3_*`-shaped subset ([`sqlite3.h`](contracts/c-abi/sqlite3.h)).
+- `crates/cli` is the `redlinedb` shell and its maintenance subcommands.
+- `crates/redlinedb-lite` is a std-only front binary that answers a small shell surface and hands everything else to `redlinedb`.
+- `crates/server` is `redlinedb-server`, a small framed TCP protocol (not the PostgreSQL wire protocol) with no authentication or TLS.
+- `crates/bench` holds engine-local tests and perf tooling; it does not produce official evidence.
 
 | Path | Purpose |
 |---|---|
-| `crates/redlinedb/` | Public Rust API |
-| `crates/sql/` | SQL parser, planner, executor, and dialect support |
-| `crates/kernel/` | Storage, WAL, MVCC, catalog, and recovery |
-| `crates/ffi/` | SQLite-shaped C ABI shim |
-| `crates/cli/` | Command-line shell |
-| `crates/server/` | Optional framed server |
-| `crates/bench/` | Engine-local tests and non-official harness code; not a parity evidence producer |
-| `benchmark-results/sqlite-parity/latest/` | Dated official report artifacts and processed evidence |
-| `docs/` | Architecture, testing, and audit guidance |
-| `paper/` | Evaluation writeup and reproducibility assets |
+| `subrepos/redline-testing` | Official conformance runner, corpora and report renderers |
+| `subrepos/redline-web`, `redline-central`, `redline-split-ops` | Web console, Rust client and database shim, release tooling |
+| `subrepos/redline` | Historical public hub, kept for its history |
+| `metadata/` | SQLite known failures, PostgreSQL regression baseline and capability matrix |
+| `contracts/` | C ABI headers (`contracts/c-abi`) |
+| `ops/` | CI scripts and git hooks |
+| `benchmark-results/` | Committed evidence, reports and release bench bundles |
+| `docs/` | Manual, architecture, testing and release runbooks |
+| `paper/` | Historical preprint; see [paper/README.md](paper/README.md) |
 
-## Development Notes
+## RQL
 
-- [CONTRIBUTING.md](CONTRIBUTING.md) lists the tools each lane needs;
-  `scripts/ci-doctor.sh --profile core|contributor|required` checks them
-  (`just ci-doctor` runs the required profile).
-- `just fast` is the default local proof lane for ordinary edits.
-- `just required` runs the exact protected lane: fast tests followed by the
-  hard security, full-graph dependency-review, and Jankurai ratchet gates.
-- `just redline-testing-official` runs the included official suite wrapper.
-- `just official-evidence-guard` fails if official metrics can be regenerated without the included official runner.
-- `just sqlite-parity-report-update` refreshes the generated parity report from the latest processed official evidence bundle.
-- `just sqlite-parity-report-check` verifies the README report block matches the committed processed official evidence bundle.
-- `just sqlite-parity-report-publish-pr` is the CI entrypoint that regenerates the report and opens or updates the draft report PR after main CI succeeds.
-- `scripts/ci-local.sh all` mirrors the broader local CI surface when you need it.
+RQL is an additive, default-off typed relational IR: callers submit JSON or Rust
+values that lower straight into executor plans without the SQL parser. In the
+v5.0.0 official evidence (`55637d088`, 2026-09-28), the `rql_phase1`
+suite passed 1183 of 1385 cases. It skipped 202, each
+declared in advance: 105 the phase-1 rewriter cannot parse or lower,
+77 known differences between RQL and SQLite output, and
+20 expected-error cases the suite does not run through RQL.
+See [docs/rql.md](docs/rql.md).
 
-The agent-readable proof map lives in [`AGENTS.md`](AGENTS.md). Use
-[`docs/architecture.md`](docs/architecture.md) for component boundaries,
-[`docs/testing.md`](docs/testing.md) for test routing, and
-[`docs/release.md`](docs/release.md) for the gated release and rollback runbook.
+## Development and contributing
 
-Official SQLite, memory, RQL and beyond-SQLite evidence is produced only by
-`subrepos/redline-testing` and its processed evidence bundle. Engine-local tests
-remain regression checks, while the runner owns the conformance corpus and reports.
+`just required` is the protected PR lane. It runs every CI family (engine,
+testing, central, web, release tools, integration, parity and packaging), then
+the jankurai security check and the audit family. `just fast` is the default
+local proof lane.
 
-## Contributing
+```bash
+just fast
+just required
+```
 
-Start with [CONTRIBUTING.md](CONTRIBUTING.md). Read the root `AGENTS.md`, then
-follow `docs/testing.md` for proof lanes and
-`docs/architecture.md` for workspace structure. Keep changes narrow, avoid
-touching generated zones by hand, and prefer the smallest lawful edit that
-restores the invariant.
+Read [CONTRIBUTING.md](CONTRIBUTING.md) and [AGENTS.md](AGENTS.md), then
+[docs/testing.md](docs/testing.md) for proof lanes and
+[docs/architecture.md](docs/architecture.md) for component boundaries. Keep
+changes narrow. Change generated README blocks only through their renderers:
+`just sqlite-parity-report-update` for the SQLite badge and report,
+`redline-testing check-postgres … --readme README.md` for the PostgreSQL block
+(`ops/ci/sqlite-parity-report.sh update` runs both), and
+`redline-testing version-history --bundle … --readme README.md` for the version
+table. Official SQLite, memory, RQL and PostgreSQL evidence is produced only by
+`subrepos/redline-testing`; engine-local tests are regression checks.
+[docs/release.md](docs/release.md) is the release and rollback runbook, and
+[SECURITY.md](SECURITY.md) says how to report a vulnerability.
 
 ## Citing
 
-If you reference RedlineDB in a paper or writeup, cite the evaluation material
-in `paper/main.pdf` and link back to this repository release.
+Cite the software release using [CITATION.cff](CITATION.cff) (GitHub shows it
+under "Cite this repository"). The preprint in `paper/` is historical: its
+numbers do not reconcile with its own methodology and are not evidence for this
+release ([paper/README.md](paper/README.md)).
 
 ## License
 
-Apache-2.0. See [LICENSE](LICENSE).
+Apache-2.0. See [LICENSE](LICENSE) and [NOTICE](NOTICE).

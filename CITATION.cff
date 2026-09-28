@@ -1,0 +1,23 @@
+cff-version: 1.2.0
+message: "If you use RedlineDB, please cite this software release."
+type: software
+title: RedlineDB
+version: 5.0.0
+# date-released: YYYY-MM-DD  # fill in the v5.0.0 tag date when the release is published
+abstract: >-
+  RedlineDB is an experimental embedded SQL engine written in Rust. It offers a
+  SQLite-shaped SQL shell and Rust API over its own storage format, with MVCC
+  snapshots, concurrent writers within one process, a group-commit write-ahead
+  log and crash recovery. It is not a drop-in replacement for SQLite.
+authors:
+  - name: "The RedlineDB Contributors"
+repository-code: "https://github.com/neverhuman/redline"
+url: "https://github.com/neverhuman/redline"
+license: Apache-2.0
+keywords:
+  - database
+  - embedded database
+  - SQL
+  - Rust
+  - MVCC
+  - write-ahead log
