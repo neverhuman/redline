@@ -88,7 +88,7 @@ pub fn crlf(state: &mut CliState, args: &[&str]) -> Result<DotOutcome, String> {
 pub fn version(state: &mut CliState, _args: &[&str]) -> Result<DotOutcome, String> {
     state
         .output
-        .write_line(&format!("redlinedb v{}", env!("CARGO_PKG_VERSION")))
+        .write_line(crate::REDLINEDB_VERSION_LINE)
         .map_err(|err| err.to_string())?;
     Ok(DotOutcome::Ok)
 }

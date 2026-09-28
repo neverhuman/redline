@@ -74,8 +74,23 @@ fn version_identifies_redlinedb_release_and_sqlite_compatibility() {
         stdout.contains(concat!("redlinedb v", env!("CARGO_PKG_VERSION"))),
         "stdout={stdout}"
     );
-    // The version names RedlineDB only; it claims no SQLite feature level.
-    assert!(!stdout.contains("SQLite"), "stdout={stdout}");
+    // The SQLite version named is the pinned corpus reference, so the two
+    // cannot drift apart; no compatibility level is claimed.
+    let pin = std::fs::read_to_string(concat!(
+        env!("CARGO_MANIFEST_DIR"),
+        "/../../scripts/sqlite/build-reference.sh"
+    ))
+    .expect("read build-reference.sh");
+    let pinned = pin
+        .lines()
+        .find_map(|line| line.strip_prefix("version=\""))
+        .and_then(|rest| rest.strip_suffix('"'))
+        .expect("version= line in build-reference.sh");
+    assert!(
+        stdout.contains(&format!("(tested against SQLite {pinned})")),
+        "stdout={stdout}"
+    );
+    assert!(!stdout.contains("compatibility"), "stdout={stdout}");
 }
 
 #[test]

@@ -44,7 +44,14 @@ use render::{
     write_stream_delimited_value,
 };
 
-const REDLINEDB_VERSION_LINE: &str = concat!("redlinedb v", env!("CARGO_PKG_VERSION"));
+/// `--version`, `-version` and `.version`. The SQLite version is the pinned
+/// reference the corpus runs against (scripts/sqlite/build-reference.sh), not
+/// a compatibility claim; the sqlite3 shell contract expects it here.
+const REDLINEDB_VERSION_LINE: &str = concat!(
+    "redlinedb v",
+    env!("CARGO_PKG_VERSION"),
+    " (tested against SQLite 3.53.1)"
+);
 
 #[derive(Parser, Debug)]
 #[command(

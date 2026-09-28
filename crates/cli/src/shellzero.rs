@@ -108,7 +108,8 @@ fn handle_dot(rest: &str, out: &mut String) -> DotResult {
             DotResult::Ok
         }
         "version" => {
-            out.push_str(&format!("redlinedb v{}\n", env!("CARGO_PKG_VERSION")));
+            out.push_str(crate::REDLINEDB_VERSION_LINE);
+            out.push('\n');
             DotResult::Ok
         }
         "show" => {

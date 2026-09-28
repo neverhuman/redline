@@ -114,7 +114,10 @@ fn handle_dot(rest: &str, filename: Option<&str>, out: &mut String) -> DotResult
             DotResult::Ok
         }
         "version" => {
-            out.push_str(&format!("redlinedb v{}\n", env!("CARGO_PKG_VERSION")));
+            out.push_str(&format!(
+                "redlinedb v{} (tested against SQLite 3.53.1)\n",
+                env!("CARGO_PKG_VERSION")
+            ));
             DotResult::Ok
         }
         "show" => {
