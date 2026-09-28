@@ -23,6 +23,10 @@ pub struct ReportOptions {
     pub expected_repetitions: Option<usize>,
     pub expected_warmup: Option<usize>,
     pub check: bool,
+    /// The case ids the raw records must cover exactly (SQ-04). `None` is
+    /// the suite's compiled-in corpus for official evidence, and the cases
+    /// the records hold for a local diagnostic.
+    pub case_manifest: Option<std::collections::BTreeSet<String>>,
 }
 
 #[derive(Debug)]
@@ -56,6 +60,10 @@ pub(crate) struct RawRecord {
     pub(crate) sample_role: String,
     #[serde(default)]
     pub(crate) repetition_index: Option<usize>,
+    /// The sample's position in its case (warmups first); older records
+    /// may lack it.
+    #[serde(default)]
+    pub(crate) sample_index: Option<usize>,
     pub(crate) status: String,
     pub(crate) reference_elapsed_ns: u128,
     pub(crate) target_elapsed_ns: u128,

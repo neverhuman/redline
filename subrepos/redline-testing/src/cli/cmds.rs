@@ -24,6 +24,7 @@ pub(crate) fn report(args: ReportArgs) -> Result<()> {
         expected_repetitions: args.expected_repetitions,
         expected_warmup: args.expected_warmup,
         check: args.check,
+        case_manifest: None,
     })
 }
 

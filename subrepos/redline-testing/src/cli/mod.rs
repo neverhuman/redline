@@ -15,6 +15,12 @@ pub fn run(cli: Cli) -> Result<()> {
             args.baseline.as_deref(),
             args.readme.as_deref(),
         ),
+        CommandKind::CheckSqlite(args) => {
+            crate::report::check_sqlite(crate::report::CheckSqliteOptions {
+                official_evidence: args.official_evidence,
+                output: args.output,
+            })
+        }
         CommandKind::Report(args) => cmds::report(args),
         CommandKind::List(args) => cmds::list(args),
         CommandKind::JankuraiCompare(args) => cmds::jankurai_compare(args),

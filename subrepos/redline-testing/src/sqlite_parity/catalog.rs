@@ -90,7 +90,10 @@ fn check_official(pinned_only: Option<&std::ffi::OsStr>) -> Result<()> {
     Ok(())
 }
 
-fn select_cases_with(official: bool, pinned_only: Option<&std::ffi::OsStr>) -> Result<Vec<Case>> {
+pub(super) fn select_cases_with(
+    official: bool,
+    pinned_only: Option<&std::ffi::OsStr>,
+) -> Result<Vec<Case>> {
     if official {
         check_official(pinned_only)?;
     }

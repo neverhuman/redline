@@ -145,7 +145,7 @@ pub fn run(config: RunConfig) -> Result<RunSummary> {
     )
 }
 
-fn is_rql_phase1_source(case: &Case) -> bool {
+pub(super) fn is_rql_phase1_source(case: &Case) -> bool {
     RQL_PHASE1_CATEGORIES.contains(&case.category.as_str())
 }
 

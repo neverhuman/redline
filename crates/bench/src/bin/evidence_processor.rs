@@ -14,6 +14,8 @@ use sha2::{Digest, Sha256};
 mod completion;
 #[path = "evidence_processor/sqlite_known_failures.rs"]
 mod sqlite_known_failures;
+#[path = "evidence_processor/sqlite_qualification.rs"]
+mod sqlite_qualification;
 #[path = "evidence_processor/sqlite_scope_policy.rs"]
 mod sqlite_scope_policy;
 
@@ -509,6 +511,27 @@ fn run(root: PathBuf) -> Result<PathBuf> {
             raw_skipped.into_iter().collect(),
         );
     }
+    // One verdict per case, over complete and unique samples of exactly the
+    // corpus: the runner's own reduction, held to the raw records (SQ-04).
+    let (qualification, qualification_summary) =
+        sqlite_qualification::load(&root, &official, &official_bytes, &expected_sha)?;
+    for name in sqlite_qualification::QUALIFIED_SUITES {
+        let raw_path = validated[name]["raw_path"]
+            .as_str()
+            .ok_or_else(|| anyhow!("suite {name} has no raw_path"))?;
+        let expected_total = if name == "rql_phase1" {
+            EXPECTED_RQL_PHASE1_CASES
+        } else {
+            EXPECTED_SQLITE_CASES
+        };
+        sqlite_qualification::check_suite(
+            &qualification,
+            name,
+            &validated[name],
+            &root.join(raw_path),
+            expected_total,
+        )?;
+    }
     let has_failures = validated
         .values()
         .any(|suite| suite["failed"].as_u64().unwrap_or(1) > 0);
@@ -555,6 +578,7 @@ fn run(root: PathBuf) -> Result<PathBuf> {
     processed.insert("postgres_regression".to_owned(), pg);
     processed.insert("sqlite_known_failures".to_owned(), known_failures.summary());
     processed.insert("sqlite_scope_policy".to_owned(), scope_policy.summary());
+    processed.insert("sqlite_qualification".to_owned(), qualification_summary);
     processed.insert(
         "suite_summaries".to_owned(),
         Value::Object(

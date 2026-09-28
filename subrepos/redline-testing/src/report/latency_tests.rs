@@ -127,6 +127,7 @@ fn try_generate(suite: &str, raw_text: &str) -> anyhow::Result<Generated> {
         expected_repetitions: Some(3),
         expected_warmup: Some(0),
         check: false,
+        case_manifest: Some(fixture::case_ids(raw_text)),
     })?;
     let names = super::evidence::artifact_names_for_suite(suite);
     let read = |path: PathBuf| fs::read_to_string(&path).expect("generated artifact");

@@ -24,13 +24,32 @@ fn sha256_hex(bytes: &[u8]) -> String {
     format!("{:x}", Sha256::digest(bytes))
 }
 
+/// The ids of every sqlite_parity case, from the runner's own listing: an
+/// official report must cover exactly them (SQ-04).
+fn corpus_case_ids() -> Vec<String> {
+    let output = Command::new(env!("CARGO_BIN_EXE_redline-testing"))
+        .args(["list", "--suite", "sqlite_parity", "--format", "json"])
+        .output()
+        .expect("list the corpus");
+    assert!(output.status.success(), "list failed");
+    let cases: Value = serde_json::from_slice(&output.stdout).expect("case list");
+    cases
+        .as_array()
+        .expect("case array")
+        .iter()
+        .map(|case| format!("{:05}", case["id"].as_u64().expect("case id")))
+        .collect()
+}
+
+/// Every corpus case, passed and measured three times.
 fn raw_text() -> String {
-    (1..=3usize)
-        .map(|repetition| {
+    let mut raw = String::new();
+    for case_id in corpus_case_ids() {
+        for repetition in 1..=3usize {
             let record = json!({
-                "case_id": "00001",
-                "name": "CASE_ONE",
-                "case_file": "CASE_ONE.rs",
+                "case_id": case_id,
+                "name": format!("CASE_{case_id}"),
+                "case_file": format!("CASE_{case_id}.rs"),
                 "priority": "P0",
                 "profile": "memory",
                 "category": "SMOKE",
@@ -46,9 +65,10 @@ fn raw_text() -> String {
                 "reference_elapsed_ns": 2_000_000u64,
                 "target_elapsed_ns": 4_000_000u64,
             });
-            format!("{record}\n")
-        })
-        .collect()
+            raw.push_str(&format!("{record}\n"));
+        }
+    }
+    raw
 }
 
 /// A run directory: raw results, run provenance and processed evidence.
@@ -63,6 +83,7 @@ impl Fixture {
             .tempdir()
             .expect("temp root");
         let raw = raw_text();
+        let cases = raw.lines().count() / 3;
         let identity = json!({
             "source_commit": "c1af369c1af369c1af369c1af369c1af369c1af3",
             "source_tree": "7ee7ee7ee7ee7ee7ee7ee7ee7ee7ee7ee7ee7ee7",
@@ -118,7 +139,7 @@ impl Fixture {
             "official_evidence": official,
             "suite_summaries": {
                 "sqlite_parity": {
-                    "total": 1, "passed": 1, "failed": 0, "skipped": 0,
+                    "total": cases, "passed": cases, "failed": 0, "skipped": 0,
                     "raw_path": "sqlite_parity.raw.jsonl",
                     "provenance_path": "provenance.json",
                     "raw_sha256": sha256_hex(raw.as_bytes()),
@@ -130,7 +151,7 @@ impl Fixture {
                         "suite": "sqlite_parity",
                         "raw_file": "sqlite_parity.raw.jsonl",
                         "records": raw.lines().count(),
-                        "cases": 1,
+                        "cases": cases,
                         "raw_sha256": sha256_hex(raw.as_bytes()),
                     },
                 }

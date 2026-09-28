@@ -119,6 +119,24 @@ for the publish + attestation flow.
   and writes `run_mode: official`; other runs write `run_mode: diagnostic`.
   `official-evidence.json` records `sqlite_scope_policy` (schema, path,
   sha256) and each suite's `skipped_case_ids`.
+- Case verdicts are disjoint and complete (SQ-04). `report` reduced raw
+  records to overlapping sets: a case with a failed warmup and passing
+  measured samples counted as both passed and failed, repetitions were
+  checked over the whole run rather than per case, duplicates and missing
+  cases went unnoticed, and `repetitions` defaulted to the number of measured
+  samples. `report/verdicts.rs` `reduce_sqlite_verdicts` now requires every
+  sample identity (case, role, repetition) once, each executed case to have
+  exactly the run's warmups and repetitions `1..=R`, a skipped or rejected
+  case to be one placeholder, and the cases to be exactly the suite's
+  compiled-in manifest; a case with any failed record is failed, a policy
+  skip skipped, and only a clean case passed. A report from official
+  evidence must state `--expected-warmup` and `--expected-repetitions`. New
+  `check-sqlite --official-evidence <run>/official-evidence.json --output
+  <file>` applies the same reduction to `sqlite_parity`, `memory` and
+  `rql_phase1`, checks the runner's counts and failed and skipped ids
+  against it, and writes `sqlite-qualification.json`
+  (`redline-testing-sqlite-qualification-v1`) with every case id by verdict,
+  the raw and manifest hashes, the sample plan and the runner's hash.
 
 ### Removed
 

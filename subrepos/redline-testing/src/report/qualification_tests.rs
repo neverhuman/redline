@@ -60,8 +60,20 @@ fn passed(case_id: &str, name: &str) -> String {
         .collect()
 }
 
+/// A case whose three measured samples all failed. (It used to have one
+/// sample only, which the per-case sample check now rejects.)
 fn failed(case_id: &str, name: &str) -> String {
-    record(case_id, name, "measured:1", Some(1), "failed")
+    (1..=3usize)
+        .map(|rep| {
+            record(
+                case_id,
+                name,
+                &format!("measured:{rep}"),
+                Some(rep),
+                "failed",
+            )
+        })
+        .collect()
 }
 
 fn skipped(case_id: &str, name: &str) -> String {
@@ -119,7 +131,7 @@ fn evidence(raw_text: &str, status: &str, counts: [usize; 4]) -> serde_json::Val
     })
 }
 
-fn options(root: &Path, evidence: Option<PathBuf>) -> ReportOptions {
+fn options(root: &Path, evidence: Option<PathBuf>, raw_text: &str) -> ReportOptions {
     ReportOptions {
         suite: "sqlite_parity".to_owned(),
         input: root.join("raw.jsonl"),
@@ -138,6 +150,7 @@ fn options(root: &Path, evidence: Option<PathBuf>) -> ReportOptions {
         expected_repetitions: Some(3),
         expected_warmup: Some(0),
         check: false,
+        case_manifest: Some(fixture::case_ids(raw_text)),
     }
 }
 
@@ -154,7 +167,7 @@ fn render(raw_text: &str, evidence: Option<serde_json::Value>, readme: &str) -> 
         fs::write(&path, serde_json::to_string_pretty(&value).expect("json")).expect("evidence");
         path
     });
-    generate(options(root.path(), evidence)).expect("report should generate");
+    generate(options(root.path(), evidence, raw_text)).expect("report should generate");
     fs::read_to_string(root.path().join("README.md")).expect("rendered README")
 }
 

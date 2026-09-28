@@ -325,6 +325,15 @@ and a listed case that runs fails the run. An unknown capability token, an
 unknown case status, or a capability probe that cannot run, times out or
 floods is an error, never a skip.
 
+**Verdicts:** `report` and `check-sqlite` reduce a suite's raw records to one
+verdict per case: failed when any record failed, skipped when its one record
+is a policy skip, passed otherwise. Every executed case must have exactly the
+run's warmups and measured repetitions once each, and the cases must be
+exactly the suite's compiled-in manifest (`list --format json`), or the
+reduction fails. `check-sqlite --official-evidence <run>/official-evidence.json
+--output sqlite-qualification.json` records the result for the RedlineDB
+evidence processor.
+
 **Bounded cases:** every engine run starts in its own process group. Its stdin
 is written by a separate thread and its stdout and stderr are drained while it
 runs, at most `--max-output-bytes` each. At `--case-timeout-ms`, or at the

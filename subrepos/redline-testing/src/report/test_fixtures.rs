@@ -177,6 +177,15 @@ pub(crate) fn completion(raw_text: &str) -> Value {
     })
 }
 
+/// The case ids in `raw_text`: the manifest of a fixture run.
+pub(crate) fn case_ids(raw_text: &str) -> std::collections::BTreeSet<String> {
+    raw_text
+        .lines()
+        .filter_map(|line| serde_json::from_str::<Value>(line).ok())
+        .filter_map(|record| record["case_id"].as_str().map(str::to_owned))
+        .collect()
+}
+
 pub(crate) fn pretty(value: &Value) -> String {
     serde_json::to_string_pretty(value).expect("fixture json") + "\n"
 }

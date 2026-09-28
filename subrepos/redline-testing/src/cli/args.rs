@@ -15,6 +15,7 @@ pub struct Cli {
 pub(crate) enum CommandKind {
     Run(RunArgs),
     CheckPostgres(CheckPostgresArgs),
+    CheckSqlite(CheckSqliteArgs),
     Report(ReportArgs),
     List(ListArgs),
     JankuraiCompare(JankuraiCompareArgs),
@@ -205,6 +206,17 @@ impl Suite {
             Self::BeyondSqlite => "beyond_sqlite",
         }
     }
+}
+
+/// Reduces an official run's SQLite-shell suites to one verdict per case
+/// and writes sqlite-qualification.json (SQ-04).
+#[derive(Debug, Args)]
+pub(crate) struct CheckSqliteArgs {
+    /// The run's official-evidence.json; raw paths are relative to it.
+    #[arg(long)]
+    pub(crate) official_evidence: PathBuf,
+    #[arg(long)]
+    pub(crate) output: PathBuf,
 }
 
 #[derive(Debug, Args)]

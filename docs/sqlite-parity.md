@@ -146,6 +146,16 @@ refuses `REDLINE_TESTING_PINNED_ONLY`, `--case-id` and an expired exception,
 and `evidence_processor` accepts only official evidence whose skipped case ids,
 recomputed from the raw records, equal the policy's list.
 
+Each case has exactly one verdict. `redline-testing check-sqlite`, which
+`scripts/process-redline-testing-evidence.sh` runs before `evidence_processor`,
+reduces each SQLite-shell suite to failed (any failed record, a failed warmup
+included), skipped (a policy skip) or passed, and fails unless every executed
+case has exactly the run's warmups and repetitions once each and the cases are
+exactly the suite's corpus. `evidence_processor` requires the resulting
+`sqlite-qualification.json` from the verified runner and this run, and checks
+its disjoint id lists against the raw records and the published counts; the
+report applies the same reduction.
+
 Cases the pinned build cannot express are declared in
 `subrepos/redline-testing/metadata/sqlite_parity/declared-deviations.json`
 and listed in the report: the `soundex()` cases 11437-11439 and 00219/00220

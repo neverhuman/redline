@@ -4,9 +4,11 @@ mod provenance;
 mod qualification;
 mod ratio;
 mod render;
+mod sqlite_check;
 mod svg;
 mod types;
 mod utils;
+mod verdicts;
 
 #[cfg(test)]
 mod latency_tests;
@@ -18,8 +20,11 @@ mod qualification_tests;
 mod test_fixtures;
 #[cfg(test)]
 mod tests;
+#[cfg(test)]
+mod verdict_tests;
 
 pub use compare::{jankurai_compare, sentinel};
+pub use sqlite_check::{CheckSqliteOptions, check_sqlite};
 pub use types::{JankuraiCompareOptions, ReportOptions, SentinelOptions};
 // The runner writes its ranked.csv with the same parser, ranking and writer.
 pub(crate) use render::{parse_raw_records, rank_cases, ranked_csv};
@@ -65,23 +70,6 @@ const RETIRED_BLOCKS: [(&str, &str); 2] = [
     ),
 ];
 
-fn validate_warmups(records: &[RawRecord], expected_warmup: usize) -> Result<()> {
-    let mut cases = BTreeMap::<&str, (bool, usize)>::new();
-    for record in records {
-        let (executed, warmups) = cases.entry(&record.case_id).or_default();
-        *executed |= record.status != "skipped";
-        *warmups += usize::from(record.sample_role == "warmup");
-    }
-    for (case_id, (executed, warmups)) in cases {
-        // A declared skip is one placeholder record, with no benchmark samples.
-        let expected = if executed { expected_warmup } else { 0 };
-        if warmups != expected {
-            bail!("case {case_id}: expected {expected} warmup samples but found {warmups}");
-        }
-    }
-    Ok(())
-}
-
 pub fn generate(options: ReportOptions) -> Result<()> {
     let raw_text = fs::read_to_string(&options.input)
         .with_context(|| format!("read raw input {}", options.input.display()))?;
@@ -112,23 +100,15 @@ pub fn generate(options: ReportOptions) -> Result<()> {
         )?;
     }
 
-    if let Some(expected_repetitions) = options.expected_repetitions {
-        let measured = raw_records
-            .iter()
-            .filter(|record| utils::is_measured(record))
-            .map(|record| record.repetition_index)
-            .collect::<BTreeSet<_>>();
-        if measured.len() != expected_repetitions {
-            bail!(
-                "expected {} measured repetitions but found {}",
-                expected_repetitions,
-                measured.len()
-            );
-        }
-    }
-    if let Some(expected_warmup) = options.expected_warmup {
-        validate_warmups(&raw_records, expected_warmup)?;
-    }
+    // One verdict per case, from complete and unique samples, over exactly
+    // the manifest's cases (SQ-04).
+    let (warmup, repetitions) = sample_plan(&options, &raw_records)?;
+    let verdicts = if options.suite == "beyond_sqlite" {
+        verdicts::case_verdicts(&raw_records)
+    } else {
+        let manifest = case_manifest(&options, &raw_records)?;
+        verdicts::reduce_sqlite_verdicts(&raw_records, &manifest, warmup, repetitions)?
+    };
 
     // Beyond-SQLite records are feature metadata with no timings, so that
     // suite has no latency ranking; every other suite must rank cleanly.
@@ -142,29 +122,6 @@ pub fn generate(options: ReportOptions) -> Result<()> {
         .as_deref()
         .map(read_official_evidence_versions)
         .transpose()?;
-    let total_cases = raw_records
-        .iter()
-        .map(|record| record.case_id.clone())
-        .collect::<BTreeSet<_>>()
-        .len();
-    let passed_cases = raw_records
-        .iter()
-        .filter(|record| record.status == "passed" && utils::is_measured(record))
-        .map(|record| record.case_id.clone())
-        .collect::<BTreeSet<_>>()
-        .len();
-    let failed_cases = raw_records
-        .iter()
-        .filter(|record| record.status == "failed")
-        .map(|record| record.case_id.clone())
-        .collect::<BTreeSet<_>>()
-        .len();
-    let skipped_cases = raw_records
-        .iter()
-        .filter(|record| record.status == "skipped")
-        .map(|record| record.case_id.clone())
-        .collect::<BTreeSet<_>>()
-        .len();
     let measured_samples = raw_records
         .iter()
         .filter(|record| utils::is_measured(record))
@@ -175,18 +132,16 @@ pub fn generate(options: ReportOptions) -> Result<()> {
         .count();
     let summary = SummaryJson {
         suite: options.suite.clone(),
-        total_cases,
-        passed_cases,
-        failed_cases,
-        skipped_cases,
+        total_cases: verdicts.total(),
+        passed_cases: verdicts.passed.len(),
+        failed_cases: verdicts.failed.len(),
+        skipped_cases: verdicts.skipped.len(),
         elapsed_ns: identity.measurement.elapsed_ns,
         measured_samples,
         warmup_samples,
         ranked_cases: ranked.len(),
-        repetitions: options
-            .expected_repetitions
-            .unwrap_or(measured_samples.max(1)),
-        warmup: options.expected_warmup.unwrap_or(warmup_samples),
+        repetitions,
+        warmup,
         measurement_boundary: crate::latency::MEASUREMENT_BOUNDARY.to_owned(),
         ranked_schema: crate::latency::RANKED_CSV_SCHEMA.to_owned(),
     };
@@ -368,6 +323,57 @@ pub fn generate(options: ReportOptions) -> Result<()> {
     }
 
     Ok(())
+}
+
+/// The run's warmups and measured repetitions per case. A report from
+/// official evidence states them; a local diagnostic may leave them to the
+/// records, whose every case is then held to what the first executed case
+/// shows.
+fn sample_plan(options: &ReportOptions, records: &[RawRecord]) -> Result<(usize, usize)> {
+    match (options.expected_warmup, options.expected_repetitions) {
+        (Some(warmup), Some(repetitions)) => return Ok((warmup, repetitions)),
+        _ if options.official_evidence.is_some() => bail!(
+            "a report from official evidence needs --expected-warmup and --expected-repetitions"
+        ),
+        _ => {}
+    }
+    let first = records
+        .iter()
+        .find(|record| record.status != "skipped" && record.sample_role != "not_run")
+        .map(|record| record.case_id.as_str());
+    let of_first = || {
+        records
+            .iter()
+            .filter(move |record| Some(record.case_id.as_str()) == first)
+    };
+    let warmup = options.expected_warmup.unwrap_or_else(|| {
+        of_first()
+            .filter(|record| record.sample_role == "warmup")
+            .count()
+    });
+    let repetitions = options.expected_repetitions.unwrap_or_else(|| {
+        of_first()
+            .filter_map(|record| record.repetition_index)
+            .max()
+            .unwrap_or(1)
+    });
+    Ok((warmup, repetitions))
+}
+
+/// The cases the records must cover: as given, else the suite's compiled-in
+/// corpus for official evidence, else (a local diagnostic, perhaps of a
+/// narrowed run) the cases the records hold.
+fn case_manifest(options: &ReportOptions, records: &[RawRecord]) -> Result<BTreeSet<String>> {
+    if let Some(manifest) = &options.case_manifest {
+        return Ok(manifest.clone());
+    }
+    if options.official_evidence.is_some() {
+        return crate::sqlite_parity::manifest_case_ids(&options.suite);
+    }
+    Ok(records
+        .iter()
+        .map(|record| record.case_id.clone())
+        .collect())
 }
 
 /// The renderer block of a committed report provenance, which `--check`

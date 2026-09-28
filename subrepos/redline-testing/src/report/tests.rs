@@ -24,66 +24,6 @@ fn write_text(path: &Path, text: &str) {
     fs::write(path, text).expect("write test file");
 }
 
-fn sample_raw_record() -> String {
-    serde_json::json!({
-        "case_id": "00001",
-        "name": "BENCHMARK_CASE",
-        "case_file": "case.rs",
-        "priority": "P0",
-        "profile": "memory",
-        "category": "SQL_FUNCTIONS",
-        "sample_role": "measured:1",
-        "repetition_index": 1,
-        "status": "passed",
-        "reference_elapsed_ns": 10_000u128,
-        "target_elapsed_ns": 5_000u128,
-        "memory_status": "unavailable"
-    })
-    .to_string()
-}
-
-fn warmup_fixture(case_id: &str, role: &str, status: &str) -> super::types::RawRecord {
-    let mut value: serde_json::Value = serde_json::from_str(&sample_raw_record()).unwrap();
-    value["case_id"] = case_id.into();
-    value["sample_role"] = role.into();
-    value["status"] = status.into();
-    serde_json::from_value(value).unwrap()
-}
-
-#[test]
-fn warmup_validation_accepts_declared_skips_without_samples() {
-    let records = [
-        warmup_fixture("executed", "warmup", "passed"),
-        warmup_fixture("executed", "measured:1", "passed"),
-        warmup_fixture("skipped", "skipped", "skipped"),
-    ];
-    super::validate_warmups(&records, 1).unwrap();
-}
-
-#[test]
-fn warmup_validation_rejects_missing_samples_even_with_declared_skips() {
-    let records = [
-        warmup_fixture("executed", "measured:1", "passed"),
-        warmup_fixture("skipped", "skipped", "skipped"),
-    ];
-    let err = super::validate_warmups(&records, 1).unwrap_err();
-    assert!(
-        err.to_string()
-            .contains("case executed: expected 1 warmup samples but found 0")
-    );
-}
-
-#[test]
-fn warmup_validation_rejects_balanced_missing_and_duplicate_samples() {
-    let records = [
-        warmup_fixture("missing", "measured:1", "passed"),
-        warmup_fixture("extra", "warmup", "passed"),
-        warmup_fixture("extra", "warmup", "passed"),
-        warmup_fixture("extra", "measured:1", "passed"),
-    ];
-    assert!(super::validate_warmups(&records, 1).is_err());
-}
-
 fn sample_official_evidence_raw(
     raw_sha256: &str,
     runner_version: &str,
@@ -212,6 +152,7 @@ fn report_requires_official_evidence_for_committed_artifacts() {
         expected_repetitions: None,
         expected_warmup: None,
         check: false,
+        case_manifest: None,
     })
     .expect_err("missing official evidence should fail");
     assert!(err.to_string().contains("--official-evidence"), "{err:?}");
@@ -315,6 +256,7 @@ fn report_uses_official_evidence_versions_in_readme_block() {
         expected_repetitions: Some(1),
         expected_warmup: Some(0),
         check: false,
+        case_manifest: Some(["00001".to_owned()].into()),
     })
     .expect("report should generate");
     let rendered = fs::read_to_string(readme).expect("readme rendered");
@@ -397,6 +339,7 @@ fn beyond_sqlite_plot_uses_feature_progress_copy() {
             expected_repetitions: None,
             expected_warmup: None,
             check: false,
+            case_manifest: None,
         },
     );
     assert_eq!(artifacts.len(), 1);

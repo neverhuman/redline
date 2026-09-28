@@ -20,9 +20,10 @@ mod target_contract_tests;
 mod test_fixtures;
 mod text;
 
+use std::collections::BTreeSet;
 use std::path::PathBuf;
 
-use anyhow::Result;
+use anyhow::{Result, bail};
 
 pub use bounded::{Limits, check_kill};
 pub use catalog::{all_cases, check_official_selection};
@@ -100,6 +101,22 @@ pub fn run(config: RunConfig) -> Result<RunSummary> {
         config.workers,
         record_sink::RecordSink::open(&config.output, config.suite)?,
     )
+}
+
+/// The case ids every complete run of `suite` covers, whatever the
+/// environment says: the manifest `report` and `check-sqlite` hold raw
+/// records to (SQ-04).
+pub fn manifest_case_ids(suite: &str) -> Result<BTreeSet<String>> {
+    let cases = catalog::select_cases_with(false, None)?;
+    Ok(match suite {
+        "sqlite_parity" | "memory" => cases.iter().map(case::Case::display_id).collect(),
+        "rql_phase1" => cases
+            .iter()
+            .filter(|case| rql_phase1::is_rql_phase1_source(case))
+            .map(case::Case::display_id)
+            .collect(),
+        other => bail!("suite {other} has no SQLite case manifest"),
+    })
 }
 
 pub fn run_rql_phase1(config: RunConfig) -> Result<RunSummary> {

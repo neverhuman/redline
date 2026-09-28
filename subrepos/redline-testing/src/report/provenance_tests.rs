@@ -32,7 +32,12 @@ impl Rendered {
     }
 }
 
-fn options(root: &Path, evidence: PathBuf, run_provenance: Option<PathBuf>) -> ReportOptions {
+fn options(
+    root: &Path,
+    evidence: PathBuf,
+    run_provenance: Option<PathBuf>,
+    raw_text: &str,
+) -> ReportOptions {
     ReportOptions {
         suite: "sqlite_parity".to_owned(),
         input: root.join("raw.jsonl"),
@@ -50,6 +55,7 @@ fn options(root: &Path, evidence: PathBuf, run_provenance: Option<PathBuf>) -> R
         expected_repetitions: Some(3),
         expected_warmup: Some(0),
         check: false,
+        case_manifest: Some(fixture::case_ids(raw_text)),
     }
 }
 
@@ -73,7 +79,7 @@ fn setup(
         fs::write(&path, text).expect("run provenance");
         path
     });
-    let options = options(root.path(), evidence_path, run_provenance);
+    let options = options(root.path(), evidence_path, run_provenance, raw_text);
     (root, options)
 }
 
