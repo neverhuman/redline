@@ -143,6 +143,10 @@
       "command": "just score",
       "purpose": "verify release log discipline (docs/release.md)"
     },
+    "CITATION.cff": {
+      "command": "just score",
+      "purpose": "verify the software citation stays routed"
+    },
     "CLAUDE.md": {
       "command": "just score",
       "purpose": "verify root agent instructions stay short and routed"

@@ -11,6 +11,7 @@
     ".gitignore": "workspace",
     "AGENTS.md": "agent",
     "CHANGELOG.md": "workspace",
+    "CITATION.cff": "workspace",
     "CLAUDE.md": "agent",
     "CONTRIBUTING.md": "workspace",
     "Cargo.lock": "workspace",

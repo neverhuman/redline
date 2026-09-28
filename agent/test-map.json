@@ -45,6 +45,10 @@
       "command": "rtk bash scripts/ci-local.sh required",
       "purpose": "verify release notes through the canonical host-required lane"
     },
+    "CITATION.cff": {
+      "command": "rtk bash scripts/ci-local.sh required",
+      "purpose": "verify the software citation through the canonical host-required lane"
+    },
     "CLAUDE.md": {
       "command": "rtk bash scripts/ci-local.sh required",
       "purpose": "verify agent instructions through the canonical host-required lane"
