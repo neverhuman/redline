@@ -79,3 +79,25 @@ them into `CHANGELOG.md`.
   and a template that embeds them is never served from a statement cache
   (an `INSERT ... SELECT` joining a derived table or view used to be cached
   with the rows of its first preparation).
+
+## Views, CTEs and derived tables read current rows and bound parameters (Q5-08)
+
+- A statement that reads a view, a CTE or a derived table binds again when
+  it is executed, so a statement prepared before an insert, or reset and
+  stepped again, reads the rows of the moment it runs, from this connection
+  or another. It used to return the rows of its preparation.
+- Parameters inside a CTE or derived table are bound:
+  `WITH c AS (SELECT :x AS x) SELECT x FROM c` with `:x = 7` answers 7
+  (it answered NULL), and `SELECT * FROM (SELECT a FROM t WHERE a = ?)`
+  filters on the bound value.
+- Parameters keep SQLite's numbering across subqueries: `SELECT ?,
+  (SELECT ?)` has two parameters (it had one and read the first value
+  twice), and `SELECT (SELECT :a), :b, :a` binds `:a` in both places.
+- `CREATE VIEW` with a parameter in its body is refused with `parameters are
+  not allowed in views`, as in SQLite.
+- The first execution straight after the preparation reuses the prepared
+  rows when nothing is bound and nothing has been written since, so a
+  prepare-and-step pays for one materialization.
+- Declared deviation: every CTE is materialized when the statement is
+  bound, so an unused CTE that names a missing table is an error; SQLite
+  ignores it.

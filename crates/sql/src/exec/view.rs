@@ -7,13 +7,12 @@
 //! container. JOINs against the view route through the synthetic
 //! `TableDef` returned by [`try_resolve_view_bound_table`].
 //!
-//! Like CTE materialization, view rows live for the duration of the
-//! prepared statement. The connection layer keeps templates that embed
-//! those rows out of both statement caches, so preparing the same SQL
-//! after base-table changes re-materializes the view from live data.
-//! A followup task (`docs/sqlite-parity.md`) can still move this to
-//! execution-time materialization for statements prepared before a data
-//! change.
+//! Like CTE materialization, view rows belong to the statement whose
+//! binding read them (`crate::exec::bind_env`). Templates that embed them
+//! stay out of both statement caches, and a statement that read a view
+//! binds again when it is executed, so it reads the rows of the moment it
+//! runs (`crate::exec::rebind`, Q5-08). A view body is bound in its own
+//! scope: the CTEs of the statement around it are not visible to it.
 
 use std::sync::Arc;
 

@@ -858,6 +858,15 @@ pub struct Statement {
     /// The rows and CTE names this statement's binding materialized; every
     /// step installs them, and dropping the statement frees them (Q5-09).
     bind_env: Option<Arc<crate::exec::bind_env::BindEnv>>,
+    /// The binding of `template` read rows (a view, CTE or derived table),
+    /// so each execution binds it again (Q5-08).
+    materialized: bool,
+    /// Set by the preparation, taken by the first execution: while it still
+    /// matches, the rows the preparation read are current.
+    prepared_at: Option<crate::exec::rebind::DataVersion>,
+    /// The binding of `template` did something a ROLLBACK TO replay would
+    /// not reproduce (S9-05).
+    bind_hazard: bool,
     bindings: Vec<Option<SqlValue>>,
     runtime: RuntimeState,
     current_row: Option<Vec<SqlValue>>,
@@ -899,11 +908,28 @@ impl Statement {
             conn,
             template,
             bind_env,
+            materialized: false,
+            prepared_at: None,
+            bind_hazard: false,
             bindings,
             runtime: RuntimeState::Idle,
             current_row: None,
             affected_rows: 0,
         }
+    }
+
+    /// Record what the preparation of `template` did: whether its binding
+    /// read rows, the data version it read them at, and whether it did
+    /// anything a replay would not reproduce.
+    pub(crate) fn set_preparation(
+        &mut self,
+        materialized: bool,
+        prepared_at: Option<crate::exec::rebind::DataVersion>,
+        hazard: bool,
+    ) {
+        self.materialized = materialized;
+        self.prepared_at = prepared_at;
+        self.bind_hazard = hazard;
     }
 
     /// Internal binding helper used by replay — accepts a raw `SqlValue`
@@ -989,7 +1015,16 @@ impl Statement {
         let conn: &Connection = unsafe { &*conn_ptr };
         crate::exec::with_current_connection(conn, || {
             if matches!(self.runtime, RuntimeState::Idle) {
-                if self.template.schema_epoch != self.conn.schema_epoch()
+                // Q5-08: a binding that read rows is repeated, with the
+                // current parameters, unless this is the first execution
+                // and nothing is bound or written since the preparation.
+                let prepared_at = self.prepared_at.take();
+                let rebind = self.materialized
+                    && !(prepared_at.is_some()
+                        && self.bindings.iter().all(Option::is_none)
+                        && prepared_at == Some(crate::exec::rebind::DataVersion::of(conn)?));
+                if rebind
+                    || self.template.schema_epoch != self.conn.schema_epoch()
                     || self.template.stats_epoch != self.conn.stats_epoch().0
                     || self.template.optimizer_hash != self.conn.optimizer_hash()
                     || crate::listen::template_reads_channels(&self.template)
@@ -997,9 +1032,20 @@ impl Statement {
                     if is_rql_template(&self.template) {
                         return Err(Error::SchemaChanged);
                     }
+                    let hazards = crate::replay::HazardScope::begin();
                     let capture = crate::exec::bind_env::Capture::begin();
-                    let new_template = self.conn.prepare_cached(self.template.sql.as_ref())?;
+                    let materializations = crate::exec::bind_env::materializations();
+                    let new_template = if rebind {
+                        let _bindings =
+                            crate::exec::rebind::BindTimeBindings::install(&self.bindings);
+                        self.conn.rebind_template(&self.template)?
+                    } else {
+                        self.conn.prepare_cached(self.template.sql.as_ref())?
+                    };
+                    self.materialized =
+                        crate::exec::bind_env::materializations() != materializations;
                     self.bind_env = capture.finish();
+                    self.bind_hazard = hazards.finish();
                     let mut new_bindings =
                         Vec::with_capacity(new_template.param_layout.count() + 1);
                     new_bindings.resize(new_template.param_layout.count() + 1, None);
@@ -1023,8 +1069,9 @@ impl Statement {
                 let _env = crate::exec::bind_env::Installed::install(self.bind_env.as_ref());
                 let hazards = crate::replay::HazardScope::begin();
                 let result = execute_prepared(conn, &self.template, &self.bindings)?;
-                let replay_safe =
-                    !hazards.finish() && crate::replay::kind_is_replayable(&self.template.kind);
+                let replay_safe = !hazards.finish()
+                    && !self.bind_hazard
+                    && crate::replay::kind_is_replayable(&self.template.kind);
                 self.affected_rows = result.affected_rows;
                 self.runtime = result.runtime;
                 // Journal this statement's SQL+bindings if the savepoint

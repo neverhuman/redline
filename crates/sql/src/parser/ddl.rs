@@ -933,6 +933,15 @@ pub(crate) fn bind_create_view(
             "CREATE VIEW modifiers are not supported".to_owned(),
         ));
     }
+    // SQLite binds nothing into a view body; a parameter there would read
+    // as NULL forever (Q5-08).
+    let mut params = ParamLayout::default();
+    scan_sql_parameters(&create_view.query.to_string(), &mut params);
+    if params.count() > 0 {
+        return Err(Error::UnsupportedSql(
+            "parameters are not allowed in views".to_owned(),
+        ));
+    }
     let (schema, name) = split_name(create_view.name)?;
     let columns = create_view
         .columns

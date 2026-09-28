@@ -440,7 +440,9 @@ fn bind_derived_table(
             .map(|c| c.name.value.clone())
             .collect();
     }
-    let rows = crate::exec::materialize_prepared_rows(conn, &template, &[])?;
+    // Q5-08: a statement bound again at execution shows its parameters.
+    let bindings = crate::exec::rebind::bind_time_bindings();
+    let rows = crate::exec::materialize_prepared_rows(conn, &template, &bindings)?;
     let name = alias
         .as_ref()
         .map(|alias| alias.name.value.clone())

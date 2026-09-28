@@ -254,19 +254,25 @@
       "id": "sql.cte",
       "section": "SQL Surface",
       "feature": "CTEs (`WITH`, recursive and non-recursive)",
-      "status": "pass",
+      "status": "partial",
       "proof_kind": "semantic_match",
       "tests": [
         "crates/sql/tests/parity_cte.rs::non_recursive_cte_basic",
         "crates/sql/tests/parity_cte.rs::recursive_cte_fibonacci_first_eight",
         "crates/sql/tests/parity_cte.rs::recursive_cte_cycle_dedups_with_union",
-        "crates/sql/tests/parity_cte.rs::non_recursive_cte_materialized_hint_is_accepted"
+        "crates/sql/tests/parity_cte.rs::non_recursive_cte_materialized_hint_is_accepted",
+        "crates/sql/tests/launch_cte_scope.rs::cte_name_does_not_shadow_table_in_later_statement",
+        "crates/sql/tests/launch_cte_scope.rs::nested_with_in_derived_table_keeps_outer_rows",
+        "crates/sql/tests/launch_view_freshness.rs::cte_parameter_bound_after_prepare",
+        "crates/sql/tests/launch_view_freshness.rs::an_unused_cte_naming_a_missing_table_is_an_error"
       ],
       "artifacts": [],
       "corpus_case_ids": [],
-      "open_subfeatures": [],
+      "open_subfeatures": [
+        "declared deviation: every CTE is materialized, used or not, so an unused CTE that names a missing table is an error where SQLite ignores the CTE"
+      ],
       "owner": "sql-parser-planner-executor",
-      "notes": "A3: non-recursive + recursive (UNION / UNION ALL) materialized into thread-local row store; accepts `AS MATERIALIZED` / `AS NOT MATERIALIZED` as no-op hints and supports JOIN against CTE via synthetic TableDef. Iteration cap 10_000."
+      "notes": "A3: non-recursive + recursive (UNION / UNION ALL) materialized when the statement is bound, into rows the statement owns (Q5-09); a statement is bound again at each execution with its current parameters (Q5-08). Accepts `AS MATERIALIZED` / `AS NOT MATERIALIZED` as no-op hints and supports JOIN against CTE via synthetic TableDef. Iteration cap 10_000."
     },
     {
       "id": "sql.compound-select",
@@ -319,7 +325,9 @@
         "crates/sql/tests/parity_view.rs::create_select_drop_view_basic",
         "crates/sql/tests/parity_view.rs::repeated_prepare_of_view_observes_base_table_changes",
         "crates/sql/tests/parity_view.rs::insert_into_view_is_rejected",
-        "crates/sql/tests/parity_view.rs::view_survives_reopen"
+        "crates/sql/tests/parity_view.rs::view_survives_reopen",
+        "crates/sql/tests/launch_view_freshness.rs::held_view_statement_prepared_before_insert_sees_row",
+        "crates/sql/tests/launch_view_freshness.rs::create_view_with_parameter_rejected"
       ],
       "artifacts": [],
       "corpus_case_ids": [
@@ -327,11 +335,10 @@
         "10573"
       ],
       "open_subfeatures": [
-        "a cached prepared statement over a view does not observe rows changed after it was prepared",
         "ALTER TABLE or DROP TABLE on a view is rejected with different error text (cases 10572, 10573)"
       ],
       "owner": "sql-parser-planner-executor",
-      "notes": "The official sqlite_parity corpus covers `CREATE [TEMP] VIEW [IF NOT EXISTS]` and `DROP VIEW [IF EXISTS]`. Views persist in the catalog (format_version 4) and expand at FROM-binding time. DML on a view returns a SQLite-style \"cannot modify view\" error."
+      "notes": "The official sqlite_parity corpus covers `CREATE [TEMP] VIEW [IF NOT EXISTS]` and `DROP VIEW [IF EXISTS]`. Views persist in the catalog (format_version 4) and expand at FROM-binding time; a statement that reads a view, a CTE or a derived table binds again at each execution, so a held or reset statement reads current rows (Q5-08). A view body is bound in its own scope, and parameters in `CREATE VIEW` are refused as in SQLite. DML on a view returns a SQLite-style \"cannot modify view\" error."
     },
     {
       "id": "sql.triggers",

@@ -327,7 +327,9 @@ pub(crate) fn run_query_to_rows(
     } else {
         template.output_columns.iter().cloned().collect()
     };
-    let rows = super::materialize_prepared_rows(conn, &template, &[])?;
+    // Q5-08: a statement bound again at execution shows its parameters.
+    let bindings = super::rebind::bind_time_bindings();
+    let rows = super::materialize_prepared_rows(conn, &template, &bindings)?;
     Ok((rows, columns))
 }
 

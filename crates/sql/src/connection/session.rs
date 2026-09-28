@@ -196,18 +196,7 @@ impl Connection {
                 let template = self.savepoint_template(head, action);
                 return Ok((Some(Statement::new(Arc::clone(self), template)), tail));
             }
-            // Q5-09: the statement owns what its binding materializes.
-            let capture = crate::exec::bind_env::Capture::begin();
-            let template = self.prepare_cached(head)?;
-            let bind_env = capture.finish();
-            Ok((
-                Some(Statement::with_bind_env(
-                    Arc::clone(self),
-                    template,
-                    bind_env,
-                )),
-                tail,
-            ))
+            Ok((Some(self.prepare_statement(head)?), tail))
         })) {
             Ok(result) => result,
             Err(payload) => Err(Error::Parse(format!(
@@ -555,9 +544,7 @@ impl Connection {
 
     fn replay_journal(self: &Arc<Self>, entries: &[JournalEntry]) -> Result<()> {
         for entry in entries {
-            let capture = crate::exec::bind_env::Capture::begin();
-            let template = self.prepare_cached(&entry.sql)?;
-            let mut stmt = Statement::with_bind_env(Arc::clone(self), template, capture.finish());
+            let mut stmt = self.prepare_statement(&entry.sql)?;
             if !entry.bindings.is_empty() {
                 for (idx, slot) in entry.bindings.iter().enumerate().skip(1) {
                     if let Some(value) = slot {
@@ -1251,6 +1238,72 @@ impl Connection {
         f(&mut session)
     }
 
+    /// Prepare `sql` into a statement that owns what its binding
+    /// materialized (Q5-09) and knows whether it must bind again when it
+    /// runs (Q5-08).
+    fn prepare_statement(self: &Arc<Self>, sql: &str) -> Result<Statement> {
+        let hazards = crate::replay::HazardScope::begin();
+        let capture = crate::exec::bind_env::Capture::begin();
+        let materializations = crate::exec::bind_env::materializations();
+        let published_csn = crate::exec::rebind::DataVersion::published_csn(self.as_ref());
+        let template = self.prepare_cached(sql)?;
+        let materialized = crate::exec::bind_env::materializations() != materializations;
+        let bind_env = capture.finish();
+        let hazard = hazards.finish();
+        let prepared_at = if materialized {
+            Some(crate::exec::rebind::DataVersion::at(
+                self.as_ref(),
+                published_csn,
+            )?)
+        } else {
+            None
+        };
+        let mut stmt = Statement::with_bind_env(Arc::clone(self), template, bind_env);
+        stmt.set_preparation(materialized, prepared_at, hazard);
+        Ok(stmt)
+    }
+
+    /// Bind `template`'s SQL again for an execution, with every parameter
+    /// numbered as in the whole statement, so the materializers can read the
+    /// bound values (Q5-08). The result is never cached.
+    pub(crate) fn rebind_template(
+        self: &Arc<Self>,
+        template: &PreparedTemplate,
+    ) -> Result<Arc<PreparedTemplate>> {
+        let canonical = crate::exec::rebind::canonical_for_prepare(&template.sql)
+            .and_then(|(text, _)| parse_prepared_template(self.as_ref(), &text).ok());
+        let mut fresh = match canonical {
+            Some(fresh) => fresh,
+            None => parse_prepared_template(self.as_ref(), &template.sql)?,
+        };
+        fresh.sql = Arc::clone(&template.sql);
+        fresh.param_layout = template.param_layout.clone();
+        fresh.stats_epoch = self.stats_epoch().0;
+        fresh.optimizer_hash = self.optimizer_hash();
+        Ok(Arc::new(fresh))
+    }
+
+    /// Parse `sql` with its parameters numbered across the whole statement
+    /// (Q5-08, `rebind::canonical_for_prepare`); the template keeps `sql`
+    /// and the statement's parameter layout, names included. Text whose
+    /// `?` is not a parameter (the JSON `?`, `?|` and `?&` operators) does
+    /// not parse once numbered, and is parsed as written.
+    fn parse_with_statement_numbering(&self, sql: &str) -> Result<PreparedTemplate> {
+        let Some((canonical, layout)) = crate::exec::rebind::canonical_for_prepare(sql) else {
+            return parse_prepared_template(self, sql);
+        };
+        let Ok(mut template) = parse_prepared_template(self, &canonical) else {
+            return parse_prepared_template(self, sql);
+        };
+        template.sql = if template.sql.as_ref() == canonical.trim() {
+            Arc::from(sql.trim())
+        } else {
+            Arc::from(sql)
+        };
+        template.param_layout = layout;
+        Ok(template)
+    }
+
     pub(crate) fn prepare_cached(self: &Arc<Self>, sql: &str) -> Result<Arc<PreparedTemplate>> {
         // Set the per-thread current-connection slot so binders that need
         // to execute sub-queries during prepare (notably view-body
@@ -1268,7 +1321,7 @@ impl Connection {
             || crate::pg_fn::sql_reads_pg_proc(normalized)
             || crate::pg_alter::bypass_statement_cache(self.as_ref())
         {
-            let mut template = parse_prepared_template(self.as_ref(), sql)?;
+            let mut template = self.parse_with_statement_numbering(sql)?;
             template.stats_epoch = self.stats_epoch().0;
             template.optimizer_hash = self.optimizer_hash();
             return Ok(Arc::new(template));
@@ -1291,7 +1344,7 @@ impl Connection {
         }
 
         let materializations = crate::exec::bind_env::materializations();
-        let mut template = parse_prepared_template(self.as_ref(), sql)?;
+        let mut template = self.parse_with_statement_numbering(sql)?;
         template.stats_epoch = self.stats_epoch().0;
         template.optimizer_hash = self.optimizer_hash();
         let template = Arc::new(template);

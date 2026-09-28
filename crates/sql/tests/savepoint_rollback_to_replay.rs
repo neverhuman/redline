@@ -101,6 +101,10 @@ fn every_kind_of_unsafe_prefix_is_rejected_and_a_safe_one_replays() {
         "INSERT INTO fired VALUES (1)",
         "INSERT INTO stamped(v) VALUES (1)",
         "INSERT INTO t SELECT abs(random()) % 2",
+        // A CTE is materialized when the statement is bound; what the
+        // binding evaluates counts too.
+        "WITH r(x) AS (SELECT random()) INSERT INTO t SELECT x FROM r",
+        "INSERT INTO t SELECT x FROM (SELECT datetime('now') AS x)",
         "CREATE TABLE made_in_tx(x)",
         "CREATE INDEX t_v ON t(v)",
     ] {
