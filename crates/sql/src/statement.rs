@@ -1006,6 +1006,7 @@ impl Statement {
                 if self.template.schema_epoch != self.conn.schema_epoch()
                     || self.template.stats_epoch != self.conn.stats_epoch().0
                     || self.template.optimizer_hash != self.conn.optimizer_hash()
+                    || crate::listen::template_reads_channels(&self.template)
                 {
                     if is_rql_template(&self.template) {
                         return Err(Error::SchemaChanged);

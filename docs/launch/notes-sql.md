@@ -236,3 +236,18 @@ index-format epoch below), so such an index is rebuilt at the first open.
   (`SELECT 'é interval '`).
 - In the SQLite dialect `'\x41'` is the four-character text `\x41`, as in
   SQLite. Only the Postgres dialect reads it as a hex bytea literal.
+
+## `pg_listening_channels()` (PG-02)
+
+- The rewrite that answers `SELECT pg_listening_channels()` changes only a
+  call in code. The call spelled inside `'...'`, `E'...'`, `$$...$$`,
+  `$tag$...$tag$`, a quoted identifier or a comment is returned byte for
+  byte; after `LISTEN`, a literal used to have the channel list spliced into
+  it.
+- A prepared `SELECT pg_listening_channels()` answers the channel set of the
+  moment it runs, not of the moment it was prepared.
+- Any other use of the function (`SELECT pg_listening_channels(), 1`,
+  `SELECT upper(pg_listening_channels())`, `SELECT * FROM
+  pg_listening_channels()`, an alias) fails with `unsupported capability:
+  pg_listening_channels outside a bare SELECT list` instead of a parse error
+  or a rewritten statement.

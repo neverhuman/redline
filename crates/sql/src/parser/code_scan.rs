@@ -218,6 +218,15 @@ impl Iterator for CodeRanges<'_> {
     }
 }
 
+/// One flag per byte of `sql`: `true` where the byte is code.
+pub(crate) fn sql_code_mask(sql: &str, lexer: Lexer) -> Vec<bool> {
+    let mut mask = vec![false; sql.len()];
+    for range in code_ranges(sql, lexer) {
+        mask[range].fill(true);
+    }
+    mask
+}
+
 /// Copy the character that starts at byte `*i` of `sql` to `out` and step
 /// past it. Byte-wise rewrites use this instead of `out.push(byte as char)`,
 /// which turned each byte of a multi-byte UTF-8 character into a separate
@@ -326,6 +335,12 @@ mod tests {
         assert_eq!(code("a 'b", Lexer::Sqlite), "a ");
         assert_eq!(code("a /* b", Lexer::Sqlite), "a ");
         assert_eq!(code("a $$ b", Lexer::Postgres), "a ");
+    }
+
+    #[test]
+    fn mask_marks_code_bytes() {
+        let mask = sql_code_mask("a'é'b", Lexer::Sqlite);
+        assert_eq!(mask, vec![true, false, false, false, false, true]);
     }
 
     #[test]

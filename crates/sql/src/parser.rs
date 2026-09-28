@@ -209,8 +209,12 @@ fn parse_prepared_template_impl(conn: &Connection, sql: &str) -> Result<Prepared
     if let Some(rewritten) = crate::pg_fn::rewrite_pg_proc(conn, sql) {
         return parse_prepared_template_impl(conn, &rewritten);
     }
-    if let Some(rewritten) = crate::listen::rewrite_pg_listening_channels(conn, sql) {
-        return parse_prepared_template_impl(conn, &rewritten);
+    if let Some(rewritten) = crate::listen::rewrite_pg_listening_channels(conn, sql)? {
+        // Keep the SQL with the call, so preparing it again reads the
+        // channel set of that moment (see `listen::template_reads_channels`).
+        let mut template = parse_prepared_template_impl(conn, &rewritten)?;
+        template.sql = Arc::from(trimmed);
+        return Ok(template);
     }
     // Track J: strip Postgres `::regclass` and similar cast suffixes that
     // RedlineDB has no need to evaluate; the wrapped string is the natural

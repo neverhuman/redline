@@ -70,6 +70,7 @@ const REWRITE_TRIGGER_PHRASES: &[&str] = &[
     "alter table t add column if not exists c",
     "t indexed by i",
     "t not indexed",
+    "select pg_listening_channels()",
     "select * from pg_catalog.pg_namespace",
     "from pg_class where relname = 't'",
     "from pg_proc",
