@@ -1,6 +1,8 @@
 #!/usr/bin/env bash
 # Publish the release archives in target/packages as the GitHub release of
-# $TAG. The release-build workflow's publish job runs it from the checkout of
+# $TAG, with the acceptance manifest $RELEASE_ACCEPTANCE
+# (release-acceptance.v1.json, from ops/ci/release-acceptance.sh) as one more
+# asset. The release-build workflow's publish job runs it from the checkout of
 # the tag. ops/ci/tests/release-authority.sh tests it.
 set -euo pipefail
 : "${TAG:?TAG is required}"
@@ -56,9 +58,21 @@ for asset in "${assets[@]}"; do
     { printf '%s provenance does not name %s\n' "$asset" "$TAG" >&2; exit 1; }
 done
 
+# The acceptance manifest must bind exactly these archives, this commit and a
+# successful acceptance run (scripts/release/verify-acceptance.sh), with the
+# receipts' digests checked when RELEASE_ACCEPTANCE_RECEIPTS names them.
+acceptance=${RELEASE_ACCEPTANCE:-}
+if [[ -z $acceptance || ${acceptance##*/} != release-acceptance.v1.json || ! -f $acceptance ]]; then
+  printf 'RELEASE_ACCEPTANCE must name the release-acceptance.v1.json of %s (ops/ci/release-acceptance.sh)\n' "$TAG" >&2
+  exit 1
+fi
+verify_args=(--packages target/packages --tag "$TAG")
+[[ -z ${RELEASE_ACCEPTANCE_RECEIPTS:-} ]] || verify_args+=(--receipts "$RELEASE_ACCEPTANCE_RECEIPTS")
+bash "$here/../../scripts/release/verify-acceptance.sh" "$acceptance" "${verify_args[@]}"
+
 # create fails when the release already exists; immutable assets are never clobbered.
 args=(--repo "$REDLINE_REPO_SLUG" --verify-tag --draft --title "RedlineDB $TAG" --notes-file "$notes")
 [[ $TAG != *-rc.* ]] || args+=(--prerelease)
 gh release create "$TAG" "${args[@]}"
-gh release upload "$TAG" --repo "$REDLINE_REPO_SLUG" "${assets[@]/#/target/packages/}"
+gh release upload "$TAG" --repo "$REDLINE_REPO_SLUG" "${assets[@]/#/target/packages/}" "$acceptance"
 gh release edit "$TAG" --repo "$REDLINE_REPO_SLUG" --draft=false

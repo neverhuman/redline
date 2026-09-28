@@ -475,3 +475,30 @@ against the v5 headers. There is no v4 compatibility alias.
   name, since `ci.yml`'s matrix and `crates/bench/tests/ci_workflow_routing.rs`
   name it. Maintainer infra (runner egress, more runners) is still needed for
   the heavy jobs to stop flaking.
+
+## Release acceptance manifest (CI-04/CI-06)
+
+- Every release now carries `release-acceptance.v1.json`
+  (`redline.release-acceptance/v1`), attested with the archives: the
+  repository id, tag, commit, tree, source-inputs hash, compiler, the run and
+  every job's conclusion, each archive's sha256, and the digests of the
+  receipts it was accepted on (the security receipt, the jankurai security
+  evidence, the component audits, the official redline-testing evidence and
+  the durability evidence). `scripts/release/verify-acceptance.sh` checks a
+  downloaded manifest against the release and the tagged checkout; see
+  `docs/release.md`, "Acceptance manifest".
+- The CI `security` job now also writes the release security receipt
+  (`ops/ci/security-receipt.sh`, full history) and uploads it as the
+  `security-receipt` artifact.
+- The source-inputs recipe behind `.github/parity-report-inputs.sha256` moved
+  to `ops/ci/source-inputs-sha256.sh` (same paths, same hash); redline-testing's
+  recipe test reads it there.
+- For the integrator (not a release-note line): publishing now requires a
+  `durability-evidence` artifact from the tag's `ci.yml` run, and no job
+  uploads one yet (`ops/release/acceptance-receipts` says so, and
+  `crates/bench/tests/ci_release_acceptance.rs` makes whoever adds the
+  uploader update that line). Until the durability receipt job lands in
+  `ci.yml`, every tag stops at publish with "missing receipt artifact(s):
+  durability-evidence". To release without it, remove its line from
+  `ops/release/acceptance-receipts` and from the download pattern in
+  `release-build.yml`, and narrow the durability claim instead.

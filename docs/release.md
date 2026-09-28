@@ -55,11 +55,13 @@ Run the same check locally before pushing a tag; it reports every failed rule.
    (`git tag -a`; sign it when a maintainer signing key is configured) and push
    that one tag.
 3. `release-build.yml` runs the complete acceptance workflow (`ci.yml`, which
-   may ask for no more than `contents: read` and `attestations: read`),
-   generates GitHub build-provenance attestations, and publishes the
-   prerelease with those notes from a GitHub-hosted runner. It never
-   overwrites an existing release or asset, and it uploads exactly one archive
-   and one checksum for each package and platform.
+   may ask for no more than `contents: read` and `attestations: read`), writes
+   and checks the acceptance manifest (below), generates GitHub
+   build-provenance attestations for the archives and the manifest, and
+   publishes the prerelease with those notes from a GitHub-hosted runner. It
+   never overwrites an existing release or asset, and it uploads exactly one
+   archive and one checksum for each package and platform, plus
+   `release-acceptance.v1.json`.
 4. `verify-published` then installs the candidate on Linux x86_64 and ARM64
    and macOS Intel and Apple Silicon from the public installer URL with
    `VERSION` pinned (a prerelease is never `releases/latest`), runs
@@ -181,10 +183,56 @@ at every call, two concurrent installers, rollback, legacy migration, the glibc
 installation, and `scripts/test-docs-quickstart.sh` runs the quick start of
 `docs/install.md` and `README.md` against it.
 
+## Acceptance manifest
+
+Every release carries `release-acceptance.v1.json` (schema
+`redline.release-acceptance/v1`), which binds the release to the run that
+accepted it. The publish job downloads the tag run's package archives and the
+receipt artifacts that `ops/release/acceptance-receipts` lists, and
+`ops/ci/release-acceptance.sh` records:
+
+- the repository slug and id, the tag, the commit it names, that commit's
+  tree, the source-inputs hash (`ops/ci/source-inputs-sha256.sh`, the hash
+  `.github/parity-report-inputs.sha256` holds for the committed report),
+  whether the checkout was clean, and the compiler every package names;
+- the run id, attempt and URL, and every completed job of that attempt with
+  its conclusion (`gh api .../runs/<id>/attempts/<attempt>/jobs`);
+- each archive's name and sha256;
+- each receipt's name, file count and digest (the sha256 of its sorted
+  `sha256  ./path` lines): `security-receipt` (`ops/ci/security-receipt.sh`
+  in the `security` job), `security-evidence`, `audit-family`,
+  `redline-testing-official-evidence` (the `parity` job) and
+  `durability-evidence`.
+
+It refuses when a receipt is missing, so the publish job cannot publish a
+release whose run did not upload all of them. No `ci.yml` job uploads
+`durability-evidence` yet: until one does, every tag stops at publish.
+`scripts/release/verify-acceptance.sh` then checks the manifest fail-closed:
+the canonical repository, every job concluded success and a
+`RedlineDB/required` job among them, the exact twelve archives with matching
+digests and build provenance (repository id, tag, commit, tree, compiler),
+the tree and source-inputs hash of the checkout, a clean checkout, the
+receipts' digests, and a passing security receipt for the commit. The publish
+job runs it before attesting the manifest, and
+`ops/ci/publish-github-release.sh` runs it again and refuses to publish
+without it. To check a published release:
+
+```bash
+git fetch origin tag vX.Y.Z && git checkout vX.Y.Z
+gh release download vX.Y.Z --repo neverhuman/redline --dir release
+gh attestation verify release/release-acceptance.v1.json --repo neverhuman/redline
+bash scripts/release/verify-acceptance.sh release/release-acceptance.v1.json \
+  --packages release --tag vX.Y.Z
+```
+
+The receipts themselves stay artifacts of the run (GitHub keeps them for the
+repository's artifact retention period); the manifest keeps their digests.
+
 ## Evidence and rollback
 
 Acceptance artifacts are attached to the CI/release run: conformance evidence,
-security receipts, component audit reports and all native package archives.
+security receipts, component audit reports and all native package archives,
+bound to the release by `release-acceptance.v1.json` (above).
 `docs/migration/inventory.json` and `redlinectl validate --history` verify the
 preserved source identities and recovery refs. Earlier audit baselines remain
 recorded; policy qualification does not lower their score floors.

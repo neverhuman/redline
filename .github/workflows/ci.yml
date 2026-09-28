@@ -421,6 +421,8 @@ jobs:
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
         with:
+          # The receipt's gitleaks scan covers the whole history.
+          fetch-depth: 0
           persist-credentials: false
       - uses: dtolnay/rust-toolchain@3c5f7ea28cd621ae0bf5283f0e981fb97b8a7af9
         with: {toolchain: 1.95.0}
@@ -435,9 +437,18 @@ jobs:
             cat target/jankurai/security/security-lane-*.log
             exit 1
           }
+      # The release receipt for this commit (docs/security-scans.md): every
+      # lockfile's audit and deny results, the advisory databases' age and a
+      # full-history gitleaks scan, in target/security/receipt.json.
+      - name: Write the security receipt
+        run: bash ops/ci/security-receipt.sh
+      # Release acceptance binds both (ops/release/acceptance-receipts).
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
         if: always()
         with: {name: security-evidence, path: target/jankurai/security, if-no-files-found: warn}
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        if: always()
+        with: {name: security-receipt, path: target/security, if-no-files-found: warn}
 
   packaging:
     uses: ./.github/workflows/packages.yml

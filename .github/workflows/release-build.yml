@@ -5,8 +5,11 @@ name: release-build
 # CHANGELOG.md, docs/releases/vX.Y.Z.md, an annotated tag at the commit, the
 # repository id, no existing release, stable tags on main); acceptance runs
 # the whole of ci.yml, which may ask for no more than the permissions granted
-# below (ops/ci/check-workflow-permissions.sh); publish creates the release;
-# verify-published installs it from the public URLs on each platform.
+# below (ops/ci/check-workflow-permissions.sh); publish writes and checks the
+# acceptance manifest (release-acceptance.v1.json: the run's jobs, the package
+# digests and the receipts of ops/release/acceptance-receipts), attests it with
+# the archives and creates the release; verify-published installs it from the
+# public URLs on each platform.
 on:
   push:
     tags:
@@ -57,6 +60,8 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 20
     permissions:
+      # The run's job list for the acceptance manifest.
+      actions: read
       contents: write
       id-token: write
       attestations: write
@@ -72,14 +77,34 @@ jobs:
         with: {toolchain: 1.95.0}
       - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
         with: {pattern: 'packages-*', path: target/packages, merge-multiple: true}
+      # Each receipt into target/acceptance/receipts/<name>/. A receipt the
+      # run did not upload is simply absent here; release-acceptance.sh then
+      # refuses and names it.
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+        with:
+          pattern: '{security-receipt,security-evidence,audit-family,redline-testing-official-evidence,durability-evidence}'
+          path: target/acceptance/receipts
+      - name: Write and check the release acceptance manifest
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ github.ref_name }}
+        run: |
+          bash ops/ci/release-acceptance.sh target/packages target/acceptance/receipts target/acceptance/release-acceptance.v1.json
+          bash scripts/release/verify-acceptance.sh target/acceptance/release-acceptance.v1.json \
+            --packages target/packages --receipts target/acceptance/receipts --tag "$TAG"
       - uses: actions/attest-build-provenance@96b4a1ef7235a096b17240c259729fdd70c83d45
         with: {subject-path: 'target/packages/*.tar.gz'}
+      - uses: actions/attest-build-provenance@96b4a1ef7235a096b17240c259729fdd70c83d45
+        with: {subject-path: target/acceptance/release-acceptance.v1.json}
       # Runs release-version.sh check again with this job's token, which also
-      # sees draft releases, then checks every asset before creating anything.
+      # sees draft releases, then checks every asset and the acceptance
+      # manifest before creating anything.
       - name: Publish verified archives without replacing existing assets
         env:
           GH_TOKEN: ${{ github.token }}
           TAG: ${{ github.ref_name }}
+          RELEASE_ACCEPTANCE: target/acceptance/release-acceptance.v1.json
+          RELEASE_ACCEPTANCE_RECEIPTS: target/acceptance/receipts
         run: bash ops/ci/publish-github-release.sh
   verify-published:
     needs: publish

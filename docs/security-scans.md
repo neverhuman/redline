@@ -86,6 +86,8 @@ It exits non-zero, after writing the receipt, when a scan fails, when an
 advisory database was last fetched more than 24 hours ago, when the clone is
 shallow or when the tree has changes. `SECURITY_RECEIPT_ALLOW_DIRTY=1` and
 `SECURITY_RECEIPT_ALLOW_SHALLOW=1` relax the last two for a local trial; the
-receipt records them, and a release needs neither. Attaching the receipt to
-the GitHub release and binding it into the release acceptance record is
-separate work (CI-06).
+receipt records them, and a release needs neither. CI's `security` job runs
+it on a full clone and uploads `target/security` as the `security-receipt`
+artifact; a release binds that artifact's digest into
+`release-acceptance.v1.json` and refuses unless the receipt passed for the
+tagged commit (`docs/release.md`, "Acceptance manifest").

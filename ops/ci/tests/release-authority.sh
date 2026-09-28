@@ -8,9 +8,11 @@
 #     ops/ci/release-version.sh refuses, an asset set other than one archive
 #     and one checksum per package and platform, a checksum file naming
 #     another archive, and archives whose provenance names another
-#     repository or tag, before it creates anything; names --repo on every
-#     gh call; takes the notes from docs/releases/vX.Y.Z.md; and marks
-#     candidates as prereleases.
+#     repository or tag, and a missing or mismatched acceptance manifest
+#     (scripts/release/verify-acceptance.sh), before it creates anything;
+#     names --repo on every gh call; takes the notes from
+#     docs/releases/vX.Y.Z.md; uploads the manifest with the archives; and
+#     marks candidates as prereleases.
 # No network or GitHub access: gh is a shim, and cargo, rustc and npm are
 # shims while packaging. Publication runs `cargo metadata` on a fixture.
 #
@@ -56,9 +58,11 @@ printf '#!/bin/sh\nprintf "%%s\\n" "$*" >> "%s/gh.log"\n[ "$1 $2" != "release vi
 chmod +x "$work/gh-only/gh"
 publish_path="$work/gh-only:$PATH_BEFORE_SHIMS"
 # The checkout: a one-crate workspace at 5.0.0 with its changelog section and
-# notes, origin/main at HEAD, and annotated tags v5.0.0 and $tag.
+# notes, target/ ignored, origin/main at HEAD, and annotated tags v5.0.0 and
+# $tag.
 checkout=$work/checkout
 mkdir -p "$checkout/src" "$checkout/docs/releases"
+printf '/target/\n' > "$checkout/.gitignore"
 printf '[package]\nname = "fixture"\nversion = "5.0.0"\nedition = "2021"\n\n[workspace]\n' > "$checkout/Cargo.toml"
 : > "$checkout/src/lib.rs"
 printf '# Changelog\n\n## [5.0.0] - 2026-10-01\n' > "$checkout/CHANGELOG.md"
@@ -71,6 +75,9 @@ for t in v5.0.0 "$tag"; do
   git -C "$checkout" -c user.name=fixture -c user.email=fixture@example.invalid -c tag.gpgSign=false tag -a -m "$t" "$t"
 done
 git -C "$checkout" tag v5.0.0-rc.8
+commit=$(git -C "$checkout" rev-parse HEAD)
+tree=$(git -C "$checkout" rev-parse 'HEAD^{tree}')
+rustc_line='rustc 1.95.0 (59807616e 2026-04-14)'
 
 platforms=(linux-x86_64 linux-arm64 macos-x86_64 macos-arm64)
 # packages <tag> [repository id for the last archive]: the twelve release
@@ -86,12 +93,33 @@ packages() {
       [[ $count != 12 ]] || id=$last_id
       dir=$work/trees/$package-$platform
       mkdir -p "$dir/share/redlinedb"
-      printf '{"schema":"redline.release-build/v2","repository_url":"%s","repository_id":%s,"tag":"%s"}\n' \
-        "$REDLINE_REPO_URL" "$id" "$release" > "$dir/share/redlinedb/build-provenance.json"
+      printf '{"schema":"redline.release-build/v2","repository_url":"%s","repository_id":%s,"tag":"%s","commit":"%s","source_tree":"%s","rust":"%s"}\n' \
+        "$REDLINE_REPO_URL" "$id" "$release" "$commit" "$tree" "$rustc_line" > "$dir/share/redlinedb/build-provenance.json"
       tar -czf "$checkout/target/packages/$package-$release-$platform.tar.gz" -C "$dir" .
       (cd "$checkout/target/packages" && sha256sum "$package-$release-$platform.tar.gz" > "$package-$release-$platform.tar.gz.sha256")
     done
   done
+}
+
+# acceptance <tag>: the acceptance manifest of <tag> over the archives now in
+# target/packages, from receipts and a job list of a successful run.
+mkdir -p "$work/jobs-gh"
+printf '#!/bin/sh\necho %s\n' "'{\"jobs\":[{\"name\":\"acceptance / RedlineDB/required\",\"status\":\"completed\",\"conclusion\":\"success\"},{\"name\":\"publish\",\"status\":\"in_progress\",\"conclusion\":null}]}'" \
+  > "$work/jobs-gh/gh"
+chmod +x "$work/jobs-gh/gh"
+acceptance() {
+  local release=$1 name receipts=$checkout/target/acceptance/receipts
+  rm -rf "$checkout/target/acceptance"
+  while read -r name; do
+    mkdir -p "$receipts/$name"
+    printf '%s\n' "$name" > "$receipts/$name/evidence.txt"
+  done < <(sed 's/#.*//' "$root/ops/release/acceptance-receipts" | awk 'NF { print $1 }')
+  printf '{"candidate":{"sha":"%s","dirty":false,"shallow":false},"result":"pass"}\n' "$commit" > "$receipts/security-receipt/receipt.json"
+  (cd "$checkout" && env PATH="$work/jobs-gh:$PATH_BEFORE_SHIMS" TAG="$release" GH_TOKEN=fixture \
+    GITHUB_REPOSITORY="$REDLINE_REPO_SLUG" GITHUB_REPOSITORY_ID="$REDLINE_REPO_ID" GITHUB_RUN_ID=7 GITHUB_RUN_ATTEMPT=1 \
+    bash "$root/ops/ci/release-acceptance.sh" target/packages target/acceptance/receipts \
+    target/acceptance/release-acceptance.v1.json) > "$work/acceptance.log" 2>&1 \
+    || fail "acceptance $release: $(tail -n 2 "$work/acceptance.log")"
 }
 
 # publish <label> [VAR=value...]; sets $status. Default identity is canonical.
@@ -101,7 +129,9 @@ publish() {
   rm -f "$work/gh.log"
   status=0
   (cd "$checkout" && env PATH="$publish_path" GITHUB_REPOSITORY="$REDLINE_REPO_SLUG" GITHUB_REPOSITORY_ID="$REDLINE_REPO_ID" \
-    GH_REPO= TAG=$tag "$@" bash "$root/ops/ci/publish-github-release.sh") > "$work/$label.log" 2>&1 || status=$?
+    GH_REPO= TAG=$tag RELEASE_ACCEPTANCE=target/acceptance/release-acceptance.v1.json \
+    RELEASE_ACCEPTANCE_RECEIPTS=target/acceptance/receipts "$@" \
+    bash "$root/ops/ci/publish-github-release.sh") > "$work/$label.log" 2>&1 || status=$?
 }
 # expect_refusal <label> <message> [VAR=value...]: refused, and nothing was
 # created, uploaded or edited on GitHub.
@@ -131,6 +161,8 @@ expect_published() {
     fail "$label: notes are not docs/releases/v5.0.0.md: $(grep '^release create' "$work/gh.log" 2>/dev/null)"
   uploaded=$(grep '^release upload ' "$work/gh.log" 2>/dev/null | tr ' ' '\n' | grep -c '^target/packages/' || true)
   [[ $uploaded == 24 ]] || fail "$label: uploaded $uploaded files, not 12 archives and 12 checksums"
+  grep -q '^release upload .* target/acceptance/release-acceptance.v1.json' "$work/gh.log" 2>/dev/null ||
+    fail "$label: the acceptance manifest was not uploaded"
 }
 
 # expect_authority_refusal <label> [VAR=value...]: refused before any gh call.
@@ -172,10 +204,27 @@ packages "$tag"
 printf 'tampered' >> "$checkout/target/packages/redline-testing-$tag-macos-arm64.tar.gz"
 expect_refusal tampered-archive "redline-testing-$tag-macos-arm64.tar.gz: FAILED"
 
+# The acceptance manifest: required, for this tag, and for these archives.
 packages "$tag"
+expect_refusal no-acceptance 'RELEASE_ACCEPTANCE must name the release-acceptance.v1.json' RELEASE_ACCEPTANCE=
+packages v5.0.0
+acceptance v5.0.0
+packages "$tag"
+expect_refusal other-acceptance "does not match --tag $tag"
+acceptance "$tag"
+# A rebuilt archive with its own checksum file and valid provenance, but not
+# the bytes the acceptance run bound.
+printf 'rebuilt\n' > "$work/trees/redlinedb-linux-arm64/extra"
+tar -czf "$checkout/target/packages/redlinedb-$tag-linux-arm64.tar.gz" -C "$work/trees/redlinedb-linux-arm64" .
+(cd "$checkout/target/packages" && sha256sum "redlinedb-$tag-linux-arm64.tar.gz" > "redlinedb-$tag-linux-arm64.tar.gz.sha256")
+expect_refusal unbound-archive "redlinedb-$tag-linux-arm64.tar.gz: sha256"
+
+packages "$tag"
+acceptance "$tag"
 expect_published candidate "$tag"
 grep -q "^release create $tag .*--prerelease" "$work/gh.log" 2>/dev/null || fail 'candidate: not marked as a prerelease'
 packages v5.0.0
+acceptance v5.0.0
 expect_published stable v5.0.0
 ! grep -q -- '--prerelease' "$work/gh.log" || fail 'stable: marked as a prerelease'
 

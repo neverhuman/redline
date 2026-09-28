@@ -16,8 +16,8 @@ use sha2::{Digest, Sha256};
 pub(crate) const RUN_PROVENANCE_SCHEMA: &str = "redline-testing-run-provenance-v2";
 
 /// The source inputs of the measured binaries, relative to the repository
-/// root. This is the pathspec `ops/ci/sqlite-parity-report.sh` hashes into
-/// `.github/parity-report-inputs.sha256`; a unit test below keeps the two
+/// root. This is the pathspec `ops/ci/source-inputs-sha256.sh` hashes (into
+/// `.github/parity-report-inputs.sha256`); a unit test below keeps the two
 /// lists equal. Generated outputs (README, reports, charts,
 /// benchmark results, `target/`) are outside it.
 pub(crate) const SOURCE_INPUT_PATHS: [&str; 13] = [
@@ -50,7 +50,7 @@ pub(crate) struct SourceIdentity {
     /// `git rev-parse HEAD^{tree}`.
     pub(crate) source_tree: Option<String>,
     /// SHA-256 of `git ls-tree -r HEAD -- <SOURCE_INPUT_PATHS>`, the same
-    /// bytes `ops/ci/sqlite-parity-report.sh` pipes to `sha256sum`.
+    /// bytes `ops/ci/source-inputs-sha256.sh` pipes to `sha256sum`.
     pub(crate) source_inputs_sha256: Option<String>,
     /// Whether `git status --porcelain --untracked-files=all` reports any
     /// change under `SOURCE_INPUT_PATHS`, untracked files included.
@@ -218,8 +218,8 @@ mod tests {
 
     #[test]
     fn source_inputs_match_the_report_publisher_recipe() {
-        let script = fs::read_to_string(repository_root().join("ops/ci/sqlite-parity-report.sh"))
-            .expect("read ops/ci/sqlite-parity-report.sh");
+        let script = fs::read_to_string(repository_root().join("ops/ci/source-inputs-sha256.sh"))
+            .expect("read ops/ci/source-inputs-sha256.sh");
         let marker = "git ls-tree -r HEAD --";
         let start = script.find(marker).expect("inputs recipe") + marker.len();
         let end = script[start..]

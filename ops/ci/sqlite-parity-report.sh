@@ -109,12 +109,9 @@ publish_pr() {
   # Generated reports, dates, charts, and README edits do not change these
   # inputs. In particular, merging this report cannot spawn another report.
   # The runner records the same hash as source_inputs_sha256 in its run
-  # provenance; SOURCE_INPUT_PATHS in
-  # subrepos/redline-testing/src/evidence/identity.rs must list these paths.
+  # provenance; ops/ci/source-inputs-sha256.sh holds the one recipe.
   local inputs
-  inputs=$(git ls-tree -r HEAD -- Cargo.toml Cargo.lock rust-toolchain.toml .cargo crates subrepos metadata ops scripts \
-    agent/audit-policy.toml .jankurai/audit-policy.toml .github/workflows/ci.yml \
-    .github/workflows/sqlite-parity-report.yml | sha256sum | cut -d ' ' -f 1)
+  inputs=$(bash ops/ci/source-inputs-sha256.sh)
   if [ -f .github/parity-report-inputs.sha256 ] && [ "$(cat .github/parity-report-inputs.sha256)" = "$inputs" ]; then
     printf 'Parity product, corpus, oracle, and policy inputs are unchanged.\n'
     return 0

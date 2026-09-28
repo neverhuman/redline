@@ -1,0 +1,10 @@
+# The CI artifacts every release binds into release-acceptance.v1.json
+# (ops/ci/release-acceptance.sh writes it, scripts/release/verify-acceptance.sh
+# checks it). release-build.yml's publish job downloads them from the tag's
+# acceptance run and refuses to publish while any is missing. One artifact
+# name per line, then the ci.yml job that uploads it and what it holds.
+security-receipt                    # security: ops/ci/security-receipt.sh, target/security
+security-evidence                   # security: jankurai security run, target/jankurai/security
+audit-family                        # audit: every component's jankurai audit, target/audit-family
+redline-testing-official-evidence   # parity: the official redline-testing run, target/redline-testing
+durability-evidence                 # the durability receipt; no ci.yml job uploads it yet, so publish refuses every tag until one does
