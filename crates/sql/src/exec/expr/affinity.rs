@@ -133,11 +133,34 @@ pub(crate) fn apply_one(value: SqlValue, affinity: CmpAffinity) -> SqlValue {
 }
 
 /// `sqlite3IndexAffinityOk` for a constant (or other-table) probe with
-/// affinity `probe` against an index column with affinity `column`: the
-/// index answers the comparison only if the comparison converts the probe
-/// exactly as the index path does (by the column's own affinity).
+/// affinity `probe` against an index column with affinity `column`. A
+/// comparison that converts nothing can always use the index (two TEXT
+/// columns, for one); a TEXT comparison needs a TEXT index and a NUMERIC
+/// one a numeric index, whose keys hold the values that conversion makes.
+///
+/// A probe the index path converts by the column's affinity where the
+/// comparison converts nothing must be one that conversion leaves alone;
+/// [`probe_unchanged_by_index`] checks that.
 pub(crate) fn index_usable(column: Affinity, probe: Option<Affinity>) -> bool {
-    CmpAffinity::between(Some(column), probe) == CmpAffinity::of(column)
+    match CmpAffinity::between(Some(column), probe) {
+        CmpAffinity::None => true,
+        CmpAffinity::Text => column == Affinity::Text,
+        CmpAffinity::Numeric => is_numeric(column),
+    }
+}
+
+/// Whether converting `value` by the index column's affinity, as an index
+/// probe does, keeps it as it is (same storage class, same value).
+pub(crate) fn probe_unchanged_by_index(column: Affinity, value: &SqlValue) -> bool {
+    let converted = apply_one(value.clone(), CmpAffinity::of(column));
+    match (&converted, value) {
+        (SqlValue::Integer(a), SqlValue::Integer(b)) => a == b,
+        (SqlValue::Real(a), SqlValue::Real(b)) => a.to_bits() == b.to_bits(),
+        (SqlValue::Text(a), SqlValue::Text(b)) => a == b,
+        (SqlValue::Blob(a), SqlValue::Blob(b)) => a == b,
+        (SqlValue::Null, SqlValue::Null) => true,
+        _ => false,
+    }
 }
 
 /// The affinity `CAST(x AS type_name)` gives its value.
@@ -389,7 +412,12 @@ mod tests {
         assert!(index_usable(Integer, Some(Text)));
         assert!(index_usable(Text, None));
         assert!(!index_usable(Text, Some(Integer)));
-        assert!(!index_usable(Text, Some(Text)));
+        // Two non-numeric affinities compare as BLOB: nothing converts, and
+        // `aff < SQLITE_AFF_TEXT` lets the index answer.
+        assert!(index_usable(Text, Some(Text)));
+        assert!(index_usable(Text, Some(Blob)));
+        assert!(!index_usable(Blob, Some(Integer)));
+        assert!(index_usable(Real, Some(Integer)));
         assert!(index_usable(Blob, None));
         assert!(index_usable(Blob, Some(Text)));
         assert!(!index_usable(Blob, Some(Real)));

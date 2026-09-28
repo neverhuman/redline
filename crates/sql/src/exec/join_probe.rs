@@ -36,15 +36,22 @@ pub(crate) fn probe_inner_equijoin(
     if matches!(value, SqlValue::Null) {
         return Ok(Some(Vec::new()));
     }
-    // `left.x = right.y` compares with the affinity of both operands. The
-    // index on `right.y` converts a probe by `y`'s affinity alone, so it
-    // can answer only when that is the comparison's conversion too
-    // (`sqlite3IndexAffinityOk`); otherwise the join compares row by row.
+    // `left.x = right.y` compares with the affinity of both operands
+    // (`sqlite3IndexAffinityOk` decides whether the index on `right.y` can
+    // answer). The index path converts the probe by `y`'s affinity; where
+    // the comparison converts nothing, that conversion must leave this
+    // probe as it is. Otherwise the join compares row by row.
     let Some(column) = step.right.table.columns.get(ordinal) else {
         return Ok(None);
     };
     let probe_affinity = crate::exec::expr::affinity::expr_affinity(&prefix_ctx, probe_expr);
     if !crate::exec::expr::affinity::index_usable(column.affinity, probe_affinity) {
+        return Ok(None);
+    }
+    if crate::exec::expr::affinity::CmpAffinity::between(Some(column.affinity), probe_affinity)
+        == crate::exec::expr::affinity::CmpAffinity::None
+        && !crate::exec::expr::affinity::probe_unchanged_by_index(column.affinity, &value)
+    {
         return Ok(None);
     }
     let Some(predicate) = equality_expr(&step.right.table, ordinal, &value) else {
@@ -234,3 +241,7 @@ fn strip(expr: &Expr) -> &Expr {
     }
     current
 }
+
+#[cfg(test)]
+#[path = "join_probe_tests.rs"]
+mod tests;

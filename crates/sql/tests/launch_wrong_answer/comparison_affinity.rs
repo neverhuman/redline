@@ -341,3 +341,33 @@ fn comparison_affinity_partial_index_predicate() {
         true,
     );
 }
+
+/// An equijoin read through the right table's index converts exactly as
+/// the comparison does: two TEXT columns convert nothing (and may use the
+/// index), a column without a type against a TEXT column converts nothing
+/// either, so INTEGER 5 does not meet TEXT '5' however the join runs.
+#[test]
+fn equijoin_through_an_index_keeps_the_comparison_affinity() {
+    let lab = Lab::new();
+    lab.exec_both(
+        "CREATE TABLE tt(id INTEGER PRIMARY KEY, y TEXT); CREATE INDEX tt_y ON tt(y); \
+         INSERT INTO tt VALUES (1, '5'), (2, 'abc'), (3, '7.0'), (4, '7'); \
+         CREATE TABLE tb(id INTEGER PRIMARY KEY, w); \
+         INSERT INTO tb VALUES (1, 5), (2, '5'), (3, 'abc'), (4, 7), (5, x'35'), (6, 7.0); \
+         CREATE TABLE tn(id INTEGER PRIMARY KEY, n INTEGER); CREATE INDEX tn_n ON tn(n); \
+         INSERT INTO tn VALUES (1, 5), (2, 7); \
+         CREATE TABLE t2(id INTEGER PRIMARY KEY, z TEXT); \
+         INSERT INTO t2 VALUES (1, '5'), (2, 'abc'), (3, '7.0'), (4, 'x'), (5, '7');",
+    );
+    for sql in [
+        "SELECT tb.id, tt.id FROM tb JOIN tt ON tb.w = tt.y",
+        "SELECT t2.id, tt.id FROM t2 JOIN tt ON t2.z = tt.y",
+        "SELECT t2.id, tt.id FROM t2 JOIN tt ON tt.y = t2.z",
+        "SELECT t2.id, tn.id FROM t2 JOIN tn ON t2.z = tn.n",
+        "SELECT tb.id, tn.id FROM tb JOIN tn ON tb.w = tn.n",
+        "SELECT tt.id, tb.id FROM tt JOIN tb ON tt.y = tb.w",
+        "SELECT tb.id, tt.id FROM tb JOIN tt ON tb.w = tt.y WHERE tt.y > ''",
+    ] {
+        lab.assert_same(sql, false);
+    }
+}
