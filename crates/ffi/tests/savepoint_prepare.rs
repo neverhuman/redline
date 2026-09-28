@@ -6,8 +6,19 @@ use std::ffi::CString;
 use std::os::raw::c_void;
 use std::ptr;
 
-use crate::sqlite3_api::*;
-use crate::types::*;
+use std::os::raw::c_int;
+
+use redlinedb::sqlite3_api::*;
+use redlinedb::types::{sqlite3, sqlite3_stmt};
+
+// Exported by the library as a C symbol but not re-exported for Rust.
+unsafe extern "C" {
+    fn sqlite3_get_autocommit(db: *mut sqlite3) -> c_int;
+}
+
+// The SQLite result codes this test checks (sqlite3.h).
+const RLDB_OK: c_int = 0;
+const RLDB_DONE: c_int = 101;
 
 fn open(name: &str) -> *mut sqlite3 {
     let dir = std::env::temp_dir().join(format!(

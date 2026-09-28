@@ -63,8 +63,6 @@ pub use sqlite3_api as sqlite3_compat;
 #[cfg(test)]
 mod tests;
 #[cfg(test)]
-mod tests_savepoint_prepare;
-#[cfg(test)]
 mod tests_storage_class;
 
 // ---- Public re-exports ------------------------------------------------------
