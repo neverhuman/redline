@@ -9,7 +9,7 @@ use redlinedb_sql::Step;
 
 use crate::types::*;
 use crate::util::{
-    api, flatten_code, map_error, reclaim_box, record_status_with_message, sql_result,
+    api, flatten_code, reclaim_box, record_status_with_message, sql_result, statement_error,
 };
 
 /// # Safety
@@ -52,8 +52,7 @@ pub unsafe extern "C" fn rldb_prepare_v2(
         let (stmt_opt, remainder) = match db_ref.conn.clone().prepare_v2(&sql_text) {
             Ok(pair) => pair,
             Err(err) => {
-                let msg = err.to_string();
-                let code = map_error(err);
+                let (code, msg) = statement_error(db, err);
                 record_status_with_message(db, code, &msg);
                 return Err(code);
             }
@@ -133,12 +132,12 @@ pub unsafe extern "C" fn rldb_step(stmt: *mut rldb_stmt) -> c_int {
         // Scope the udf/collation dispatcher to this connection for the
         // duration of step() so registered C callbacks can be looked up by
         // their `*mut sqlite3` connection identity.
+        crate::sqlite3_api::hooks_fire::reset_authorizer_malfunction(db);
         redlinedb_sql::udf::with_db(db as usize, || match stmt_ref.stmt.step() {
             Ok(Step::Row) => Ok(RLDB_ROW),
             Ok(Step::Done) => Ok(RLDB_DONE),
             Err(err) => {
-                let msg = err.to_string();
-                let code = map_error(err);
+                let (code, msg) = statement_error(db, err);
                 record_status_with_message(db, code, &msg);
                 Err(code)
             }
@@ -176,13 +175,13 @@ pub unsafe extern "C" fn rldb_finalize(stmt: *mut rldb_stmt) -> c_int {
             return Err(RLDB_MISUSE);
         }
         // SAFETY: matching constructor/destructor pair — `stmt` originates from
-        // Box::into_raw(boxed) at rldb_prepare_v2 (crates/ffi/src/stmt.rs:103);
+        // Box::into_raw(boxed) at rldb_prepare_v2 (crates/ffi/src/stmt.rs:102);
         // ownership invariant: the C caller may not free this pointer directly
         // per redlinedb.h:99; exclusive access because rldb_stmt is documented
         // as single-thread-owned in redlinedb.h:99; double-finalize guarded by
         // the null check above (caller must NULL stmt after rldb_finalize per
         // redlinedb.h:99); ledgered at .jankurai/unsafe-ledger.toml
-        // (file=crates/ffi/src/stmt.rs, line=188, detector=rust.unsafe.raw-parts);
+        // (file=crates/ffi/src/stmt.rs, line=187, detector=rust.unsafe.raw-parts);
         // proof: crates/ffi/tests/safety_invariants.rs::oversize_sql_is_rejected_gracefully
         // and ::parameter_index_out_of_range_returns_range.
         let boxed = unsafe { reclaim_box(stmt) }; // SAFETY: reclaim the leaked Box; matching destructor for the Box::into_raw at prepare (see invariant above).

@@ -58,6 +58,18 @@ pub(crate) fn map_error(err: SqlError) -> c_int {
     }
 }
 
+/// Return code and `sqlite3_errmsg` text for a statement that failed with
+/// `err`. A DENY caused by an authorizer returning an invalid code is
+/// reported as SQLite reports it: `SQLITE_ERROR`, "authorizer malfunction".
+pub(crate) fn statement_error(db: *mut rldb, err: SqlError) -> (c_int, String) {
+    let malfunction = crate::sqlite3_api::hooks_fire::take_authorizer_malfunction(db);
+    if malfunction && matches!(err, SqlError::NotAuthorized) {
+        return (RLDB_ERROR, "authorizer malfunction".to_owned());
+    }
+    let message = err.to_string();
+    (map_error(err), message)
+}
+
 pub(crate) fn sql_result<T>(
     result: std::result::Result<T, SqlError>,
 ) -> std::result::Result<T, c_int> {

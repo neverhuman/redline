@@ -49,6 +49,37 @@ against the v5 headers. There is no v4 compatibility alias.
 - A column whose engine-generated name contains a NUL no longer fails
   `sqlite3_prepare_v2`; the name is truncated at the NUL.
 
+## Breaking: registrations, hooks and flags fail closed
+
+- A function or collation registered on a connection is removed when the
+  connection closes. Before, the process-wide registry kept it under the
+  handle's address, so a connection opened later at the same address could
+  call the closed connection's callback with its freed `user_data`.
+  `sqlite3_collation_needed` is now per connection (it was process-wide).
+- `sqlite3_create_function_v2` destructors run exactly once: when the
+  function is replaced, when it is deleted, when the connection closes, or
+  when the registration fails. Before, they never ran. Collation
+  destructors run on replace, delete and close (not on failure, as upstream).
+- Deleting a function (every callback NULL) returns `SQLITE_OK`; it returned
+  `SQLITE_MISUSE`. Passing `xFunc` with `xStep`/`xFinal` is now
+  `SQLITE_MISUSE`; it registered a scalar.
+- `SQLITE_DIRECTONLY` and unknown `enc` bits make `sqlite3_create_function*`
+  fail with `SQLITE_ERROR`; they were accepted and ignored.
+  `SQLITE_DETERMINISTIC`, `SQLITE_INNOCUOUS`, `SQLITE_SUBTYPE` and
+  `SQLITE_RESULT_SUBTYPE` are accepted and recorded.
+- `sqlite3_create_window_function` with `xValue` or `xInverse` fails with
+  `SQLITE_ERROR`; they were silently dropped.
+- `sqlite3_trace_v2` with a callback and a non-zero mask fails with
+  `SQLITE_ERROR`; it returned `SQLITE_OK` and never called back.
+- An authorizer return code other than OK, DENY or IGNORE fails the statement
+  with `SQLITE_ERROR` "authorizer malfunction"; it was treated as OK. The
+  authorizer's database name moved from `arg4` to `arg5`, as upstream.
+- `sqlite3_blob_open` with `flags == 0` is read-only: `sqlite3_blob_write`
+  returns `SQLITE_READONLY`. It used to write.
+- `docs/security-capabilities.md` lists what the C ABI enforces, refuses and
+  does not implement yet (among them: no `SQLITE_READ` authorizer calls, no
+  trace_v2 events, trace/profile/commit hooks only from `sqlite3_exec`).
+
 ## Safety contract and panics
 
 - The caller contract for handles, pointers and input lengths, and the panic

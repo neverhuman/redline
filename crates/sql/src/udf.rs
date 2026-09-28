@@ -151,9 +151,16 @@ pub enum AuthorizerDecision {
 /// a table/column is about to be read or mutated so the FFI layer's
 /// `sqlite3_set_authorizer` callback can veto the access.
 ///
+/// Arguments follow SQLite's callback: `arg3` and `arg4` are the action's
+/// two arguments and `db_name` is the fifth (the database, "main").
 /// Returns a raw SQLite return code (0 = OK, 1 = DENY, 2 = IGNORE).
-pub type AuthorizerFn =
-    fn(db_addr: usize, action: i32, arg3: Option<&str>, arg4: Option<&str>) -> i32;
+pub type AuthorizerFn = fn(
+    db_addr: usize,
+    action: i32,
+    arg3: Option<&str>,
+    arg4: Option<&str>,
+    db_name: Option<&str>,
+) -> i32;
 
 static AUTHORIZER: OnceLock<AuthorizerFn> = OnceLock::new();
 
@@ -161,25 +168,33 @@ pub fn install_authorizer_dispatch(f: AuthorizerFn) -> bool {
     AUTHORIZER.set(f).is_ok()
 }
 
-pub fn fire_authorizer(action: i32, arg3: Option<&str>, arg4: Option<&str>) -> AuthorizerDecision {
+pub fn fire_authorizer(
+    action: i32,
+    arg3: Option<&str>,
+    arg4: Option<&str>,
+    db_name: Option<&str>,
+) -> AuthorizerDecision {
     let Some(cb) = AUTHORIZER.get() else {
         return AuthorizerDecision::Allow;
     };
-    match cb(current_db(), action, arg3, arg4) {
+    match cb(current_db(), action, arg3, arg4, db_name) {
         AUTH_OK => AuthorizerDecision::Allow,
         AUTH_DENY => AuthorizerDecision::Deny,
         AUTH_IGNORE => AuthorizerDecision::Ignore,
-        _ => AuthorizerDecision::Allow,
+        // SQLite treats any other code as an authorizer malfunction and
+        // refuses the statement; allowing it would fail open.
+        _ => AuthorizerDecision::Deny,
     }
 }
 
-/// Convenience wrapper: ask the authorizer about a table-level action.
-/// `arg3` is the table name, `arg4` is the database name (default "main").
+/// Convenience wrapper: ask the authorizer about a table-level action on
+/// `table` in "main". As SQLite does for INSERT and DELETE, `arg3` is the
+/// table, `arg4` is NULL and the database name is the fifth argument.
 /// Returns the authorizer's decision; callers translate Deny into a
 /// "not authorized" error and Ignore into substituting NULL for the
 /// accessed value.
 pub fn authorize_table_access(action: i32, table: &str) -> AuthorizerDecision {
-    fire_authorizer(action, Some(table), Some("main"))
+    fire_authorizer(action, Some(table), None, Some("main"))
 }
 
 /// Current connection address. Set per-statement by the FFI prepare path so

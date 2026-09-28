@@ -14,7 +14,7 @@ use redlinedb_sql::Statement;
 use redlinedb_sql::value::SqlValue;
 
 use crate::types::*;
-use crate::util::{caller_buffer, reclaim_box};
+use crate::util::{caller_buffer, reclaim_box, record_status};
 
 #[allow(non_camel_case_types)]
 pub struct RldbBlob {
@@ -27,6 +27,9 @@ pub struct RldbBlob {
     pub(crate) column: String,
     pub(crate) rowid: i64,
     pub(crate) cached: Mutex<Vec<u8>>,
+    /// `sqlite3_blob_open` flags were non-zero. A read-only handle refuses
+    /// writes with `SQLITE_READONLY`, as upstream.
+    pub(crate) writable: bool,
 }
 
 impl RldbBlob {
@@ -97,7 +100,7 @@ pub unsafe extern "C" fn sqlite3_blob_open(
     table: *const c_char,
     column: *const c_char,
     rowid: i64,
-    _flags: c_int,
+    flags: c_int,
     out: *mut *mut RldbBlob,
 ) -> c_int {
     if db.is_null() || table.is_null() || column.is_null() || out.is_null() {
@@ -122,6 +125,7 @@ pub unsafe extern "C" fn sqlite3_blob_open(
         column,
         rowid,
         cached: Mutex::new(Vec::new()),
+        writable: flags != 0,
     });
     let bytes = match load_cell(&handle) {
         Some(b) => b,
@@ -178,6 +182,10 @@ pub unsafe extern "C" fn sqlite3_blob_write(
     }
     // SAFETY: caller obligation — blob non-null per documented contract.
     let blob = unsafe { &*blob };
+    if !blob.writable {
+        record_status(blob.db(), RLDB_READONLY);
+        return RLDB_READONLY;
+    }
     let mut cache = blob.cached.lock().expect("blob cache poisoned");
     let start = offset as usize;
     let end = start + nbytes as usize;
@@ -209,7 +217,7 @@ pub unsafe extern "C" fn sqlite3_blob_close(blob: *mut RldbBlob) -> c_int {
     // close is prevented by the null-check above (caller MUST NULL the
     // pointer after sqlite3_blob_close); ledgered at
     // .jankurai/unsafe-ledger.toml (file=crates/ffi/src/sqlite3_api/blob.rs,
-    // line=98, detector=rust.unsafe.raw-parts); proof:
+    // line=101, detector=rust.unsafe.raw-parts); proof:
     // crates/ffi/tests/blob_io.rs::open_read_write_close_round_trip.
     let _ = unsafe { reclaim_box(blob) }; // SAFETY: reclaim and drop the leaked Box; matching destructor for Box::into_raw at sqlite3_blob_open (see invariant above).
     RLDB_OK

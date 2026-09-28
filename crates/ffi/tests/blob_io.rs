@@ -180,3 +180,63 @@ fn null_pointers_to_blob_api_return_misuse_or_noop() {
         );
     }
 }
+
+const SQLITE_READONLY: i32 = 8;
+
+// S8-05: flags == 0 opens a read-only handle, as upstream.
+#[test]
+fn readonly_blob_handle_rejects_write() {
+    let (_dir, db) = open_db();
+    exec(db, "CREATE TABLE t(id INTEGER PRIMARY KEY, b BLOB)");
+    exec(db, "INSERT INTO t(id, b) VALUES (1, x'0102')");
+    let main = CString::new("main").unwrap();
+    let table = CString::new("t").unwrap();
+    let column = CString::new("b").unwrap();
+    let open = |flags: i32| {
+        let mut blob: *mut RldbBlob = ptr::null_mut();
+        let rc = unsafe {
+            sqlite3_blob_open(
+                db,
+                main.as_ptr(),
+                table.as_ptr(),
+                column.as_ptr(),
+                1,
+                flags,
+                &mut blob,
+            )
+        };
+        assert_eq!(rc, RLDB_OK);
+        blob
+    };
+    let blob = open(0);
+    unsafe {
+        let mut buf = [0u8; 2];
+        assert_eq!(
+            sqlite3_blob_read(blob, buf.as_mut_ptr() as *mut c_void, 2, 0),
+            RLDB_OK
+        );
+        assert_eq!(buf, [1, 2]);
+        let payload = [0xEEu8];
+        let rc = sqlite3_blob_write(blob, payload.as_ptr() as *const c_void, 1, 0);
+        assert_eq!(rc, SQLITE_READONLY);
+        assert_eq!(redlinedb::rldb_errcode(db), SQLITE_READONLY);
+        // The handle's view is unchanged too.
+        assert_eq!(
+            sqlite3_blob_read(blob, buf.as_mut_ptr() as *mut c_void, 2, 0),
+            RLDB_OK
+        );
+        assert_eq!(buf, [1, 2]);
+        assert_eq!(sqlite3_blob_close(blob), RLDB_OK);
+    }
+    let blob = open(1);
+    unsafe {
+        let mut buf = [0u8; 2];
+        assert_eq!(
+            sqlite3_blob_read(blob, buf.as_mut_ptr() as *mut c_void, 2, 0),
+            RLDB_OK
+        );
+        assert_eq!(buf, [1, 2], "the read-only handle wrote nothing");
+        sqlite3_blob_close(blob);
+    }
+    unsafe { rldb_close(db) };
+}

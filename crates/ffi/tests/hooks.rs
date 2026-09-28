@@ -150,7 +150,7 @@ fn authorizer_returns_decision_code() {
     let (_dir, db) = open_db();
     AUTH_COUNT.store(0, Ordering::Relaxed);
     unsafe { sqlite3_set_authorizer(db, Some(authorizer_cb), ptr::null_mut()) };
-    let decision = __test_fire_authorizer(db, 9 /* SQLITE_SELECT */, Some("users"));
+    let decision = __test_fire_authorizer(db, 9 /* SQLITE_DELETE */, Some("users"));
     assert_eq!(decision, 1); // SQLITE_DENY
     assert_eq!(AUTH_COUNT.load(Ordering::Relaxed), 1);
     unsafe { rldb_close(db) };
@@ -263,8 +263,14 @@ fn update_hook_fires_per_row() {
 }
 
 // End-to-end: set_authorizer DENIES SELECT on a sensitive table.
-// Drives the SQL SELECT executor via rldb_exec so the planner-time
-// authorizer check is exercised.
+// Drives the SQL SELECT executor via rldb_exec so the step-time authorizer
+// check is exercised.
+//
+// This is RedlineDB's table-level contract, not SQLite's: RedlineDB asks
+// SQLITE_SELECT (21) once per base table with the table in arg3. SQLite
+// passes NULL there and asks SQLITE_READ (20) per column, which RedlineDB
+// does not do yet (docs/security-capabilities.md), so an authorizer written
+// for SQLite that only denies SQLITE_READ is never consulted.
 unsafe extern "C" fn auth_deny_sensitive(
     _: *mut c_void,
     action: c_int,
@@ -273,7 +279,7 @@ unsafe extern "C" fn auth_deny_sensitive(
     _arg5: *const c_char,
     _arg6: *const c_char,
 ) -> c_int {
-    // SQLITE_SELECT = 21. Deny SELECT on the table named "sensitive".
+    // Deny SQLITE_SELECT on the table named "sensitive".
     if action == 21 && !arg3.is_null() {
         let name = unsafe { CStr::from_ptr(arg3) }.to_string_lossy();
         if name == "sensitive" {
@@ -354,5 +360,240 @@ fn exec_walk_invokes_trace_profile_commit_hooks() {
     assert!(TRACE_COUNT.load(Ordering::Relaxed) >= 1);
     // Commit hook may fire when the COMMIT keyword is detected.
     let _ = COMMIT_COUNT.load(Ordering::Relaxed);
+    unsafe { rldb_close(db) };
+}
+
+// ---- S8-05: trace_v2 and the authorizer fail closed -----------------------
+//
+// Tests run in parallel, so each one counts through its own `user_data`.
+
+use std::os::raw::c_uint;
+use std::sync::atomic::AtomicUsize;
+
+use redlinedb::rldb_errmsg;
+use redlinedb::sqlite3_api::hooks::sqlite3_trace_v2;
+
+const SQLITE_ERROR: i32 = 1;
+const SQLITE_AUTH: i32 = 23;
+const SQLITE_TRACE_STMT: c_uint = 0x01;
+const SQLITE_TRACE_PROFILE: c_uint = 0x02;
+const SQLITE_TRACE_ROW: c_uint = 0x04;
+const SQLITE_TRACE_CLOSE: c_uint = 0x08;
+
+fn bump(user_data: *mut c_void) {
+    // SAFETY: every registration below passes a pointer to an AtomicUsize
+    // that its test keeps alive until after close.
+    let counter = unsafe { &*(user_data as *const AtomicUsize) };
+    counter.fetch_add(1, Ordering::SeqCst);
+}
+
+unsafe extern "C" fn counting_trace_v2(
+    _mask: c_uint,
+    user_data: *mut c_void,
+    _p: *mut c_void,
+    _x: *mut c_void,
+) -> c_int {
+    bump(user_data);
+    0
+}
+
+unsafe extern "C" fn counting_trace(user_data: *mut c_void, _sql: *const c_char) {
+    bump(user_data);
+}
+
+fn exec_with_errmsg(db: *mut rldb, sql: &str) -> (i32, String) {
+    let c_sql = CString::new(sql).unwrap();
+    let mut errmsg: *mut c_char = ptr::null_mut();
+    let rc =
+        unsafe { redlinedb::rldb_exec(db, c_sql.as_ptr(), None, ptr::null_mut(), &mut errmsg) };
+    let msg = if errmsg.is_null() {
+        String::new()
+    } else {
+        let msg = unsafe { CStr::from_ptr(errmsg) }
+            .to_string_lossy()
+            .into_owned();
+        unsafe { redlinedb::rldb_free(errmsg as *mut c_void) };
+        msg
+    };
+    (rc, msg)
+}
+
+#[test]
+fn trace_v2_with_callback_reports_error() {
+    let (_dir, db) = open_db();
+    let hits = AtomicUsize::new(0);
+    let user_data = &hits as *const AtomicUsize as *mut c_void;
+    for mask in [
+        SQLITE_TRACE_STMT,
+        SQLITE_TRACE_PROFILE,
+        SQLITE_TRACE_ROW,
+        SQLITE_TRACE_CLOSE,
+        SQLITE_TRACE_STMT | SQLITE_TRACE_PROFILE | SQLITE_TRACE_ROW | SQLITE_TRACE_CLOSE,
+    ] {
+        let rc = unsafe { sqlite3_trace_v2(db, mask, Some(counting_trace_v2), user_data) };
+        assert_eq!(rc, SQLITE_ERROR, "mask {mask:#x}");
+        let msg = unsafe { CStr::from_ptr(rldb_errmsg(db)) }
+            .to_string_lossy()
+            .into_owned();
+        assert_eq!(
+            msg,
+            "sqlite3_trace_v2 events are not supported by RedlineDB"
+        );
+    }
+    let (rc, _) = exec_with_errmsg(
+        db,
+        "CREATE TABLE t(x); INSERT INTO t VALUES (1); SELECT x FROM t",
+    );
+    assert_eq!(rc, RLDB_OK);
+    assert_eq!(hits.load(Ordering::SeqCst), 0);
+    unsafe { rldb_close(db) };
+}
+
+#[test]
+fn trace_v2_null_callback_ok() {
+    let (_dir, db) = open_db();
+    let hits = AtomicUsize::new(0);
+    let user_data = &hits as *const AtomicUsize as *mut c_void;
+    unsafe {
+        assert_eq!(sqlite3_trace_v2(db, 0, None, ptr::null_mut()), RLDB_OK);
+        assert_eq!(
+            sqlite3_trace_v2(db, SQLITE_TRACE_STMT, None, ptr::null_mut()),
+            RLDB_OK
+        );
+        // A zero mask disables tracing even with a callback, as upstream.
+        assert_eq!(
+            sqlite3_trace_v2(db, 0, Some(counting_trace_v2), user_data),
+            RLDB_OK
+        );
+        assert_eq!(
+            sqlite3_trace_v2(ptr::null_mut(), 0, None, ptr::null_mut()),
+            21
+        );
+    }
+    // Upstream: each sqlite3_trace_v2 call cancels an earlier sqlite3_trace.
+    let legacy = AtomicUsize::new(0);
+    unsafe {
+        sqlite3_trace(
+            db,
+            Some(counting_trace),
+            &legacy as *const AtomicUsize as *mut c_void,
+        )
+    };
+    __test_fire_trace(db, "SELECT 1");
+    assert_eq!(legacy.load(Ordering::SeqCst), 1);
+    assert_eq!(
+        unsafe { sqlite3_trace_v2(db, 0, None, ptr::null_mut()) },
+        RLDB_OK
+    );
+    __test_fire_trace(db, "SELECT 1");
+    assert_eq!(
+        legacy.load(Ordering::SeqCst),
+        1,
+        "trace_v2 cancels sqlite3_trace"
+    );
+    assert_eq!(hits.load(Ordering::SeqCst), 0);
+    unsafe { rldb_close(db) };
+}
+
+unsafe extern "C" fn auth_malfunction(
+    _: *mut c_void,
+    _action: c_int,
+    _arg3: *const c_char,
+    _arg4: *const c_char,
+    _arg5: *const c_char,
+    _arg6: *const c_char,
+) -> c_int {
+    7 // not SQLITE_OK, SQLITE_DENY or SQLITE_IGNORE
+}
+
+unsafe extern "C" fn auth_deny_all(
+    _: *mut c_void,
+    _action: c_int,
+    _arg3: *const c_char,
+    _arg4: *const c_char,
+    _arg5: *const c_char,
+    _arg6: *const c_char,
+) -> c_int {
+    1 // SQLITE_DENY
+}
+
+#[test]
+fn authorizer_invalid_return_denies() {
+    let (_dir, db) = open_db();
+    let (rc, _) = exec_with_errmsg(db, "CREATE TABLE t(x); INSERT INTO t VALUES (1)");
+    assert_eq!(rc, RLDB_OK);
+    unsafe { sqlite3_set_authorizer(db, Some(auth_malfunction), ptr::null_mut()) };
+    for sql in ["SELECT x FROM t", "INSERT INTO t VALUES (2)"] {
+        let (rc, msg) = exec_with_errmsg(db, sql);
+        assert_eq!(rc, SQLITE_ERROR, "{sql}");
+        assert_eq!(msg, "authorizer malfunction", "{sql}");
+    }
+    // The malfunction does not linger: a later DENY reports SQLITE_AUTH.
+    unsafe { sqlite3_set_authorizer(db, Some(auth_deny_all), ptr::null_mut()) };
+    let (rc, msg) = exec_with_errmsg(db, "SELECT x FROM t");
+    assert_eq!(rc, SQLITE_AUTH);
+    assert_eq!(msg, "not authorized");
+    unsafe { sqlite3_set_authorizer(db, None, ptr::null_mut()) };
+    let (rc, _) = exec_with_errmsg(db, "SELECT x FROM t");
+    assert_eq!(rc, RLDB_OK);
+    unsafe { rldb_close(db) };
+}
+
+type AuthCall = (
+    c_int,
+    Option<String>,
+    Option<String>,
+    Option<String>,
+    Option<String>,
+);
+
+unsafe extern "C" fn auth_record(
+    user_data: *mut c_void,
+    action: c_int,
+    arg3: *const c_char,
+    arg4: *const c_char,
+    arg5: *const c_char,
+    arg6: *const c_char,
+) -> c_int {
+    let text = |p: *const c_char| {
+        (!p.is_null()).then(|| unsafe { CStr::from_ptr(p) }.to_string_lossy().into_owned())
+    };
+    // SAFETY: the test passes a pointer to a Mutex it keeps alive.
+    let calls = unsafe { &*(user_data as *const std::sync::Mutex<Vec<AuthCall>>) };
+    calls
+        .lock()
+        .unwrap()
+        .push((action, text(arg3), text(arg4), text(arg5), text(arg6)));
+    0
+}
+
+#[test]
+fn authorizer_db_name_in_arg5() {
+    let (_dir, db) = open_db();
+    let (rc, _) = exec_with_errmsg(db, "CREATE TABLE t(x)");
+    assert_eq!(rc, RLDB_OK);
+    let calls: std::sync::Mutex<Vec<AuthCall>> = std::sync::Mutex::new(Vec::new());
+    let user_data = &calls as *const std::sync::Mutex<Vec<AuthCall>> as *mut c_void;
+    unsafe { sqlite3_set_authorizer(db, Some(auth_record), user_data) };
+    let (rc, _) = exec_with_errmsg(db, "INSERT INTO t VALUES (1)");
+    assert_eq!(rc, RLDB_OK);
+    unsafe { sqlite3_set_authorizer(db, None, ptr::null_mut()) };
+    let calls = calls.into_inner().unwrap();
+    let insert = calls
+        .iter()
+        .find(|call| call.0 == 18 /* SQLITE_INSERT */)
+        .unwrap_or_else(|| panic!("no SQLITE_INSERT call in {calls:?}"));
+    // Upstream SQLITE_INSERT: arg3 = table, arg4 = NULL, arg5 = database,
+    // arg6 = innermost trigger or view (NULL here).
+    assert_eq!(
+        insert,
+        &(
+            18,
+            Some("t".to_owned()),
+            None,
+            Some("main".to_owned()),
+            None
+        )
+    );
     unsafe { rldb_close(db) };
 }

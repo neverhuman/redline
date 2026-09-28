@@ -148,3 +148,273 @@ fn null_db_to_create_collation_returns_misuse() {
     };
     assert_eq!(rc, 21); // RLDB_MISUSE
 }
+
+// ---- S8-04: a collation belongs to its connection -------------------------
+//
+// Tests run in parallel, so every destructor counter is the test's own
+// `AtomicUsize`, passed as `user_data` and kept alive until after close.
+
+use std::sync::atomic::{AtomicUsize, Ordering};
+
+use redlinedb::sqlite3_api::collation::__test_invoke_needed;
+
+const SQLITE_OK: c_int = 0;
+const SQLITE_MISUSE: c_int = 21;
+const SQLITE_UTF8: c_int = 1;
+
+unsafe extern "C" fn count_destroy(user_data: *mut c_void) {
+    // SAFETY: every registration below passes a pointer to an AtomicUsize
+    // that its test keeps alive until after the connection is closed.
+    let counter = unsafe { &*(user_data as *const AtomicUsize) };
+    counter.fetch_add(1, Ordering::SeqCst);
+}
+
+unsafe extern "C" fn count_needed(
+    user_data: *mut c_void,
+    _db: *mut rldb,
+    _encoding: c_int,
+    _name: *const std::os::raw::c_char,
+) {
+    // SAFETY: the test passes a pointer to an AtomicUsize it keeps alive.
+    let counter = unsafe { &*(user_data as *const AtomicUsize) };
+    counter.fetch_add(1, Ordering::SeqCst);
+}
+
+fn counter() -> Box<AtomicUsize> {
+    Box::new(AtomicUsize::new(0))
+}
+
+fn user_data(counter: &AtomicUsize) -> *mut c_void {
+    counter as *const AtomicUsize as *mut c_void
+}
+
+fn count(counter: &AtomicUsize) -> usize {
+    counter.load(Ordering::SeqCst)
+}
+
+fn open_memory() -> *mut rldb {
+    let mut db: *mut rldb = ptr::null_mut();
+    let rc = unsafe { rldb_open(c":memory:".as_ptr(), &mut db) };
+    assert_eq!(rc, SQLITE_OK);
+    db
+}
+
+fn close(db: *mut rldb) {
+    assert_eq!(unsafe { rldb_close(db) }, SQLITE_OK);
+}
+
+/// Register `reverse_nocase` as `name` with a counting destructor.
+fn register(db: *mut rldb, name: &str, counter: &AtomicUsize) -> c_int {
+    let name = CString::new(name).unwrap();
+    unsafe {
+        sqlite3_create_collation_v2(
+            db,
+            name.as_ptr(),
+            SQLITE_UTF8,
+            user_data(counter),
+            Some(reverse_nocase),
+            Some(count_destroy),
+        )
+    }
+}
+
+fn unregister(db: *mut rldb, name: &str) -> c_int {
+    let name = CString::new(name).unwrap();
+    unsafe {
+        sqlite3_create_collation_v2(db, name.as_ptr(), SQLITE_UTF8, ptr::null_mut(), None, None)
+    }
+}
+
+fn seed(db: *mut rldb) {
+    exec(db, "CREATE TABLE fruit(s TEXT)");
+    exec(
+        db,
+        "INSERT INTO fruit VALUES ('apple'), ('Banana'), ('cherry')",
+    );
+}
+
+/// `ORDER BY s COLLATE <name>` over the seeded rows: the ordered values, or
+/// the failing return code.
+fn ordered_by(db: *mut rldb, collation: &str) -> Result<Vec<String>, c_int> {
+    let collected: std::sync::Mutex<Vec<String>> = std::sync::Mutex::new(Vec::new());
+    extern "C" fn cb(
+        ctx: *mut c_void,
+        _ncol: c_int,
+        argv: *mut *mut std::os::raw::c_char,
+        _argn: *mut *mut std::os::raw::c_char,
+    ) -> c_int {
+        let value = unsafe { std::ffi::CStr::from_ptr(*argv) }
+            .to_string_lossy()
+            .into_owned();
+        let collected = unsafe { &*(ctx as *const std::sync::Mutex<Vec<String>>) };
+        collected.lock().unwrap().push(value);
+        0
+    }
+    let sql = CString::new(format!(
+        "SELECT s FROM fruit ORDER BY s COLLATE {collation}"
+    ))
+    .unwrap();
+    let ctx = &collected as *const std::sync::Mutex<Vec<String>> as *mut c_void;
+    let rc = unsafe { rldb_exec(db, sql.as_ptr(), Some(cb), ctx, ptr::null_mut()) };
+    if rc != SQLITE_OK {
+        return Err(rc);
+    }
+    Ok(collected.into_inner().unwrap())
+}
+
+const REVERSED: [&str; 3] = ["cherry", "Banana", "apple"];
+
+#[test]
+fn collation_destructor_runs_once_on_replace() {
+    let (_dir, db) = open_db();
+    seed(db);
+    let first = counter();
+    let second = counter();
+    assert_eq!(register(db, "REV_A", &first), SQLITE_OK);
+    assert_eq!(register(db, "rev_a", &second), SQLITE_OK);
+    assert_eq!((count(&first), count(&second)), (1, 0));
+    assert_eq!(ordered_by(db, "REV_A").unwrap(), REVERSED);
+    close(db);
+    assert_eq!((count(&first), count(&second)), (1, 1));
+}
+
+#[test]
+fn collation_destructor_runs_on_close() {
+    let (_dir, db) = open_db();
+    let destroyed = counter();
+    assert_eq!(register(db, "REV_CLOSE", &destroyed), SQLITE_OK);
+    assert_eq!(count(&destroyed), 0);
+    close(db);
+    assert_eq!(count(&destroyed), 1);
+}
+
+#[test]
+fn collation_null_compare_unregisters_and_destroys() {
+    let (_dir, db) = open_db();
+    seed(db);
+    let destroyed = counter();
+    assert_eq!(register(db, "REV_GONE", &destroyed), SQLITE_OK);
+    assert_eq!(ordered_by(db, "REV_GONE").unwrap(), REVERSED);
+    assert_eq!(unregister(db, "REV_GONE"), SQLITE_OK);
+    assert_eq!(count(&destroyed), 1);
+    assert!(ordered_by(db, "REV_GONE").is_err(), "the collation is gone");
+    close(db);
+    assert_eq!(count(&destroyed), 1);
+}
+
+#[test]
+fn collation_failed_registration_does_not_invoke_destructor() {
+    // Unlike every other SQLite interface, sqlite3_create_collation_v2 does
+    // not call xDestroy when it fails: the caller keeps ownership.
+    let (_dir, db) = open_db();
+    let destroyed = counter();
+    let invalid_utf8 = [0xFFu8, 0xFE, 0x00];
+    let rc = unsafe {
+        sqlite3_create_collation_v2(
+            db,
+            invalid_utf8.as_ptr().cast(),
+            SQLITE_UTF8,
+            user_data(&destroyed),
+            Some(reverse_nocase),
+            Some(count_destroy),
+        )
+    };
+    assert_eq!(rc, SQLITE_MISUSE);
+    let rc = unsafe {
+        sqlite3_create_collation_v2(
+            db,
+            ptr::null(),
+            SQLITE_UTF8,
+            user_data(&destroyed),
+            Some(reverse_nocase),
+            Some(count_destroy),
+        )
+    };
+    assert_eq!(rc, SQLITE_MISUSE);
+    close(db);
+    assert_eq!(count(&destroyed), 0);
+}
+
+#[test]
+fn closed_connection_collation_not_inherited_by_reused_address() {
+    // A handle's address is the registry key, and the allocator hands a
+    // freed handle's address to a later open. Closing a batch and opening
+    // another reuses one in about half the rounds on glibc.
+    let mut reused = false;
+    for _ in 0..64 {
+        let destroyed = counter();
+        let closed: Vec<usize> = (0..8)
+            .map(|_| {
+                let db = open_memory();
+                assert_eq!(register(db, "REV_SENTINEL", &destroyed), SQLITE_OK);
+                db as usize
+            })
+            .collect();
+        for &db in &closed {
+            close(db as *mut rldb);
+        }
+        assert_eq!(
+            count(&destroyed),
+            8,
+            "close destroys the connection's collations"
+        );
+        let opened: Vec<*mut rldb> = (0..8).map(|_| open_memory()).collect();
+        for &db in &opened {
+            if closed.contains(&(db as usize)) {
+                reused = true;
+                seed(db);
+                assert!(
+                    ordered_by(db, "REV_SENTINEL").is_err(),
+                    "a new connection at a reused address inherited a closed connection's collation"
+                );
+            }
+        }
+        opened.into_iter().for_each(close);
+        if reused {
+            break;
+        }
+    }
+    if !reused {
+        eprintln!("note: the allocator did not reuse a handle address in 64 rounds");
+    }
+}
+
+#[test]
+fn two_live_connections_collations_isolated() {
+    let (_dir_a, a) = open_db();
+    let (_dir_b, b) = open_db();
+    seed(b);
+    let on_a = counter();
+    let on_b = counter();
+    assert_eq!(register(a, "REV_ISO", &on_a), SQLITE_OK);
+    assert!(
+        ordered_by(b, "REV_ISO").is_err(),
+        "b must not see a's collation"
+    );
+    assert_eq!(register(b, "REV_ISO", &on_b), SQLITE_OK);
+    assert_eq!((count(&on_a), count(&on_b)), (0, 0));
+    close(a);
+    assert_eq!((count(&on_a), count(&on_b)), (1, 0));
+    assert_eq!(ordered_by(b, "REV_ISO").unwrap(), REVERSED);
+    close(b);
+    assert_eq!((count(&on_a), count(&on_b)), (1, 1));
+}
+
+#[test]
+fn collation_needed_is_per_connection() {
+    let (_dir_a, a) = open_db();
+    let (_dir_b, b) = open_db();
+    let hits = counter();
+    let rc = unsafe { sqlite3_collation_needed(a, user_data(&hits), Some(count_needed)) };
+    assert_eq!(rc, SQLITE_OK);
+    __test_invoke_needed(b, "FOO");
+    assert_eq!(
+        count(&hits),
+        0,
+        "b must not call a's collation-needed callback"
+    );
+    __test_invoke_needed(a, "FOO");
+    assert_eq!(count(&hits), 1);
+    close(a);
+    close(b);
+}

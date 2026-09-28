@@ -8,7 +8,7 @@ use redlinedb_sql::Step;
 
 use crate::types::*;
 use crate::util::{
-    api, exec_value, flatten_code, map_error, record_status_with_message, set_errmsg,
+    api, exec_value, flatten_code, record_status_with_message, set_errmsg, statement_error,
 };
 
 /// # Safety
@@ -74,6 +74,7 @@ fn rldb_exec_inner(
     loop {
         // Fire trace hook before preparing each statement.
         crate::sqlite3_api::hooks_fire::fire_trace(db, rest);
+        crate::sqlite3_api::hooks_fire::reset_authorizer_malfunction(db);
         let start = std::time::Instant::now();
         let (stmt_opt, tail) = prepare_statement(db_ref, rest, errmsg, db)?;
         // Capture the head we just consumed so the commit/rollback hook
@@ -106,8 +107,7 @@ fn prepare_statement<'a>(
     db: *mut crate::types::rldb,
 ) -> Result<(Option<redlinedb_sql::Statement>, &'a str), c_int> {
     db_ref.conn.clone().prepare_v2(sql).map_err(|err| {
-        let msg = err.to_string();
-        let code = map_error(err);
+        let (code, msg) = statement_error(db, err);
         // SAFETY: set_errmsg's documented contract null-checks internally;
         // non-null writes transfer ownership to the caller (paired with
         // rldb_free / sqlite3_free).
@@ -127,8 +127,7 @@ fn run_statement_to_completion(
             Ok(Step::Done) => return Ok(()),
             Ok(Step::Row) => continue,
             Err(err) => {
-                let msg = err.to_string();
-                let code = map_error(err);
+                let (code, msg) = statement_error(db, err);
                 // SAFETY: set_errmsg's documented contract null-checks
                 // internally; non-null writes transfer ownership to the
                 // caller (paired with rldb_free / sqlite3_free).
@@ -152,8 +151,7 @@ fn run_statement_with_callback(
             Ok(Step::Row) => invoke_exec_callback(stmt, callback, ctx, errmsg)?,
             Ok(Step::Done) => return Ok(()),
             Err(err) => {
-                let msg = err.to_string();
-                let code = map_error(err);
+                let (code, msg) = statement_error(db, err);
                 // SAFETY: set_errmsg's documented contract null-checks
                 // internally; non-null writes transfer ownership to the
                 // caller (paired with rldb_free / sqlite3_free).

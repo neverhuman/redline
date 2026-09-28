@@ -92,6 +92,47 @@ There is no v4 compatibility alias.
   build with URI handling off. Backup into an in-memory destination fails
   with `SQLITE_CANTOPEN`.
 
+## ABI v5 registration, hook and blob contracts
+
+These change behaviour behind declarations the header already has; no
+signature changes. `docs/security-capabilities.md` has the full list of what
+is enforced, refused and not implemented.
+
+- A function or collation registration belongs to its connection.
+  `rldb_close`/`sqlite3_close` removes the connection's registrations before
+  freeing the handle, so a connection that later gets the same address starts
+  with none. `sqlite3_collation_needed` is per connection.
+- `sqlite3_create_function_v2` owns `user_data` once `db` is valid:
+  `destroy(user_data)` runs exactly once, on failure, on replacement, on
+  deletion (every callback NULL, now `SQLITE_OK`; v4 returned `SQLITE_MISUSE`)
+  or at close. xFunc together with xStep/xFinal, or only one of xStep/xFinal,
+  is `SQLITE_MISUSE` (v4 registered a scalar). Collations release `user_data`
+  on replace, delete and close; as upstream, a failed
+  `sqlite3_create_collation_v2` does not call `destroy`.
+- The `enc` argument is checked. The text encoding may be 0 (UTF-8, as
+  upstream) through 5; `SQLITE_DETERMINISTIC` (0x800), `SQLITE_INNOCUOUS`
+  (0x200000), `SQLITE_SUBTYPE` (0x100000) and `SQLITE_RESULT_SUBTYPE`
+  (0x1000000) are recorded. `SQLITE_DIRECTONLY` (0x80000) fails with
+  `SQLITE_ERROR` "SQLITE_DIRECTONLY is not enforced by RedlineDB"; any other
+  bit fails with "unsupported sqlite3_create_function flags". The legacy
+  `sqlite3_create_function` now passes `enc` through (v4 passed 0).
+- `sqlite3_create_window_function` with a non-NULL `xValue` or `xInverse`
+  fails with `SQLITE_ERROR` (v4 registered the aggregate and dropped them).
+- `sqlite3_trace_v2` with a callback and a non-zero mask fails with
+  `SQLITE_ERROR` "sqlite3_trace_v2 events are not supported by RedlineDB"
+  (v4 returned `SQLITE_OK` and never called it). A NULL callback or zero mask
+  returns `SQLITE_OK` and cancels a `sqlite3_trace` callback.
+- The authorizer receives the database name in `arg5` (v4 passed it in
+  `arg4`); for table actions `arg3` is the table and `arg4` is NULL. A return
+  value other than `SQLITE_OK`, `SQLITE_DENY` or `SQLITE_IGNORE` fails the
+  statement with `SQLITE_ERROR` "authorizer malfunction" (v4 allowed it).
+- `sqlite3_blob_open` with `flags == 0` gives a read-only handle;
+  `sqlite3_blob_write` on it returns `SQLITE_READONLY` (v4 wrote).
+- The header does not yet define `SQLITE_UTF8`, the function flags,
+  `SQLITE_AUTH`, `SQLITE_DENY`/`SQLITE_IGNORE` or the authorizer action codes,
+  and does not declare `sqlite3_trace_v2` or `sqlite3_create_window_function`;
+  callers use upstream's values, which RedlineDB matches.
+
 ## Library naming
 
 `RLDB_ABI_MAJOR` in `contracts/c-abi/redlinedb.h` is the single source of the

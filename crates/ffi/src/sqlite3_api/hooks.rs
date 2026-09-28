@@ -10,8 +10,11 @@
 use std::ffi::c_void;
 use std::os::raw::{c_char, c_int, c_uint};
 use std::sync::Mutex;
+use std::sync::atomic::{AtomicBool, Ordering};
 
+use super::collation::CollationNeededFn;
 use crate::types::*;
+use crate::util::record_status_with_message;
 
 pub type CommitHookFn = unsafe extern "C" fn(user_data: *mut c_void) -> c_int;
 pub type RollbackHookFn = unsafe extern "C" fn(user_data: *mut c_void);
@@ -53,6 +56,12 @@ pub struct HookSlots {
     pub profile: Mutex<Option<(ProfileFn, usize)>>,
     pub busy: Mutex<Option<(BusyHandlerFn, usize)>>,
     pub authorizer: Mutex<Option<(AuthorizerFn, usize)>>,
+    /// `sqlite3_collation_needed`, which upstream scopes to the connection.
+    pub collation_needed: Mutex<Option<(CollationNeededFn, usize)>>,
+    /// Set when the authorizer returned a code other than OK, DENY or
+    /// IGNORE during the current statement. The statement fails as denied,
+    /// and this turns its error into SQLite's "authorizer malfunction".
+    pub authorizer_malfunction: AtomicBool,
 }
 
 impl Default for HookSlots {
@@ -65,6 +74,8 @@ impl Default for HookSlots {
             profile: Mutex::new(None),
             busy: Mutex::new(None),
             authorizer: Mutex::new(None),
+            collation_needed: Mutex::new(None),
+            authorizer_malfunction: AtomicBool::new(false),
         }
     }
 }
@@ -157,18 +168,33 @@ pub unsafe extern "C" fn sqlite3_profile(
     swap_slot(db, |h| &h.profile, cb, user_data)
 }
 
+/// RedlineDB never delivers `sqlite3_trace_v2` events (STMT, PROFILE, ROW or
+/// CLOSE), so installing a callback for any of them fails with
+/// `SQLITE_ERROR` rather than reporting success for events that never
+/// arrive; nothing changes. A NULL callback or a zero mask turns tracing off
+/// and, as upstream, also cancels a `sqlite3_trace` callback.
+///
 /// # Safety
 /// `db` non-NULL valid sqlite3*; `cb` either NULL or valid C function pointer.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn sqlite3_trace_v2(
     db: *mut rldb,
-    _mask: c_uint,
-    _cb: Option<TraceV2Fn>,
+    mask: c_uint,
+    cb: Option<TraceV2Fn>,
     _user_data: *mut c_void,
 ) -> c_int {
-    if validate_db(db).is_none() {
+    let Some(handle) = validate_db(db) else {
         return RLDB_MISUSE;
+    };
+    if cb.is_some() && mask != 0 {
+        record_status_with_message(
+            db,
+            RLDB_ERROR,
+            "sqlite3_trace_v2 events are not supported by RedlineDB",
+        );
+        return RLDB_ERROR;
     }
+    *handle.hooks.trace.lock().expect("trace hook poisoned") = None;
     RLDB_OK
 }
 
@@ -204,5 +230,9 @@ pub unsafe extern "C" fn sqlite3_set_authorizer(
     super::hooks_fire::ensure_sql_dispatchers_installed();
     let mut slot = handle.hooks.authorizer.lock().expect("authorizer poisoned");
     *slot = cb.map(|f| (f, user_data as usize));
+    handle
+        .hooks
+        .authorizer_malfunction
+        .store(false, Ordering::Relaxed);
     RLDB_OK
 }

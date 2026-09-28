@@ -5,6 +5,7 @@
 use std::ffi::CString;
 use std::os::raw::{c_int, c_void};
 use std::sync::Once;
+use std::sync::atomic::Ordering;
 
 use redlinedb_sql::udf as sql_udf;
 
@@ -25,8 +26,14 @@ fn mutation_from_sql(db_addr: usize, op: i32, table: &str, rowid: i64) {
     fire_update(db_addr as *mut rldb, op, table, rowid);
 }
 
-fn authorizer_from_sql(db_addr: usize, action: i32, arg3: Option<&str>, arg4: Option<&str>) -> i32 {
-    fire_authorizer(db_addr as *mut rldb, action, arg3, arg4)
+fn authorizer_from_sql(
+    db_addr: usize,
+    action: i32,
+    arg3: Option<&str>,
+    arg4: Option<&str>,
+    db_name: Option<&str>,
+) -> i32 {
+    fire_authorizer(db_addr as *mut rldb, action, arg3, arg4, db_name)
 }
 
 pub(crate) enum CommitDecision {
@@ -130,14 +137,19 @@ pub(crate) fn fire_update(db: *mut rldb, op: c_int, table: &str, rowid: i64) {
     }
 }
 
-/// Consult the authorizer for an access decision.
+/// Consult the authorizer for an access decision. `arg3`/`arg4` are the
+/// action's arguments and `db_name` is SQLite's fifth callback argument
+/// (the database, "main"); the sixth (trigger or view) is always NULL.
 ///
-/// Returns one of `SQLITE_OK (0)`, `SQLITE_DENY (1)`, `SQLITE_IGNORE (2)`.
+/// Returns the callback's code. SQLite accepts only `SQLITE_OK (0)`,
+/// `SQLITE_DENY (1)` and `SQLITE_IGNORE (2)`; any other code is recorded as a
+/// malfunction here and treated as DENY by the SQL layer.
 pub(crate) fn fire_authorizer(
     db: *mut rldb,
     action: c_int,
     arg3: Option<&str>,
     arg4: Option<&str>,
+    db_name: Option<&str>,
 ) -> c_int {
     let Some(handle) = validate_db(db) else {
         return 0;
@@ -147,22 +159,50 @@ pub(crate) fn fire_authorizer(
         return 0;
     };
     let user_data = user_data_addr as *mut c_void;
-    let a3 = arg3.and_then(|s| CString::new(s).ok());
-    let a4 = arg4.and_then(|s| CString::new(s).ok());
-    let a3p = a3.as_ref().map(|c| c.as_ptr()).unwrap_or(std::ptr::null());
-    let a4p = a4.as_ref().map(|c| c.as_ptr()).unwrap_or(std::ptr::null());
+    let c_arg = |arg: Option<&str>| arg.and_then(|s| CString::new(s).ok());
+    let (a3, a4, a5) = (c_arg(arg3), c_arg(arg4), c_arg(db_name));
+    let ptr = |c: &Option<CString>| c.as_ref().map(|c| c.as_ptr()).unwrap_or(std::ptr::null());
     // SAFETY: cb signature matches the documented C ABI; CStrings live for
     // the duration of the call.
-    unsafe {
+    let rc = unsafe {
         cb(
             user_data,
             action,
-            a3p,
-            a4p,
-            std::ptr::null(),
+            ptr(&a3),
+            ptr(&a4),
+            ptr(&a5),
             std::ptr::null(),
         )
+    };
+    if !(0..=2).contains(&rc) {
+        handle
+            .hooks
+            .authorizer_malfunction
+            .store(true, Ordering::Relaxed);
     }
+    rc
+}
+
+/// Forget an authorizer malfunction left by an earlier statement. Called
+/// before each statement runs.
+pub(crate) fn reset_authorizer_malfunction(db: *mut rldb) {
+    if let Some(handle) = validate_db(db) {
+        handle
+            .hooks
+            .authorizer_malfunction
+            .store(false, Ordering::Relaxed);
+    }
+}
+
+/// True (once) when the authorizer returned an invalid code since the last
+/// reset, so the statement's "not authorized" error is a malfunction.
+pub(crate) fn take_authorizer_malfunction(db: *mut rldb) -> bool {
+    validate_db(db).is_some_and(|handle| {
+        handle
+            .hooks
+            .authorizer_malfunction
+            .swap(false, Ordering::Relaxed)
+    })
 }
 
 /// Consult the busy handler for retry decisions. Returns true to retry,
@@ -211,7 +251,7 @@ pub fn __test_fire_profile(db: *mut rldb, sql: &str, nanos: u64) {
 
 #[doc(hidden)]
 pub fn __test_fire_authorizer(db: *mut rldb, action: c_int, table: Option<&str>) -> c_int {
-    fire_authorizer(db, action, table, None)
+    fire_authorizer(db, action, table, None, Some("main"))
 }
 
 #[doc(hidden)]

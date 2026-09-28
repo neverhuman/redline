@@ -82,14 +82,18 @@ pub unsafe extern "C" fn rldb_close(db: *mut rldb) -> c_int {
         if db_ref.active_statements.load(Ordering::Relaxed) != 0 {
             return Err(RLDB_BUSY);
         }
+        // Release what this connection's functions and collations own. The
+        // registries are keyed by handle address, which a later open reuses.
+        crate::sqlite3_api::udf::purge_connection(db as usize);
+        crate::sqlite3_api::collation::purge_connection(db as usize);
         // SAFETY: matching constructor/destructor pair — `db` originates from
-        // Box::into_raw(handle) at open_handle (crates/ffi/src/util.rs:133);
+        // Box::into_raw(handle) at open_handle (crates/ffi/src/util.rs:145);
         // ownership invariant: only rldb_close / rldb_close_v2 consume it
         // (caller never frees directly per redlinedb.h:87); exclusive access
         // upheld by the active_statements==0 check above; double-close guarded
         // by the null check above (caller must NULL the handle after close);
         // ledgered at .jankurai/unsafe-ledger.toml (file=crates/ffi/src/lifecycle.rs,
-        // line=94, detector=rust.unsafe.raw-parts); proof:
+        // line=98, detector=rust.unsafe.raw-parts); proof:
         // crates/ffi/tests/safety_invariants.rs::double_close_via_null_after_close_is_safe.
         unsafe {
             // SAFETY: reclaim and drop the leaked Box; matching destructor for

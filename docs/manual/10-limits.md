@@ -14,7 +14,7 @@ The committed official summary is 2445 passes, 0 failures, and 0 skips out of 24
 
 The median case in that latency report was slower than SQLite. 361 cases were faster. Quote both if you quote either.
 
-The C ABI uses `sqlite3_*` names for the calls it implements. A symbol existing is not a promise that every SQLite C flag and every SQLite authorizer hook exists. Read `crates/ffi` and `docs/boundaries.md` for the surface you are linking.
+The C ABI uses `sqlite3_*` names for the calls it implements. A symbol existing is not a promise that every SQLite C flag and every SQLite authorizer hook exists. `docs/security-capabilities.md` lists which hooks and flags are enforced, which are refused with an error, and which are not implemented; read it before relying on the authorizer, `sqlite3_trace_v2` or function flags. Read `crates/ffi` and `docs/boundaries.md` for the surface you are linking.
 
 ## Postgres
 

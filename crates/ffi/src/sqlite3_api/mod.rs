@@ -21,6 +21,7 @@ mod meta;
 pub mod result;
 mod stmt;
 pub mod udf;
+mod user_data;
 pub mod value;
 
 pub use bind::*;
