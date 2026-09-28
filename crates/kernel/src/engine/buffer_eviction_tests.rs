@@ -679,9 +679,9 @@ fn buffer_eviction_never_tears_an_uncommitted_index_split() {
 
 #[test]
 fn buffer_eviction_fails_closed_unless_pressure_checkpoints_are_enabled() {
-    // A checkpoint skips a page another writer changes while it runs, yet
-    // records an LSN past that page's committed rows, so the engine does not
-    // start one under memory pressure on its own. A pool of dirty pages then
+    // The kernel starts a checkpoint under memory pressure only when its
+    // caller enables that; the SQL layer does for every persistent database
+    // it opens to the end of its WAL. Without it a pool of dirty pages
     // refuses the allocation, as it did on c1af369.
     let temp = TempDir::new().unwrap();
     let engine = Engine::create(temp.path(), config(CommitDurability::Normal, SMALL_POOL)).unwrap();

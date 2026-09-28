@@ -114,6 +114,9 @@ struct FrameEntry {
     ready: Condvar,
 }
 
+/// Checkpoints one allocation may ask for before it fails.
+const PRESSURE_RELIEF_ROUNDS: usize = 8;
+
 /// Clock hand ceiling. `pin` saturates here; `evict_one` must be allowed
 /// this many decays plus one zero-usage visit.
 const CLOCK_MAX_USAGE: u8 = 5;
@@ -691,7 +694,7 @@ impl Inner {
         if self.resident.load(Ordering::Relaxed) < self.capacity {
             return Ok(());
         }
-        let mut relieved = false;
+        let mut reliefs = 0_usize;
         loop {
             {
                 let _eviction = self
@@ -709,13 +712,15 @@ impl Inner {
             }
             // A full clock pass locked every resident frame, so this thread
             // holds none of them, and the eviction mutex is released: the
-            // checkpoint below flushes frames and waits on that mutex.
-            if relieved || !self.relieve_pressure()? {
+            // checkpoint below flushes frames and waits on that mutex. Other
+            // writers can dirty the frames a checkpoint cleaned before this
+            // thread's next pass reaches them, so ask again, a few times.
+            if reliefs == PRESSURE_RELIEF_ROUNDS || !self.relieve_pressure()? {
                 return Err(Error::CorruptPage(
                     "no unpinned frame available for eviction",
                 ));
             }
-            relieved = true;
+            reliefs += 1;
         }
     }
 

@@ -17,6 +17,8 @@ mod directory_load_tests;
 #[cfg(test)]
 mod integrity_hole_tests;
 mod maintenance;
+#[cfg(test)]
+mod pressure_checkpoint_tests;
 mod recovery;
 mod runtime;
 #[cfg(test)]

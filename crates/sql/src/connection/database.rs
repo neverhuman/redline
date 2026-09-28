@@ -148,7 +148,11 @@ impl Database {
         let engine = if private_memory {
             Engine::create_volatile(base, opts.engine)?
         } else {
-            Engine::create(base, opts.engine)?
+            let engine = Engine::create(base, opts.engine)?;
+            // A pool full of dirty logged pages makes room through a
+            // checkpoint rather than failing the write.
+            engine.enable_pool_pressure_checkpoints()?;
+            engine
         };
         // A6-b: Only initialise user_version for *fresh* databases.  The
         // old code called save_user_version(0) unconditionally, which
@@ -206,6 +210,8 @@ impl Database {
         let metadata_sync_policy =
             MetadataSyncPolicy::from_commit_durability(opts.engine.commit_durability);
         let engine = Engine::open(base, opts.engine)?;
+        // Opened to the end of its WAL, so a checkpoint may record it.
+        engine.enable_pool_pressure_checkpoints()?;
         let user_version = load_user_version(base)?;
         let stats_store = StatsStore::new(base);
         let stats = match stats_store.load()? {

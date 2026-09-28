@@ -1,7 +1,7 @@
 //! Inspection, checkpoint, statistics, vacuum, and integrity entrypoints.
 
 use std::collections::HashMap;
-use std::sync::Arc;
+use std::sync::{Arc, MutexGuard};
 
 use crate::catalog::IndexId as CatalogIndexId;
 use crate::engine::page_heap::{HeapScanRow, PageBackedHeap, ParallelScanDiagnostics, VacuumStats};
@@ -237,10 +237,15 @@ impl Engine {
         }
         // Serialize from the start: a checkpoint that chose its LSNs later
         // must not publish before one that chose them earlier.
-        let _serial = self
+        let serial = self
             .checkpoint_serial
             .lock()
             .map_err(|_| Error::CorruptPage("checkpoint serial mutex poisoned"))?;
+        self.checkpoint_serialized(&serial)
+    }
+
+    /// The checkpoint itself; the caller holds `checkpoint_serial`.
+    fn checkpoint_serialized(&self, _serial: &MutexGuard<'_, ()>) -> Result<CheckpointStats> {
         let durable_lsn = self.wal.flush_all()?;
         // Do not record a checkpoint past a WAL record whose page image is
         // still unpublished. Recovery would skip that record.
@@ -306,16 +311,12 @@ impl Engine {
     /// a dirty page it may not write on its own, instead of failing the
     /// allocation with "no unpinned frame available for eviction".
     ///
-    /// Off by default, and safe only while one thread writes. A checkpoint
-    /// does not yet take a complete cut (workplan R5): it skips a page that
-    /// another writer changes between its WAL flush and its page flush, yet
-    /// records an LSN past that page's earlier committed changes and prunes
-    /// the WAL below it. A crash, or closing without a later checkpoint that
-    /// writes the page, then loses those changes. Checkpoints the caller
-    /// runs itself share that limit; this only makes them automatic under
-    /// memory pressure. Use it only on an engine opened to the end of its
-    /// WAL: a checkpoint after recovery to an earlier target records the WAL
-    /// end. A volatile engine has nothing to checkpoint and ignores it.
+    /// Safe with any number of writers: a checkpoint writes every dirty page
+    /// as one complete cut (workplan R5). The SQL layer turns it on for every
+    /// persistent database it opens to the end of its WAL. Use it only on
+    /// such an engine: a checkpoint after recovery to an earlier target
+    /// records the WAL end. A volatile engine evicts to its scratch file
+    /// instead and ignores this. Idempotent.
     pub fn enable_pool_pressure_checkpoints(self: &Arc<Self>) -> Result<()> {
         if self.volatile {
             return Ok(());
@@ -405,7 +406,18 @@ impl PagePressureRelief for Engine {
         if self.volatile {
             return Ok(false);
         }
-        self.checkpoint_with_stats().map(|_| true)
+        // Many writers can run out of frames at once. One checkpoint cleans
+        // every page that was dirty when it started, so a writer that waited
+        // for another thread's checkpoint takes none of its own.
+        let seen = self.checkpoint_info()?.map(|control| control.generation);
+        let serial = self
+            .checkpoint_serial
+            .lock()
+            .map_err(|_| Error::CorruptPage("checkpoint serial mutex poisoned"))?;
+        if self.checkpoint_info()?.map(|control| control.generation) != seen {
+            return Ok(true);
+        }
+        self.checkpoint_serialized(&serial).map(|_| true)
     }
 }
 

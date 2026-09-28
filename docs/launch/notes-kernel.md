@@ -311,3 +311,22 @@ Draft lines for the v5.0.0 CHANGELOG. The integrator owns `CHANGELOG.md`.
 - A page whose bytes are all zero now counts as never written, as the full
   check (`redline_full_check`) already skipped it. Any other unreadable
   page, a checksum failure included, is still reported.
+
+## Pressure checkpoints are on for SQL databases
+
+- A persistent database whose dirty pages outgrew the buffer pool failed
+  the write with "no unpinned frame available for eviction": eviction
+  writes a logged page only as part of a checkpoint, and SQL, CLI and FFI
+  databases never asked for one on their own. Pressure checkpoints had
+  been made opt-in (single writer only) because of the incomplete cut
+  fixed above.
+- `redlinedb-sql` now enables them for every persistent database it
+  creates, or opens to the end of its WAL (`Engine::
+  enable_pool_pressure_checkpoints`). Opens to an earlier recovery target
+  and in-memory databases do not use them. The kernel itself still leaves
+  them to its caller.
+- With many writers, the frames one checkpoint cleans can be dirtied again
+  before the thread that asked for it gets to evict one. An allocation now
+  asks for up to eight checkpoints before it fails, and a writer that
+  waited on another thread's checkpoint takes none of its own.
+- Only a pool whose frames are all pinned still fails the allocation.
