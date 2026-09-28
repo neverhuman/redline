@@ -210,7 +210,8 @@ receipt artifacts that `ops/release/acceptance-receipts` lists, and
   `.github/parity-report-inputs.sha256` holds for the committed report),
   whether the checkout was clean, and the compiler every package names;
 - the run id, attempt and URL, and every completed job of that attempt with
-  its conclusion (`gh api .../runs/<id>/attempts/<attempt>/jobs`);
+  its conclusion (`gh api --paginate
+  repos/neverhuman/redline/actions/runs/<id>/attempts/<attempt>/jobs`);
 - each archive's name and sha256;
 - each receipt's name, file count and digest (the sha256 of its sorted
   `sha256  ./path` lines): `security-receipt` (`ops/ci/security-receipt.sh`
