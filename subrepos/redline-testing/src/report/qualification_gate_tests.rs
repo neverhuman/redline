@@ -1,5 +1,5 @@
-//! The SQLite qualification gate against the runner's own counts
-//! (L-01/SQ-01, SQ-04).
+//! The SQLite qualification gate against the runner's own counts, and the
+//! declared deviations it lists (L-01/SQ-01, SQ-04).
 //!
 //! Each Unqualified branch of `qualify()` is driven with an otherwise clean
 //! 3/3 run, so a deleted gate would turn the badge green, and a case the
@@ -78,6 +78,40 @@ fn a_case_failing_only_its_warmup_is_a_red_failure() {
             "-1%2F2%20%C2%B7%201%20failed%20%C2%B7%200%20skipped%20%C2%B7%203.53.1-red\""
         ),
         "{badge}"
+    );
+}
+
+#[test]
+fn only_passing_declared_deviations_are_listed() {
+    // 00093 fails and 00094 is skipped, so neither "passes, but ...".
+    let raw = [
+        failed("00093", "CREATE_VIRTUAL_TABLE_FTS5_OPTIONAL"),
+        skipped("00094", "FTS5_HIGHLIGHT_OPTIONAL"),
+        passed("00095", "CREATE_VIRTUAL_TABLE_RTREE_OPTIONAL"),
+    ]
+    .concat();
+    let readme = render(&raw, Some(evidence(&raw, "failed", [3, 1, 1, 1])), README);
+    let block = report_block(&readme);
+    assert!(
+        block.contains("**Declared deviations (1):** these cases pass, but RedlineDB produces the compared output without the SQLite feature behind it.\n\n- `00095` CREATE_VIRTUAL_TABLE_RTREE_OPTIONAL: "),
+        "{block}"
+    );
+    for id in ["`00093`", "`00094`"] {
+        assert!(!block.contains(id), "{id} did not pass:\n{block}");
+    }
+    assert!(badge(&readme).contains("; 1 declared deviation;"));
+
+    // With no passing declared case there is nothing to declare.
+    let raw = [
+        failed("00093", "CREATE_VIRTUAL_TABLE_FTS5_OPTIONAL"),
+        passed("00001", "PLAIN"),
+    ]
+    .concat();
+    let readme = render(&raw, Some(evidence(&raw, "failed", [2, 1, 1, 0])), README);
+    assert!(
+        report_block(&readme)
+            .contains("**Declared deviations:** none among the cases that passed in this run."),
+        "{readme}"
     );
 }
 

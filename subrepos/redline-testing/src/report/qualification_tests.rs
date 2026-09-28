@@ -319,7 +319,7 @@ fn report_block_prints_recorded_corpus_and_oracle_build() {
     assert!(block.contains("corpus SHA-256 `c0ffeec0ffee`"), "{block}");
     assert!(block.contains("build stamp `36ca143645cf`"), "{block}");
     assert!(
-        block.contains("**Declared deviations:** none among the cases in this run."),
+        block.contains("**Declared deviations:** none among the cases that passed in this run."),
         "{block}"
     );
 }

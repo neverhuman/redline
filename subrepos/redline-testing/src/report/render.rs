@@ -296,7 +296,7 @@ fn render_sqlite_scope(
     out.push_str(&run_provenance_sentence(identity));
     out.push_str("\n\n");
     if q.declared_deviations.is_empty() {
-        out.push_str("**Declared deviations:** none among the cases in this run.\n\n");
+        out.push_str("**Declared deviations:** none among the cases that passed in this run.\n\n");
     }
     for (kind, heading) in DEVIATION_HEADINGS {
         let declared = q

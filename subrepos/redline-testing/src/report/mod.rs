@@ -163,7 +163,7 @@ pub fn generate(options: ReportOptions) -> Result<()> {
     let qualification = if options.suite == "sqlite_parity" {
         Some(build_sqlite_qualification(
             &summary,
-            &raw_records,
+            &verdicts.passed,
             options.official_evidence.as_deref(),
         )?)
     } else {

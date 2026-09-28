@@ -11,7 +11,7 @@ use serde::Deserialize;
 use serde_json::Value;
 
 use super::evidence::official_suite_entry;
-use super::types::{DeclaredDeviation, Qualification, RawRecord, SqliteQualification, SummaryJson};
+use super::types::{DeclaredDeviation, Qualification, SqliteQualification, SummaryJson};
 use super::utils::sha256_hex;
 
 pub(crate) const SURFACE: &str = "sqlite_sql_cli";
@@ -42,18 +42,18 @@ pub(crate) fn declared_deviations() -> Result<Vec<DeclaredDeviation>> {
 /// The qualification of a `sqlite_parity` run. Without official evidence it
 /// is `Unqualified`; the evidence binding to the raw bytes was already
 /// checked by `validate_official_evidence_binding`.
+///
+/// The declared deviations listed are those of cases whose verdict is
+/// passed: the report says of each that it passes without the feature
+/// behind it, and a failed or skipped case is already counted as such.
 pub(crate) fn build_sqlite_qualification(
     summary: &SummaryJson,
-    raw_records: &[RawRecord],
+    passed_cases: &BTreeSet<String>,
     official_evidence: Option<&Path>,
 ) -> Result<SqliteQualification> {
-    let run_cases = raw_records
-        .iter()
-        .map(|record| record.case_id.as_str())
-        .collect::<BTreeSet<_>>();
     let declared_deviations = declared_deviations()?
         .into_iter()
-        .filter(|deviation| run_cases.contains(deviation.case_id.as_str()))
+        .filter(|deviation| passed_cases.contains(&deviation.case_id))
         .collect::<Vec<_>>();
     let mut qualification = SqliteQualification {
         surface: SURFACE,
