@@ -627,7 +627,11 @@ impl Connection {
                 session.defer_foreign_keys = false;
                 Ok(())
             }
-            Ok(CommitOutcome::MaybeCommitted) => {
+            // The kernel reports a commit whose record was queued before the
+            // WAL failed as unknown. Like a maybe-committed commit, it may be
+            // there after a reopen, so keep the session's view of it.
+            Ok(CommitOutcome::MaybeCommitted)
+            | Err(redlinedb_kernel::Error::CommitOutcomeUnknown { .. }) => {
                 session.kernel_unique_guards.clear();
                 session.unique_guards.clear();
                 session.clear_savepoints();

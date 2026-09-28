@@ -13,6 +13,8 @@ mod checkpoint_cut_tests;
 #[cfg(test)]
 mod checkpoint_serial_tests;
 #[cfg(test)]
+mod commit_visibility_tests;
+#[cfg(test)]
 mod directory_load_tests;
 #[cfg(test)]
 mod integrity_hole_tests;

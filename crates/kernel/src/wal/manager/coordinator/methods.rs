@@ -1,3 +1,4 @@
+use std::borrow::Borrow;
 use std::collections::{BTreeMap, VecDeque};
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
@@ -131,15 +132,22 @@ impl WalCoordinator {
         self.append_with_payload(kind, tx_id, payload)
     }
 
-    pub fn append_commit(
+    /// Queue the commit record of `tx_id` with a CSN taken under the WAL
+    /// lock, so CSN order is WAL order.
+    ///
+    /// `reserve_csn` may return a guard that gives the CSN back when dropped
+    /// (the engine's `ReservedCsn`). On an error after the reservation the
+    /// guard is dropped here, before the record is queued, so the CSN cannot
+    /// be left pending.
+    pub fn append_commit<R: Borrow<Csn>>(
         &self,
         tx_id: TxId,
-        reserve_csn: impl FnOnce() -> Csn,
-    ) -> Result<(Csn, WalAppend)> {
+        reserve_csn: impl FnOnce() -> R,
+    ) -> Result<(R, WalAppend)> {
         if self.volatile {
-            let csn = reserve_csn();
+            let reserved = reserve_csn();
             return Ok((
-                csn,
+                reserved,
                 WalAppend {
                     start_lsn: Lsn::ZERO,
                     end_lsn: Lsn::ZERO,
@@ -150,7 +158,11 @@ impl WalCoordinator {
             .checked_add(17)
             .ok_or(Error::CorruptWal("record length overflow"))?;
         let mut state = self.wait_for_wal_buffer(encoded_len)?;
-        let csn = reserve_csn();
+        let reserved = reserve_csn();
+        let csn = *reserved.borrow();
+        // Fails after the CSN is reserved and before the record is queued:
+        // the commit is certainly not in the WAL.
+        crate::failpoints::io_error_under("wal::append_commit_error", &self.dir)?;
         let payload = WalPayload::Commit { tx_id, csn }.encode()?;
         let append = enqueue_reserved_record(
             &mut state,
@@ -162,7 +174,7 @@ impl WalCoordinator {
         )?;
         state.write_requested = true;
         self.shared.cvar.notify_all();
-        Ok((csn, append))
+        Ok((reserved, append))
     }
 
     pub fn append_commit_with_csn(&self, tx_id: TxId, csn: Csn) -> Result<WalAppend> {
@@ -206,10 +218,13 @@ impl WalCoordinator {
             .map_err(|_| Error::CorruptWal("wal coordinator mutex poisoned"))?;
 
         loop {
-            check_wal_failure(&state)?;
+            // Durable first: the writer can make this record durable and
+            // fail on a later batch before this waiter wakes. The record is
+            // on disk then, and its commit must not be reported failed.
             if state.durable_lsn >= target_lsn {
                 return Ok(state.durable_lsn);
             }
+            check_wal_failure(&state)?;
 
             if target_lsn > state.flush_requested_lsn {
                 state.flush_requested_lsn = target_lsn;
@@ -236,10 +251,11 @@ impl WalCoordinator {
             .map_err(|_| Error::CorruptWal("wal coordinator mutex poisoned"))?;
 
         loop {
-            check_wal_failure(&state)?;
+            // Written first, for the same reason as in `flush_until`.
             if state.written_lsn >= target_lsn {
                 return Ok(state.written_lsn);
             }
+            check_wal_failure(&state)?;
             state.write_requested = true;
             self.shared.cvar.notify_all();
             state = self

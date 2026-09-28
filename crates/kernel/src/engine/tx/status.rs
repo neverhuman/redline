@@ -1,6 +1,8 @@
+use std::borrow::Borrow;
 use std::collections::{BTreeSet, HashMap};
 use std::sync::atomic::{AtomicU64, Ordering};
-use std::sync::{Arc, Mutex, RwLock};
+use std::sync::{Arc, Condvar, Mutex, RwLock};
+use std::time::Instant;
 
 use crate::format::{Csn, TxId};
 use crate::txn::{Isolation, Snapshot, TxState};
@@ -32,6 +34,9 @@ pub(super) struct TxStatusInner {
     next_csn: AtomicU64,
     published_csn: AtomicU64,
     frontier: Mutex<CsnFrontier>,
+    /// Signalled, under `frontier`, when `published_csn` advances while a
+    /// thread waits in [`ConcurrentTxStatus::wait_published`].
+    frontier_advanced: Condvar,
 }
 
 #[derive(Debug, Default)]
@@ -39,6 +44,49 @@ struct CsnFrontier {
     pending: BTreeSet<u64>,
     completed: BTreeSet<u64>,
     skipped: BTreeSet<u64>,
+    /// Threads in `wait_published`. A publish with none skips the notify.
+    waiters: usize,
+}
+
+/// A commit sequence number reserved for one commit.
+///
+/// Snapshots see commits up to the published CSN, which advances only over
+/// contiguous CSNs that published or were given up. Dropping the
+/// reservation without [`ReservedCsn::publish`] gives the CSN up, so a
+/// commit that fails or panics after reserving cannot hold every later
+/// commit out of new snapshots, and out of `wait_published`, forever.
+#[must_use = "dropping a reservation gives its CSN up"]
+#[derive(Debug)]
+pub(crate) struct ReservedCsn<'a> {
+    txs: &'a ConcurrentTxStatus,
+    csn: Csn,
+    settled: bool,
+}
+
+impl ReservedCsn<'_> {
+    pub(crate) fn csn(&self) -> Csn {
+        self.csn
+    }
+
+    /// Mark `tx` committed at this CSN and publish it.
+    pub(crate) fn publish(mut self, tx: TxId) {
+        self.settled = true;
+        self.txs.publish_commit(tx, self.csn);
+    }
+}
+
+impl Borrow<Csn> for ReservedCsn<'_> {
+    fn borrow(&self) -> &Csn {
+        &self.csn
+    }
+}
+
+impl Drop for ReservedCsn<'_> {
+    fn drop(&mut self) {
+        if !self.settled {
+            self.txs.cancel_reserved_csn(self.csn);
+        }
+    }
 }
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
@@ -71,6 +119,7 @@ impl ConcurrentTxStatus {
                 next_csn: AtomicU64::new(1),
                 published_csn: AtomicU64::new(0),
                 frontier: Mutex::new(CsnFrontier::default()),
+                frontier_advanced: Condvar::new(),
             }),
         }
     }
@@ -108,6 +157,59 @@ impl ConcurrentTxStatus {
         csn
     }
 
+    /// Reserve the next CSN for a commit; see [`ReservedCsn`].
+    pub(crate) fn reserve_commit(&self) -> ReservedCsn<'_> {
+        ReservedCsn {
+            txs: self,
+            csn: self.reserve_commit_csn(),
+            settled: false,
+        }
+    }
+
+    /// Wait until the published CSN reaches `csn`, so that a snapshot taken
+    /// afterwards sees the commit at `csn`. Returns false if `deadline`
+    /// passes first; `None` waits without a bound.
+    ///
+    /// Every lower CSN must publish or be given up first. A committer holds
+    /// no lock another committer needs between reserving and publishing, and
+    /// a dropped [`ReservedCsn`] gives its CSN up, so the wait ends.
+    pub fn wait_published(&self, csn: Csn, deadline: Option<Instant>) -> bool {
+        if self.inner.published_csn.load(Ordering::Acquire) >= csn.0 {
+            return true;
+        }
+        let mut frontier = self
+            .inner
+            .frontier
+            .lock()
+            .expect("csn frontier mutex poisoned");
+        frontier.waiters += 1;
+        let reached = loop {
+            if self.inner.published_csn.load(Ordering::Acquire) >= csn.0 {
+                break true;
+            }
+            frontier = match deadline {
+                None => self
+                    .inner
+                    .frontier_advanced
+                    .wait(frontier)
+                    .expect("csn frontier mutex poisoned"),
+                Some(deadline) => {
+                    let now = Instant::now();
+                    if now >= deadline {
+                        break false;
+                    }
+                    self.inner
+                        .frontier_advanced
+                        .wait_timeout(frontier, deadline - now)
+                        .expect("csn frontier mutex poisoned")
+                        .0
+                }
+            };
+        };
+        frontier.waiters -= 1;
+        reached
+    }
+
     pub fn publish_commit(&self, tx: TxId, csn: Csn) {
         self.inner.set_state(tx, TxState::Committed(csn));
         self.inner.complete_csn(csn);
@@ -143,7 +245,36 @@ impl ConcurrentTxStatus {
     pub fn restore_frontier(&self, next_tx: TxId, next_csn: Csn, published_csn: Csn) {
         advance_atomic_to_at_least(&self.inner.next_tx, next_tx.0.max(1));
         advance_atomic_to_at_least(&self.inner.next_csn, next_csn.0.max(1));
+        let frontier = self
+            .inner
+            .frontier
+            .lock()
+            .expect("csn frontier mutex poisoned");
         advance_atomic_to_at_least(&self.inner.published_csn, published_csn.0);
+        self.inner.notify_waiters(&frontier);
+    }
+
+    /// Settle every CSN below the next one when recovery ends.
+    ///
+    /// Recovery published each commit it found. Any lower CSN it did not
+    /// find belongs to a commit whose record never reached the WAL, whose
+    /// reservation was given up before the crash, and it will never publish.
+    /// Left pending, one such CSN below a recovered commit would keep that
+    /// commit out of every snapshot. A CSN names no committed transaction
+    /// unless recovery marked one, so settling the rest shows nothing new.
+    pub(crate) fn seal_recovered_frontier(&self) {
+        let mut frontier = self
+            .inner
+            .frontier
+            .lock()
+            .expect("csn frontier mutex poisoned");
+        let last = self.inner.next_csn.load(Ordering::SeqCst).saturating_sub(1);
+        frontier.pending.clear();
+        frontier.completed.retain(|csn| *csn > last);
+        frontier.skipped.retain(|csn| *csn > last);
+        advance_atomic_to_at_least(&self.inner.published_csn, last);
+        self.inner.advance_published_csn(&mut frontier);
+        self.inner.notify_waiters(&frontier);
     }
 
     pub fn committed_states(&self) -> Vec<(TxId, Csn)> {
@@ -305,6 +436,7 @@ impl TxStatusInner {
 
     fn advance_published_csn(&self, frontier: &mut CsnFrontier) {
         let mut published = self.published_csn.load(Ordering::Acquire);
+        let start = published;
         loop {
             let next = published.saturating_add(1);
             if frontier.completed.remove(&next) || frontier.skipped.remove(&next) {
@@ -313,6 +445,18 @@ impl TxStatusInner {
             } else {
                 break;
             }
+        }
+        if published != start {
+            self.notify_waiters(frontier);
+        }
+    }
+
+    /// Wake `wait_published` callers. The caller holds the frontier lock,
+    /// which a waiter holds from its check until it sleeps, so none misses
+    /// the advance.
+    fn notify_waiters(&self, frontier: &CsnFrontier) {
+        if frontier.waiters > 0 {
+            self.frontier_advanced.notify_all();
         }
     }
 }
@@ -339,9 +483,80 @@ impl Default for ConcurrentTxStatus {
 
 #[cfg(test)]
 mod tests {
+    use std::thread;
+    use std::time::{Duration, Instant};
+
     use super::ConcurrentTxStatus;
     use crate::Error;
-    use crate::format::TxId;
+    use crate::format::{Csn, TxId};
+
+    /// Workplan R8: a commit that publishes while a lower CSN is unpublished
+    /// is outside new snapshots, and `wait_published` holds its caller until
+    /// the lower CSN publishes.
+    #[test]
+    fn published_frontier_waits_for_lower_csn() {
+        let txs = ConcurrentTxStatus::new();
+        let (a, b) = (txs.begin(), txs.begin());
+        let csn_a = txs.reserve_commit_csn();
+        let csn_b = txs.reserve_commit_csn();
+        assert!(csn_a < csn_b);
+
+        txs.publish_commit(b, csn_b);
+        assert!(txs.snapshot().visible_csn < csn_b);
+        let started = Instant::now();
+        assert!(!txs.wait_published(csn_b, Some(started + Duration::from_millis(50))));
+        assert!(started.elapsed() >= Duration::from_millis(50));
+
+        let waiter = {
+            let txs = txs.clone();
+            thread::spawn(move || {
+                let reached =
+                    txs.wait_published(csn_b, Some(Instant::now() + Duration::from_secs(20)));
+                (reached, txs.snapshot().visible_csn)
+            })
+        };
+        thread::sleep(Duration::from_millis(20));
+        txs.publish_commit(a, csn_a);
+        let (reached, visible) = waiter.join().unwrap();
+        assert!(
+            reached,
+            "the waiter timed out after the lower CSN published"
+        );
+        assert!(visible >= csn_b, "the waiter woke before B was visible");
+        assert!(txs.wait_published(csn_b, Some(Instant::now())));
+        assert!(txs.wait_published(Csn(0), None));
+    }
+
+    /// A reservation dropped before it publishes gives its CSN up, so the
+    /// frontier moves past it to a later commit.
+    #[test]
+    fn dropped_reservation_gives_its_csn_up() {
+        let txs = ConcurrentTxStatus::new();
+        let later_tx = txs.begin();
+        let failed = txs.reserve_commit();
+        let later = txs.reserve_commit();
+        let later_csn = later.csn();
+        later.publish(later_tx);
+        assert!(txs.published_csn() < later_csn);
+        drop(failed);
+        assert_eq!(txs.published_csn(), later_csn);
+    }
+
+    /// A CSN recovery never found cannot hold back the commits after it.
+    #[test]
+    fn sealed_recovery_frontier_passes_a_csn_the_wal_lacks() {
+        let txs = ConcurrentTxStatus::new();
+        txs.publish_recovered_commit(TxId(1), Csn(1));
+        txs.publish_recovered_commit(TxId(3), Csn(3));
+        assert_eq!(txs.published_csn(), Csn(1));
+        txs.seal_recovered_frontier();
+        assert_eq!(txs.published_csn(), Csn(3));
+        assert_eq!(txs.stats().pending_csns, 0);
+        let csn = txs.reserve_commit_csn();
+        assert_eq!(csn, Csn(4));
+        txs.publish_commit(txs.begin(), csn);
+        assert_eq!(txs.published_csn(), Csn(4));
+    }
 
     #[test]
     fn advancing_past_a_tx_id_never_lowers_or_wraps_the_next_id() {

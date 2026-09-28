@@ -88,7 +88,14 @@ pub(super) fn drain_until(
     wal: &mut WalManager,
     target_lsn: Lsn,
     max_batch_bytes: usize,
-) -> Result<DrainCounts> {
+) -> std::result::Result<DrainCounts, WalFailure> {
+    let poisoned = |wal: &WalManager, what: &'static str| {
+        WalFailure::new(
+            WalFailureStage::Write,
+            &Error::CorruptWal(what),
+            wal.written_lsn(),
+        )
+    };
     let mut totals = DrainCounts::default();
     loop {
         if wal.written_lsn() >= target_lsn {
@@ -100,7 +107,7 @@ pub(super) fn drain_until(
             let mut state = shared
                 .state
                 .lock()
-                .map_err(|_| Error::CorruptWal("wal coordinator mutex poisoned"))?;
+                .map_err(|_| poisoned(wal, "wal coordinator mutex poisoned"))?;
             let mut batch_bytes = 0_usize;
             while let Some(record) = state.pending.pop_front() {
                 batch_bytes += record.encoded.len();
@@ -124,14 +131,16 @@ pub(super) fn drain_until(
             let mut state = shared
                 .state
                 .lock()
-                .map_err(|_| Error::CorruptWal("wal coordinator mutex poisoned"))?;
+                .map_err(|_| poisoned(wal, "wal coordinator mutex poisoned"))?;
             while state.pending.is_empty() && state.failure.is_none() && !state.shutdown {
                 state = shared
                     .cvar
                     .wait(state)
-                    .map_err(|_| Error::CorruptWal("wal coordinator wait poisoned"))?;
+                    .map_err(|_| poisoned(wal, "wal coordinator wait poisoned"))?;
             }
-            check_wal_failure(&state)?;
+            if let Some(failure) = state.failure {
+                return Err(failure);
+            }
             continue;
         }
 
@@ -141,7 +150,9 @@ pub(super) fn drain_until(
             totals.records = totals.records.saturating_add(1);
             totals.bytes = totals.bytes.saturating_add(record.encoded.len() as u64);
         }
-        wal.write_encoded_batch(&batch)?;
+        if let Err((stage, err)) = wal.write_encoded_batch_staged(&batch) {
+            return Err(WalFailure::new(stage, &err, wal.written_lsn()));
+        }
         if last_written != Lsn::ZERO {
             publish_written_lsn(shared, last_written);
         }
@@ -195,15 +206,20 @@ pub(super) fn enqueue_reserved_record(
 }
 
 pub(super) fn check_wal_failure(state: &WalCoordinatorState) -> Result<()> {
-    if let Some(message) = state.failure {
-        return Err(Error::CorruptWal(message));
+    if let Some(failure) = state.failure {
+        return Err(failure.into());
     }
     Ok(())
 }
 
-pub(super) fn publish_wal_failure(shared: &Arc<WalCoordinatorShared>) {
+/// Record why the writer stopped and wake every waiter. The first failure
+/// is kept: the writer exits after publishing one, so a second can only
+/// come from the shutdown path of the same run.
+pub(super) fn publish_wal_failure(shared: &Arc<WalCoordinatorShared>, failure: WalFailure) {
     if let Ok(mut state) = shared.state.lock() {
-        state.failure = Some("wal writer failed");
+        if state.failure.is_none() {
+            state.failure = Some(failure);
+        }
         shared.cvar.notify_all();
     }
 }

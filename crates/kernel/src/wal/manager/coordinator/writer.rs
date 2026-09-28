@@ -95,8 +95,8 @@ pub(super) fn wal_writer_loop(
             group_records = group_records.saturating_add(1);
             group_bytes = group_bytes.saturating_add(record.encoded.len() as u64);
         }
-        if let Err(_err) = wal.write_encoded_batch(&batch) {
-            publish_wal_failure(&shared);
+        if let Err((stage, err)) = wal.write_encoded_batch_staged(&batch) {
+            publish_wal_failure(&shared, WalFailure::new(stage, &err, wal.written_lsn()));
             return;
         }
         if last_written != Lsn::ZERO {
@@ -130,8 +130,8 @@ pub(super) fn wal_writer_loop(
                     group_records = group_records.saturating_add(drained.records);
                     group_bytes = group_bytes.saturating_add(drained.bytes);
                 }
-                Err(_err) => {
-                    publish_wal_failure(&shared);
+                Err(failure) => {
+                    publish_wal_failure(&shared, failure);
                     return;
                 }
             }
@@ -163,8 +163,11 @@ pub(super) fn wal_writer_loop(
                         return;
                     }
                 }
-                Err(_err) => {
-                    publish_wal_failure(&shared);
+                Err(err) => {
+                    publish_wal_failure(
+                        &shared,
+                        WalFailure::new(WalFailureStage::Flush, &err, wal.durable_lsn()),
+                    );
                     return;
                 }
             }
@@ -202,8 +205,11 @@ fn sync_written_on_shutdown(
                 false
             }
         }
-        Err(_err) => {
-            publish_wal_failure(shared);
+        Err(err) => {
+            publish_wal_failure(
+                shared,
+                WalFailure::new(WalFailureStage::Flush, &err, wal.durable_lsn()),
+            );
             false
         }
     }

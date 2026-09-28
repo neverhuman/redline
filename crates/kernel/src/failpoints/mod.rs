@@ -110,6 +110,30 @@ pub fn cfg_skip_then_panic(_name: &str, _skip_hits: usize) -> Result<(), String>
     Ok(())
 }
 
+/// Fail with an I/O error when the failpoint `name` is armed for `path`.
+///
+/// `return` fails every call. `return(<text>)` fails only paths that
+/// contain `<text>`, so a test can confine the fault to its own temp
+/// directory while other tests share the process. Other actions (`panic`,
+/// `sleep`, ...) behave as at any failpoint.
+#[cfg(feature = "failpoints")]
+pub(crate) fn io_error_under(name: &str, path: &std::path::Path) -> std::io::Result<()> {
+    fail::fail_point!(name, |only_under: Option<String>| {
+        match only_under {
+            Some(text) if !path.to_string_lossy().contains(text.as_str()) => Ok(()),
+            _ => Err(std::io::Error::other(format!("{name} failpoint"))),
+        }
+    });
+    Ok(())
+}
+
+/// No-op when the feature is disabled.
+#[cfg(not(feature = "failpoints"))]
+#[inline(always)]
+pub(crate) fn io_error_under(_name: &str, _path: &std::path::Path) -> std::io::Result<()> {
+    Ok(())
+}
+
 /// Validate an action string against the `fail` 0.5.x grammar.
 ///
 /// Grammar (matching `fail::Action::from_str`):

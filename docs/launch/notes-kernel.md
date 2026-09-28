@@ -388,3 +388,53 @@ Draft lines for the v5.0.0 CHANGELOG. The integrator owns `CHANGELOG.md`.
   row twice. This was so before these changes. Closing it needs the
   checkpoint's page state recorded before its page writes (or heap redo
   that skips what a page already holds).
+
+## Uncertain commits, and COMMIT returns only once it is visible
+
+- A commit whose WAL write or fsync failed after its commit record was
+  queued returned a plain error and was marked aborted in memory. The
+  record could still be in the file, and the next open then recovered the
+  transaction as committed, so a caller that took the error as a rollback
+  and retried could apply a change twice. Such a commit now fails with
+  the new kernel error `CommitOutcomeUnknown { tx_id, end_lsn, cause }`.
+  SQL reports it as the existing `CommitMaybeCommitted` ("commit outcome
+  uncertain"), which the `redlinedb` crate maps to `ErrorCode::IoErr` and
+  the C API to `RLDB_IOERR`. An error before the record is queued is still
+  a plain error, and that transaction never comes back. The transaction is
+  not visible in the process either way.
+- A commit that the writer made durable and then failed on a later batch,
+  before the committer woke, was reported failed and aborted in memory
+  although it was on disk. `flush_until` and `write_until` now check the
+  durable (or written) LSN before the failure.
+- The WAL writer kept only the text "wal writer failed". It now keeps the
+  step (`write`, `flush` or `rotate`), the I/O error kind and the LSN, and
+  every later append or wait fails with the new `Error::WalWriterFailed`,
+  whose message still starts "wal writer failed". The `redlinedb` crate
+  and the C API report it as an I/O error.
+- A CSN reserved by a commit that then failed before queueing its record
+  stayed pending forever, so no later commit became visible to a new
+  snapshot. The reservation is now a guard that gives the CSN up when the
+  commit fails or panics, and recovery settles every CSN below the next one
+  once replay ends, so a CSN the WAL lacks cannot hide the commits after
+  it.
+- `COMMIT` returned as soon as its own CSN published, even when an earlier
+  CSN was still between its barrier and its publish. A snapshot begun after
+  `COMMIT` returned, including the same connection's next statement, could
+  then miss that commit. The commit now releases its locks and the
+  checkpoint horizon, then waits until the published CSN reaches its own
+  (`ConcurrentTxStatus::wait_published`), and warns on stderr after 5 s.
+  Existing snapshots are unchanged. Schema and index handles still publish
+  with the transaction, not with the CSN frontier, so a statement that
+  starts during that wait can see a new table before its rows.
+- Cost, measured with a release-build probe (one-row insert-and-commit
+  loops on ext4 NVMe on a shared host, two rounds of three repetitions per
+  build): one Normal writer, 57,700 to 65,100 commits/s against 40,600 to
+  66,200 before (median latency 14 to 17 us against 14 to 19 us); 16
+  Normal writers, 42,900 to 51,500 commits/s against 30,500 to 58,200,
+  median latency 277 to 349 us against 243 to 384 us (the middle run about
+  10% higher), p99 758 to 840 us against 740 to 2,900 us; 16 UnsafeDev
+  writers, 110,500 to 126,500 against 110,700 to 130,700. Strict is bound
+  by a 10 ms fsync on this disk and showed no difference beyond noise.
+- Not changed: `CommitMaybeCommitted` carries no transaction id or LSN at
+  the SQL layer; the kernel error does. After a WAL failure the database
+  stays open for reads, and writes keep failing until it is reopened.

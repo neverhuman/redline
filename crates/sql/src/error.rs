@@ -4,7 +4,7 @@ use thiserror::Error;
 #[derive(Debug, Error)]
 pub enum Error {
     #[error("kernel error: {0}")]
-    Kernel(#[from] KernelError),
+    Kernel(#[source] KernelError),
 
     #[error("parse error: {0}")]
     Parse(String),
@@ -79,6 +79,19 @@ impl PartialEq for Error {
 }
 
 impl Eq for Error {}
+
+impl From<KernelError> for Error {
+    fn from(err: KernelError) -> Self {
+        match err {
+            // The commit record was queued before the WAL failed, so the
+            // next open may find the transaction committed. That is the
+            // same promise `CommitMaybeCommitted` makes; do not report it
+            // as a failure the caller may simply retry.
+            KernelError::CommitOutcomeUnknown { .. } => Self::CommitMaybeCommitted,
+            other => Self::Kernel(other),
+        }
+    }
+}
 
 impl From<sqlparser::parser::ParserError> for Error {
     fn from(value: sqlparser::parser::ParserError) -> Self {

@@ -12,6 +12,7 @@ use std::sync::{Arc, Weak};
 
 #[path = "tx/status.rs"]
 mod status;
+pub(crate) use status::ReservedCsn;
 use status::TxStatusInner;
 pub use status::{ConcurrentTxStatus, TxStatusStats};
 

@@ -40,6 +40,33 @@ pub enum Error {
     #[error("corrupt wal: {0}")]
     CorruptWal(&'static str),
 
+    /// The WAL writer thread hit an I/O error and stopped. Every later
+    /// append and every wait for a record past `at_lsn` fails with this.
+    #[error("wal writer failed during {stage} at lsn {}: {kind}", .at_lsn.0)]
+    WalWriterFailed {
+        stage: crate::wal::WalFailureStage,
+        kind: io::ErrorKind,
+        at_lsn: crate::format::Lsn,
+    },
+
+    /// The commit record was queued, then the WAL failed before it was known
+    /// to be written (Normal) or durable (Strict). The transaction is not
+    /// visible in this process, but the record may be in the WAL, and then
+    /// the next open recovers it as committed. Do not treat this as a
+    /// rollback: check for the transaction's effects after reopening before
+    /// retrying a change that must happen only once.
+    #[error(
+        "commit outcome unknown for transaction {} (commit record ends at lsn {}): {cause}",
+        .tx_id.0,
+        .end_lsn.0
+    )]
+    CommitOutcomeUnknown {
+        tx_id: crate::format::TxId,
+        end_lsn: crate::format::Lsn,
+        #[source]
+        cause: Box<Error>,
+    },
+
     #[error("no free slot space on page")]
     PageFull,
 
@@ -165,6 +192,30 @@ impl PartialEq for Error {
             ) => left_needed == right_needed && left_actual == right_actual,
             (Self::CorruptPage(left), Self::CorruptPage(right)) => left == right,
             (Self::CorruptWal(left), Self::CorruptWal(right)) => left == right,
+            (
+                Self::WalWriterFailed {
+                    stage: left_stage,
+                    kind: left_kind,
+                    at_lsn: left_lsn,
+                },
+                Self::WalWriterFailed {
+                    stage: right_stage,
+                    kind: right_kind,
+                    at_lsn: right_lsn,
+                },
+            ) => left_stage == right_stage && left_kind == right_kind && left_lsn == right_lsn,
+            (
+                Self::CommitOutcomeUnknown {
+                    tx_id: left_tx,
+                    end_lsn: left_lsn,
+                    cause: left_cause,
+                },
+                Self::CommitOutcomeUnknown {
+                    tx_id: right_tx,
+                    end_lsn: right_lsn,
+                    cause: right_cause,
+                },
+            ) => left_tx == right_tx && left_lsn == right_lsn && left_cause == right_cause,
             (Self::PageFull, Self::PageFull) => true,
             (
                 Self::RecordTooLarge {

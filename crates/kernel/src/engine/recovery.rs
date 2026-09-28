@@ -350,6 +350,9 @@ impl Engine {
         reserve_ids_named_in_wal(&scan_report.records, &txs, &heap)?;
         recover_index_page_images(&scan_report.records, replay_from_lsn, target, &buffer)?;
         let metrics = recover_heap(&scan_report.records, heap_replay_from, target, &txs, &heap)?;
+        // Every commit recovery will publish is published now. A CSN below
+        // them that the WAL lacks was given up before the crash.
+        txs.seal_recovered_frontier();
         // A crash here leaves in the page file whatever replayed heap pages
         // eviction wrote, with no checkpoint that covers them.
         crate::fail_point!("engine::recovery::after_heap_replay");

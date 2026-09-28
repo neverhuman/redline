@@ -543,6 +543,78 @@ fn commit_failure_surfaces_maybe_committed_without_index_repair() {
     assert_eq!(stmt.column_i64(0).expect("count"), 1);
 }
 
+/// Workplan R7: the WAL fsync fails after the commit record was written. The
+/// commit may or may not survive, so SQL reports "maybe committed", not a
+/// rollback. This process does not show the row; reopening finds it, since
+/// the record reached the file. Both the explicit COMMIT and the autocommit
+/// path report it the same way.
+///
+/// `return(<db path>)` fails only this test's WAL: the fault fires on the
+/// WAL writer thread, where a thread-local switch cannot reach, and other
+/// tests in this binary run in parallel.
+#[cfg(feature = "failpoints")]
+#[test]
+fn commit_io_failure_is_uncertain() {
+    use redlinedb_kernel::engine::CommitDurability;
+    use redlinedb_kernel::failpoints;
+
+    for explicit in [true, false] {
+        let dir = tempdir().expect("temp dir");
+        let path = dir.path().join("uncertain.db");
+        let mut opts = DbOptions::default();
+        opts.engine.commit_durability = CommitDurability::Strict;
+        {
+            let db = Database::create(&path, opts.clone()).expect("create database");
+            let conn = db.connect();
+            conn.execute("CREATE TABLE t(k INTEGER PRIMARY KEY, v TEXT)")
+                .expect("create table");
+            conn.execute("INSERT INTO t VALUES (1, 'kept')")
+                .expect("insert kept row");
+
+            failpoints::cfg("wal::flush_error", &format!("return({})", path.display()))
+                .expect("arm wal flush failure");
+            let err = if explicit {
+                conn.execute("BEGIN").expect("begin");
+                conn.execute("INSERT INTO t VALUES (2, 'unknown')")
+                    .expect("insert inside the transaction");
+                conn.execute("COMMIT")
+                    .expect_err("the commit's fsync failed")
+            } else {
+                conn.execute("INSERT INTO t VALUES (2, 'unknown')")
+                    .expect_err("the autocommit's fsync failed")
+            };
+            failpoints::cfg("wal::flush_error", "off").expect("disarm wal flush failure");
+            assert_eq!(
+                err,
+                redlinedb_sql::Error::CommitMaybeCommitted,
+                "explicit={explicit}: an fsync failure after the write is not a rollback"
+            );
+            assert_eq!(
+                scalar_i64(&conn, "SELECT COUNT(*) FROM t WHERE k = 2"),
+                0,
+                "explicit={explicit}: an uncertain commit is not shown"
+            );
+            assert_eq!(scalar_i64(&conn, "SELECT COUNT(*) FROM t WHERE k = 1"), 1);
+            if explicit {
+                // COMMIT ended the transaction even though it failed.
+                let again = conn.execute("COMMIT").expect_err("no transaction is open");
+                assert!(
+                    matches!(again, redlinedb_sql::Error::TransactionState(_)),
+                    "{again:?}"
+                );
+            }
+        }
+
+        let db = Database::open(&path, opts).expect("reopen database");
+        let conn = db.connect();
+        assert_eq!(
+            scalar_i64(&conn, "SELECT COUNT(*) FROM t"),
+            2,
+            "explicit={explicit}: the written commit record recovers"
+        );
+    }
+}
+
 fn scalar_i64(conn: &Arc<Connection>, sql: &str) -> i64 {
     let mut stmt = conn.prepare(sql).expect("prepare scalar");
     assert_eq!(stmt.step().expect("step scalar"), Step::Row);

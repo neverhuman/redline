@@ -90,39 +90,25 @@ fn write(engine: &Engine, index_id: IndexId, run: usize, writer: usize) -> Commi
         engine.commit(tx).unwrap();
         committed.insert(row, (tag, Some(payload(tag, 1))));
         if i % 5 == 4 {
-            retry_until_visible(|| {
-                let mut tx = engine.begin(Isolation::Snapshot)?;
-                engine.update(&mut tx, row, payload(tag, 2))?;
-                engine.commit(tx).map(drop)
-            })
-            .unwrap_or_else(|err| panic!("writer {writer} update {i}: {err:?}"));
+            // The commit above returned only once new snapshots see it
+            // (workplan R8), so this snapshot sees the row it updates.
+            let mut tx = engine.begin(Isolation::Snapshot).unwrap();
+            engine
+                .update(&mut tx, row, payload(tag, 2))
+                .and_then(|_| engine.commit(tx).map(drop))
+                .unwrap_or_else(|err| panic!("writer {writer} update {i}: {err:?}"));
             committed.insert(row, (tag, Some(payload(tag, 2))));
         }
         if i % 7 == 6 {
-            retry_until_visible(|| {
-                let mut tx = engine.begin(Isolation::Snapshot)?;
-                engine.delete(&mut tx, row)?;
-                engine.commit(tx).map(drop)
-            })
-            .unwrap_or_else(|err| panic!("writer {writer} delete {i}: {err:?}"));
+            let mut tx = engine.begin(Isolation::Snapshot).unwrap();
+            engine
+                .delete(&mut tx, row)
+                .and_then(|_| engine.commit(tx).map(drop))
+                .unwrap_or_else(|err| panic!("writer {writer} delete {i}: {err:?}"));
             committed.insert(row, (tag, None));
         }
     }
     committed
-}
-
-/// Run `change` until the row it changes is visible to its snapshot. A
-/// commit returns before every earlier commit has published, so a new
-/// snapshot of the same thread can still miss it for a moment and the change
-/// fails with a serialization failure (workplan R8).
-fn retry_until_visible(mut change: impl FnMut() -> crate::Result<()>) -> crate::Result<()> {
-    for _ in 0..100_000 {
-        match change() {
-            Err(crate::Error::SerializationFailure) => thread::yield_now(),
-            other => return other,
-        }
-    }
-    change()
 }
 
 fn assert_committed(engine: &Engine, index_id: IndexId, committed: &Committed, when: &str) {

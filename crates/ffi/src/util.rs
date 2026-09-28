@@ -42,7 +42,9 @@ pub(crate) fn map_error(err: SqlError) -> c_int {
         }
         SqlError::Kernel(KernelError::ConstraintViolation(_))
         | SqlError::ConstraintViolation(_) => RLDB_CONSTRAINT,
-        SqlError::CommitMaybeCommitted => RLDB_IOERR,
+        SqlError::CommitMaybeCommitted
+        | SqlError::Kernel(KernelError::WalWriterFailed { .. })
+        | SqlError::Kernel(KernelError::CommitOutcomeUnknown { .. }) => RLDB_IOERR,
         SqlError::Kernel(KernelError::SchemaChanged) => RLDB_SCHEMA,
         SqlError::Kernel(KernelError::ObjectNotFound)
         | SqlError::UnknownTable(_)

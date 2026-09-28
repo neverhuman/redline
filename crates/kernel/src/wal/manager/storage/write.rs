@@ -174,6 +174,9 @@ impl<Fs: FileSystem> WalManager<Fs> {
         let written = self.written_lsn;
         let _ = written;
         crate::fail_point!("wal::flush", |_| { Ok(written) });
+        // Unlike `wal::flush`, this one fails the fsync: the written bytes
+        // stay in the file, but the manager never calls them durable.
+        crate::failpoints::io_error_under("wal::flush_error", &self.dir)?;
         self.active_file.sync_data()?;
         // Lane BH P1 #7: count fdatasync calls so the bench harness
         // can surface them on Redline rows. The bump only fires when
@@ -210,6 +213,16 @@ impl<Fs: FileSystem> WalManager<Fs> {
     /// `write_all_at` and one `wal::write_encoded` failpoint. Record bytes
     /// are unchanged.
     pub(crate) fn write_encoded_batch(&mut self, records: &[QueuedWalRecord]) -> Result<()> {
+        self.write_encoded_batch_staged(records)
+            .map_err(|(_, err)| err)
+    }
+
+    /// [`Self::write_encoded_batch`], naming the step that failed: the
+    /// segment rotation or the write itself.
+    pub(crate) fn write_encoded_batch_staged(
+        &mut self,
+        records: &[QueuedWalRecord],
+    ) -> std::result::Result<(), (WalFailureStage, Error)> {
         let mut index = 0;
         while index < records.len() {
             self.prepare_for_record(records[index].append, records[index].encoded.len())?;
@@ -236,25 +249,35 @@ impl<Fs: FileSystem> WalManager<Fs> {
                 }
             }
             if bytes.is_empty() {
-                return Err(Error::CorruptWal(
-                    "record lsn does not match write position",
+                return Err((
+                    WalFailureStage::Write,
+                    Error::CorruptWal("record lsn does not match write position"),
                 ));
             }
-            self.emit_wal_bytes(offset, &bytes, last_end, last_start)?;
+            self.emit_wal_bytes(offset, &bytes, last_end, last_start)
+                .map_err(|err| (WalFailureStage::Write, err))?;
         }
         Ok(())
     }
 
-    fn prepare_for_record(&mut self, append: WalAppend, encoded_len: usize) -> Result<()> {
+    fn prepare_for_record(
+        &mut self,
+        append: WalAppend,
+        encoded_len: usize,
+    ) -> std::result::Result<(), (WalFailureStage, Error)> {
+        let write_err = |err| (WalFailureStage::Write, err);
+        let rotate_err = |err| (WalFailureStage::Rotate, err);
         if encoded_len > self.config.segment_bytes as usize {
-            return Err(Error::CorruptWal("record larger than wal segment"));
+            return Err(write_err(Error::CorruptWal(
+                "record larger than wal segment",
+            )));
         }
         // An exact fill leaves the cursor at `segment_bytes`. The next
         // reserved LSN is the following segment, and that LSN compares
         // equal to `(segment - 1) * size + offset` when offset == size,
         // so the mismatch check below would not rotate.
         if self.active_offset >= self.config.segment_bytes {
-            self.rotate_segment()?;
+            self.rotate_segment().map_err(rotate_err)?;
         }
         let expected_lsn =
             Lsn((self.active_segment - 1) * self.config.segment_bytes + self.active_offset);
@@ -262,14 +285,14 @@ impl<Fs: FileSystem> WalManager<Fs> {
             && self.active_offset > 0
             && self.active_offset + encoded_len as u64 > self.config.segment_bytes
         {
-            self.rotate_segment()?;
+            self.rotate_segment().map_err(rotate_err)?;
         }
         let expected_lsn =
             Lsn((self.active_segment - 1) * self.config.segment_bytes + self.active_offset);
         if expected_lsn != append.start_lsn {
-            return Err(Error::CorruptWal(
+            return Err(write_err(Error::CorruptWal(
                 "record lsn does not match write position",
-            ));
+            )));
         }
         Ok(())
     }
@@ -284,6 +307,7 @@ impl<Fs: FileSystem> WalManager<Fs> {
         // Lane E failpoint: armed before the bytes land, once per
         // physical write rather than once per queued record.
         crate::fail_point!("wal::write_encoded");
+        crate::failpoints::io_error_under("wal::write_error", &self.dir)?;
         self.active_file.write_all_at(offset, bytes)?;
         // Lane BH P1 #7: count the pwrite-equivalent before bumping
         // the offset; the bench harness reads this through

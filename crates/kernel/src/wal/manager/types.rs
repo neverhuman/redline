@@ -78,7 +78,64 @@ pub(crate) struct WalCoordinatorState {
     pub(crate) write_requested: bool,
     pub(crate) flush_requested_lsn: Lsn,
     pub(crate) shutdown: bool,
-    pub(crate) failure: Option<&'static str>,
+    /// The first error the writer thread hit. The writer stops at it, so
+    /// no record it had not made durable becomes durable afterwards.
+    pub(crate) failure: Option<WalFailure>,
+}
+
+/// The WAL writer step that failed.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum WalFailureStage {
+    /// Writing queued records into the active segment.
+    Write,
+    /// The fsync that makes written records durable.
+    Flush,
+    /// Closing a full segment and creating the next one.
+    Rotate,
+}
+
+impl std::fmt::Display for WalFailureStage {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(match self {
+            Self::Write => "write",
+            Self::Flush => "flush",
+            Self::Rotate => "rotate",
+        })
+    }
+}
+
+/// Why the WAL writer stopped. Records that end at or below `at_lsn` are
+/// unaffected: written for `Write` and `Rotate`, durable for `Flush`.
+/// Records past it may or may not have reached the file.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct WalFailure {
+    pub stage: WalFailureStage,
+    pub kind: std::io::ErrorKind,
+    pub at_lsn: Lsn,
+}
+
+impl WalFailure {
+    pub(crate) fn new(stage: WalFailureStage, err: &Error, at_lsn: Lsn) -> Self {
+        let kind = match err {
+            Error::Io(io) => io.kind(),
+            _ => std::io::ErrorKind::Other,
+        };
+        Self {
+            stage,
+            kind,
+            at_lsn,
+        }
+    }
+}
+
+impl From<WalFailure> for Error {
+    fn from(failure: WalFailure) -> Self {
+        Error::WalWriterFailed {
+            stage: failure.stage,
+            kind: failure.kind,
+            at_lsn: failure.at_lsn,
+        }
+    }
 }
 
 #[derive(Debug)]

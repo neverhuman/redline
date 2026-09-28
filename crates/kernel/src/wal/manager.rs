@@ -14,5 +14,6 @@ mod storage;
 mod types;
 
 pub use config::*;
+pub(crate) use coordinator::PageInstallFence;
 pub use counters::*;
 pub use types::*;

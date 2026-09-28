@@ -30,15 +30,30 @@ conn.commit()?;
 
 | Mode | Meaning |
 | --- | --- |
-| `Strict` | The default. The flush finishes, and only then is the commit published to other snapshots. A crash during the flush does not leave the new row visible. |
-| `Normal` | Schema changes are written and the durability barrier is lighter. The parity harness sets this when it is measuring SQL rather than fsync. |
-| `UnsafeDev` | Skips shutdown flush work that the other modes still do. For development processes you can afford to throw away. |
+| `Strict` | The default. `COMMIT` returns after the commit record is fsynced to the write-ahead log. Other snapshots see the commit only after that fsync. |
+| `Normal` | `COMMIT` returns after the commit record is written to the operating system with `write(2)`, before any fsync. It survives the process dying, not an OS crash or power loss. The schema file is written without fsync too. The parity harness sets this when it is measuring SQL rather than fsync. |
+| `UnsafeDev` | `COMMIT` returns once the commit record is queued, before the operating system has the bytes. The process dying can lose commits that returned. Closing also skips the final log flush. For development processes you can afford to throw away. |
 
 If `REDLINEDB_DEFAULT_DURABILITY` is unset, `OpenOptions::default()` selects `Strict`. `strict` and `full` select Strict. `normal` selects Normal. `unsafe_dev`, `unsafe-dev`, and `off` select UnsafeDev. Any other string panics the first time default options are built. The panic text names `strict`, `normal`, and `unsafe_dev`.
 
 `REDLINEDB_QUIET_DURABILITY=1` suppresses the one-line notice the library prints the first time a non-default mode is selected through the environment.
 
-The order on the strict path is the product rule: durable, then visible. Code that published the commit and flushed afterwards could show a row that a crash then lost. That path is gone. If you are writing a tool that reports "committed" to a person, leave the default in place and report success after `COMMIT` returns.
+The order is the product rule in every mode: past the mode's barrier, then visible. On `Strict` that means durable, then visible. Code that published the commit and flushed afterwards could show a row that a crash then lost. That path is gone.
+
+`COMMIT` returns only once a transaction that begins afterwards sees the commit, on any connection, including the one that committed. Commits become visible in the order they reached the log. When an earlier commit has passed its barrier but is not visible yet, a later `COMMIT` waits for it. Snapshots that were already open do not change. One exception: a schema change such as `CREATE TABLE` reaches new statements when its transaction publishes, which can be a moment before that transaction's rows are visible.
+
+If you are writing a tool that reports "committed" to a person, leave the default in place and report success after `COMMIT` returns.
+
+## When `COMMIT` fails
+
+A `COMMIT` error means one of two things.
+
+- The commit record never reached the log queue, for example because an earlier log write had already failed. The transaction is rolled back. It does not come back.
+- The commit record was queued, and then writing or fsyncing the log failed before the commit passed its barrier. The outcome is unknown. SQL returns `CommitMaybeCommitted` ("commit outcome uncertain"), which the `redlinedb` crate reports as `ErrorCode::IoErr` and the C API as `RLDB_IOERR`. The kernel's error is `CommitOutcomeUnknown`, which names the transaction, the log position its record ends at, and the log failure.
+
+After an unknown outcome, this process does not show the transaction. The log writer stops at its first failure, so every later write fails with an error that says `wal writer failed` and names the step (`write`, `flush` or `rotate`). Close the database and open it again. If the commit record reached the file whole, recovery replays it and the transaction is there. Otherwise it is not. A failed fsync does not prove the bytes are absent.
+
+Do not retry a change that must happen once just because `COMMIT` failed. Reopen, then check whether it happened, for example by looking up a key the transaction wrote.
 
 ## Locks and busy waits
 
@@ -54,6 +69,6 @@ A reader on one connection does not have to finish before a writer on another co
 
 ## Crash
 
-Recovery replays the write-ahead log. On `Strict`, a commit that did not finish its flush is not a published snapshot, so recovery does not have to invent a story about a row that other transactions already observed. After recovery, open the file again with the same `Database` API. There is no separate recovery command for the common case.
+Recovery replays the write-ahead log. Every commit whose record is whole in the log comes back. That includes a commit whose `COMMIT` had not returned yet, or returned an unknown outcome. On `Strict`, a commit is visible, and `COMMIT` returns, only after its record is fsynced, so recovery finds every commit that another transaction saw or that `COMMIT` reported, as long as the storage keeps what fsync acknowledged. `Normal` and `UnsafeDev` give that up for the cases in the table above. Recovery runs when you open the file again with the same `Database` API. There is no separate recovery command for the common case.
 
 Take a backup before you experiment with `UnsafeDev` on a file you care about. Chapter [Files and day-to-day operation](09-operate.md) shows the backup commands.

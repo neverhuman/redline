@@ -1,3 +1,8 @@
+use std::time::Instant;
+
+use crate::engine::tx::ReservedCsn;
+use crate::wal::manager::PageInstallFence;
+
 use super::*;
 
 #[cfg(feature = "failpoints")]
@@ -31,22 +36,50 @@ fn commit_failure_armed_for_thread() -> bool {
     false
 }
 
+/// Lane E failpoint: the WAL barrier passed but the CSN is not yet visible
+/// to in-memory observers. `panic` fails the commit there. `return` makes
+/// a commit on a thread armed with `arm_commit_failure_for_thread` report
+/// `MaybeCommitted` after publishing it locally, so higher layers can
+/// surface the uncertainty without replaying any SQL-side index repair.
+fn injected_commit_outcome(csn: Csn) -> CommitOutcome {
+    crate::fail_point!("engine::commit::before_publish", |_detail: Option<
+        String,
+    >| {
+        if commit_failure_armed_for_thread() {
+            CommitOutcome::MaybeCommitted
+        } else {
+            CommitOutcome::Committed(csn)
+        }
+    });
+    CommitOutcome::Committed(csn)
+}
+
+/// How long a commit waits for earlier CSNs to publish before it reports the
+/// stall on stderr. It keeps waiting afterwards.
+const PUBLISH_WAIT_WARNING: Duration = Duration::from_secs(5);
+
 impl Engine {
+    /// Commit `tx`.
+    ///
+    /// - `Ok(Committed(csn))`: the commit passed the durability barrier of
+    ///   the live mode and is visible to every snapshot taken after this
+    ///   returns.
+    /// - `Err(CommitOutcomeUnknown)`: the commit record was queued and the
+    ///   WAL failed before it was known written (Normal) or durable
+    ///   (Strict). This process does not show it; the next open may.
+    /// - Any other `Err`: the commit record was never queued, and the
+    ///   transaction is certainly rolled back.
     pub fn commit(&self, mut tx: Txn) -> Result<CommitOutcome> {
         tx.ensure_open()?;
         let pending_schema = tx.pending_schema_snapshot();
         if self.volatile {
-            let csn = self.txs.reserve_commit_csn();
-            return Ok(self.finish_commit(
-                &mut tx,
-                csn,
-                pending_schema,
-                CommitOutcome::Committed(csn),
-            ));
+            let reserved = self.txs.reserve_commit();
+            let outcome = CommitOutcome::Committed(reserved.csn());
+            return Ok(self.finish_commit(&mut tx, reserved, pending_schema, None, outcome));
         }
         // The commit record can be durable before publish_commit. Hold the
         // checkpoint horizon across that gap so recovery still replays it.
-        let _commit_fence = self.wal.begin_page_install()?;
+        let commit_fence = self.wal.begin_page_install()?;
         if let Some(snapshot) = pending_schema.as_deref() {
             let snapshot_bytes = crate::catalog::encode_snapshot(snapshot)?;
             self.wal.append(
@@ -61,15 +94,15 @@ impl Engine {
             )?;
         }
 
-        let (csn, append) = match self
+        // A failure before the commit record is queued is a certain abort.
+        // `append_commit` gives the reserved CSN up on such a failure.
+        let (reserved, append) = match self
             .wal
-            .append_commit(tx.id(), || self.txs.reserve_commit_csn())
+            .append_commit(tx.id(), || self.txs.reserve_commit())
         {
             Ok(value) => value,
             Err(err) => {
-                self.txs.abort(tx.id());
-                self.release_locks(&mut tx);
-                tx.close();
+                self.abort_after_failed_commit(&mut tx);
                 return Err(err);
             }
         };
@@ -84,54 +117,64 @@ impl Engine {
             CommitDurability::UnsafeDev => Ok(append.end_lsn),
         };
         if let Err(err) = commit_barrier {
-            self.txs.cancel_reserved_csn(csn);
-            self.txs.abort(tx.id());
-            self.release_locks(&mut tx);
-            tx.close();
-            return Err(err);
+            // The record is queued, so the WAL may hold it whole even though
+            // the barrier failed, and then the next open recovers it as
+            // committed. Only a record known durable is certainly committed.
+            let durable = self
+                .wal
+                .durable_lsn()
+                .is_ok_and(|durable| durable >= append.end_lsn);
+            if !durable {
+                // Not visible here: the writer stopped, so no later commit
+                // can be made durable over it either. Give the CSN up so
+                // the published frontier does not wait on it.
+                let tx_id = tx.id();
+                drop(reserved);
+                self.abort_after_failed_commit(&mut tx);
+                return Err(Error::CommitOutcomeUnknown {
+                    tx_id,
+                    end_lsn: append.end_lsn,
+                    cause: Box::new(err),
+                });
+            }
         }
 
         #[cfg(test)]
         crate::wal::run_before_commit_publish_hook();
 
-        // Lane E failpoint: WAL fsync has acked but the CSN is not yet
-        // visible to in-memory observers. The injected path returns
-        // `MaybeCommitted` after publishing the commit locally, so higher
-        // layers can surface the uncertainty without replaying any SQL-side
-        // index repair.
-        let _pending_schema_for_closure = pending_schema.clone();
-        crate::fail_point!("engine::commit::before_publish", |arg: Option<String>| {
-            if !commit_failure_armed_for_thread() {
-                let _ = arg;
-                return Ok(self.finish_commit(
-                    &mut tx,
-                    csn,
-                    _pending_schema_for_closure.clone(),
-                    CommitOutcome::Committed(csn),
-                ));
-            }
-            let _detail = match arg {
-                Some(detail) => detail,
-                None => "engine::commit::before_publish injected fault".to_string(),
-            };
-            Ok(self.finish_commit(
-                &mut tx,
-                csn,
-                _pending_schema_for_closure.clone(),
-                CommitOutcome::MaybeCommitted,
-            ))
-        });
-        Ok(self.finish_commit(&mut tx, csn, pending_schema, CommitOutcome::Committed(csn)))
+        let outcome = injected_commit_outcome(reserved.csn());
+        Ok(self.finish_commit(
+            &mut tx,
+            reserved,
+            pending_schema,
+            Some(commit_fence),
+            outcome,
+        ))
     }
 
+    /// Publish a commit whose record passed the barrier, then wait until new
+    /// snapshots see it (workplan R8).
+    ///
+    /// CSNs publish in order: a snapshot sees commits up to the highest CSN
+    /// below which every commit has published. Returning as soon as this
+    /// commit published would let a caller's next transaction miss its own
+    /// commit while an earlier CSN is still between its barrier and its
+    /// publish. The wait comes after the locks are released: the commit it
+    /// waits for needs none of them, and a failed commit gives its CSN up.
+    ///
+    /// The schema and index handles are published with the CSN, not gated
+    /// by it: a statement that starts while this commit waits can see a new
+    /// table before the rows this transaction put in it.
     fn finish_commit(
         &self,
         tx: &mut Txn,
-        csn: Csn,
+        reserved: ReservedCsn<'_>,
         pending_schema: Option<Arc<crate::catalog::SchemaSnapshot>>,
+        commit_fence: Option<PageInstallFence>,
         outcome: CommitOutcome,
     ) -> CommitOutcome {
-        self.txs.publish_commit(tx.id(), csn);
+        let csn = reserved.csn();
+        reserved.publish(tx.id());
         if let Some(snapshot) = pending_schema {
             if !self.volatile {
                 let _ = self.catalog_store.save_atomic(&snapshot);
@@ -152,9 +195,39 @@ impl Engine {
                 }
             }
         }
+        // A checkpoint from here on records this commit in its transaction
+        // status and its catalog, so it may pass the commit record. Release
+        // the horizon before waiting on other commits.
+        drop(commit_fence);
         self.release_locks(tx);
         tx.close();
+        self.wait_until_visible(csn);
         outcome
+    }
+
+    fn wait_until_visible(&self, csn: Csn) {
+        // The usual case: no earlier commit is still publishing.
+        if self.txs.published_csn() >= csn {
+            return;
+        }
+        let warn_at = Instant::now() + PUBLISH_WAIT_WARNING;
+        if self.txs.wait_published(csn, Some(warn_at)) {
+            return;
+        }
+        eprintln!(
+            "redlinedb: commit csn {} has waited {}s for earlier commits to publish \
+             (published csn {}); still waiting",
+            csn.0,
+            PUBLISH_WAIT_WARNING.as_secs(),
+            self.txs.published_csn().0,
+        );
+        self.txs.wait_published(csn, None);
+    }
+
+    fn abort_after_failed_commit(&self, tx: &mut Txn) {
+        self.txs.abort(tx.id());
+        self.release_locks(tx);
+        tx.close();
     }
 
     pub fn rollback(&self, mut tx: Txn) -> Result<()> {
