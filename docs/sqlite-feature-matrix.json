@@ -343,7 +343,13 @@
         "crates/sql/tests/parity_trigger.rs::after_insert_writes_audit_row",
         "crates/sql/tests/parity_trigger.rs::after_update_of_column_filters_firing",
         "crates/sql/tests/parity_trigger.rs::recursive_trigger_terminates_at_cap",
-        "crates/sql/tests/parity_trigger.rs::trigger_survives_reopen"
+        "crates/sql/tests/parity_trigger.rs::recursive_triggers_off_still_fires_a_distinct_nested_trigger",
+        "crates/sql/tests/parity_trigger.rs::trigger_survives_reopen",
+        "crates/sql/tests/launch_trigger_chains.rs::distinct_trigger_chain_runs_with_recursion_off",
+        "crates/sql/tests/launch_trigger_chains.rs::self_trigger_is_skipped_when_off_and_nests_when_on",
+        "crates/sql/tests/launch_trigger_chains.rs::instead_of_self_insert_does_not_recurse",
+        "crates/sql/tests/launch_trigger_chains.rs::trigger_depth_cap_boundary",
+        "crates/sql/tests/launch_trigger_chains.rs::failing_body_leaves_no_partial_effects"
       ],
       "artifacts": [],
       "corpus_case_ids": [
@@ -351,12 +357,14 @@
         "10570"
       ],
       "open_subfeatures": [
-        "INSTEAD OF triggers on views",
-        "recursion is capped at 32 in debug builds rather than SQLite's 1000",
+        "INSTEAD OF UPDATE and INSTEAD OF DELETE on views (INSTEAD OF INSERT fires)",
+        "trigger programs nest at most 8 deep, where SQLite allows 1000; the ninth fails its statement with \"too many levels of trigger recursion\", which the C API reports as SQLITE_MISUSE rather than SQLITE_ERROR",
+        "a CASE ... END expression inside a trigger body fails to parse",
+        "a dropped trigger's name cannot be used again: CREATE TRIGGER fails with \"object already exists\"",
         "an unknown trigger and RAISE outside a trigger are rejected differently (cases 10561, 10570)"
       ],
       "owner": "sql-parser-planner-executor",
-      "notes": "The official sqlite_parity corpus covers `CREATE TRIGGER {BEFORE|AFTER} {INSERT|UPDATE [OF col,...]|DELETE}` plus `DROP TRIGGER`, including `OLD`/`NEW` and `UPDATE OF`."
+      "notes": "The official sqlite_parity corpus covers `CREATE TRIGGER {BEFORE|AFTER} {INSERT|UPDATE [OF col,...]|DELETE}` plus `DROP TRIGGER`, including `OLD`/`NEW` and `UPDATE OF`. `recursive_triggers` follows SQLite: when off, only a trigger that is already running is not fired again, so chains of distinct triggers run to any depth; when on, triggers nest up to the cap. A failed trigger fails its statement: outside an explicit transaction the statement changes nothing, and inside one the transaction must be rolled back."
     },
     {
       "id": "sql.generated-columns",

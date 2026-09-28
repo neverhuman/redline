@@ -675,3 +675,22 @@ against the v5 headers. There is no v4 compatibility alias.
 - Breaking for scripts that read `share/redlinedb/build-provenance.json`,
   `VERSION` or the licence files from a redline-web or redline-testing
   archive: read `share/redlinedb/components/<package>/` instead.
+
+## Triggers: chains and recursion (Q5-07)
+
+- With `PRAGMA recursive_triggers = OFF` (the default), a trigger fired by
+  another trigger's body now runs. Before, every nested trigger was
+  suppressed, so a chain `a -> b -> audit` wrote nothing to `audit`. As in
+  SQLite, only a trigger that is already running is not fired again.
+- An `INSTEAD OF INSERT` trigger whose body inserts into its own view no
+  longer overflows the stack and aborts the process: with recursion off the
+  nested insert fires nothing, and with it on the statement fails at the
+  nesting limit. The trigger's body and everything it fires now run in one
+  transaction, so a failure leaves none of their changes behind.
+- Trigger programs nest at most 8 deep (SQLite allows 1000). The ninth
+  fails its statement with "too many levels of trigger recursion" instead of
+  "trigger recursion depth exceeded 8"; the C API still reports it as
+  `SQLITE_MISUSE`.
+- Still open: `INSTEAD OF UPDATE`/`DELETE`, a `CASE ... END` expression in
+  a trigger body (it fails to parse), and re-creating a trigger under the
+  name of one that was dropped ("object already exists").

@@ -32,11 +32,11 @@ pub struct Txn {
     row_lock_manager: Option<Arc<RowLockManager>>,
     open: bool,
     lifecycle: Option<Arc<TxnLifecycle>>,
-    /// Lane A5-triggers: depth counter for nested trigger fires. The SQL
-    /// crate increments this each time it enters a trigger body and
-    /// decrements on exit; SQLite caps recursion at 1000 by default and
-    /// surfaces a clear error past that. The counter is reset to 0 when
-    /// the trigger executor releases the outermost frame.
+    /// A depth counter a caller may keep for nested trigger fires. The SQL
+    /// crate does not use it: it tracks running trigger programs, their
+    /// nesting cap and SQLite's recursion rule per connection in
+    /// crates/sql/src/exec/trigger.rs, which also covers INSTEAD OF
+    /// triggers that fire outside a transaction.
     trigger_depth: u32,
 }
 
@@ -68,8 +68,7 @@ impl Txn {
         }
     }
 
-    /// Current trigger recursion depth. Used by the SQL executor's
-    /// fire-hook to enforce SQLite-compatible recursion caps.
+    /// Current value of the trigger depth counter (see the field).
     pub fn trigger_depth(&self) -> u32 {
         self.trigger_depth
     }

@@ -12,14 +12,18 @@
 //! 4. Re-parse the body SQL on each fire and execute every statement in
 //!    the body against the live connection.
 //!
-//! Recursive depth tracking lives on [`Txn::trigger_depth`]; the executor
-//! increments before entering a body and decrements on exit, returning a
-//! clear error if the cap is exceeded (default 1000, matching SQLite).
+//! Every running trigger program is a [`TriggerFrame`] on a per-thread
+//! stack, entered before its `WHEN` clause and left when it ends, however it
+//! ends. As in SQLite (`OP_Program`), with `recursive_triggers` off a
+//! trigger does not fire while that same trigger is already running; every
+//! other trigger fires at any depth. Past [`TRIGGER_DEPTH_CAP`] nested
+//! programs the statement fails with "too many levels of trigger recursion".
 //!
-//! `INSTEAD OF` triggers on views are intentionally deferred to a
-//! followup task; this module fires only `BEFORE`/`AFTER` triggers on
-//! base tables.
+//! `INSTEAD OF INSERT` triggers on views fire through
+//! [`fire_instead_of_insert`], under the same frames and in one write
+//! transaction.
 
+use std::cell::RefCell;
 use std::sync::Arc;
 
 use crate::connection::Connection;
@@ -27,21 +31,87 @@ use crate::error::{Error, Result};
 use crate::exec::expr::scalar::row::{SqlRow, TableRow};
 use crate::value::SqlValue;
 use redlinedb_kernel::catalog::{
-    Affinity, ColumnDef, ColumnId, SchemaId, SchemaSnapshot, TableDef, TableId, TriggerDef,
-    TriggerEventKind, TriggerTimeKind, triggers_for,
+    Affinity, ColumnDef, ColumnId, ObjectId, SchemaId, SchemaSnapshot, TableDef, TableId,
+    TriggerDef, TriggerEventKind, TriggerTimeKind, triggers_for,
 };
 use redlinedb_kernel::engine::Txn;
 use redlinedb_kernel::format::RowId;
 
-/// Recursion cap. SQLite's default `SQLITE_MAX_TRIGGER_DEPTH` is 1000,
-/// but RedlineDB's debug builds have heavier stack frames; we cap at 32
-/// to keep within typical Rust stack limits across CI environments while
-/// remaining well above what any non-pathological workload uses (most
-/// applications stay at depth 1–3). The cap can be raised in release
-/// builds via a per-build constant once we add it; the spec calls for
-/// SQLite-style behaviour past the cap, which is exactly what we
-/// surface here.
+/// Most trigger programs one connection runs nested at once. SQLite's
+/// default limit (`SQLITE_MAX_TRIGGER_DEPTH`) is 1000; each nested program
+/// here re-enters the whole statement executor on the native stack, so the
+/// cap stays at 8, which a debug build's test threads survive. The program
+/// that would be the ninth fails its statement with "too many levels of
+/// trigger recursion", as SQLite does past its limit.
 pub(crate) const TRIGGER_DEPTH_CAP: u32 = 8;
+
+const TOO_DEEP: &str = "too many levels of trigger recursion";
+
+thread_local! {
+    /// The trigger programs running on this thread, outermost first.
+    static RUNNING: RefCell<Vec<RunningTrigger>> = const { RefCell::new(Vec::new()) };
+}
+
+/// One running trigger program: which connection runs which trigger.
+/// Triggers another connection runs on this thread (from a callback) are
+/// separate programs with their own depth.
+#[derive(Clone, PartialEq, Eq)]
+struct RunningTrigger {
+    connection: usize,
+    schema: SchemaId,
+    trigger: ObjectId,
+}
+
+impl RunningTrigger {
+    fn of(conn: &Connection, trigger: &TriggerDef) -> Self {
+        Self {
+            connection: conn as *const Connection as usize,
+            schema: trigger.schema_id,
+            trigger: trigger.trigger_id,
+        }
+    }
+}
+
+/// A trigger program while it runs. [`TriggerFrame::enter`] refuses the
+/// program past [`TRIGGER_DEPTH_CAP`] and otherwise marks the trigger as
+/// running; dropping the frame (on success, error or unwind) unmarks it and
+/// every frame entered after it, so a failed statement leaves no trigger
+/// marked as running.
+struct TriggerFrame {
+    slot: usize,
+}
+
+impl TriggerFrame {
+    fn enter(conn: &Connection, trigger: &TriggerDef) -> Result<Self> {
+        let running = RunningTrigger::of(conn, trigger);
+        RUNNING.with(|stack| {
+            let mut stack = stack.borrow_mut();
+            let depth = stack
+                .iter()
+                .filter(|frame| frame.connection == running.connection)
+                .count();
+            if depth >= TRIGGER_DEPTH_CAP as usize {
+                return Err(Error::UnsupportedSql(TOO_DEEP.to_owned()));
+            }
+            let slot = stack.len();
+            stack.push(running);
+            Ok(Self { slot })
+        })
+    }
+
+    /// Whether `trigger` is running on `conn`, anywhere in the nesting.
+    fn is_running(conn: &Connection, trigger: &TriggerDef) -> bool {
+        let running = RunningTrigger::of(conn, trigger);
+        RUNNING.with(|stack| stack.borrow().contains(&running))
+    }
+}
+
+impl Drop for TriggerFrame {
+    fn drop(&mut self) {
+        // `try_with`: nothing to unmark once the thread's stack is gone.
+        let _ = RUNNING.try_with(|stack| stack.borrow_mut().truncate(self.slot));
+    }
+}
 
 /// Fire all triggers that match `(table, event, time)`. For UPDATE
 /// triggers the optional `changed_cols` filter restricts firing to
@@ -49,7 +119,7 @@ pub(crate) const TRIGGER_DEPTH_CAP: u32 = 8;
 /// values actually changed.
 pub(crate) fn fire_triggers(
     conn: &Connection,
-    tx: &mut Txn,
+    _tx: &mut Txn,
     schema: &SchemaSnapshot,
     table: &Arc<TableDef>,
     event: TriggerEventKind,
@@ -62,15 +132,13 @@ pub(crate) fn fire_triggers(
     if triggers.is_empty() {
         return Ok(());
     }
-    // `PRAGMA recursive_triggers = OFF` mirrors SQLite: top-level DML
-    // still fires triggers, but a trigger body's DML must not cascade
-    // into further triggers. The flag is read through the re-entrant
-    // session pointer because the session mutex is already held by the
-    // enclosing DML executor — calling `conn.recursive_triggers()`
-    // would re-lock and deadlock.
-    if tx.trigger_depth() > 0 && !current_recursive_triggers() {
-        return Ok(());
-    }
+    // `PRAGMA recursive_triggers = OFF` mirrors SQLite's OP_Program rule:
+    // a trigger does not fire while that same trigger is already running;
+    // every other trigger fires, however deeply nested. The flag is read
+    // through the re-entrant session pointer because the session mutex is
+    // already held by the enclosing DML executor — calling
+    // `conn.recursive_triggers()` would re-lock and deadlock.
+    let recursive = current_recursive_triggers();
     for trigger in triggers {
         if event == TriggerEventKind::Update
             && !trigger.when_cols.is_empty()
@@ -78,7 +146,10 @@ pub(crate) fn fire_triggers(
         {
             continue;
         }
-        fire_one(conn, tx, table, &trigger, old.as_ref(), new.as_ref())?;
+        if !recursive && TriggerFrame::is_running(conn, &trigger) {
+            continue;
+        }
+        fire_one(conn, table, &trigger, old.as_ref(), new.as_ref())?;
     }
     Ok(())
 }
@@ -102,9 +173,9 @@ fn any_column_in_filter(filter: &[Box<str>], changed: Option<&[String]>) -> bool
 }
 
 /// Read `session.recursive_triggers` without taking the session mutex.
-/// Falls back to SQLite's default (true) when no session is on the
-/// thread-local pointer (e.g. unit-test invocations that never went
-/// through `with_write_tx`).
+/// With no session on the thread-local pointer (a caller that never went
+/// through `with_write_tx`), recursion is allowed; the depth cap still
+/// bounds it.
 fn current_recursive_triggers() -> bool {
     match crate::exec::current_session_ptr() {
         Some(ptr) => {
@@ -117,9 +188,9 @@ fn current_recursive_triggers() -> bool {
     }
 }
 
+/// Run one trigger's program (its `WHEN` clause, then its body) in a frame.
 fn fire_one(
     conn: &Connection,
-    tx: &mut Txn,
     table: &Arc<TableDef>,
     trigger: &TriggerDef,
     old: Option<&TriggerRowValues>,
@@ -127,17 +198,8 @@ fn fire_one(
 ) -> Result<()> {
     // A replay would fire the trigger again (S9-05).
     crate::replay::mark_hazard();
-    let depth = tx.increment_trigger_depth();
-    if depth > TRIGGER_DEPTH_CAP {
-        tx.decrement_trigger_depth();
-        return Err(Error::UnsupportedSql(format!(
-            "trigger recursion depth exceeded {TRIGGER_DEPTH_CAP} (in trigger `{}`)",
-            trigger.name
-        )));
-    }
-    let result = run_body_with_context(conn, table, trigger, old, new);
-    tx.decrement_trigger_depth();
-    result
+    let _frame = TriggerFrame::enter(conn, trigger)?;
+    run_body_with_context(conn, table, trigger, old, new)
 }
 
 fn run_body_with_context(
@@ -203,10 +265,21 @@ pub(crate) fn fire_instead_of_insert(
         rowid: RowId(1),
         values,
     };
-    for trigger in triggers {
-        run_body_with_context(conn, &table, &trigger, None, Some(&row))?;
-    }
-    Ok(())
+    // One write transaction for the whole firing (the enclosing one when
+    // this INSERT runs inside another trigger), so the body's statements and
+    // everything they fire fail or commit together, as one statement does.
+    super::with_write_tx(conn, |session, _tx| {
+        let recursive = session.recursive_triggers;
+        for trigger in &triggers {
+            // A view insert whose trigger is already running (recursion
+            // off) fires nothing and changes nothing, as in SQLite.
+            if !recursive && TriggerFrame::is_running(conn, trigger) {
+                continue;
+            }
+            fire_one(conn, &table, trigger, None, Some(&row))?;
+        }
+        Ok(())
+    })
 }
 
 fn synth_view_trigger_table(view_name: &str, columns: &[String]) -> Arc<TableDef> {

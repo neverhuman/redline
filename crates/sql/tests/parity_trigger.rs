@@ -226,7 +226,7 @@ fn trigger_survives_reopen() {
 }
 
 #[test]
-fn recursive_triggers_off_blocks_nested_trigger_dml() {
+fn recursive_triggers_off_still_fires_a_distinct_nested_trigger() {
     use redlinedb_sql::{Database, DbOptions};
     let dir = tempfile::tempdir().expect("dir");
     let path = dir.path().join("rt.db");
@@ -237,9 +237,10 @@ fn recursive_triggers_off_blocks_nested_trigger_dml() {
     conn.execute("CREATE TABLE mirror(a INTEGER)")
         .expect("mirror");
     conn.execute("CREATE TABLE log(msg TEXT)").expect("log");
-    // driver INSERT → driver_after fires → INSERTs into mirror.
-    // mirror_after would normally fire next; when recursive_triggers is
-    // OFF the executor skips it because trigger_depth() > 0.
+    // driver INSERT → driver_after fires → INSERTs into mirror →
+    // mirror_after fires. `recursive_triggers = OFF` only stops a trigger
+    // from firing again while it is already running (SQLite's rule), so the
+    // distinct nested mirror_after fires in both modes; SQLite logs 1 row.
     conn.execute(
         "CREATE TRIGGER driver_after AFTER INSERT ON driver FOR EACH ROW \
          BEGIN INSERT INTO mirror VALUES (NEW.a); END",
@@ -258,8 +259,8 @@ fn recursive_triggers_off_blocks_nested_trigger_dml() {
     let off_rows = query_redline(&conn, "SELECT count(*) FROM log");
     assert_eq!(
         off_rows,
-        vec![vec![SqlValue::Integer(0)]],
-        "OFF: nested mirror_after must not fire"
+        vec![vec![SqlValue::Integer(1)]],
+        "OFF: the distinct nested mirror_after still fires"
     );
     let mirror_rows = query_redline(&conn, "SELECT count(*) FROM mirror");
     assert_eq!(
