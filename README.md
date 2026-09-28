@@ -5,7 +5,7 @@
 <h1 align="center">RedlineDB</h1>
 
 <p align="center">
-  <em>Rust-native embedded SQL with SQLite-shaped compatibility, concurrent writes, and deterministic recovery.</em>
+  <em>Rust-native embedded SQL with SQLite-shaped compatibility, concurrent writes, and write-ahead-log crash recovery.</em>
 </p>
 
 <p align="center">
@@ -83,7 +83,7 @@ _Cumulative v4.0.8 → v4.1.0: median **−5.3%**, p95 **−22.3%**._
 | v4.0.4 | R2 — ScalarProgram VM dispatch + parallel-scan kernel API + AccessPath IR planner wiring | +55 tests; PRAGMA toggles for opt-in |
 | v4.0.5 | R3-B — per-PreparedStatement VM compile cache | +11 tests; thread-local scoped cache |
 | v4.0.6 | R3-C + R4-A — SQL-side parallel-scan dispatch + Morsel hash-aggregator | +21 tests; AVX2 SUM(i64) **14.4× speedup** vs scalar |
-| v4.0.7 | R4-B — WAL group-commit pipeline (`wal_pipeline` feature) | **194× WAL throughput speedup**, 250× syscall reduction |
+| v4.0.7 | R4-B — WAL group-commit pipeline (`wal_pipeline` feature, off in default and release builds) | **194× WAL throughput speedup**, 250× syscall reduction; not covered by recovery tests or a durability receipt ([durability contract](docs/manual/durability.md)) |
 | v4.0.8 | R3-A — `PRAGMA redline_scalar_vm` + `PRAGMA redline_planner_use_access_path` | SQL surface for the R2-A/R2-C toggles |
 
 Workspace test count: **1786 → 1990 (+204)** with zero regressions. SIMD wins gated behind runtime `is_x86_feature_detected!` dispatch + the `unsafe-ledger.toml` audit; WAL group-commit and parallel-scan dispatch are feature-flagged so default builds remain byte-identical to v4.0.3.

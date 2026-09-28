@@ -20,6 +20,7 @@ Read these three, in order, if that is all the time you have.
 | [Postgres coverage](05-postgres-coverage.md) | What the 265-case shell lane measures, including 12 expected rejections. |
 | [SQL you will write](06-sql-you-will-write.md) | Dialects, types, and a few results that surprise people coming from the other engine. |
 | [Transactions and durability](07-transactions.md) | Snapshots, the isolation modes the kernel accepts, and when a commit is durable. |
+| [Durability contract](durability.md) | Which failures each durability mode survives, which claim a receipt backs, and what is not claimed. |
 | [Embed it](08-embed.md) | Rust, the C ABI, RQL, and the small TCP server. |
 | [Files and day-to-day operation](09-operate.md) | Paths, backup, stats, and the installer. |
 | [Limits](10-limits.md) | The boundaries worth remembering before you promise them to someone else. |

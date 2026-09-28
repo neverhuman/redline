@@ -44,6 +44,8 @@ The order is the product rule in every mode: past the mode's barrier, then visib
 
 If you are writing a tool that reports "committed" to a person, leave the default in place and report success after `COMMIT` returns.
 
+Which failures each mode survives, and which of those statements a test receipt backs, is in the [durability contract](durability.md). A power cut is not one of them: no release has a power-loss receipt.
+
 ## When `COMMIT` fails
 
 A `COMMIT` error means one of two things.
@@ -69,6 +71,6 @@ A reader on one connection does not have to finish before a writer on another co
 
 ## Crash
 
-Recovery replays the write-ahead log. Every commit whose record is whole in the log comes back. That includes a commit whose `COMMIT` had not returned yet, or returned an unknown outcome. On `Strict`, a commit is visible, and `COMMIT` returns, only after its record is fsynced, so recovery finds every commit that another transaction saw or that `COMMIT` reported, as long as the storage keeps what fsync acknowledged. `Normal` and `UnsafeDev` give that up for the cases in the table above. Recovery runs when you open the file again with the same `Database` API. There is no separate recovery command for the common case.
+Recovery replays the write-ahead log. Every commit whose record is whole in the log comes back. That includes a commit whose `COMMIT` had not returned yet, or returned an unknown outcome. On `Strict`, a commit is visible, and `COMMIT` returns, only after its record is fsynced, so recovery finds every commit that another transaction saw or that `COMMIT` reported, as long as the storage keeps what fsync acknowledged. `Normal` and `UnsafeDev` give that up for the cases in the table above. The [durability contract](durability.md) lists the failure models, the receipt behind the process-kill statement, and the known gaps. Recovery runs when you open the file again with the same `Database` API. There is no separate recovery command for the common case.
 
 Take a backup before you experiment with `UnsafeDev` on a file you care about. Chapter [Files and day-to-day operation](09-operate.md) shows the backup commands.

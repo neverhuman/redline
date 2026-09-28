@@ -487,3 +487,75 @@ Draft lines for the v5.0.0 CHANGELOG. The integrator owns `CHANGELOG.md`.
   used to store the CSN there.
 - Compatibility: a binary older than this one ignores the fork record and
   replays past the target.
+
+## A durability contract, and a receipt for the shipped shell
+
+- New manual page `docs/manual/durability.md` (workplan R10): a table of
+  Strict, Normal and UnsafeDev against process kill, OS crash or power
+  loss, and media corruption. Strict surviving a process kill is the only
+  claim, and it carries the tag `<!-- claim:durability.strict.process-kill
+  -->`. Power loss is not claimed: no LazyFS or VM-reset receipt exists.
+  Media corruption is detected (page and record checksums), not repaired.
+  The page also covers uncertain commits, visibility, the owner lock and
+  read-only opens, checkpoint and WAL retention, torn-tail salvage, and the
+  tmpfs, `wal_pipeline`, feature and platform limits, including the open
+  duplicate-row defect when a process dies during a checkpoint's page
+  writes. Chapters 01 and 07 and the README no longer state durability
+  without that page's conditions ("deterministic recovery" is gone; the
+  `wal_pipeline` throughput line says it is off in release builds).
+- `PRAGMA redline_durability` returns the commit durability the engine
+  applies now: `strict`, `normal` or `unsafe_dev`. `PRAGMA synchronous`
+  keeps SQLite's recall value, which starts at FULL whatever the mode, so
+  it could not answer this. The PRAGMA is read-only.
+- `redlinedb-bench durability-evidence --binary target/release/redlinedb
+  --mode strict --failure-model process-kill --out <receipt.json>` runs the
+  shipped shell, not a bench child built with failpoints. It feeds the
+  shell one two-row transaction per key with an ack after each `COMMIT`,
+  keeps an fsynced ledger of the acks, sends SIGKILL at seeded points,
+  recovers twice with the same binary and grades the result with the
+  recover oracle. It refuses a failpoint build (a scan for every kernel
+  failpoint name, checked against `crates/kernel/src` by a test), a Strict
+  run on tmpfs or ramfs, and a binary built by another rustc than the
+  tree's. It exits non-zero unless every scenario passed. The receipt
+  records source SHA and dirtiness, binary SHA-256, toolchain and target,
+  the mode as `PRAGMA redline_durability` read it back, filesystem, mount
+  options and device, kernel, seeds, counts, raw-log SHA-256s and a
+  `limitations` list.
+- `redlinedb-bench durability-evidence-verify` and
+  `ops/ci/durability-claim-gate.sh` check every claim tag in `README.md`
+  and `docs/` against the receipts in `benchmark-results/durability/`: a
+  receipt backs a claim only if it passed at least 10 scenarios from a
+  clean tree whose commit is an ancestor of the release commit with no
+  change to `crates/`, `Cargo.*`, `rust-toolchain.toml` or `.cargo/` in
+  between. `ops/ci/publish-github-release.sh` runs the gate before it
+  creates the release.
+- Kernel CI: `.config/nextest.toml` (slow-timeout 60 s, killed after 5
+  periods; the failpoint test files run one at a time in the
+  `kernel-failpoints` test group). `ops/ci/fast.sh` stage `kernel` now runs
+  `cargo nextest run -p redlinedb-kernel --locked`, and the new stage
+  `kernel-failpoints` runs the lib and the four failpoint-gated test files
+  with `--features failpoints`, which the plain kernel stage compiled to
+  nothing.
+
+### For the integrator (R10)
+
+- `.github/workflows/ci.yml` belongs to another lane, so this lane did not
+  touch it. Add `kernel-failpoints` to the `tests` job's `stage` matrix.
+  Measured on this host with a warm target directory: `kernel` 53 s
+  (557 tests, 2 skipped), `kernel-failpoints` 32 s (247 tests). Twice
+  that is under the 15-minute floor, so give each 15 minutes if the
+  matrix gets per-stage timeouts; the shared 45 minutes also covers them.
+- The release is now blocked until a Strict process-kill receipt for the
+  release commit sits in `benchmark-results/durability/` (Phase 7), because
+  `docs/manual/durability.md` carries that claim tag. Remove the tag
+  instead if the release must ship without a receipt; then the page must
+  not state the claim either.
+- The gate builds `redlinedb-bench` when a claim tag exists and
+  `REDLINEDB_BENCH_BIN` is unset. The `publish` job in
+  `.github/workflows/release-build.yml` has no Rust toolchain step; add one
+  (or pass a built `redlinedb-bench` in `REDLINEDB_BENCH_BIN`), or the
+  gate fails closed there.
+- Build the receipt binary with `cargo build --release --locked -p
+  redlinedb-cli` on its own. Building it in the same invocation as
+  `redlinedb-bench` turns kernel failpoints on through feature
+  unification, and the receipt tool rejects that binary.
