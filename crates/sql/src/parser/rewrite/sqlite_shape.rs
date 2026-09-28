@@ -25,24 +25,23 @@ pub(crate) fn rewrite_select_into_to_ctas(sql: &str) -> String {
     out
 }
 
+/// Split `sql` at the `;` of its code: never inside a literal, a quoted
+/// name or a comment (an apostrophe in a comment used to put the quote
+/// tracking out of step, so a `;` inside a later literal split it).
 pub(crate) fn split_top_level_statements(sql: &str) -> Vec<String> {
     let bytes = sql.as_bytes();
+    let lexer = crate::parser::code_scan::Lexer::current();
     let mut out = Vec::new();
     let mut start = 0usize;
     let mut depth = 0i32;
-    let mut in_str: Option<u8> = None;
     let mut i = 0usize;
     while i < bytes.len() {
-        let b = bytes[i];
-        if let Some(q) = in_str {
-            if b == q {
-                in_str = None;
-            }
-            i += 1;
+        if let Some(end) = crate::parser::code_scan::non_code_end(bytes, i, lexer) {
+            i = end;
             continue;
         }
+        let b = bytes[i];
         match b {
-            b'\'' | b'"' => in_str = Some(b),
             b'(' => depth += 1,
             b')' => depth -= 1,
             b';' if depth == 0 => {
@@ -160,7 +159,8 @@ pub(crate) fn find_top_level_keyword(
 /// recognises it as a parenthesised SELECT source followed by the
 /// ON CONFLICT trailer.
 pub(crate) fn wrap_insert_select_with_upsert(sql: &str) -> String {
-    let lower = sql.to_ascii_lowercase();
+    // Literals and comments are blanked, so only a code `INSERT INTO` counts.
+    let lower = code_lowercase(sql);
     // Find each top-level "insert into" occurrence
     let mut out = sql.to_owned();
     let mut search_from = 0usize;

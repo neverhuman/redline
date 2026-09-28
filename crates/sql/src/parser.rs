@@ -47,6 +47,7 @@ pub(crate) use pragma::*;
 mod pragma_compile;
 #[allow(unused_imports)]
 pub(crate) use pragma_compile::*;
+pub(crate) mod code_mask;
 pub(crate) mod code_scan;
 mod order_by;
 mod pragma_recovery;
@@ -168,7 +169,11 @@ fn parse_prepared_template_impl(conn: &Connection, sql: &str) -> Result<Prepared
     // The postgres dialect keeps `schema.table` as its own name. Sequence
     // DDL still stores the bare sequence name.
     if crate::value::postgres_result_dialect() && !crate::pg_schema::is_sequence_ddl(sql) {
-        if let Some(rewritten) = crate::pg_schema::rewrite_tables(conn, sql) {
+        if let Some(rewritten) =
+            code_mask::rewrite_code_only_opt(sql, code_mask::KeepBrackets::Subscripts, |masked| {
+                crate::pg_schema::rewrite_tables(conn, masked)
+            })
+        {
             if rewritten != sql {
                 return parse_prepared_template_impl(conn, &rewritten);
             }
@@ -178,7 +183,11 @@ fn parse_prepared_template_impl(conn: &Connection, sql: &str) -> Result<Prepared
                 return parse_prepared_template_impl(conn, &rewritten);
             }
         }
-    } else if let Some(rewritten) = strip_registered_pg_schema_prefixes(conn, sql) {
+    } else if let Some(rewritten) =
+        code_mask::rewrite_code_only_opt(sql, code_mask::KeepBrackets::No, |masked| {
+            strip_registered_pg_schema_prefixes(conn, masked)
+        })
+    {
         if rewritten != sql {
             return parse_prepared_template_impl(conn, &rewritten);
         }
@@ -438,10 +447,17 @@ fn split_attach_path_alias(rest: &str) -> Option<(String, &str)> {
         let mut out = String::new();
         while i < bytes.len() {
             if bytes[i] == quote {
+                // A doubled quote is one quote character of the path.
+                if bytes.get(i + 1) == Some(&quote) {
+                    out.push(quote as char);
+                    i += 2;
+                    continue;
+                }
                 return Some((out, parse_attach_alias(&rest[i + 1..])?));
             }
-            out.push(bytes[i] as char);
-            i += 1;
+            // Whole characters: a byte pushed as a `char` turned `ö` into
+            // `Ã¶`, and the database was created under that name.
+            code_scan::copy_char(&mut out, rest, &mut i);
         }
         return None;
     } else {

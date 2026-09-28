@@ -279,6 +279,22 @@ index-format epoch below), so such an index is rebuilt at the first open.
   (`SELECT 'é interval '`).
 - In the SQLite dialect `'\x41'` is the four-character text `\x41`, as in
   SQLite. Only the Postgres dialect reads it as a hex bytea literal.
+- The passes that still scan the text themselves -- GLOB, ON CONFLICT,
+  jsonb `?`, STRICT / WITHOUT ROWID, date arithmetic, `ARRAY[..]`,
+  subscripts, the schema-prefix strip, `ADD COLUMN IF NOT EXISTS` and the
+  statement splitter -- now see bracket- and backtick-quoted names,
+  comments and Postgres `E'..'` and `$tag$..$tag$` strings as opaque.
+  ``CREATE TABLE `a GLOB b`(x)`` created a table named ` glob(b,a)`,
+  ``CREATE TABLE `public.t`(a)`` one named `t`, `SELECT 7 AS [a ? 'k']`
+  named its column `jsonb_exists(a, 'k')`, and an apostrophe in a comment
+  (`/* it's */`) let a later literal be rewritten as code:
+  `INSERT INTO t /* it's */ VALUES ('; SELECT a INTO b')` stored
+  `; CREATE TABLE b AS SELECT a`.
+- `ATTACH 'cöpy.db'` created the database file under a mangled name
+  (`cÃ¶py.db`); a doubled quote in the path is now one quote.
+- `CREATE FUNCTION` with a non-ASCII character in its body no longer aborts
+  the process (a string was sliced inside the character); Postgres function
+  arguments substituted into a body keep non-ASCII text.
 
 ## `pg_listening_channels()` (PG-02)
 

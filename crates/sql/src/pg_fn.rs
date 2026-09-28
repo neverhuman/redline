@@ -121,16 +121,20 @@ fn substitute_args(body: &str, args: &[(String, String)]) -> String {
     let mut in_str = false;
     while i < bytes.len() {
         if in_str {
-            out.push(bytes[i] as char);
             if bytes[i] == b'\'' {
+                out.push('\'');
                 if i + 1 < bytes.len() && bytes[i + 1] == b'\'' {
                     out.push('\'');
                     i += 2;
                     continue;
                 }
                 in_str = false;
+                i += 1;
+                continue;
             }
-            i += 1;
+            // Whole characters: a byte pushed as a `char` re-encodes
+            // multi-byte text (`é` became `Ã©`).
+            crate::parser::code_scan::copy_char(&mut out, body, &mut i);
             continue;
         }
         if bytes[i] == b'\'' {
@@ -156,8 +160,7 @@ fn substitute_args(body: &str, args: &[(String, String)]) -> String {
             }
             continue;
         }
-        out.push(bytes[i] as char);
-        i += 1;
+        crate::parser::code_scan::copy_char(&mut out, body, &mut i);
     }
     out
 }

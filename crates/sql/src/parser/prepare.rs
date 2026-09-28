@@ -142,28 +142,16 @@ pub(crate) fn strip_alter_add_column_if_not_exists_hint(sql: &str) -> String {
     let mut i = 0usize;
     let mut changed = false;
 
+    let lexer = super::code_scan::Lexer::current();
     while i < bytes.len() {
+        // Literals, quoted names and comments of the statement's dialect
+        // (Postgres `E'..'` and `$$..$$` included) are copied as they are.
+        if let Some(end) = super::code_scan::non_code_end(bytes, i, lexer) {
+            out.push_str(&sql[i..end]);
+            i = end;
+            continue;
+        }
         match bytes[i] {
-            b'\'' | b'"' | b'`' => {
-                let end = quoted_end(bytes, i, bytes[i]);
-                out.push_str(&sql[i..end]);
-                i = end;
-            }
-            b'[' => {
-                let end = bracket_quoted_end(bytes, i);
-                out.push_str(&sql[i..end]);
-                i = end;
-            }
-            b'-' if i + 1 < bytes.len() && bytes[i + 1] == b'-' => {
-                let end = line_comment_end(bytes, i);
-                out.push_str(&sql[i..end]);
-                i = end;
-            }
-            b'/' if i + 1 < bytes.len() && bytes[i + 1] == b'*' => {
-                let end = block_comment_end(bytes, i);
-                out.push_str(&sql[i..end]);
-                i = end;
-            }
             b if is_ident_start(b) => {
                 let word_end = word_end(bytes, i);
                 let word = &sql[i..word_end];

@@ -23,6 +23,8 @@ mod new_02_group_numeric;
 mod numeric;
 #[path = "launch_wrong_answer/q5_01_literals.rs"]
 mod q5_01_literals;
+#[path = "launch_wrong_answer/q5_01_quoted_forms.rs"]
+mod q5_01_quoted_forms;
 #[path = "launch_wrong_answer/q5_02_merge_unique.rs"]
 mod q5_02_merge_unique;
 #[path = "launch_wrong_answer/q5_02_partial_update.rs"]

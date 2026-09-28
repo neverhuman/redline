@@ -21,7 +21,7 @@ use crate::lab::{Lab, int, text};
 /// Every phrase that switches on a pre-parse rewrite, spelled as it would
 /// appear in code. Inside a literal, identifier or comment none of them may
 /// change the statement.
-const REWRITE_TRIGGER_PHRASES: &[&str] = &[
+pub(crate) const REWRITE_TRIGGER_PHRASES: &[&str] = &[
     "AS MATERIALIZED",
     "AS NOT MATERIALIZED",
     "as materialized x",
@@ -83,7 +83,7 @@ const REWRITE_TRIGGER_PHRASES: &[&str] = &[
 
 /// Decorations around each phrase: as written, upper case, and surrounded by
 /// multi-byte UTF-8 so a byte-wise rewrite cannot hide.
-fn spellings(phrase: &str) -> Vec<String> {
+pub(crate) fn spellings(phrase: &str) -> Vec<String> {
     vec![
         phrase.to_owned(),
         phrase.to_ascii_uppercase(),
@@ -91,7 +91,7 @@ fn spellings(phrase: &str) -> Vec<String> {
     ]
 }
 
-fn quote(value: &str) -> String {
+pub(crate) fn quote(value: &str) -> String {
     format!("'{}'", value.replace('\'', "''"))
 }
 

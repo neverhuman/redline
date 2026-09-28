@@ -19,13 +19,16 @@ pub(crate) use scan::*;
 pub(crate) use sqlite_shape::*;
 pub(crate) use virtual_table::*;
 
+use super::code_mask::{KeepBrackets, rewrite_code_only};
 use super::code_scan::{replace_code, sql_code_contains_ci};
 use crate::value::postgres_result_dialect;
 
 /// Lower SQLite and Postgres surface syntax the parser lacks. A pass that
 /// searches for its trigger words gates on [`sql_code_contains_ci`] and
 /// matches code only, so the same words in a literal, quoted identifier or
-/// comment are never rewritten (Q5-01).
+/// comment are never rewritten (Q5-01). A pass that scans the text with its
+/// own quote tracking runs through [`rewrite_code_only`], which hides quoted
+/// names, comments and Postgres string forms from it.
 pub(crate) fn rewrite_sqlite_compat_syntax(sql: &str) -> String {
     let mut out = sql.to_owned();
     if sql_code_contains_ci(&out, b" window win as ")
@@ -38,20 +41,25 @@ pub(crate) fn rewrite_sqlite_compat_syntax(sql: &str) -> String {
         out = rewrite_window_exclude(&out);
     }
     if contains_on_conflict_clause(&out) {
-        out = wrap_insert_select_with_upsert(&out);
-        out = rewrite_on_conflict_clauses(&out);
+        out = rewrite_code_only(&out, KeepBrackets::No, |sql| {
+            rewrite_on_conflict_clauses(&wrap_insert_select_with_upsert(sql))
+        });
     }
-    out = rewrite_glob_to_function(&out);
+    if contains_ignore_ascii_case(&out, b"glob") {
+        out = rewrite_code_only(&out, KeepBrackets::No, rewrite_glob_to_function);
+    }
     if out.contains("NULL IS NOT 1") {
         out = replace_code(&out, "NULL IS NOT 1", "NULL IS DISTINCT FROM 1");
     }
     if has_jsonb_question_op(&out) {
-        out = rewrite_jsonb_question_ops(&out);
+        out = rewrite_code_only(&out, KeepBrackets::Array, rewrite_jsonb_question_ops);
     }
     if sql_code_contains_ci(&out, b"using ") {
         out = strip_create_index_using_clause(&out);
     }
-    out = rewrite_strict_without_rowid_combo(&out);
+    if contains_ignore_ascii_case(&out, b"strict") {
+        out = rewrite_code_only(&out, KeepBrackets::No, rewrite_strict_without_rowid_combo);
+    }
     out = rewrite_create_sequence_options_order(&out);
     out = rewrite_identity_sequence_options(&out);
     if sql_code_contains_ci(&out, b"drop identity") {
@@ -61,7 +69,7 @@ pub(crate) fn rewrite_sqlite_compat_syntax(sql: &str) -> String {
         out = rewrite_overriding_system_value(&out);
     }
     if has_pg_array_literal(&out) {
-        out = rewrite_pg_array_literal(&out);
+        out = rewrite_code_only(&out, KeepBrackets::Array, rewrite_pg_array_literal);
     }
     // `'\x41'` is the text `\x41` in SQLite; only Postgres reads hex bytea.
     if postgres_result_dialect() && has_pg_bytea_literal(&out) {
@@ -77,7 +85,7 @@ pub(crate) fn rewrite_sqlite_compat_syntax(sql: &str) -> String {
         out = rewrite_pg_array_overlap(&out);
     }
     if has_postfix_index(&out) {
-        out = rewrite_postfix_index(&out);
+        out = rewrite_code_only(&out, KeepBrackets::Subscripts, rewrite_postfix_index);
     }
     if sql_code_contains_ci(&out, b"at time zone") {
         out = rewrite_at_time_zone(&out);
@@ -86,7 +94,7 @@ pub(crate) fn rewrite_sqlite_compat_syntax(sql: &str) -> String {
         out = rewrite_pg_interval_literal(&out);
     }
     if out.contains("'+") || out.contains("'-") {
-        out = rewrite_date_arith_with_modifier(&out);
+        out = rewrite_code_only(&out, KeepBrackets::No, rewrite_date_arith_with_modifier);
     }
     if sql_code_contains_ci(&out, b" into ") {
         out = rewrite_select_into_to_ctas(&out);
@@ -113,3 +121,7 @@ pub(crate) fn rewrite_sqlite_compat_syntax(sql: &str) -> String {
     }
     out
 }
+
+#[cfg(test)]
+#[path = "quoted_form_tests.rs"]
+mod quoted_form_tests;

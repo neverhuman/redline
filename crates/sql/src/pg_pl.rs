@@ -1013,8 +1013,7 @@ fn substitute(expr: &str, env: &Env) -> String {
             }
             continue;
         }
-        out.push(bytes[i] as char);
-        i += 1;
+        crate::parser::code_scan::copy_char(&mut out, expr, &mut i);
     }
     out
 }
@@ -1263,7 +1262,9 @@ fn starts_word(src: &str, i: usize, word: &str) -> bool {
     if i > 0 && (bytes[i - 1].is_ascii_alphanumeric() || bytes[i - 1] == b'_') {
         return false;
     }
-    if !src[i..i + word.len()].eq_ignore_ascii_case(word) {
+    // Compare bytes: `i` may sit inside a multi-byte character, where a
+    // `str` slice would panic.
+    if !bytes[i..i + word.len()].eq_ignore_ascii_case(word.as_bytes()) {
         return false;
     }
     let after = i + word.len();
