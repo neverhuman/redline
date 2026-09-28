@@ -295,6 +295,12 @@ index-format epoch below), so such an index is rebuilt at the first open.
   tombstone when no snapshot can still read it (the same transaction removed
   it, or its insert rolled back), and otherwise keeps it for older snapshots
   and adds the entry's next version beside it.
+- MERGE (`WHEN MATCHED THEN UPDATE` and `WHEN NOT MATCHED THEN INSERT`) and
+  `ON UPDATE CASCADE` check UNIQUE constraints before they write, as UPDATE
+  and INSERT do. They did not: a MERGE or a cascade could give a second row
+  a key another row held, through a UNIQUE index, a partial UNIQUE index the
+  row entered, or a column's own UNIQUE constraint. A cascade also recomputes
+  the child's STORED generated columns now.
 - A point lookup on a unique partial index no longer skips the routed table
   scan; a partial index holds only the rows its WHERE clause admits.
 - An index with a `COLLATE NOCASE` (or RTRIM or custom) key is no longer

@@ -164,7 +164,9 @@ fn update_child_columns(
     // The action is an UPDATE of the child row, so the new key takes the
     // child columns' affinity (a REAL child column stores 7.0, not 7).
     let new_values = apply_row_affinity(child, new_values)?;
+    let new_values = compute_stored_generated_columns(child, new_values)?;
     apply_constraints(child, &new_values)?;
+    ensure_unique_constraints(conn, session, tx, child, &new_values, Some(rowid))?;
     let payload = encode_sql_row(child.table_id.0, &new_values)?;
     engine.update_for_relation(tx, child.relation_id, rowid, payload)?;
     super::super::index_dml::maintain_indexes_on_update(

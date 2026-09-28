@@ -95,6 +95,7 @@ pub(crate) fn execute_merge(
                         MergeClausePlan::MatchedUpdate { assignments, .. } => {
                             apply_matched_update(
                                 conn,
+                                session,
                                 tx,
                                 plan,
                                 target_row,
@@ -162,8 +163,10 @@ fn joined_from(table: &Arc<TableDef>, alias: Option<Arc<str>>, row: Option<Table
     }
 }
 
+#[allow(clippy::too_many_arguments)]
 fn apply_matched_update(
     conn: &Connection,
+    session: &mut crate::session::SessionState,
     tx: &mut redlinedb_kernel::engine::Txn,
     plan: &MergePlan,
     target_row: &TableRow,
@@ -192,6 +195,9 @@ fn apply_matched_update(
     values = super::apply_row_affinity(&plan.target, values)?;
     values = super::compute_stored_generated_columns(&plan.target, values)?;
     super::apply_constraints(&plan.target, &values)?;
+    // The UPDATE's own row is not a conflict; any other holder of a new
+    // UNIQUE key (index, constraint or partial index the row enters) is.
+    super::ensure_unique_constraints(conn, session, tx, &plan.target, &values, Some(fresh.rowid))?;
 
     let payload = encode_sql_row(plan.target.table_id.0, &values)?;
     conn.engine()
@@ -260,6 +266,7 @@ fn apply_not_matched_insert(
 
     let new_rowid =
         super::choose_rowid_for_insert(session, conn.engine(), tx, &plan.target, &mut row_values)?;
+    super::ensure_unique_constraints(conn, session, tx, &plan.target, &row_values, None)?;
     let payload = encode_sql_row(plan.target.table_id.0, &row_values)?;
     conn.engine()
         .insert_for_relation(tx, plan.target.relation_id, new_rowid, payload)?;
