@@ -1,0 +1,777 @@
+{
+  "schema_version": "redline-release-bench-summary-v1",
+  "bundle": "v5.0.0",
+  "started_at_utc": "2026-09-28T23:19:06Z",
+  "finished_at_utc": "2026-09-28T23:45:02Z",
+  "estimator": "per case: RedlineDB median / SQLite median of the measured repetitions' elapsed ns (lower is better); per run: the median and nearest-rank p95 of those case ratios over the cohort; per label: the median of its runs' values, with their min-max",
+  "noise_rule": "a label's median change against the previous label is claimed only when the two labels' min-max ranges across runs do not overlap (exceeds_noise); overlapping ranges are within_noise; with fewer than two runs there is no spread (unassessed)",
+  "protocol": {
+    "suite": "sqlite_parity",
+    "workers": 1,
+    "repetitions": 3,
+    "warmup": 1,
+    "order": "alternate",
+    "cpus": "2-5",
+    "tmp_root": "/dev/shm/rl-bench-<bundle>-<pid>-<sequence>",
+    "durability": "default",
+    "measurement_boundary": "cli_case_wall_time",
+    "max_loadavg": 32.0,
+    "command": "taskset -c 2-5 redline-testing run --suite sqlite_parity --target-bin <binary> --sqlite-bin <reference> --workers 1 --repetitions 3 --warmup 1 --order alternate --tmp-root /dev/shm/rl-bench-<bundle>-<pid>-<sequence> --progress never --output <label>/run-<k>/raw.jsonl"
+  },
+  "host": {
+    "cpu_model": "AMD Ryzen Threadripper PRO 3995WX 64-Cores",
+    "nproc": 128,
+    "kernel": "Linux 6.8.0-139-generic x86_64",
+    "pinned_cpus": "2-5",
+    "tmp_filesystem": "tmpfs",
+    "governors": {
+      "cpu2": "schedutil",
+      "cpu3": "schedutil",
+      "cpu4": "schedutil",
+      "cpu5": "schedutil"
+    },
+    "runner_units_active": [
+      "actions.runner.neverhuman-RedlineDB.xbabe2-1.service",
+      "actions.runner.neverhuman-RedlineDB.xbabe2-2.service",
+      "actions.runner.neverhuman-RedlineDB.xbabe2-3.service",
+      "actions.runner.neverhuman-RedlineDB.xbabe2-4.service",
+      "jope-runner@full.service"
+    ],
+    "runs_with_runner_jobs": 0,
+    "max_loadavg_threshold": 32.0,
+    "max_loadavg_observed": 11.15
+  },
+  "runner": {
+    "path": "/home/ubuntu/redlineDB/target/release/redline-testing",
+    "sha256": "dccf62c12a46973ea95148b1cef2943bdab2f2a58aa51a331968439cc4ff1f70",
+    "version": "redline-testing 1.0.1"
+  },
+  "reference": {
+    "path": "/home/ubuntu/redlineDB/target/sqlite-reference/3.53.1/bin/sqlite3",
+    "sha256": "fd3bdd25217a849f8f4fa295fb78199cfd69b0c4d47ba8d8c32a1aa328bd147e",
+    "version": "3.53.1 2026-05-05 10:34:17 c88b22011a54b4f6fbd149e9f8e4de77658ce58143a1af0e3785e4e6475127e9 (64-bit)"
+  },
+  "corpus": {
+    "cases": 2445,
+    "narrowed_by": null
+  },
+  "runs_per_label": 3,
+  "common_pass_set": {
+    "definition": "the cases every label passed in every run: every row passed, with exactly the warmups and measured repetitions the protocol asked for",
+    "cases": 1899
+  },
+  "medium_cohort": {
+    "file": {
+      "path": "cohorts/medium-set.txt",
+      "sha256": "df81a4b58a1a7ef4d9beafd620288f14399590cbd6fc8250e64fc2d8280b7bd7",
+      "source": "bench/perf/cases/medium-set.txt"
+    },
+    "listed": 294,
+    "in_bundle": 294,
+    "in_common_pass_set": 280
+  },
+  "labels": [
+    {
+      "label": "v2.0.5",
+      "source_ref": "v2.0.5",
+      "source_commit": "c020508247e598d412b2b65c9c8e36b0ae63afab",
+      "binary_sha256": "420cce7c9e1b0710fa66fc562211c4d5f81dac8f62f23343f2ec60b6250b3f99",
+      "version": "redlinedb v2.0.4 (SQLite 3.45.1 compatibility)",
+      "build": {
+        "declared": true,
+        "profile": "release",
+        "features": "default",
+        "rustflags": ""
+      },
+      "durability": "built-in default",
+      "build_rustc": "rustc 1.95.0 (59807616e 2026-04-14)",
+      "pgo_training_corpus": null,
+      "passed_cases": 1911,
+      "flaky_cases": 0,
+      "runs": [
+        {
+          "run": 1,
+          "sequence": 1,
+          "raw": "v2.0.5/run-1/raw.jsonl",
+          "raw_sha256": "e248d3807ce7d39482ab6fc7fbe8016c621fcb66eef9203cb202659be420309b",
+          "passed": 1911,
+          "failed": 534,
+          "skipped": 0,
+          "runner_exit": 1,
+          "loadavg_before": 6.56,
+          "loadavg_after": 7.35,
+          "runner_jobs_before": 0,
+          "runner_jobs_after": 0
+        },
+        {
+          "run": 2,
+          "sequence": 12,
+          "raw": "v2.0.5/run-2/raw.jsonl",
+          "raw_sha256": "0c01ee2ee152617a54b0c7e2995cd3295760b1297c47de8edadfc92b567ddf5e",
+          "passed": 1911,
+          "failed": 534,
+          "skipped": 0,
+          "runner_exit": 1,
+          "loadavg_before": 9.26,
+          "loadavg_after": 8.53,
+          "runner_jobs_before": 0,
+          "runner_jobs_after": 0
+        },
+        {
+          "run": 3,
+          "sequence": 17,
+          "raw": "v2.0.5/run-3/raw.jsonl",
+          "raw_sha256": "fbe24e4e6a5fe2cf20c1cf5c5b065322d9b67e99a90cc7c30640ae3ae780413c",
+          "passed": 1911,
+          "failed": 534,
+          "skipped": 0,
+          "runner_exit": 1,
+          "loadavg_before": 11.15,
+          "loadavg_after": 8.73,
+          "runner_jobs_before": 0,
+          "runner_jobs_after": 0
+        }
+      ],
+      "common": {
+        "cases": 1899,
+        "median": {
+          "value": 2.014405871679894,
+          "min": 2.0126384487620737,
+          "max": 2.0203640710073976,
+          "per_run": [
+            2.0203640710073976,
+            2.014405871679894,
+            2.0126384487620737
+          ]
+        },
+        "p95": {
+          "value": 2.2820948953744176,
+          "min": 2.268384237803485,
+          "max": 2.29103619637067,
+          "per_run": [
+            2.268384237803485,
+            2.2820948953744176,
+            2.29103619637067
+          ]
+        },
+        "delta_vs_previous": null
+      },
+      "medium": {
+        "cases": 280,
+        "median": {
+          "value": 2.0200666022037423,
+          "min": 2.0194168200538667,
+          "max": 2.033407450247278,
+          "per_run": [
+            2.0200666022037423,
+            2.033407450247278,
+            2.0194168200538667
+          ]
+        },
+        "p95": {
+          "value": 2.2972561602967314,
+          "min": 2.285851337405598,
+          "max": 2.2996895547714082,
+          "per_run": [
+            2.285851337405598,
+            2.2996895547714082,
+            2.2972561602967314
+          ]
+        },
+        "delta_vs_previous": null
+      }
+    },
+    {
+      "label": "v4.0.3",
+      "source_ref": "v4.0.3",
+      "source_commit": "89a55f466a4836cd16a5c99f11ee2d83ffa6fe45",
+      "binary_sha256": "5408b87e888ab07b01553bcaf33bae6fbd3026085cbcef2dffbdf816abc736b1",
+      "version": "redlinedb v4.0.3 (SQLite 3.45.1 compatibility)",
+      "build": {
+        "declared": true,
+        "profile": "release",
+        "features": "default",
+        "rustflags": ""
+      },
+      "durability": "built-in default",
+      "build_rustc": "rustc 1.95.0 (59807616e 2026-04-14)",
+      "pgo_training_corpus": null,
+      "passed_cases": 2305,
+      "flaky_cases": 0,
+      "runs": [
+        {
+          "run": 1,
+          "sequence": 2,
+          "raw": "v4.0.3/run-1/raw.jsonl",
+          "raw_sha256": "47cf18c0b422def8c5fb5e64664363f4c685865910ed67daea33bb3303dfc1a9",
+          "passed": 2305,
+          "failed": 140,
+          "skipped": 0,
+          "runner_exit": 1,
+          "loadavg_before": 7.35,
+          "loadavg_after": 8.74,
+          "runner_jobs_before": 0,
+          "runner_jobs_after": 0
+        },
+        {
+          "run": 2,
+          "sequence": 7,
+          "raw": "v4.0.3/run-2/raw.jsonl",
+          "raw_sha256": "5209c8e39e6aedabc1ccc0f80854e0149e7970d1e276fbb9addb1d139759dbb8",
+          "passed": 2305,
+          "failed": 140,
+          "skipped": 0,
+          "runner_exit": 1,
+          "loadavg_before": 6.61,
+          "loadavg_after": 6.32,
+          "runner_jobs_before": 0,
+          "runner_jobs_after": 0
+        },
+        {
+          "run": 3,
+          "sequence": 18,
+          "raw": "v4.0.3/run-3/raw.jsonl",
+          "raw_sha256": "73a192a3d48c292510bf6c67ea52498f5f4985bfa9ee9c49e790b4ff5036e6da",
+          "passed": 2305,
+          "failed": 140,
+          "skipped": 0,
+          "runner_exit": 1,
+          "loadavg_before": 8.73,
+          "loadavg_after": 7.17,
+          "runner_jobs_before": 0,
+          "runner_jobs_after": 0
+        }
+      ],
+      "common": {
+        "cases": 1899,
+        "median": {
+          "value": 2.182674007125266,
+          "min": 2.1824199684427947,
+          "max": 4.097731812221991,
+          "per_run": [
+            4.097731812221991,
+            2.1824199684427947,
+            2.182674007125266
+          ]
+        },
+        "p95": {
+          "value": 2.512999126444294,
+          "min": 2.512761519357523,
+          "max": 9.04496034258942,
+          "per_run": [
+            9.04496034258942,
+            2.512761519357523,
+            2.512999126444294
+          ]
+        },
+        "delta_vs_previous": {
+          "previous": "v2.0.5",
+          "median_change_pct": 8.353238928212935,
+          "verdict": "exceeds_noise"
+        }
+      },
+      "medium": {
+        "cases": 280,
+        "median": {
+          "value": 2.194347040211717,
+          "min": 2.1586283386499123,
+          "max": 5.092171874523407,
+          "per_run": [
+            5.092171874523407,
+            2.1586283386499123,
+            2.194347040211717
+          ]
+        },
+        "p95": {
+          "value": 2.515750793004048,
+          "min": 2.512999126444294,
+          "max": 8.78011203903274,
+          "per_run": [
+            8.78011203903274,
+            2.515750793004048,
+            2.512999126444294
+          ]
+        },
+        "delta_vs_previous": {
+          "previous": "v2.0.5",
+          "median_change_pct": 8.627459996509401,
+          "verdict": "exceeds_noise"
+        }
+      }
+    },
+    {
+      "label": "v4.0.8",
+      "source_ref": "v4.0.8",
+      "source_commit": "fb9ef60ad5ab728412cd6a3549b8d29aa4755f88",
+      "binary_sha256": "1c2239056951a0628e0e71e511a03d5da29e6108101dfbba6547217ea3c8cae0",
+      "version": "redlinedb v4.0.8 (SQLite 3.45.1 compatibility)",
+      "build": {
+        "declared": true,
+        "profile": "release",
+        "features": "default",
+        "rustflags": ""
+      },
+      "durability": "built-in default",
+      "build_rustc": "rustc 1.95.0 (59807616e 2026-04-14)",
+      "pgo_training_corpus": null,
+      "passed_cases": 2305,
+      "flaky_cases": 0,
+      "runs": [
+        {
+          "run": 1,
+          "sequence": 3,
+          "raw": "v4.0.8/run-1/raw.jsonl",
+          "raw_sha256": "54b4fabaf6f2459ca1a76c3d9ee639cbb8ce797dbfb2b9f37041988a376c1704",
+          "passed": 2305,
+          "failed": 140,
+          "skipped": 0,
+          "runner_exit": 1,
+          "loadavg_before": 8.74,
+          "loadavg_after": 6.1,
+          "runner_jobs_before": 0,
+          "runner_jobs_after": 0
+        },
+        {
+          "run": 2,
+          "sequence": 8,
+          "raw": "v4.0.8/run-2/raw.jsonl",
+          "raw_sha256": "6af2ae41bf5100308ae31e63900b88a6c313f00edd17e78162d6db899e65b9a8",
+          "passed": 2305,
+          "failed": 140,
+          "skipped": 0,
+          "runner_exit": 1,
+          "loadavg_before": 6.32,
+          "loadavg_after": 6.41,
+          "runner_jobs_before": 0,
+          "runner_jobs_after": 0
+        },
+        {
+          "run": 3,
+          "sequence": 13,
+          "raw": "v4.0.8/run-3/raw.jsonl",
+          "raw_sha256": "388aa521da5f514dc873b64b6c2a36c9322d0bbee49cb78418f2072f9805b199",
+          "passed": 2305,
+          "failed": 140,
+          "skipped": 0,
+          "runner_exit": 1,
+          "loadavg_before": 8.53,
+          "loadavg_after": 7.81,
+          "runner_jobs_before": 0,
+          "runner_jobs_after": 0
+        }
+      ],
+      "common": {
+        "cases": 1899,
+        "median": {
+          "value": 2.2003483177263434,
+          "min": 2.1977753841419183,
+          "max": 4.710089909103427,
+          "per_run": [
+            4.710089909103427,
+            2.2003483177263434,
+            2.1977753841419183
+          ]
+        },
+        "p95": {
+          "value": 2.5406431112044694,
+          "min": 2.5224307423756454,
+          "max": 6.106812942808749,
+          "per_run": [
+            6.106812942808749,
+            2.5406431112044694,
+            2.5224307423756454
+          ]
+        },
+        "delta_vs_previous": {
+          "previous": "v4.0.3",
+          "median_change_pct": 0.8097549401963056,
+          "verdict": "within_noise"
+        }
+      },
+      "medium": {
+        "cases": 280,
+        "median": {
+          "value": 2.219483560822808,
+          "min": 2.205027498394327,
+          "max": 4.777467086670518,
+          "per_run": [
+            4.777467086670518,
+            2.219483560822808,
+            2.205027498394327
+          ]
+        },
+        "p95": {
+          "value": 2.532082354457232,
+          "min": 2.509261366117581,
+          "max": 6.360340208505643,
+          "per_run": [
+            6.360340208505643,
+            2.509261366117581,
+            2.532082354457232
+          ]
+        },
+        "delta_vs_previous": {
+          "previous": "v4.0.3",
+          "median_change_pct": 1.1455125442995318,
+          "verdict": "within_noise"
+        }
+      }
+    },
+    {
+      "label": "v4.0.9",
+      "source_ref": "v4.0.9",
+      "source_commit": "02e297fd1f9ace5ebf50da0db37e897c4247a41c",
+      "binary_sha256": "13ea8c1fcd739d9828d07289a14cb9562a1185ebfe795d3b755905a6d6e46051",
+      "version": "redlinedb v4.0.9 (SQLite 3.45.1 compatibility)",
+      "build": {
+        "declared": true,
+        "profile": "release",
+        "features": "default",
+        "rustflags": ""
+      },
+      "durability": "built-in default",
+      "build_rustc": "rustc 1.95.0 (59807616e 2026-04-14)",
+      "pgo_training_corpus": null,
+      "passed_cases": 2305,
+      "flaky_cases": 0,
+      "runs": [
+        {
+          "run": 1,
+          "sequence": 4,
+          "raw": "v4.0.9/run-1/raw.jsonl",
+          "raw_sha256": "650b799fd9721d7fa838b766295c818be8ddd2b228cfa4f90b679aaddefe09b6",
+          "passed": 2305,
+          "failed": 140,
+          "skipped": 0,
+          "runner_exit": 1,
+          "loadavg_before": 6.1,
+          "loadavg_after": 10.52,
+          "runner_jobs_before": 0,
+          "runner_jobs_after": 0
+        },
+        {
+          "run": 2,
+          "sequence": 9,
+          "raw": "v4.0.9/run-2/raw.jsonl",
+          "raw_sha256": "9ddbf6366f6c910c0a1126a1366cbb4e0161163b4d2eb9f5ca5bdc7ed92b6860",
+          "passed": 2305,
+          "failed": 140,
+          "skipped": 0,
+          "runner_exit": 1,
+          "loadavg_before": 6.41,
+          "loadavg_after": 5.84,
+          "runner_jobs_before": 0,
+          "runner_jobs_after": 0
+        },
+        {
+          "run": 3,
+          "sequence": 14,
+          "raw": "v4.0.9/run-3/raw.jsonl",
+          "raw_sha256": "37c795523e53459e73709d841afc95b95d922fceb34d2b99cfac506d88a74959",
+          "passed": 2305,
+          "failed": 140,
+          "skipped": 0,
+          "runner_exit": 1,
+          "loadavg_before": 7.81,
+          "loadavg_after": 8.04,
+          "runner_jobs_before": 0,
+          "runner_jobs_after": 0
+        }
+      ],
+      "common": {
+        "cases": 1899,
+        "median": {
+          "value": 2.2171137265417262,
+          "min": 2.204831014982177,
+          "max": 3.0332906423605337,
+          "per_run": [
+            3.0332906423605337,
+            2.2171137265417262,
+            2.204831014982177
+          ]
+        },
+        "p95": {
+          "value": 2.5493783520709252,
+          "min": 2.5361445399300715,
+          "max": 12.090863030251638,
+          "per_run": [
+            12.090863030251638,
+            2.5493783520709252,
+            2.5361445399300715
+          ]
+        },
+        "delta_vs_previous": {
+          "previous": "v4.0.8",
+          "median_change_pct": 0.7619434014295878,
+          "verdict": "within_noise"
+        }
+      },
+      "medium": {
+        "cases": 280,
+        "median": {
+          "value": 2.220165656578199,
+          "min": 2.1989113573590116,
+          "max": 3.670087865104974,
+          "per_run": [
+            3.670087865104974,
+            2.220165656578199,
+            2.1989113573590116
+          ]
+        },
+        "p95": {
+          "value": 2.568226483131653,
+          "min": 2.5394379674804926,
+          "max": 6.168961323565605,
+          "per_run": [
+            6.168961323565605,
+            2.568226483131653,
+            2.5394379674804926
+          ]
+        },
+        "delta_vs_previous": {
+          "previous": "v4.0.8",
+          "median_change_pct": 0.03073218326239413,
+          "verdict": "within_noise"
+        }
+      }
+    },
+    {
+      "label": "v4.1.0",
+      "source_ref": "v4.1.0",
+      "source_commit": "af20826311a067a51383c382013612545156df61",
+      "binary_sha256": "26ebec40f89258aee1474d0ffff1769df1235594b1f8a48ac3ee037c3dbbce7c",
+      "version": "redlinedb v4.1.0 (SQLite 3.45.1 compatibility)",
+      "build": {
+        "declared": true,
+        "profile": "release",
+        "features": "default",
+        "rustflags": ""
+      },
+      "durability": "built-in default",
+      "build_rustc": "rustc 1.95.0 (59807616e 2026-04-14)",
+      "pgo_training_corpus": null,
+      "passed_cases": 2364,
+      "flaky_cases": 0,
+      "runs": [
+        {
+          "run": 1,
+          "sequence": 5,
+          "raw": "v4.1.0/run-1/raw.jsonl",
+          "raw_sha256": "273faf902db1ef734262900777ad36969b48e6ea4521412dc996e3604e93fda0",
+          "passed": 2364,
+          "failed": 81,
+          "skipped": 0,
+          "runner_exit": 1,
+          "loadavg_before": 10.52,
+          "loadavg_after": 7.82,
+          "runner_jobs_before": 0,
+          "runner_jobs_after": 0
+        },
+        {
+          "run": 2,
+          "sequence": 10,
+          "raw": "v4.1.0/run-2/raw.jsonl",
+          "raw_sha256": "8f76ffd825ad1d1052d0741ae3f8e873aa9488bddc4688f96eca40429583bad2",
+          "passed": 2364,
+          "failed": 81,
+          "skipped": 0,
+          "runner_exit": 1,
+          "loadavg_before": 5.84,
+          "loadavg_after": 6.37,
+          "runner_jobs_before": 0,
+          "runner_jobs_after": 0
+        },
+        {
+          "run": 3,
+          "sequence": 15,
+          "raw": "v4.1.0/run-3/raw.jsonl",
+          "raw_sha256": "550c21fb36e18b1264c85fc64fabf82a39bf2069bc8201376f78fd460214d8fa",
+          "passed": 2364,
+          "failed": 81,
+          "skipped": 0,
+          "runner_exit": 1,
+          "loadavg_before": 8.04,
+          "loadavg_after": 6.33,
+          "runner_jobs_before": 0,
+          "runner_jobs_after": 0
+        }
+      ],
+      "common": {
+        "cases": 1899,
+        "median": {
+          "value": 2.1119368755429075,
+          "min": 2.0861507134976938,
+          "max": 2.189870262245316,
+          "per_run": [
+            2.189870262245316,
+            2.1119368755429075,
+            2.0861507134976938
+          ]
+        },
+        "p95": {
+          "value": 2.4385510846290677,
+          "min": 2.41570809498187,
+          "max": 5.2875506351529955,
+          "per_run": [
+            5.2875506351529955,
+            2.4385510846290677,
+            2.41570809498187
+          ]
+        },
+        "delta_vs_previous": {
+          "previous": "v4.0.9",
+          "median_change_pct": -4.743863597961417,
+          "verdict": "exceeds_noise"
+        }
+      },
+      "medium": {
+        "cases": 280,
+        "median": {
+          "value": 2.1404983955289083,
+          "min": 2.08540962859998,
+          "max": 2.1527049230808446,
+          "per_run": [
+            2.1527049230808446,
+            2.1404983955289083,
+            2.08540962859998
+          ]
+        },
+        "p95": {
+          "value": 2.4577892383340805,
+          "min": 2.4297546733307764,
+          "max": 5.0432277876122695,
+          "per_run": [
+            5.0432277876122695,
+            2.4577892383340805,
+            2.4297546733307764
+          ]
+        },
+        "delta_vs_previous": {
+          "previous": "v4.0.9",
+          "median_change_pct": -3.588347599794728,
+          "verdict": "exceeds_noise"
+        }
+      }
+    },
+    {
+      "label": "v5.0.0",
+      "source_ref": "55637d088",
+      "source_commit": "55637d0887935e8be0202ed699ffb47e10a5eef2",
+      "binary_sha256": "0c803caa8e0ef29c4633b660da45fe48a7b237be1816506fbcd9b10d325d23b8",
+      "version": "redlinedb v5.0.0 (tested against SQLite 3.53.1)",
+      "build": {
+        "declared": true,
+        "profile": "release",
+        "features": "default",
+        "rustflags": ""
+      },
+      "durability": "built-in default",
+      "build_rustc": "rustc 1.95.0 (59807616e 2026-04-14)",
+      "pgo_training_corpus": null,
+      "passed_cases": 2368,
+      "flaky_cases": 0,
+      "runs": [
+        {
+          "run": 1,
+          "sequence": 6,
+          "raw": "v5.0.0/run-1/raw.jsonl",
+          "raw_sha256": "dfc13e8bdcfc9174eb82ace00d9d94f3de5624fb4c553b69d788546eba3b9edc",
+          "passed": 2368,
+          "failed": 77,
+          "skipped": 0,
+          "runner_exit": 1,
+          "loadavg_before": 7.82,
+          "loadavg_after": 6.61,
+          "runner_jobs_before": 0,
+          "runner_jobs_after": 0
+        },
+        {
+          "run": 2,
+          "sequence": 11,
+          "raw": "v5.0.0/run-2/raw.jsonl",
+          "raw_sha256": "0e6e5ce326e3d50169386eb734ae1fcf15d50001a43a5b9771dc09b9d4b6d000",
+          "passed": 2368,
+          "failed": 77,
+          "skipped": 0,
+          "runner_exit": 1,
+          "loadavg_before": 6.37,
+          "loadavg_after": 9.26,
+          "runner_jobs_before": 0,
+          "runner_jobs_after": 0
+        },
+        {
+          "run": 3,
+          "sequence": 16,
+          "raw": "v5.0.0/run-3/raw.jsonl",
+          "raw_sha256": "d4efb036109a46107ba5f3e4d22c7088f3429271f742e54ff51f2dc3c689f4fc",
+          "passed": 2368,
+          "failed": 77,
+          "skipped": 0,
+          "runner_exit": 1,
+          "loadavg_before": 6.33,
+          "loadavg_after": 11.15,
+          "runner_jobs_before": 0,
+          "runner_jobs_after": 0
+        }
+      ],
+      "common": {
+        "cases": 1899,
+        "median": {
+          "value": 2.2459426440844203,
+          "min": 2.2237447679736384,
+          "max": 2.2796345539012304,
+          "per_run": [
+            2.2796345539012304,
+            2.2459426440844203,
+            2.2237447679736384
+          ]
+        },
+        "p95": {
+          "value": 2.880360258683036,
+          "min": 2.5626881552605436,
+          "max": 5.616762200589215,
+          "per_run": [
+            2.880360258683036,
+            5.616762200589215,
+            2.5626881552605436
+          ]
+        },
+        "delta_vs_previous": {
+          "previous": "v4.1.0",
+          "median_change_pct": 6.345159748539575,
+          "verdict": "exceeds_noise"
+        }
+      },
+      "medium": {
+        "cases": 280,
+        "median": {
+          "value": 2.231893843860234,
+          "min": 2.2144685563660604,
+          "max": 2.3175940741677,
+          "per_run": [
+            2.3175940741677,
+            2.231893843860234,
+            2.2144685563660604
+          ]
+        },
+        "p95": {
+          "value": 2.599305585445989,
+          "min": 2.5662376438759136,
+          "max": 4.454588132181448,
+          "per_run": [
+            4.454588132181448,
+            2.599305585445989,
+            2.5662376438759136
+          ]
+        },
+        "delta_vs_previous": {
+          "previous": "v4.1.0",
+          "median_change_pct": 4.269820922184908,
+          "verdict": "exceeds_noise"
+        }
+      }
+    }
+  ],
+  "publishable": true,
+  "publication_blockers": []
+}

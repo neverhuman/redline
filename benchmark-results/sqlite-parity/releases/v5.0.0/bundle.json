@@ -1,0 +1,202 @@
+{
+  "schema_version": "redline-release-bench-bundle-v1",
+  "bundle": "v5.0.0",
+  "started_at_utc": "2026-09-28T23:19:06Z",
+  "finished_at_utc": "2026-09-28T23:45:02Z",
+  "runs_per_label": 3,
+  "protocol": {
+    "suite": "sqlite_parity",
+    "workers": 1,
+    "repetitions": 3,
+    "warmup": 1,
+    "order": "alternate",
+    "cpus": "2-5",
+    "tmp_root": "/dev/shm/rl-bench-<bundle>-<pid>-<sequence>",
+    "durability": "default",
+    "measurement_boundary": "cli_case_wall_time",
+    "max_loadavg": 32,
+    "command": "taskset -c 2-5 redline-testing run --suite sqlite_parity --target-bin <binary> --sqlite-bin <reference> --workers 1 --repetitions 3 --warmup 1 --order alternate --tmp-root /dev/shm/rl-bench-<bundle>-<pid>-<sequence> --progress never --output <label>/run-<k>/raw.jsonl"
+  },
+  "cases": {
+    "manifest": "cases.json",
+    "count": 2445,
+    "case_list": null
+  },
+  "medium_cohort": {
+    "path": "cohorts/medium-set.txt",
+    "sha256": "df81a4b58a1a7ef4d9beafd620288f14399590cbd6fc8250e64fc2d8280b7bd7",
+    "source": "bench/perf/cases/medium-set.txt"
+  },
+  "labels": [
+    {
+      "label": "v2.0.5",
+      "binary": "target/version-history/v2.0.5/redlinedb",
+      "binary_sha256": "420cce7c9e1b0710fa66fc562211c4d5f81dac8f62f23343f2ec60b6250b3f99",
+      "source_ref": "v2.0.5",
+      "source_commit": "c020508247e598d412b2b65c9c8e36b0ae63afab",
+      "build_contract": "v2.0.5/build-contract.json",
+      "build_record": "v2.0.5/build.json",
+      "durability_env": false
+    },
+    {
+      "label": "v4.0.3",
+      "binary": "target/version-history/v4.0.3/redlinedb",
+      "binary_sha256": "5408b87e888ab07b01553bcaf33bae6fbd3026085cbcef2dffbdf816abc736b1",
+      "source_ref": "v4.0.3",
+      "source_commit": "89a55f466a4836cd16a5c99f11ee2d83ffa6fe45",
+      "build_contract": "v4.0.3/build-contract.json",
+      "build_record": "v4.0.3/build.json",
+      "durability_env": false
+    },
+    {
+      "label": "v4.0.8",
+      "binary": "target/version-history/v4.0.8/redlinedb",
+      "binary_sha256": "1c2239056951a0628e0e71e511a03d5da29e6108101dfbba6547217ea3c8cae0",
+      "source_ref": "v4.0.8",
+      "source_commit": "fb9ef60ad5ab728412cd6a3549b8d29aa4755f88",
+      "build_contract": "v4.0.8/build-contract.json",
+      "build_record": "v4.0.8/build.json",
+      "durability_env": false
+    },
+    {
+      "label": "v4.0.9",
+      "binary": "target/version-history/v4.0.9/redlinedb",
+      "binary_sha256": "13ea8c1fcd739d9828d07289a14cb9562a1185ebfe795d3b755905a6d6e46051",
+      "source_ref": "v4.0.9",
+      "source_commit": "02e297fd1f9ace5ebf50da0db37e897c4247a41c",
+      "build_contract": "v4.0.9/build-contract.json",
+      "build_record": "v4.0.9/build.json",
+      "durability_env": false
+    },
+    {
+      "label": "v4.1.0",
+      "binary": "target/version-history/v4.1.0/redlinedb",
+      "binary_sha256": "26ebec40f89258aee1474d0ffff1769df1235594b1f8a48ac3ee037c3dbbce7c",
+      "source_ref": "v4.1.0",
+      "source_commit": "af20826311a067a51383c382013612545156df61",
+      "build_contract": "v4.1.0/build-contract.json",
+      "build_record": "v4.1.0/build.json",
+      "durability_env": true
+    },
+    {
+      "label": "v5.0.0",
+      "binary": "target/version-history/v5.0.0/redlinedb",
+      "binary_sha256": "0c803caa8e0ef29c4633b660da45fe48a7b237be1816506fbcd9b10d325d23b8",
+      "source_ref": "55637d088",
+      "source_commit": "55637d0887935e8be0202ed699ffb47e10a5eef2",
+      "build_contract": "v5.0.0/build-contract.json",
+      "build_record": "v5.0.0/build.json",
+      "durability_env": true
+    }
+  ],
+  "runs": [
+    {
+      "sequence": 1,
+      "label": "v2.0.5",
+      "run": 1,
+      "raw": "v2.0.5/run-1/raw.jsonl"
+    },
+    {
+      "sequence": 2,
+      "label": "v4.0.3",
+      "run": 1,
+      "raw": "v4.0.3/run-1/raw.jsonl"
+    },
+    {
+      "sequence": 3,
+      "label": "v4.0.8",
+      "run": 1,
+      "raw": "v4.0.8/run-1/raw.jsonl"
+    },
+    {
+      "sequence": 4,
+      "label": "v4.0.9",
+      "run": 1,
+      "raw": "v4.0.9/run-1/raw.jsonl"
+    },
+    {
+      "sequence": 5,
+      "label": "v4.1.0",
+      "run": 1,
+      "raw": "v4.1.0/run-1/raw.jsonl"
+    },
+    {
+      "sequence": 6,
+      "label": "v5.0.0",
+      "run": 1,
+      "raw": "v5.0.0/run-1/raw.jsonl"
+    },
+    {
+      "sequence": 7,
+      "label": "v4.0.3",
+      "run": 2,
+      "raw": "v4.0.3/run-2/raw.jsonl"
+    },
+    {
+      "sequence": 8,
+      "label": "v4.0.8",
+      "run": 2,
+      "raw": "v4.0.8/run-2/raw.jsonl"
+    },
+    {
+      "sequence": 9,
+      "label": "v4.0.9",
+      "run": 2,
+      "raw": "v4.0.9/run-2/raw.jsonl"
+    },
+    {
+      "sequence": 10,
+      "label": "v4.1.0",
+      "run": 2,
+      "raw": "v4.1.0/run-2/raw.jsonl"
+    },
+    {
+      "sequence": 11,
+      "label": "v5.0.0",
+      "run": 2,
+      "raw": "v5.0.0/run-2/raw.jsonl"
+    },
+    {
+      "sequence": 12,
+      "label": "v2.0.5",
+      "run": 2,
+      "raw": "v2.0.5/run-2/raw.jsonl"
+    },
+    {
+      "sequence": 13,
+      "label": "v4.0.8",
+      "run": 3,
+      "raw": "v4.0.8/run-3/raw.jsonl"
+    },
+    {
+      "sequence": 14,
+      "label": "v4.0.9",
+      "run": 3,
+      "raw": "v4.0.9/run-3/raw.jsonl"
+    },
+    {
+      "sequence": 15,
+      "label": "v4.1.0",
+      "run": 3,
+      "raw": "v4.1.0/run-3/raw.jsonl"
+    },
+    {
+      "sequence": 16,
+      "label": "v5.0.0",
+      "run": 3,
+      "raw": "v5.0.0/run-3/raw.jsonl"
+    },
+    {
+      "sequence": 17,
+      "label": "v2.0.5",
+      "run": 3,
+      "raw": "v2.0.5/run-3/raw.jsonl"
+    },
+    {
+      "sequence": 18,
+      "label": "v4.0.3",
+      "run": 3,
+      "raw": "v4.0.3/run-3/raw.jsonl"
+    }
+  ]
+}

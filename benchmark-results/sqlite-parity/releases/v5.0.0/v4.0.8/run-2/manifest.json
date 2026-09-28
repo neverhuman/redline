@@ -1,0 +1,39 @@
+{
+  "schema_version": "redline-testing-manifest-v1",
+  "suite": "sqlite_parity",
+  "command_line": [
+    "/home/ubuntu/redlineDB/target/release/redline-testing",
+    "run",
+    "--suite",
+    "sqlite_parity",
+    "--target-bin",
+    "/home/ubuntu/redlineDB/target/version-history/v4.0.8/redlinedb",
+    "--sqlite-bin",
+    "/home/ubuntu/redlineDB/target/sqlite-reference/3.53.1/bin/sqlite3",
+    "--workers",
+    "1",
+    "--repetitions",
+    "3",
+    "--warmup",
+    "1",
+    "--order",
+    "alternate",
+    "--tmp-root",
+    "/dev/shm/rl-bench-v5.0.0-1974153-8",
+    "--progress",
+    "never",
+    "--output",
+    "/home/ubuntu/redlineDB/benchmark-results/sqlite-parity/releases/v5.0.0/v4.0.8/run-2/raw.jsonl"
+  ],
+  "workers": "1",
+  "repetitions": 3,
+  "warmup": 1,
+  "memory_samples": false,
+  "measurement_order": "alternate",
+  "output_files": {
+    "provenance": "/home/ubuntu/redlineDB/benchmark-results/sqlite-parity/releases/v5.0.0/v4.0.8/run-2/provenance.json",
+    "ranked": "/home/ubuntu/redlineDB/benchmark-results/sqlite-parity/releases/v5.0.0/v4.0.8/run-2/ranked.csv",
+    "raw": "/home/ubuntu/redlineDB/benchmark-results/sqlite-parity/releases/v5.0.0/v4.0.8/run-2/raw.jsonl",
+    "summary": "/home/ubuntu/redlineDB/benchmark-results/sqlite-parity/releases/v5.0.0/v4.0.8/run-2/summary.json"
+  }
+}

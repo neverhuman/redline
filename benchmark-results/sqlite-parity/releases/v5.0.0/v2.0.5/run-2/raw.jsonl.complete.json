@@ -1,0 +1,8 @@
+{
+  "schema_version": "redline-testing-raw-complete-v1",
+  "suite": "sqlite_parity",
+  "raw_file": "raw.jsonl",
+  "records": 9453,
+  "cases": 2445,
+  "raw_sha256": "0c01ee2ee152617a54b0c7e2995cd3295760b1297c47de8edadfc92b567ddf5e"
+}

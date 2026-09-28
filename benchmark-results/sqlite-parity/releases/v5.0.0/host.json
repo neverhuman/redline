@@ -1,0 +1,421 @@
+{
+  "schema_version": "redline-release-bench-host-v1",
+  "hostname": "xbabe2",
+  "kernel": "Linux 6.8.0-139-generic x86_64",
+  "cpu_model": "AMD Ryzen Threadripper PRO 3995WX 64-Cores",
+  "nproc": 128,
+  "pinned_cpus": "2-5",
+  "tmp_filesystem": "tmpfs",
+  "governors": {
+    "cpu2": "schedutil",
+    "cpu3": "schedutil",
+    "cpu4": "schedutil",
+    "cpu5": "schedutil"
+  },
+  "runner_units_active": [
+    "actions.runner.neverhuman-RedlineDB.xbabe2-1.service",
+    "actions.runner.neverhuman-RedlineDB.xbabe2-2.service",
+    "actions.runner.neverhuman-RedlineDB.xbabe2-3.service",
+    "actions.runner.neverhuman-RedlineDB.xbabe2-4.service",
+    "jope-runner@full.service"
+  ],
+  "max_loadavg": 32,
+  "runs": [
+    {
+      "sequence": 1,
+      "label": "v2.0.5",
+      "run": 1,
+      "started_at_utc": "2026-09-28T23:19:12Z",
+      "finished_at_utc": "2026-09-28T23:20:13Z",
+      "loadavg_before": [
+        6.56,
+        13.89,
+        20.42
+      ],
+      "loadavg_after": [
+        7.35,
+        12.83,
+        19.65
+      ],
+      "runner_jobs_before": 0,
+      "runner_jobs_after": 0,
+      "runner_exit": 1,
+      "accepted": true,
+      "reason": null
+    },
+    {
+      "sequence": 2,
+      "label": "v4.0.3",
+      "run": 1,
+      "started_at_utc": "2026-09-28T23:20:13Z",
+      "finished_at_utc": "2026-09-28T23:24:16Z",
+      "loadavg_before": [
+        7.35,
+        12.83,
+        19.65
+      ],
+      "loadavg_after": [
+        8.74,
+        9.91,
+        16.80
+      ],
+      "runner_jobs_before": 0,
+      "runner_jobs_after": 0,
+      "runner_exit": 1,
+      "accepted": true,
+      "reason": null
+    },
+    {
+      "sequence": 3,
+      "label": "v4.0.8",
+      "run": 1,
+      "started_at_utc": "2026-09-28T23:24:16Z",
+      "finished_at_utc": "2026-09-28T23:25:57Z",
+      "loadavg_before": [
+        8.74,
+        9.91,
+        16.80
+      ],
+      "loadavg_after": [
+        6.10,
+        8.69,
+        15.66
+      ],
+      "runner_jobs_before": 0,
+      "runner_jobs_after": 0,
+      "runner_exit": 1,
+      "accepted": true,
+      "reason": null
+    },
+    {
+      "sequence": 4,
+      "label": "v4.0.9",
+      "run": 1,
+      "started_at_utc": "2026-09-28T23:25:57Z",
+      "finished_at_utc": "2026-09-28T23:28:13Z",
+      "loadavg_before": [
+        6.10,
+        8.69,
+        15.66
+      ],
+      "loadavg_after": [
+        10.52,
+        9.02,
+        14.80
+      ],
+      "runner_jobs_before": 0,
+      "runner_jobs_after": 0,
+      "runner_exit": 1,
+      "accepted": true,
+      "reason": null
+    },
+    {
+      "sequence": 5,
+      "label": "v4.1.0",
+      "run": 1,
+      "started_at_utc": "2026-09-28T23:28:13Z",
+      "finished_at_utc": "2026-09-28T23:29:37Z",
+      "loadavg_before": [
+        10.52,
+        9.02,
+        14.80
+      ],
+      "loadavg_after": [
+        7.82,
+        8.44,
+        14.09
+      ],
+      "runner_jobs_before": 0,
+      "runner_jobs_after": 0,
+      "runner_exit": 1,
+      "accepted": true,
+      "reason": null
+    },
+    {
+      "sequence": 6,
+      "label": "v5.0.0",
+      "run": 1,
+      "started_at_utc": "2026-09-28T23:29:37Z",
+      "finished_at_utc": "2026-09-28T23:30:58Z",
+      "loadavg_before": [
+        7.82,
+        8.44,
+        14.09
+      ],
+      "loadavg_after": [
+        6.61,
+        7.94,
+        13.44
+      ],
+      "runner_jobs_before": 0,
+      "runner_jobs_after": 0,
+      "runner_exit": 1,
+      "accepted": true,
+      "reason": null
+    },
+    {
+      "sequence": 7,
+      "label": "v4.0.3",
+      "run": 2,
+      "started_at_utc": "2026-09-28T23:30:58Z",
+      "finished_at_utc": "2026-09-28T23:32:08Z",
+      "loadavg_before": [
+        6.61,
+        7.94,
+        13.44
+      ],
+      "loadavg_after": [
+        6.32,
+        7.61,
+        12.93
+      ],
+      "runner_jobs_before": 0,
+      "runner_jobs_after": 0,
+      "runner_exit": 1,
+      "accepted": true,
+      "reason": null
+    },
+    {
+      "sequence": 8,
+      "label": "v4.0.8",
+      "run": 2,
+      "started_at_utc": "2026-09-28T23:32:09Z",
+      "finished_at_utc": "2026-09-28T23:33:21Z",
+      "loadavg_before": [
+        6.32,
+        7.61,
+        12.93
+      ],
+      "loadavg_after": [
+        6.41,
+        7.41,
+        12.45
+      ],
+      "runner_jobs_before": 0,
+      "runner_jobs_after": 0,
+      "runner_exit": 1,
+      "accepted": true,
+      "reason": null
+    },
+    {
+      "sequence": 9,
+      "label": "v4.0.9",
+      "run": 2,
+      "started_at_utc": "2026-09-28T23:33:21Z",
+      "finished_at_utc": "2026-09-28T23:34:33Z",
+      "loadavg_before": [
+        6.41,
+        7.41,
+        12.45
+      ],
+      "loadavg_after": [
+        5.84,
+        7.01,
+        11.94
+      ],
+      "runner_jobs_before": 0,
+      "runner_jobs_after": 0,
+      "runner_exit": 1,
+      "accepted": true,
+      "reason": null
+    },
+    {
+      "sequence": 10,
+      "label": "v4.1.0",
+      "run": 2,
+      "started_at_utc": "2026-09-28T23:34:33Z",
+      "finished_at_utc": "2026-09-28T23:35:44Z",
+      "loadavg_before": [
+        5.84,
+        7.01,
+        11.94
+      ],
+      "loadavg_after": [
+        6.37,
+        6.87,
+        11.53
+      ],
+      "runner_jobs_before": 0,
+      "runner_jobs_after": 0,
+      "runner_exit": 1,
+      "accepted": true,
+      "reason": null
+    },
+    {
+      "sequence": 11,
+      "label": "v5.0.0",
+      "run": 2,
+      "started_at_utc": "2026-09-28T23:35:44Z",
+      "finished_at_utc": "2026-09-28T23:37:08Z",
+      "loadavg_before": [
+        6.37,
+        6.87,
+        11.53
+      ],
+      "loadavg_after": [
+        9.26,
+        7.58,
+        11.36
+      ],
+      "runner_jobs_before": 0,
+      "runner_jobs_after": 0,
+      "runner_exit": 1,
+      "accepted": true,
+      "reason": null
+    },
+    {
+      "sequence": 12,
+      "label": "v2.0.5",
+      "run": 2,
+      "started_at_utc": "2026-09-28T23:37:08Z",
+      "finished_at_utc": "2026-09-28T23:38:10Z",
+      "loadavg_before": [
+        9.26,
+        7.58,
+        11.36
+      ],
+      "loadavg_after": [
+        8.53,
+        7.75,
+        11.16
+      ],
+      "runner_jobs_before": 0,
+      "runner_jobs_after": 0,
+      "runner_exit": 1,
+      "accepted": true,
+      "reason": null
+    },
+    {
+      "sequence": 13,
+      "label": "v4.0.8",
+      "run": 3,
+      "started_at_utc": "2026-09-28T23:38:10Z",
+      "finished_at_utc": "2026-09-28T23:39:21Z",
+      "loadavg_before": [
+        8.53,
+        7.75,
+        11.16
+      ],
+      "loadavg_after": [
+        7.81,
+        7.67,
+        10.89
+      ],
+      "runner_jobs_before": 0,
+      "runner_jobs_after": 0,
+      "runner_exit": 1,
+      "accepted": true,
+      "reason": null
+    },
+    {
+      "sequence": 14,
+      "label": "v4.0.9",
+      "run": 3,
+      "started_at_utc": "2026-09-28T23:39:21Z",
+      "finished_at_utc": "2026-09-28T23:40:31Z",
+      "loadavg_before": [
+        7.81,
+        7.67,
+        10.89
+      ],
+      "loadavg_after": [
+        8.04,
+        7.77,
+        10.68
+      ],
+      "runner_jobs_before": 0,
+      "runner_jobs_after": 0,
+      "runner_exit": 1,
+      "accepted": true,
+      "reason": null
+    },
+    {
+      "sequence": 15,
+      "label": "v4.1.0",
+      "run": 3,
+      "started_at_utc": "2026-09-28T23:40:32Z",
+      "finished_at_utc": "2026-09-28T23:41:40Z",
+      "loadavg_before": [
+        8.04,
+        7.77,
+        10.68
+      ],
+      "loadavg_after": [
+        6.33,
+        7.36,
+        10.33
+      ],
+      "runner_jobs_before": 0,
+      "runner_jobs_after": 0,
+      "runner_exit": 1,
+      "accepted": true,
+      "reason": null
+    },
+    {
+      "sequence": 16,
+      "label": "v5.0.0",
+      "run": 3,
+      "started_at_utc": "2026-09-28T23:41:40Z",
+      "finished_at_utc": "2026-09-28T23:42:51Z",
+      "loadavg_before": [
+        6.33,
+        7.36,
+        10.33
+      ],
+      "loadavg_after": [
+        11.15,
+        8.32,
+        10.43
+      ],
+      "runner_jobs_before": 0,
+      "runner_jobs_after": 0,
+      "runner_exit": 1,
+      "accepted": true,
+      "reason": null
+    },
+    {
+      "sequence": 17,
+      "label": "v2.0.5",
+      "run": 3,
+      "started_at_utc": "2026-09-28T23:42:51Z",
+      "finished_at_utc": "2026-09-28T23:43:52Z",
+      "loadavg_before": [
+        11.15,
+        8.32,
+        10.43
+      ],
+      "loadavg_after": [
+        8.73,
+        8.14,
+        10.23
+      ],
+      "runner_jobs_before": 0,
+      "runner_jobs_after": 0,
+      "runner_exit": 1,
+      "accepted": true,
+      "reason": null
+    },
+    {
+      "sequence": 18,
+      "label": "v4.0.3",
+      "run": 3,
+      "started_at_utc": "2026-09-28T23:43:53Z",
+      "finished_at_utc": "2026-09-28T23:45:02Z",
+      "loadavg_before": [
+        8.73,
+        8.14,
+        10.23
+      ],
+      "loadavg_after": [
+        7.17,
+        7.78,
+        9.95
+      ],
+      "runner_jobs_before": 0,
+      "runner_jobs_after": 0,
+      "runner_exit": 1,
+      "accepted": true,
+      "reason": null
+    }
+  ]
+}

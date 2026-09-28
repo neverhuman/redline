@@ -1,0 +1,29 @@
+{
+  "schema_version": "redline-version-build-v1",
+  "label": "v4.0.8",
+  "source_ref": "v4.0.8",
+  "source_commit": "fb9ef60ad5ab728412cd6a3549b8d29aa4755f88",
+  "source_commit_date": "2026-05-26T13:21:24+00:00",
+  "rustc_verbose_version": [
+    "rustc 1.95.0 (59807616e 2026-04-14)",
+    "binary: rustc",
+    "commit-hash: 59807616e1fa2540724bfbac14d7976d7e4a3860",
+    "commit-date: 2026-04-14",
+    "host: x86_64-unknown-linux-gnu",
+    "release: 1.95.0",
+    "LLVM version: 22.1.2"
+  ],
+  "cargo_version": "cargo 1.95.0 (f2d3ce0bd 2026-03-21)",
+  "cargo_command": "cargo build --release --locked -p redlinedb-cli",
+  "profile": "release",
+  "features": "default",
+  "rustflags": "",
+  "cargo_encoded_rustflags_cleared": true,
+  "pgo": false,
+  "profile_release": "[profile.release]\nopt-level = 3\nlto = \"fat\"\ncodegen-units = 1\npanic = \"abort\"\nstrip = \"symbols\"\n\n# release-native inherits release; the per-host-CPU specialization is\n# applied via RUSTFLAGS=\"-C target-cpu=native\" in .cargo/config.toml\n# (always on for the Linux toolchain). Build artifacts produced under\n# this profile are NOT portable across CPU classes — they target the\n# build host. By project policy users compile from source for their CPU.",
+  "cargo_config": "[build]\njobs = 50\n\n# Default to a portable modern microarchitecture (x86-64-v3 = SSE4.2 +\n# AVX2 + BMI2 + FMA, ~2013 Haswell+; aarch64 stays at the toolchain\n# default). Avoids SIGILL in CI when binaries built on one runner's CPU\n# class are reused on a runner with fewer features (sccache cross-host),\n# and avoids surprising end users who consume published binaries on a\n# different CPU class. Hot SIMD lanes still use runtime `is_x86_feature_\n# detected!` dispatch (vector kernels, key-compare, JSON tokenize) so\n# AVX-512 / etc. above v3 still light up when present.\n#\n# Local devs who want full per-host optimization (and accept that the\n# resulting binary is not portable to other CPUs in their fleet) can\n# opt in via:\n#   RUSTFLAGS=\"-C link-arg=-fuse-ld=mold -C target-cpu=native\" cargo ...\n# or the `release-native` cargo profile (defined in workspace Cargo.toml)\n# which inherits this base + relies on env-supplied RUSTFLAGS for the\n# CPU upgrade.\n[target.x86_64-unknown-linux-gnu]\nlinker = \"clang\"\nrustflags = [\n    \"-C\", \"link-arg=-fuse-ld=mold\",\n    \"-C\", \"target-cpu=x86-64-v3\",\n]\n\n[target.aarch64-unknown-linux-gnu]\nlinker = \"clang\"\nrustflags = [\n    \"-C\", \"link-arg=-fuse-ld=mold\",\n]\n",
+  "binary_sha256": "1c2239056951a0628e0e71e511a03d5da29e6108101dfbba6547217ea3c8cae0",
+  "binary_size_bytes": 9178248,
+  "built_at_utc": "2026-09-28T02:11:06Z",
+  "sandbox": "standalone git clone --no-local under .agent/sandbox, removed after the build"
+}

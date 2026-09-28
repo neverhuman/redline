@@ -1,0 +1,29 @@
+{
+  "schema_version": "redline-version-build-v1",
+  "label": "v2.0.5",
+  "source_ref": "v2.0.5",
+  "source_commit": "c020508247e598d412b2b65c9c8e36b0ae63afab",
+  "source_commit_date": "2026-05-23T20:45:16+00:00",
+  "rustc_verbose_version": [
+    "rustc 1.95.0 (59807616e 2026-04-14)",
+    "binary: rustc",
+    "commit-hash: 59807616e1fa2540724bfbac14d7976d7e4a3860",
+    "commit-date: 2026-04-14",
+    "host: x86_64-unknown-linux-gnu",
+    "release: 1.95.0",
+    "LLVM version: 22.1.2"
+  ],
+  "cargo_version": "cargo 1.95.0 (f2d3ce0bd 2026-03-21)",
+  "cargo_command": "cargo build --release --locked -p redlinedb-cli",
+  "profile": "release",
+  "features": "default",
+  "rustflags": "",
+  "cargo_encoded_rustflags_cleared": true,
+  "pgo": false,
+  "profile_release": "",
+  "cargo_config": "[build]\njobs = 50\n\n[target.x86_64-unknown-linux-gnu]\nlinker = \"clang\"\nrustflags = [\"-C\", \"link-arg=-fuse-ld=mold\"]\n",
+  "binary_sha256": "420cce7c9e1b0710fa66fc562211c4d5f81dac8f62f23343f2ec60b6250b3f99",
+  "binary_size_bytes": 18572168,
+  "built_at_utc": "2026-09-28T13:34:27Z",
+  "sandbox": "standalone git clone --no-local under .agent/sandbox, removed after the build"
+}

@@ -1,0 +1,29 @@
+{
+  "schema_version": "redline-version-build-v1",
+  "label": "v4.1.0",
+  "source_ref": "v4.1.0",
+  "source_commit": "af20826311a067a51383c382013612545156df61",
+  "source_commit_date": "2026-09-17T15:30:00-06:00",
+  "rustc_verbose_version": [
+    "rustc 1.95.0 (59807616e 2026-04-14)",
+    "binary: rustc",
+    "commit-hash: 59807616e1fa2540724bfbac14d7976d7e4a3860",
+    "commit-date: 2026-04-14",
+    "host: x86_64-unknown-linux-gnu",
+    "release: 1.95.0",
+    "LLVM version: 22.1.2"
+  ],
+  "cargo_version": "cargo 1.95.0 (f2d3ce0bd 2026-03-21)",
+  "cargo_command": "cargo build --release --locked -p redlinedb-cli",
+  "profile": "release",
+  "features": "default",
+  "rustflags": "",
+  "cargo_encoded_rustflags_cleared": true,
+  "pgo": false,
+  "profile_release": "[profile.release]\nopt-level = 3\nlto = \"fat\"\ncodegen-units = 1\npanic = \"abort\"\nstrip = \"symbols\"\ndebug = false\ndebug-assertions = false\noverflow-checks = false\nincremental = false\n\n# Local CPU specialization requires an explicit RUSTFLAGS override.",
+  "cargo_config": "# Portable target defaults and the system linker; no host-only prerequisites.\n# Local tuning: RUSTFLAGS='-C target-cpu=native' cargo build --release.\n# Set CARGO_BUILD_JOBS to limit concurrency on smaller machines.\n",
+  "binary_sha256": "26ebec40f89258aee1474d0ffff1769df1235594b1f8a48ac3ee037c3dbbce7c",
+  "binary_size_bytes": 9746704,
+  "built_at_utc": "2026-09-28T02:09:02Z",
+  "sandbox": "standalone git clone --no-local under .agent/sandbox, removed after the build"
+}
