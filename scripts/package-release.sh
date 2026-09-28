@@ -3,6 +3,16 @@ set -euo pipefail
 root=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
 cd "$root"
 : "${TAG:?TAG is required}"
+# Release authority. In GitHub Actions GITHUB_REPOSITORY_ID names the repository
+# running the build; only the canonical one may produce release archives.
+# shellcheck source=ops/release/authority.env
+. ops/release/authority.env
+repository_id=${GITHUB_REPOSITORY_ID:-$REDLINE_REPO_ID}
+if [[ $repository_id != "$REDLINE_REPO_ID" ]]; then
+  printf 'refusing to package for repository id %s: RedlineDB releases are built only in %s (id %s)\n' \
+    "$repository_id" "$REDLINE_REPO_SLUG" "$REDLINE_REPO_ID" >&2
+  exit 1
+fi
 case "$(uname -s)/$(uname -m)" in
   Linux/x86_64) platform=linux-x86_64 ;;
   Linux/aarch64|Linux/arm64) platform=linux-arm64 ;;
@@ -28,6 +38,7 @@ install -m 755 "$CARGO_TARGET_DIR/release/redline-web" "$stage/redline-web/bin/"
 install -m 755 "$CARGO_TARGET_DIR/release/redline-testing" "$CARGO_TARGET_DIR/release/redlinedb-client-smoke" "$stage/redline-testing/bin/"
 cp -R subrepos/redline-testing/{corpus,metadata,schemas,templates} "$stage/redline-testing/share/redlinedb/"
 commit=$(git rev-parse HEAD)
+source_tree=$(git rev-parse 'HEAD^{tree}')
 # Licence collection follows the dependency graph of this build's platform.
 host=$(rustc -vV | sed -n 's/^host: //p')
 for package in redlinedb redline-web redline-testing; do
@@ -57,7 +68,12 @@ for package in redlinedb redline-web redline-testing; do
   [[ $package != redline-web ]] || npm_project=(--npm-project subrepos/redline-web/apps/web)
   bash scripts/release/collect-licenses.sh --metadata "$stage/metadata.json" --share "$stage/$package/share/redlinedb" \
     "${roots[@]}" ${npm_project[@]+"${npm_project[@]}"}
-  jq -n --arg commit "$commit" --arg tag "$TAG" --arg platform "$platform" --arg package "$package" --arg rust "$(rustc --version)" '{schema:"redline.release-build/v1",repository:"https://github.com/neverhuman/redline",commit:$commit,tag:$tag,platform:$platform,package:$package,rust:$rust}' > "$stage/$package/share/redlinedb/build-provenance.json"
+  # One compact line: install.sh and publish-github-release.sh match
+  # "repository_id":<id> and "tag":"<tag>" in it without a JSON parser.
+  jq -cn --arg url "$REDLINE_REPO_URL" --argjson id "$REDLINE_REPO_ID" --arg tag "$TAG" --arg commit "$commit" \
+    --arg tree "$source_tree" --arg platform "$platform" --arg package "$package" --arg rust "$(rustc --version)" \
+    '{schema:"redline.release-build/v2",repository_url:$url,repository_id:$id,tag:$tag,commit:$commit,source_tree:$tree,platform:$platform,package:$package,rust:$rust}' \
+    > "$stage/$package/share/redlinedb/build-provenance.json"
   if [[ $package == redline-web ]]; then
     npm --prefix subrepos/redline-web/apps/web sbom --sbom-format cyclonedx > "$stage/$package/share/redlinedb/frontend-sbom.cdx.json"
   fi

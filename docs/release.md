@@ -67,10 +67,21 @@ x86_64/ARM64 (glibc 2.35+) and macOS Intel/Apple Silicon (macOS 15+).
 - `redline-testing-TAG-PLATFORM.tar.gz`: conformance runner, corpus and client smoke tool.
 
 Each archive has a `.sha256` sidecar and contains a CycloneDX SBOM and
-`share/redlinedb/build-provenance.json` recording its parent commit, tag,
-platform and compiler. The web archive includes a frontend SBOM; the testing
-SBOM includes the bundled client. GitHub release attestations bind the uploaded
-archive bytes to the workflow identity and source commit.
+`share/redlinedb/build-provenance.json`: one compact JSON line
+(`redline.release-build/v2`) recording the repository URL and numeric id, tag,
+source commit and tree, platform, package and compiler. The web archive
+includes a frontend SBOM; the testing SBOM includes the bundled client. GitHub
+release attestations bind the uploaded archive bytes to the workflow identity
+and source commit.
+
+`ops/release/authority.env` names the one repository allowed to build and
+publish releases: `neverhuman/redline`, id `1390165945`. Packaging refuses to
+run when `GITHUB_REPOSITORY_ID` names another repository.
+`ops/ci/publish-github-release.sh` refuses unless `GITHUB_REPOSITORY` and
+`GITHUB_REPOSITORY_ID` are that repository, refuses any archive whose
+provenance names another repository id or tag, and passes
+`--repo neverhuman/redline` to every `gh` call, so a mirror or fork running the
+same workflow cannot publish. `ops/ci/tests/release-authority.sh` tests both.
 
 Licences: `share/redlinedb/LICENSE` is the Apache-2.0 text and
 `share/redlinedb/NOTICE` the project notice. `scripts/release/collect-licenses.sh`
@@ -98,10 +109,24 @@ compiled only against upstream SQLite 3.53.1's `sqlite3.h`, against both
 libraries. macOS libraries are signed again after installation. CI stages release
 archives outside the Cargo cache to keep versions separate.
 
-The binary installer defaults to `~/.local`, honors `VERSION` and `PREFIX`,
-and fails if a checksum is absent or incorrect. `REDLINEDB_SHA256` adds an
-independent digest pin. No development toolchain is needed at runtime, and the
-installer never replaces `sqlite3`.
+The binary installer defaults to `~/.local` and honors `VERSION` and `PREFIX`.
+Without `VERSION` it installs the release that `releases/latest` resolves to,
+and reports that there is no published release when GitHub redirects to the
+release list instead. Before it writes anything under the prefix it requires a
+`.sha256` sidecar with a matching digest (`REDLINEDB_SHA256` adds an
+independent pin), an archive of regular files and directories only, and a
+`build-provenance.json` naming repository id `1390165945` and the requested
+tag. These checks reject corrupt downloads, link entries, and archives built
+for another repository or version. They do not verify who built the archive:
+whoever can upload a release asset can also upload a matching checksum and
+provenance. `REDLINEDB_VERIFY_ATTESTATION=1` adds that check with
+`gh attestation verify --repo neverhuman/redline --signer-workflow
+neverhuman/redline/.github/workflows/release-build.yml`, which needs an
+authenticated GitHub CLI. `install.sh` repeats the repository slug and id from
+`ops/release/authority.env` because a piped script cannot read files, and
+`scripts/install.sh` is a byte-identical copy; `scripts/test-installer.sh`
+checks both. No development toolchain is needed at runtime, and the installer
+never replaces `sqlite3`.
 
 ## Evidence and rollback
 

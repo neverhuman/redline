@@ -40,6 +40,7 @@ run_preflight() {
     done
     bash scripts/check_file_sizes.sh
     bash scripts/check-publish-policy.sh
+    bash ops/ci/tests/release-authority.sh
     bash scripts/parity/lint-sqlite-parity-ledger.sh
     cargo build --locked -p redlinedb-cli --bin redlinedb
     local smoke_directory smoke_binary

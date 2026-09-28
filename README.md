@@ -264,6 +264,10 @@ curl -fsSL https://raw.githubusercontent.com/neverhuman/redline/main/install.sh 
 
 It installs `redlinedb` and `redlinedb-server`; it never replaces `sqlite3`.
 Set `REDLINEDB_SHA256` to additionally require a particular archive digest.
+The installer also refuses archives whose build provenance names another
+repository or version. Checksums and provenance do not prove who built an
+archive; set `REDLINEDB_VERIFY_ATTESTATION=1` (needs an authenticated `gh`) to
+also verify its GitHub build attestation.
 
 ### Build from source
 

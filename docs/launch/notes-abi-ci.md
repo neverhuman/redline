@@ -247,3 +247,34 @@ against the v5 headers. There is no v4 compatibility alias.
   `origin-disabled`) fails `redline-proof validate` until that remote is
   removed. Runners registered against the old repository must be
   re-registered against `neverhuman/redline`.
+
+## Release identity (S8-02)
+
+- Breaking for old archives: `install.sh` now refuses an archive unless its
+  `share/redlinedb/build-provenance.json` names repository id `1390165945`
+  (`neverhuman/redline`) and the requested tag. Archives built before this
+  change carry no repository id, so this installer refuses them.
+- `install.sh` also refuses archive entries other than regular files and
+  directories (symlinks, hard links, devices), and it reports "no published
+  release" when `releases/latest` redirects to the release list; it used to
+  fail with `invalid VERSION: vreleases`. A missing release asset is now
+  reported by name instead of as a bare curl error. Every refusal happens
+  before anything is written under `PREFIX`.
+- `REDLINEDB_VERIFY_ATTESTATION=1` makes the installer run
+  `gh attestation verify` against the canonical repository's release
+  workflow. Checksums and provenance only show that the download is intact
+  and was built for this repository and tag; the attestation shows who
+  built it.
+- Release provenance is now one compact JSON line (schema
+  `redline.release-build/v2`) with `repository_url`, `repository_id`, `tag`,
+  `commit` and `source_tree`. Packaging refuses to run for another
+  `GITHUB_REPOSITORY_ID`, and the publisher refuses unless it runs in
+  `neverhuman/redline` (by name and id), refuses archives whose provenance
+  names another repository or tag, and passes `--repo neverhuman/redline` to
+  `gh` explicitly. `ops/release/authority.env` holds the constants.
+- For the integrator (not a release-note line): README and
+  `docs/manual/02-start-here.md` still show `VERSION=v4.1.0` installer
+  examples. `neverhuman/redline` has no published release yet (its
+  `releases/latest` redirects to `/releases`), and archives from before this
+  change would be refused anyway, so those examples need the v5.0.0 tag
+  once it is published.
