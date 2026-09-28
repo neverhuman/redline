@@ -629,3 +629,18 @@ against the v5 headers. There is no v4 compatibility alias.
   "PRAGMA <name> is not supported". The gap helper that returned silently
   when setup or the query failed is split into `assert_redline_rejects` and
   `assert_result_diverges`, both of which require setup to succeed.
+
+## Qualification objects (SQ-08, minimal)
+
+- New CI shard `tests (qualification)` (`CI_FAST_STAGE=qualification bash
+  ops/ci/fast.sh`) runs `scripts/qualification/emit-sqlite-qualification.sh`
+  and uploads the `sqlite-qualification` artifact: `sqlite_rust_values.json`
+  (the `sqlite_full_parity` test results and the SQLite version `rusqlite`
+  bundles, 3.50.2 today, not the 3.53.1 reference shell) and
+  `sqlite_c_abi.json` (the `redlinedb-ffi` test results and the upstream-header
+  ABI probe's per-case receipt). Counts come from the test output; the script
+  fails when a test fails, a lane cannot run, or libtest's totals disagree
+  with the listed tests. `scripts/qualification/test-emit-sqlite-qualification.sh`
+  tests it on fixture logs. Locally (warm build) the shard takes about 20 s.
+- Not done (still P1 in the audit): a stateful prepared-statement lane
+  (prepare, step, modify, reset through a view) and README badges per lane.

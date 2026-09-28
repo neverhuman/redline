@@ -260,6 +260,27 @@ The Proof column says what kind of evidence the listed tests are:
 
 <!-- sqlite-feature-matrix:end -->
 
+## Qualification objects
+
+Two narrower lanes sit beside the official SQL/CLI corpus. CI's
+`tests (qualification)` shard runs `scripts/qualification/emit-sqlite-qualification.sh`
+and uploads the `sqlite-qualification` artifact; nothing in them is typed by
+hand.
+
+- `sqlite_rust_values.json`: typed values through the Rust API, compared
+  in-process with the SQLite library `rusqlite` bundles
+  (`crates/sql/tests/sqlite_full_parity.rs`). It records that library's
+  `sqlite_version()`, which is not the 3.53.1 reference shell the official
+  corpus uses, and the `rusqlite` and `libsqlite3-sys` versions from
+  `Cargo.lock`.
+- `sqlite_c_abi.json`: `cargo test -p redlinedb-ffi` and the upstream-header
+  probe `scripts/compatibility/phase2-abi-probe.sh`, with each case's result
+  and the header, probe and library hashes; the upstream control is recorded
+  as skipped when no reference `libsqlite3` was built.
+
+Neither says anything about the SQLite file format; the file-format rows
+above are sentinels only.
+
 ## Evidence Boundary
 
 Use `just redline-testing-official` or `just sqlite-parity-report-update`.

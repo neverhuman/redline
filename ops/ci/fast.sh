@@ -11,6 +11,7 @@
 #   CI_FAST_STAGE=preflight bash ops/ci/fast.sh
 #   CI_FAST_STAGE=core bash ops/ci/fast.sh
 #   CI_FAST_STAGE=kernel-failpoints bash ops/ci/fast.sh
+#   CI_FAST_STAGE=qualification bash ops/ci/fast.sh   # SQ-08 JSON, CI only
 #   bash ops/ci/fast.sh                # run preflight + all test shards
 #
 # Every command in this lane is hard-gated by design.
@@ -135,6 +136,12 @@ run_test_stage() {
             # set takes well past the job timeout.
             cargo nextest run -p redlinedb-sql --tests --locked
             ;;
+        qualification)
+            # SQ-08: the typed-value and C ABI qualification objects, emitted
+            # from the test runs themselves (target/qualification/*.json).
+            bash scripts/qualification/test-emit-sqlite-qualification.sh
+            bash scripts/qualification/emit-sqlite-qualification.sh --out target/qualification
+            ;;
         bench)
             cargo test -p redlinedb-bench --quiet --locked
             ;;
@@ -150,7 +157,7 @@ case "$stage" in
     preflight)
         run_preflight
         ;;
-    core|kernel|kernel-failpoints|sql-unit|sql-contracts|sql-integration|bench)
+    core|kernel|kernel-failpoints|sql-unit|sql-contracts|sql-integration|bench|qualification)
         run_test_stage "$stage"
         ;;
     tests)
