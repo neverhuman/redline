@@ -360,6 +360,17 @@ impl Database {
         Ok(self.engine.checkpoint_with_stats()?)
     }
 
+    /// Checkpoint, then keep every other checkpoint waiting until the hold
+    /// drops, so the files can be copied as one consistent cut.
+    pub fn checkpoint_and_hold(
+        &self,
+    ) -> Result<(
+        CheckpointStats,
+        redlinedb_kernel::engine::CheckpointHold<'_>,
+    )> {
+        Ok(self.engine.checkpoint_and_hold()?)
+    }
+
     pub fn vacuum(&self) -> Result<VacuumStats> {
         Ok(self.engine.vacuum()?)
     }

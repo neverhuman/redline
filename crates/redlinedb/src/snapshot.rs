@@ -8,6 +8,10 @@ use crate::Database;
 use crate::error::Result;
 use crate::options::{BackupOptions, BackupStats};
 
+#[cfg(test)]
+#[path = "backup_hold_tests.rs"]
+mod backup_hold_tests;
+
 pub(crate) fn backup_to_path(
     src: &Database,
     dst: impl AsRef<Path>,
@@ -19,7 +23,11 @@ pub(crate) fn backup_to_path(
         fs::remove_dir_all(dst)?;
     }
     fs::create_dir_all(dst)?;
-    src.inner.db.checkpoint()?;
+    // No checkpoint may run while the files are copied: a pressure
+    // checkpoint between the control files and the page file would leave a
+    // copy whose control generation and pages disagree.
+    let (_checkpoint, _hold) = src.inner.db.checkpoint_and_hold()?;
+    run_before_copy_hook();
     copy_dir(src.path(), dst)?;
     Ok(BackupStats {
         tables_copied: 0,
@@ -47,4 +55,26 @@ fn copy_dir(src: &Path, dst: &Path) -> Result<()> {
         }
     }
     Ok(())
+}
+
+#[cfg(test)]
+thread_local! {
+    static BEFORE_COPY: std::cell::RefCell<Option<Box<dyn FnMut()>>> =
+        const { std::cell::RefCell::new(None) };
+}
+
+/// Test hook: runs on the copying thread once a backup holds checkpoints
+/// off, before it reads any file.
+#[cfg(test)]
+pub(crate) fn set_before_copy_hook(hook: Option<Box<dyn FnMut()>>) {
+    BEFORE_COPY.with(|slot| *slot.borrow_mut() = hook);
+}
+
+pub(crate) fn run_before_copy_hook() {
+    #[cfg(test)]
+    BEFORE_COPY.with(|slot| {
+        if let Some(hook) = slot.borrow_mut().as_mut() {
+            hook();
+        }
+    });
 }

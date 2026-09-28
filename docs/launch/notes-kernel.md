@@ -587,3 +587,11 @@ Draft lines for the v5.0.0 CHANGELOG. The integrator owns `CHANGELOG.md`.
   worker from itself, which panics (an abort in release builds). Such a
   prefetch is now dropped, and the pool's `Drop` never joins its own
   thread.
+- A physical backup (`backup_physical_to_path`) or snapshot copy
+  (`backup_to_path`) now checkpoints and holds off every other checkpoint
+  until its copy is done (`Engine::checkpoint_and_hold`). With pressure
+  checkpoints on, one could run mid-copy, rewriting pages below the
+  copied control generation and landing a newer control slot, so the
+  backup mixed two generations (a restore then returned rows twice), or
+  pruning a listed WAL segment so the copy failed. A writer that needs a
+  pressure checkpoint during a backup now waits for the copy.

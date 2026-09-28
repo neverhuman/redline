@@ -10,6 +10,7 @@ mod catalog_ops;
 mod catalog_sync_tests;
 #[cfg(test)]
 mod checkpoint_cut_tests;
+mod checkpoint_hold;
 #[cfg(test)]
 mod checkpoint_serial_tests;
 #[cfg(test)]
@@ -50,6 +51,7 @@ const BEGIN_LOCK_KEY: RowKey = RowKey {
     row_id: RowId::ZERO,
 };
 
+pub use checkpoint_hold::CheckpointHold;
 #[cfg(feature = "failpoints")]
 pub use runtime::arm_commit_failure_for_thread;
 pub use tx::{ConcurrentTxStatus, TxStatusStats, Txn};

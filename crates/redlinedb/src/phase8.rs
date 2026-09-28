@@ -180,7 +180,12 @@ pub fn backup_physical_to_path(
     options: PhysicalBackupOptions,
 ) -> Result<PhysicalBackupStats> {
     let start = Instant::now();
-    db.checkpoint()?;
+    // Checkpoint, and let no other checkpoint run until the copy is done: a
+    // pressure checkpoint between copying the control files and the page
+    // file would leave a backup whose generation and pages disagree, and
+    // one that prunes a listed WAL segment would fail the copy.
+    let (_checkpoint, _hold) = db.inner.db.checkpoint_and_hold()?;
+    let _ = update_retention(db);
     let src = db.path();
     let identity = load_identity_or_init(src)?;
     let stats = db.inner.db.stats().map_err(Error::from)?;
@@ -193,6 +198,7 @@ pub fn backup_physical_to_path(
     }
     fs::create_dir_all(dst)?;
 
+    crate::snapshot::run_before_copy_hook();
     let files = collect_files(src, &|path| should_copy_path(path, dst))?;
     let mut bytes_copied = 0_u64;
     for rel in &files {

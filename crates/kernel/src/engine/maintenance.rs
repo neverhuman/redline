@@ -286,7 +286,10 @@ impl Engine {
     }
 
     /// The checkpoint itself; the caller holds `checkpoint_serial`.
-    fn checkpoint_serialized(&self, _serial: &MutexGuard<'_, ()>) -> Result<CheckpointStats> {
+    pub(super) fn checkpoint_serialized(
+        &self,
+        _serial: &MutexGuard<'_, ()>,
+    ) -> Result<CheckpointStats> {
         let durable_lsn = self.wal.flush_all()?;
         // Do not record a checkpoint past a WAL record whose page image is
         // still unpublished. Recovery would skip that record.
