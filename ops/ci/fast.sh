@@ -62,7 +62,22 @@ run_test_stage() {
                 --locked --no-fail-fast
             ;;
         kernel)
-            cargo test -p redlinedb-kernel --quiet --locked
+            # nextest runs each test in its own process, and the slow-timeout
+            # in .config/nextest.toml names a hung test instead of letting it
+            # run into the job timeout.
+            cargo nextest run -p redlinedb-kernel --locked
+            ;;
+        kernel-failpoints)
+            # The kernel built with `failpoints`: the lib's own tests plus the
+            # test files gated on that feature, which the `kernel` stage
+            # compiles to nothing. .config/nextest.toml runs the gated files
+            # one test at a time (test group `kernel-failpoints`).
+            cargo nextest run -p redlinedb-kernel --features failpoints --locked \
+                --lib \
+                --test failpoint_smoke \
+                --test hnsw_failpoints \
+                --test commit_outcome \
+                --test recovery_failpoints
             ;;
         sql-unit)
             cargo test -p redlinedb-sql --lib --quiet --locked
@@ -96,12 +111,13 @@ case "$stage" in
     preflight)
         run_preflight
         ;;
-    core|kernel|sql-unit|sql-contracts|sql-integration|bench)
+    core|kernel|kernel-failpoints|sql-unit|sql-contracts|sql-integration|bench)
         run_test_stage "$stage"
         ;;
     tests)
         run_test_stage core
         run_test_stage kernel
+        run_test_stage kernel-failpoints
         run_test_stage sql-unit
         run_test_stage sql-contracts
         run_test_stage sql-integration
@@ -111,6 +127,7 @@ case "$stage" in
         run_preflight
         run_test_stage core
         run_test_stage kernel
+        run_test_stage kernel-failpoints
         run_test_stage sql-unit
         run_test_stage sql-contracts
         run_test_stage sql-integration

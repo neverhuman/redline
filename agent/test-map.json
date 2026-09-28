@@ -9,6 +9,10 @@
       "command": "rtk bash scripts/ci-local.sh required",
       "purpose": "verify workspace configuration through the canonical host-required lane"
     },
+    ".config/": {
+      "command": "rtk bash scripts/ci-local.sh required",
+      "purpose": "verify the nextest configuration through the canonical host-required lane"
+    },
     ".cursor/": {
       "command": "rtk bash scripts/ci-local.sh required",
       "purpose": "verify editor context through the canonical host-required lane"

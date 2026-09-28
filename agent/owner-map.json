@@ -3,6 +3,7 @@
   "owners": {
     ".agents/": "control-plane",
     ".cargo/": "workspace",
+    ".config/": "workspace",
     ".cursor/": "control-plane",
     ".editorconfig": "workspace",
     ".github/": "ops",
