@@ -120,13 +120,13 @@ fn with_target<T>(f: impl FnOnce(&mut BindEnv) -> T) -> T {
         captures
             .borrow_mut()
             .last_mut()
-            .map(|env| (f.take().expect("unused"))(env))
+            .map(|env| (f.take().expect("called once"))(env))
     });
     match captured {
         Some(value) => value,
         None => SCRATCH.with(|scratch| {
             let mut scratch = scratch.borrow_mut();
-            (f.take().expect("unused"))(scratch.get_or_insert_with(BindEnv::default))
+            (f.take().expect("called once"))(scratch.get_or_insert_with(BindEnv::default))
         }),
     }
 }
