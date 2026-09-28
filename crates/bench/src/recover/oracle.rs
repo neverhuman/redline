@@ -669,6 +669,29 @@ pub fn evaluate(expected: &AckLedger, observed: &RecoveredState) -> RecoveryVerd
             continue;
         };
         let table_rows = observed.tables.get(&check.table).map_or(0, BTreeMap::len);
+        // The forced scan must cover exactly the rows the table read
+        // returned; probes pre-seeded with no keys would otherwise pass an
+        // index that matches nothing in the table.
+        let scanned: BTreeSet<u64> = check.via_scan.values().flatten().copied().collect();
+        let table_keys: BTreeSet<u64> = observed
+            .tables
+            .get(&check.table)
+            .map(|rows| rows.keys().copied().collect())
+            .unwrap_or_default();
+        if scanned != table_keys {
+            let missing: Vec<&u64> = table_keys.difference(&scanned).take(8).collect();
+            let extra: Vec<&u64> = scanned.difference(&table_keys).take(8).collect();
+            push_capped(
+                &mut verdict.integrity_errors,
+                &mut integrity_overflow,
+                format!(
+                    "index {index}: the full scan of {} returned {} keys, the table read {}; missing from the scan {missing:?}, only in the scan {extra:?}",
+                    check.table,
+                    scanned.len(),
+                    table_keys.len()
+                ),
+            );
+        }
         if table_rows > 0 && check.via_scan.is_empty() {
             push_capped(
                 &mut verdict.integrity_errors,

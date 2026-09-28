@@ -136,6 +136,32 @@ fn missing_index_entry_fails() {
 }
 
 #[test]
+fn an_index_check_that_covers_other_rows_than_the_table_fails() {
+    // The scan and the probes agree with each other, but on nothing the
+    // table holds: pre-seeded empty probes must not pass for a check.
+    let expected = ledger(Workload::RecoverWal, 0..5);
+    let mut observed = RecoveredState::consistent(Workload::RecoverWal, ROWS, 0..5);
+    let check = &mut observed.index_checks[0];
+    for keys in check
+        .via_index
+        .values_mut()
+        .chain(check.via_scan.values_mut())
+    {
+        keys.clear();
+    }
+    let verdict = evaluate(&expected, &observed);
+    assert!(!verdict.qualified, "an empty index check qualified");
+    assert!(
+        verdict
+            .integrity_errors
+            .iter()
+            .any(|line| line.contains(KV_INDEX) && line.contains("full scan")),
+        "{:?}",
+        verdict.integrity_errors
+    );
+}
+
+#[test]
 fn half_transaction_fails() {
     // Acked key 4: crash_progress row survived, kv row did not.
     let expected = ledger(Workload::RecoverWal, 0..5);
