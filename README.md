@@ -36,9 +36,9 @@ The book for operators and for people embedding the engine is
 and it says which file to trust when a badge and a report disagree.
 
 <!-- POSTGRES_PARITY_START -->
-PostgreSQL **16.15** SQL-shell corpus: **265 / 265 passed**, **0 failed**, **0 skipped**. Corpus qualification: **passed**. Regression gate: **passed**.
+PostgreSQL **16.15** SQL-shell corpus (`redlinedb` CLI, `REDLINEDB_RESULT_DIALECT=postgres`, fresh `:memory:` per case): **265/265 agree** = **253** row matches + **12** expected rejections (declared error text verified); **0** declared unsupported; **0** mismatches; **0** skipped.
 
-All corpus cases run in CI; known failures remain failures. PostgreSQL wire/client and full application compatibility remain unverified. Source: `30fa63cb030d880035ac717a6450b095927d6303` (dirty workspace); corpus SHA-256: `b240a7204eeb46893ea1f06e715a144f6cd962efe8f41041582e52ca975cd5be`.
+Agreement is normalized SQL-shell transcript agreement, not typed-result or application parity. Not covered: wire protocol, TLS, roles/authorization, SQLSTATE, NOTIFY delivery, replication/CDC, extensions ([capability matrix](docs/beyond-postgres-skips.md#capability-matrix)). Source `f5f38686b09c0fcf5c030d4b1f09019b9c105f59`; corpus SHA-256 `b240a7204eeb46893ea1f06e715a144f6cd962efe8f41041582e52ca975cd5be`.
 <!-- POSTGRES_PARITY_END -->
 
 ## What's new in v4.0.9 → v4.1.0 (W7 startup optimization)
