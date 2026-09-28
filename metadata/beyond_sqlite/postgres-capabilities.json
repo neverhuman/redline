@@ -1,0 +1,124 @@
+{
+  "schema_version": "redline-postgres-capabilities-v1",
+  "surface": "PostgreSQL 16.15 behaviour through the redlinedb SQL shell with REDLINEDB_RESULT_DIALECT=postgres",
+  "evidence": "The beyond_sqlite corpus runs each case in a fresh redlinedb process on :memory: and compares its normalized SQL-shell transcript with psql against the pinned PostgreSQL 16.15 server. A case outcome (positive_match, expected_rejection, declared_unsupported, mismatch) says what one script printed. The status below says what the product supports. A case that matches the transcript is not, by itself, support for the capability it touches.",
+  "statuses": {
+    "implemented": "Behaves as PostgreSQL does for the stated surface, and corpus cases would fail otherwise.",
+    "partial": "Part of the surface works; the note names the part that does not.",
+    "unsupported": "Absent, rejected, or answered by a stand-in that does not perform the operation.",
+    "unverified": "No lane exercises it; no claim either way."
+  },
+  "capabilities": [
+    {
+      "capability": "wire",
+      "surface": "PostgreSQL frontend/backend protocol (psql, libpq and PostgreSQL drivers)",
+      "status": "unsupported",
+      "cases": [],
+      "note": "redlinedb-server speaks its own RLDB framing, not the PostgreSQL protocol, so psql and PostgreSQL drivers cannot connect. The corpus drives the redlinedb CLI."
+    },
+    {
+      "capability": "tls",
+      "surface": "TLS for PostgreSQL clients (sslmode)",
+      "status": "unsupported",
+      "cases": [],
+      "note": "There is no PostgreSQL listener, so there is no PostgreSQL TLS. redlinedb-server has no TLS either."
+    },
+    {
+      "capability": "roles",
+      "surface": "Roles and authorization: CREATE ROLE, GRANT, REVOKE, ownership checks, row security",
+      "status": "unsupported",
+      "cases": ["BEYOND-CASE-20219", "BEYOND-CASE-20254"],
+      "note": "There is one implicit role, redlinedb. current_user, OWNER TO CURRENT_USER and CREATE SCHEMA ... AUTHORIZATION CURRENT_USER report it (the cited cases). CREATE ROLE and GRANT fail as unsupported SQL, and no statement is authorization-checked."
+    },
+    {
+      "capability": "sqlstate",
+      "surface": "SQLSTATE codes and PostgreSQL error fields (DETAIL, HINT, position)",
+      "status": "unsupported",
+      "cases": [],
+      "note": "The shell prints RedlineDB error codes and English text; no SQLSTATE is produced. Expected rejections match on declared error text, not on SQLSTATE."
+    },
+    {
+      "capability": "notify_delivery",
+      "surface": "NOTIFY and pg_notify delivery to listening sessions",
+      "status": "unsupported",
+      "cases": [
+        "BEYOND-CASE-20431",
+        "BEYOND-CASE-20432",
+        "BEYOND-CASE-20435",
+        "BEYOND-CASE-20437",
+        "BEYOND-CASE-20441",
+        "BEYOND-CASE-20442",
+        "BEYOND-CASE-20443",
+        "BEYOND-CASE-20444"
+      ],
+      "note": "NOTIFY is accepted and does nothing, and pg_notify returns without delivering a payload. The cited cases match the transcript only because no session listens. LISTEN and UNLISTEN bookkeeping on one connection works (cases 20430, 20433, 20434, 20439, 20440). The stand-ins also answer in the default SQLite dialect (PG-01)."
+    },
+    {
+      "capability": "advisory_locks",
+      "surface": "pg_advisory_lock, pg_try_advisory_lock, pg_advisory_unlock",
+      "status": "unsupported",
+      "cases": ["BEYOND-CASE-20410", "BEYOND-CASE-20411"],
+      "note": "Success-shaped stand-ins that take no lock: pg_try_advisory_lock always returns t, and pg_advisory_unlock of a key that was never locked returns t where PostgreSQL returns f. The cited cases match the transcript only (PG-01)."
+    },
+    {
+      "capability": "transaction_ids",
+      "surface": "txid_current, pg_current_xact_id",
+      "status": "unsupported",
+      "cases": ["BEYOND-CASE-20406", "BEYOND-CASE-20407"],
+      "note": "Both return the constant 1; the cited cases only check that the value is positive (PG-01)."
+    },
+    {
+      "capability": "wal_lsn",
+      "surface": "pg_current_wal_lsn, pg_wal_lsn_diff",
+      "status": "unsupported",
+      "cases": ["BEYOND-CASE-20416", "BEYOND-CASE-20417"],
+      "note": "pg_current_wal_lsn returns the constant 0/1, and pg_wal_lsn_diff returns 0 for equal inputs and 1 for any others. The cited cases only check a non-empty LSN and a zero self-difference (PG-01)."
+    },
+    {
+      "capability": "snapshot_export",
+      "surface": "pg_export_snapshot and SET TRANSACTION SNAPSHOT",
+      "status": "unsupported",
+      "cases": ["BEYOND-CASE-20423"],
+      "note": "pg_export_snapshot returns the constant 00000001-1; no snapshot can be imported by another session. The cited case only checks a non-empty result (PG-01)."
+    },
+    {
+      "capability": "logical_replication",
+      "surface": "Logical decoding, replication slots, publications and subscriptions (CDC)",
+      "status": "unsupported",
+      "cases": [
+        "BEYOND-CASE-20418",
+        "BEYOND-CASE-20419",
+        "BEYOND-CASE-20420",
+        "BEYOND-CASE-20421",
+        "BEYOND-CASE-20424",
+        "BEYOND-CASE-20425",
+        "BEYOND-CASE-20426",
+        "BEYOND-CASE-20427",
+        "BEYOND-CASE-20428",
+        "BEYOND-CASE-20429"
+      ],
+      "note": "Cases 20418 and 20429 are expected rejections: both engines refuse logical decoding while wal_level is replica. The other cited cases count empty catalog shims or accept DDL that replicates nothing."
+    },
+    {
+      "capability": "vector",
+      "surface": "The pgvector extension",
+      "status": "unsupported",
+      "cases": ["BEYOND-CASE-20340"],
+      "note": "Case 20340 is an expected rejection: CREATE EXTENSION vector fails with extension \"vector\" is not available on both engines."
+    },
+    {
+      "capability": "citext",
+      "surface": "The citext extension",
+      "status": "partial",
+      "cases": ["BEYOND-CASE-20038", "BEYOND-CASE-20039", "BEYOND-CASE-20040"],
+      "note": "Values cast with ::citext compare and order without case (the cited cases). A column declared citext is not case-insensitive. The cast prefixes the value with U+E000, which length and octet_length count ('Hello'::citext has length 6), and ordinary TEXT that starts with U+E000 compares without case even in the default SQLite dialect (PG-03)."
+    },
+    {
+      "capability": "multi_session",
+      "surface": "Behaviour across sessions: locks, notifications, snapshots and catalog visibility between connections",
+      "status": "unverified",
+      "cases": [],
+      "note": "Every corpus case runs in one fresh process on :memory:, so no case observes a second session (PG-08)."
+    }
+  ]
+}

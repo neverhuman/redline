@@ -19,11 +19,13 @@ Leave it unset for SQLite work. The official SQLite lane does not set it.
 | Image the gate accepts | `sha256:efdf07c2f9d4df592783dcc8ea5f6db02efbf5f6452b527225ff5e58364570e9` |
 | Open failures in the policy on this commit | 0 |
 | Policy file | `metadata/beyond_sqlite/postgres-regression.json` |
-| Policy reason | text search and the nine declared rejections agree; no open failures remain |
+| Policy reason | every case agrees: row matches plus the declared rejections; nothing declared unsupported; no open failures |
 
-The policy's `failed_cases` array is the list the gate allows. On this branch that array is empty. A local gate recorded 265 passed, 0 failed, 0 skipped, and the regression check passed. The README block between `POSTGRES_PARITY_START` and `POSTGRES_PARITY_END` is that generated result.
+The policy's `failed_cases` array lists the mismatches the gate allows, and its `declared_unsupported` array lists the cases where RedlineDB may refuse with `unsupported capability:` while PostgreSQL succeeds. A refusal is a failure, not a pass. On this branch both arrays are empty. The policy's `declared_rejections` array must equal the set the corpus declares, so the count below cannot drift. A local gate recorded 265 agreeing, 0 failed, 0 skipped, and the regression check passed. The README block between `POSTGRES_PARITY_START` and `POSTGRES_PARITY_END` is written by that gate.
 
-Nine of the 265 passes are agreed rejections. Both engines exit 3, stdout matches, and the case declares `expected_target_stderr_contains`. The target produced that text, and setup completed. Those statements still fail. The [ledger](appendix-coverage.md) names them. The other 256 passes return rows.
+12 of the 265 agreeing cases are expected rejections, listed below. Both engines exit 3, stdout matches, and the case declares `expected_target_stderr_contains`. The gate re-checks each one from the raw record: the declared text is in the target's recorded stderr, and the case's setup ran on its own. Those statements still fail. The other 253 are row matches.
+
+The corpus is a SQL-shell comparison. The [capability matrix](../beyond-postgres-skips.md#capability-matrix) gives the surfaces it cannot establish — wire protocol, TLS, roles, SQLSTATE, NOTIFY delivery, replication, extensions, and behaviour across sessions — a status of their own. None of them is implemented.
 
 ## What already behaves like Postgres
 
@@ -41,12 +43,12 @@ These are in the engine on this commit, and the corpus cases that cover them are
 - `CREATE DOMAIN ... CHECK (VALUE > n)` returns the base value when the check passes and rejects the value when it fails.
 - `int4range(lo, hi)` is half-open. `int4range(1, 10)` contains 5 and does not contain 10. Overlap (`&&`) uses the same bounds.
 - `point(x, y)` and the `<->` operator. `point(0,0) <-> point(3,4)` is `5`.
-- `CREATE EXTENSION citext` compares and orders without case, and the value keeps the spelling you wrote. `CREATE EXTENSION pg_trgm`, `btree_gin`, and `btree_gist` are accepted. `CREATE EXTENSION vector` fails with `extension "vector" is not available`.
+- `citext` is partial. A value cast with `::citext` compares and orders without case and keeps the spelling you wrote. A column declared `citext` does not compare without case, and the cast's internal U+E000 prefix shows up in `length` and `octet_length`. `CREATE EXTENSION pg_trgm`, `btree_gin`, and `btree_gist` are accepted. `CREATE EXTENSION vector` fails with `extension "vector" is not available`.
 - `to_tsvector`, `to_tsquery`, `setweight`, `ts_rank`, `@@`, `similarity`, `word_similarity`, `%`, and text `<->` match the corpus rows. `USING gin` and `USING gist` are stored as ordinary indexes. The cases compare rows, not plans.
 
 **SQL functions.** `LANGUAGE SQL` functions run. `LATERAL` is accepted on the forms the corpus covers. `DEFAULT nextval(...)` together with `ALTER SEQUENCE ... OWNED BY` inserts sequence values.
 
-**Session state.** `LISTEN` and `UNLISTEN` record channels on this connection. A listen that has not committed is gone after rollback. `pg_listening_channels()` reads that set. `NOTIFY` is accepted and does not deliver a payload to any session. The open listen/notify cases are `LISTEN ALL`, which is a syntax error, and `pg_notify` inside a function or a trigger.
+**Session state.** `LISTEN` and `UNLISTEN` record channels on this connection. A listen that has not committed is gone after rollback. `pg_listening_channels()` reads that set. `NOTIFY` and `pg_notify` are accepted and deliver nothing to any session; the corpus cases that use them agree only because no session listens. `LISTEN ALL` is a syntax error on both engines. The advisory-lock, `txid_current`, WAL-LSN and snapshot-export functions are stand-ins that return fixed or success-shaped values; the capability matrix lists them as unsupported.
 
 **Table flags.** `ALTER TABLE ... INHERIT` makes a later read of the parent return the parent rows and the child rows. `NO INHERIT` drops the child from that read. `SET UNLOGGED` then `SET LOGGED` reports `relpersistence` as `u` then `p`. `SET STATISTICS 250` reads back `250`. `SET STORAGE EXTERNAL` reads back `e`. `array_to_string(reloptions, ',')` reads back `autovacuum_enabled=true` after `SET (autovacuum_enabled = true)`. `OWNER TO CURRENT_USER` reports `tableowner` as `redlinedb`. `SET WITHOUT CLUSTER` leaves the clustered-index count at `0`.
 
@@ -54,7 +56,7 @@ These are in the engine on this commit, and the corpus cases that cover them are
 
 ## Agreed errors
 
-These nine statements fail on both engines. The corpus records the RedlineDB text, so the gate counts them as passes. They are not queries you can build on.
+These 12 statements fail on both engines. The corpus records the RedlineDB text, so the gate counts them as expected rejections. They are not queries you can build on.
 
 | Case | What you get |
 | ---: | --- |
@@ -62,6 +64,9 @@ These nine statements fail on both engines. The corpus records the RedlineDB tex
 | 20023 | `value for domain positive_int2 violates check constraint "positive_int2_check"` |
 | 20103 | `syntax error at or near "BY"` for `MERGE ... WHEN NOT MATCHED BY SOURCE` |
 | 20111 | `SELECT DISTINCT ON expressions must match initial ORDER BY expressions` |
+| 20136 | `cannot insert a non-DEFAULT value into column "id"` for an explicit value in a `GENERATED ALWAYS AS IDENTITY` column |
+| 20203 | `NOT NULL constraint failed` for a NULL inserted after `ALTER COLUMN ... SET NOT NULL` |
+| 20247 | the same identity error for a second `GENERATED ALWAYS AS IDENTITY` table |
 | 20308 | `ERROR: boom` from `RAISE EXCEPTION` |
 | 20340 | `extension "vector" is not available` |
 | 20418 | `logical decoding requires wal_level >= logical` |

@@ -12,6 +12,8 @@ use sha2::{Digest, Sha256};
 
 #[path = "evidence_processor/completion.rs"]
 mod completion;
+#[path = "evidence_processor/postgres_qualification.rs"]
+mod postgres_qualification;
 #[path = "evidence_processor/sqlite_known_failures.rs"]
 mod sqlite_known_failures;
 #[path = "evidence_processor/sqlite_qualification.rs"]
@@ -470,19 +472,15 @@ fn run(root: PathBuf) -> Result<PathBuf> {
     let pg: Value = serde_json::from_slice(&fs::read(root.join("postgres-qualification.json"))?)?;
     let pg_summary = &validated["beyond_sqlite"];
     let pg_policy = repo_root.join("metadata/beyond_sqlite/postgres-regression.json");
-    if pg["schema_version"] != "redline-postgres-qualification-v1"
-        || pg["regression"] != "passed"
-        || pg["required"] != pg_summary["total"]
-        || pg["passed"] != pg_summary["passed"]
-        || pg["failed"] != pg_summary["failed"]
-        || pg["skipped"] != 0
-        || pg["unverified"] != 0
-        || pg["raw_sha256"] != sha256_file(&root.join("beyond_sqlite.raw.jsonl"))?
-        || pg["provenance_sha256"] != sha256_file(&root.join("beyond-sqlite-provenance.json"))?
-        || pg["policy_sha256"] != sha256_file(&pg_policy)?
-    {
-        bail!("PostgreSQL regression proof is missing, inconsistent, or failed");
-    }
+    postgres_qualification::check(
+        &pg,
+        &Value::Object(pg_summary.clone()),
+        &postgres_qualification::Hashes {
+            raw: &sha256_file(&root.join("beyond_sqlite.raw.jsonl"))?,
+            provenance: &sha256_file(&root.join("beyond-sqlite-provenance.json"))?,
+            policy: &sha256_file(&pg_policy)?,
+        },
+    )?;
     // Published SQLite failures are exactly the committed baseline's.
     let known_failures = sqlite_known_failures::Baseline::load(&repo_root)?;
     known_failures.check_recorded(&official)?;

@@ -17,13 +17,13 @@ Read these three, in order, if that is all the time you have.
 | Chapter | You will know |
 | --- | --- |
 | [SQLite coverage](04-sqlite-coverage.md) | What the official 2445-case lane measured on this branch. |
-| [Postgres coverage](05-postgres-coverage.md) | What the 265-case shell lane measures, including nine agreed errors. |
+| [Postgres coverage](05-postgres-coverage.md) | What the 265-case shell lane measures, including 12 expected rejections. |
 | [SQL you will write](06-sql-you-will-write.md) | Dialects, types, and a few results that surprise people coming from the other engine. |
 | [Transactions and durability](07-transactions.md) | Snapshots, the isolation modes the kernel accepts, and when a commit is durable. |
 | [Embed it](08-embed.md) | Rust, the C ABI, RQL, and the small TCP server. |
 | [Files and day-to-day operation](09-operate.md) | Paths, backup, stats, and the installer. |
 | [Limits](10-limits.md) | The boundaries worth remembering before you promise them to someone else. |
-| [Coverage ledger](appendix-coverage.md) | The policy counts, and the nine agreed Postgres errors. |
+| [Coverage ledger](appendix-coverage.md) | The policy counts, and the 12 expected Postgres rejections. |
 
 ## How to treat the numbers
 
@@ -31,7 +31,7 @@ Two lanes produce the compatibility numbers in this book.
 
 The SQLite lane compares `redlinedb` with SQLite 3.53.1 on the official `sqlite_parity` corpus. The committed report in [`benchmark-results/sqlite-parity/latest/summary.json`](../../benchmark-results/sqlite-parity/latest/summary.json) is **2445 passed, 0 failed, 0 skipped**, 3 repetitions and 1 warmup. Cases 93–96 (`fts5`, highlight, `rtree`, `dbstat`) and case 12023 (`PRAGMA compile_options`) are in that pass count. The README badge between `sqlite-parity-badge:begin` and `sqlite-parity-badge:end`, and the block under `sqlite-parity-report:begin`, are both rewritten from that summary by `redline-testing report`.
 
-The Postgres lane compares the shell with PostgreSQL 16.15 on 265 cases. The regression policy [`metadata/beyond_sqlite/postgres-regression.json`](../../metadata/beyond_sqlite/postgres-regression.json) lists **no** open failures. A local gate on this branch recorded **265 passed, 0 failed, 0 skipped**. Nine of those passes are agreed rejections: both engines exit 3, and the case names the text RedlineDB must produce. Those nine statements do not succeed. The generated README block between `POSTGRES_PARITY_START` and `POSTGRES_PARITY_END` is written by that gate.
+The Postgres lane compares the shell with PostgreSQL 16.15 on 265 cases. The regression policy [`metadata/beyond_sqlite/postgres-regression.json`](../../metadata/beyond_sqlite/postgres-regression.json) lists **no** open failures. A local gate on this branch recorded **265 agreeing, 0 failed, 0 skipped**: 253 row matches and 12 expected rejections. For an expected rejection both engines exit 3, and the case names the text RedlineDB must produce. Those 12 statements do not succeed. Agreement is normalized SQL-shell transcript agreement; the PostgreSQL wire protocol, TLS, roles and SQLSTATE are not covered (see the [capability matrix](../beyond-postgres-skips.md#capability-matrix)). The generated README block between `POSTGRES_PARITY_START` and `POSTGRES_PARITY_END` is written by that gate.
 
 A skip is a case the runner did not compare. A listed failure is a case that ran and did not match. Neither one is a pass.
 

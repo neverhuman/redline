@@ -106,7 +106,7 @@ pub fn run_cases() -> Result<(OracleSummary, Vec<CaseOutcome>)> {
 
 pub fn run_cases_with(options: RunCasesOptions) -> Result<(OracleSummary, Vec<CaseOutcome>)> {
     let cases = load_cases()?;
-    let deferred_ids = super::skip_list::deferred_case_ids()?;
+    let deferred_ids = super::skip_list::deferred_case_ids(&cases)?;
     let reference = resolve();
     let mut summary = OracleSummary {
         reference: None,

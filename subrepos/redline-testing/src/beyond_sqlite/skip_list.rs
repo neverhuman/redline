@@ -9,10 +9,16 @@
 //! Parsed with a line scan rather than a TOML crate on purpose -- this binary
 //! produces evidence, and one fewer dependency in that path is worth more than
 //! the generality.
+//!
+//! Every entry, closed ones included, must name a corpus case by its id and
+//! its exact manifest name (`checked`). Until PG-04 only deferred ids were
+//! checked, and with every entry closed that check covered nothing.
 
-use std::collections::BTreeSet;
+use std::collections::{BTreeMap, BTreeSet};
 
 use anyhow::{Result, bail};
+
+use super::case::BeyondCase;
 
 pub const SKIP_LIST: &str = include_str!("../../metadata/beyond_sqlite/skip-list.toml");
 
@@ -20,6 +26,8 @@ pub const SKIP_LIST: &str = include_str!("../../metadata/beyond_sqlite/skip-list
 #[derive(Debug, Clone)]
 pub struct Skip {
     pub case_id: String,
+    /// The case's exact name in the corpus manifest.
+    pub name: String,
     pub target_release: String,
 }
 
@@ -41,66 +49,54 @@ fn unquote(line: &str) -> Option<String> {
 /// Parse every `[[skip]]` entry, rejecting a malformed or duplicated one
 /// rather than silently narrowing the policy.
 pub fn parse(text: &str) -> Result<Vec<Skip>> {
-    let mut skips: Vec<Skip> = Vec::new();
-    let mut case_id: Option<String> = None;
-    let mut target_release: Option<String> = None;
-    let mut rationale = false;
-    let mut in_entry = false;
-
-    let flush = |case_id: &mut Option<String>,
-                 target_release: &mut Option<String>,
-                 rationale: &mut bool,
-                 skips: &mut Vec<Skip>|
-     -> Result<()> {
-        let (Some(id), Some(release)) = (case_id.take(), target_release.take()) else {
-            bail!("skip-list entry is missing case_id or target_release");
-        };
-        if !*rationale {
-            bail!("skip-list entry {id} has no rationale");
-        }
-        *rationale = false;
-        if skips.iter().any(|s: &Skip| s.case_id == id) {
-            bail!("skip-list lists case {id} twice");
-        }
-        skips.push(Skip {
-            case_id: id,
-            target_release: release,
-        });
-        Ok(())
-    };
-
+    #[derive(Default)]
+    struct Entry {
+        case_id: Option<String>,
+        name: Option<String>,
+        target_release: Option<String>,
+        rationale: bool,
+    }
+    let mut entries: Vec<Entry> = Vec::new();
     for line in text.lines() {
         let line = line.trim();
         if line == "[[skip]]" {
-            if in_entry {
-                flush(
-                    &mut case_id,
-                    &mut target_release,
-                    &mut rationale,
-                    &mut skips,
-                )?;
-            }
-            in_entry = true;
+            entries.push(Entry::default());
             continue;
         }
-        if !in_entry || line.starts_with('#') {
+        let Some(entry) = entries.last_mut() else {
+            continue;
+        };
+        if line.starts_with('#') {
             continue;
         }
         if line.starts_with("case_id") {
-            case_id = unquote(line);
+            entry.case_id = unquote(line);
+        } else if line.starts_with("name") {
+            entry.name = unquote(line);
         } else if line.starts_with("target_release") {
-            target_release = unquote(line);
+            entry.target_release = unquote(line);
         } else if line.starts_with("rationale") {
-            rationale = true;
+            entry.rationale = true;
         }
     }
-    if in_entry {
-        flush(
-            &mut case_id,
-            &mut target_release,
-            &mut rationale,
-            &mut skips,
-        )?;
+    let mut skips: Vec<Skip> = Vec::new();
+    for entry in entries {
+        let (Some(case_id), Some(name), Some(target_release)) =
+            (entry.case_id, entry.name, entry.target_release)
+        else {
+            bail!("skip-list entry is missing case_id, name or target_release");
+        };
+        if !entry.rationale {
+            bail!("skip-list entry {case_id} has no rationale");
+        }
+        if skips.iter().any(|skip| skip.case_id == case_id) {
+            bail!("skip-list lists case {case_id} twice");
+        }
+        skips.push(Skip {
+            case_id,
+            name,
+            target_release,
+        });
     }
     if skips.is_empty() {
         bail!("skip-list has no entries; refusing to treat the whole corpus as in scope");
@@ -108,9 +104,37 @@ pub fn parse(text: &str) -> Result<Vec<Skip>> {
     Ok(skips)
 }
 
-/// Corpus ids (`BEYOND-CASE-NNNNN`) that sit outside the in-scope denominator.
-pub fn deferred_case_ids() -> Result<BTreeSet<String>> {
-    Ok(parse(SKIP_LIST)?
+/// `parse`, then check that every entry -- closed or not -- names a corpus
+/// case by its id and its exact manifest name.
+pub fn checked(text: &str, cases: &[BeyondCase]) -> Result<Vec<Skip>> {
+    let skips = parse(text)?;
+    let names: BTreeMap<String, &str> = cases
+        .iter()
+        .map(|case| (case.id.to_string(), case.name.as_str()))
+        .collect();
+    for skip in &skips {
+        match names.get(&skip.case_id) {
+            None => bail!(
+                "skip-list entry {} ({}) names a case the corpus lacks",
+                skip.case_id,
+                skip.name
+            ),
+            Some(name) if *name != skip.name => bail!(
+                "skip-list entry {} is named {:?}, but the corpus names that case {:?}",
+                skip.case_id,
+                skip.name,
+                name
+            ),
+            Some(_) => {}
+        }
+    }
+    Ok(skips)
+}
+
+/// Corpus ids (`BEYOND-CASE-NNNNN`) that sit outside the in-scope
+/// denominator, from the shipped skip-list checked against `cases`.
+pub fn deferred_case_ids(cases: &[BeyondCase]) -> Result<BTreeSet<String>> {
+    Ok(checked(SKIP_LIST, cases)?
         .into_iter()
         .filter(Skip::is_deferred)
         .map(|skip| format!("BEYOND-CASE-{}", skip.case_id))
@@ -121,25 +145,34 @@ pub fn deferred_case_ids() -> Result<BTreeSet<String>> {
 mod tests {
     use super::*;
 
+    fn corpus() -> Vec<BeyondCase> {
+        super::super::oracle::load_cases().unwrap()
+    }
+
     #[test]
-    fn the_shipped_policy_parses_and_covers_only_real_cases() {
-        let skips = parse(SKIP_LIST).unwrap();
+    fn every_skip_entry_names_a_real_case_with_its_manifest_name() {
+        let skips = checked(SKIP_LIST, &corpus()).unwrap();
         assert!(
             skips.len() > 100,
             "policy shrank unexpectedly: {}",
             skips.len()
         );
-        let corpus: BTreeSet<String> = super::super::oracle::load_cases()
-            .unwrap()
-            .into_iter()
-            .map(|case| format!("BEYOND-CASE-{:05}", case.id))
-            .collect();
-        for id in deferred_case_ids().unwrap() {
-            assert!(
-                corpus.contains(&id),
-                "skip-list names a case the corpus lacks: {id}"
-            );
-        }
+        // An unknown id is refused even when the entry is closed ...
+        let unknown = format!(
+            "{SKIP_LIST}\n[[skip]]\ncase_id = \"99999\"\nname = \"NOPE\"\nrationale = \"x\"\ntarget_release = \"closed\"\n"
+        );
+        let err = checked(&unknown, &corpus()).unwrap_err().to_string();
+        assert!(err.contains("names a case the corpus lacks"), "{err}");
+        // ... and so is a real id under a name the manifest does not use.
+        let renamed = SKIP_LIST.replacen(
+            "name           = \"LISTEN_BASIC\"",
+            "name           = \"LISTEN_RENAMED\"",
+            1,
+        );
+        assert_ne!(renamed, SKIP_LIST);
+        let err = checked(&renamed, &corpus()).unwrap_err().to_string();
+        assert!(err.contains("\"LISTEN_RENAMED\""), "{err}");
+        assert!(err.contains("\"LISTEN_BASIC\""), "{err}");
     }
 
     #[test]
@@ -147,11 +180,13 @@ mod tests {
         let text = "\
 [[skip]]
 case_id        = \"20001\"
+name           = \"FIRST\"
 rationale      = \"no SQLite shape\"
 target_release = \"deferred\"
 
 [[skip]]
 case_id        = \"20002\"
+name           = \"SECOND\"
 rationale      = \"closed by the identity work\"
 target_release = \"closed\"
 ";
@@ -164,6 +199,7 @@ target_release = \"closed\"
         let deferred: Vec<_> = skips.iter().filter(|s| s.is_deferred()).collect();
         assert_eq!(deferred.len(), 1);
         assert_eq!(deferred[0].case_id, "20001");
+        assert_eq!(deferred[0].name, "FIRST");
     }
 
     #[test]
@@ -172,12 +208,14 @@ target_release = \"closed\"
             // no entries at all -- would put the whole corpus in scope
             "# only comments\n",
             // missing target_release
-            "[[skip]]\ncase_id = \"20001\"\nrationale = \"x\"\n",
+            "[[skip]]\ncase_id = \"20001\"\nname = \"A\"\nrationale = \"x\"\n",
             // missing rationale: a deferral with no reason is not a decision
-            "[[skip]]\ncase_id = \"20001\"\ntarget_release = \"deferred\"\n",
+            "[[skip]]\ncase_id = \"20001\"\nname = \"A\"\ntarget_release = \"deferred\"\n",
+            // missing name: nothing to check the id against
+            "[[skip]]\ncase_id = \"20001\"\nrationale = \"x\"\ntarget_release = \"deferred\"\n",
             // the same case deferred twice
-            "[[skip]]\ncase_id = \"20001\"\nrationale = \"x\"\ntarget_release = \"deferred\"\n\
-             [[skip]]\ncase_id = \"20001\"\nrationale = \"y\"\ntarget_release = \"deferred\"\n",
+            "[[skip]]\ncase_id = \"20001\"\nname = \"A\"\nrationale = \"x\"\ntarget_release = \"deferred\"\n\
+             [[skip]]\ncase_id = \"20001\"\nname = \"A\"\nrationale = \"y\"\ntarget_release = \"deferred\"\n",
         ] {
             assert!(parse(bad).is_err(), "should have been rejected: {bad}");
         }

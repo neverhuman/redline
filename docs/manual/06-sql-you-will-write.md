@@ -63,7 +63,7 @@ RQL avoids the question. The value is a JSON field. See [For agents](03-for-agen
 
 The kernel's message for serializable isolation is `unsupported isolation level`. The Rust facade surfaces that as a generic error, not as its own `ErrorCode`. SQL `BEGIN` and `Connection::begin` do not ask for serializable isolation. They start a snapshot. See [Transactions and durability](07-transactions.md).
 
-A domain check failure and an unknown enum label are data errors. They are supposed to fail. The open list still contains those two cases because the corpus has not yet declared the exact error text the gate should require. The rejection itself is the Postgres behavior.
+A domain check failure and an unknown enum label are data errors. They are supposed to fail. Both cases (20021, 20023) declare the exact error text the gate requires, so they count as expected rejections. The rejection itself is the Postgres behavior.
 
 ## Nulls and headers in the shell
 

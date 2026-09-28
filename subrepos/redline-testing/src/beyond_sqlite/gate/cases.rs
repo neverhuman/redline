@@ -50,8 +50,25 @@ pub(super) struct Outcomes {
     /// Both engines rejected a declared case, the target printed the
     /// declared text, and its setup ran on its own.
     pub(super) expected_rejections: BTreeSet<String>,
+    /// Failed cases PostgreSQL ran successfully and the target refused
+    /// with `unsupported capability:`: an honest refusal, not a pass.
+    pub(super) declared_unsupported: BTreeSet<String>,
+    /// Every other failed case.
+    pub(super) mismatches: BTreeSet<String>,
+}
+
+/// The prefix of the error the engine raises for a capability it declares
+/// unsupported (PG-01 introduces the error).
+pub(super) const UNSUPPORTED_CAPABILITY: &str = "unsupported capability:";
+
+impl Outcomes {
     /// Every case that did not agree.
-    pub(super) failed: BTreeSet<String>,
+    pub(super) fn failed(&self) -> BTreeSet<String> {
+        self.declared_unsupported
+            .union(&self.mismatches)
+            .cloned()
+            .collect()
+    }
 }
 
 /// `contracts` names every required case. Only a declared rejection may pass
@@ -117,7 +134,11 @@ pub(super) fn outcomes(raw: &str, contracts: &BTreeMap<String, CaseContract>) ->
             contract.expected_reference_exit
         );
         if status == "failed" {
-            split.failed.insert(id);
+            if declares_unsupported(&row, contract, (reference_exit, target_exit)) {
+                split.declared_unsupported.insert(id);
+            } else {
+                split.mismatches.insert(id);
+            }
             continue;
         }
         if recheck_pass(&id, &row, contract, (reference_exit, target_exit))? {
@@ -184,6 +205,24 @@ fn recheck_pass(
         );
     }
     Ok(true)
+}
+
+/// A failed row where PostgreSQL succeeded as the corpus expects and the
+/// target refused with an `unsupported capability:` error, per its
+/// recorded, untruncated and hash-matching stderr.
+fn declares_unsupported(
+    row: &Value,
+    contract: &CaseContract,
+    (reference_exit, target_exit): (i64, i64),
+) -> bool {
+    contract.expected_reference_exit == 0
+        && reference_exit == 0
+        && target_exit != 0
+        && row["target_stderr_truncated"] == false
+        && row["target_stderr"].as_str().is_some_and(|text| {
+            text.contains(UNSUPPORTED_CAPABILITY)
+                && row["target_stderr_sha256"].as_str() == Some(sha256(text).as_str())
+        })
 }
 
 /// Both complete normalized stdouts were recorded and hash equal.
@@ -293,7 +332,7 @@ mod tests {
         let contracts = positive();
         let good = agreeing_rows("c", &contracts["c"]);
         let split = outcomes(&good, &contracts).unwrap();
-        assert!(split.failed.is_empty());
+        assert!(split.failed().is_empty());
         assert_eq!(split.positive_matches, BTreeSet::from(["c".to_owned()]));
         for bad in [
             String::new(),
@@ -307,9 +346,39 @@ mod tests {
         assert!(outcomes("", &BTreeMap::new()).is_err());
         let failed = with(&contracts, &[("status", "failed".into())]);
         assert_eq!(
-            outcomes(&failed, &contracts).unwrap().failed,
+            outcomes(&failed, &contracts).unwrap().mismatches,
             BTreeSet::from(["c".to_owned()])
         );
+    }
+
+    #[test]
+    fn an_unsupported_capability_refusal_is_its_own_failure_bucket() {
+        let contracts = positive();
+        let stderr = "Error: 1002: unsupported capability: pg_notify: no delivery\n";
+        let refused = [
+            ("status", Value::from("failed")),
+            ("target_exit_code", 3.into()),
+            ("target_stderr", stderr.into()),
+            ("target_stderr_sha256", sha256(stderr).into()),
+        ];
+        let split = outcomes(&with(&contracts, &refused), &contracts).unwrap();
+        assert_eq!(split.declared_unsupported, BTreeSet::from(["c".to_owned()]));
+        assert!(split.mismatches.is_empty());
+        assert_eq!(split.failed(), BTreeSet::from(["c".to_owned()]));
+        // Not when PostgreSQL failed too, when the target exited 0, or when
+        // the recorded stderr is cut or not the one hashed.
+        for edit in [
+            ("reference_exit_code", Value::from(3)),
+            ("target_exit_code", Value::from(0)),
+            ("target_stderr_truncated", Value::from(true)),
+            ("target_stderr_sha256", sha256("other").into()),
+        ] {
+            let mut edits = refused.to_vec();
+            edits.push(edit.clone());
+            let split = outcomes(&with(&contracts, &edits), &contracts).unwrap();
+            assert!(split.declared_unsupported.is_empty(), "{edit:?}");
+            assert_eq!(split.mismatches, BTreeSet::from(["c".to_owned()]));
+        }
     }
 
     #[test]
@@ -428,7 +497,7 @@ mod tests {
         assert_eq!(declared.len(), 12);
         assert_eq!(split.expected_rejections, declared);
         assert_eq!(split.positive_matches.len(), contracts.len() - 12);
-        assert!(split.failed.is_empty());
+        assert!(split.failed().is_empty());
         // Each one still fails without its declared text.
         for id in &declared {
             let rows = agreeing_rows(id, &contracts[id]);

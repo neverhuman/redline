@@ -1,10 +1,25 @@
 {
-  "schema_version": "redline-postgres-regression-v1",
+  "schema_version": "redline-postgres-regression-v2",
   "previous_source_commit": "4e742765a75fe94dff26ef02c33b323c1b718345",
-  "reason": "Text search and the nine declared rejections agree with PostgreSQL 16.15. No open failures remain.",
+  "reason": "Every corpus case agrees with the pinned PostgreSQL reference: row matches, plus the declared_rejections below, each with its error text verified. No case is declared unsupported and no open failures remain.",
   "corpus_sha256": "b240a7204eeb46893ea1f06e715a144f6cd962efe8f41041582e52ca975cd5be",
   "reference_settings": "160015|C|C|UTC",
   "image_digest": "sha256:efdf07c2f9d4df592783dcc8ea5f6db02efbf5f6452b527225ff5e58364570e9",
   "server_binary_sha256": "201d8daff9a5bd9df70b820471b965c39f5a776d677f395232c477d051270722",
+  "declared_rejections": [
+    "BEYOND-CASE-20021",
+    "BEYOND-CASE-20023",
+    "BEYOND-CASE-20103",
+    "BEYOND-CASE-20111",
+    "BEYOND-CASE-20136",
+    "BEYOND-CASE-20203",
+    "BEYOND-CASE-20247",
+    "BEYOND-CASE-20308",
+    "BEYOND-CASE-20340",
+    "BEYOND-CASE-20418",
+    "BEYOND-CASE-20429",
+    "BEYOND-CASE-20438"
+  ],
+  "declared_unsupported": [],
   "failed_cases": []
 }
