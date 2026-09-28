@@ -333,6 +333,15 @@ impl ConcurrentTxStatus {
         }
     }
 
+    /// Transactions that began and have not committed or rolled back.
+    pub fn active_transaction_count(&self) -> usize {
+        self.inner
+            .active_snapshots
+            .lock()
+            .expect("active snapshot mutex poisoned")
+            .len()
+    }
+
     pub fn oldest_active_snapshot_csn(&self) -> Csn {
         let active = self
             .inner

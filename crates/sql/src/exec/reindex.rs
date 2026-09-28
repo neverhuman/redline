@@ -70,14 +70,39 @@ fn rebuild_index(conn: &Connection, tx: &mut Txn, index_id: IndexId) -> Result<(
 }
 
 /// Run `REINDEX target` in the connection's write transaction.
+///
+/// The new B-trees replace the old ones at COMMIT for every connection, so
+/// the transaction then commits only while it is the one open transaction
+/// and nothing committed since the snapshot the rebuild read
+/// (`Engine::commit_alone`, through `session.reindex_since`); otherwise the
+/// COMMIT fails as busy and changes nothing.
 pub(crate) fn execute_reindex(conn: &Connection, target: &ReindexTarget) -> Result<()> {
     with_write_tx(conn, |session, tx| {
         let snapshot = conn.engine().schema_snapshot_for_tx(tx);
-        for index_id in resolve_target(conn, session, &snapshot, target)? {
+        let targets = resolve_target(conn, session, &snapshot, target)?;
+        if targets.is_empty() {
+            return Ok(());
+        }
+        let since = tx.snapshot().visible_csn;
+        session.reindex_since = Some(session.reindex_since.map_or(since, |s| s.min(since)));
+        for index_id in targets {
             rebuild_index(conn, tx, index_id)?;
         }
         Ok(())
     })
+}
+
+/// Commit `tx` for `session`: alone if it rebuilt an index (see
+/// [`execute_reindex`]).
+pub(crate) fn commit_session_tx(
+    conn: &Connection,
+    session: &mut SessionState,
+    tx: Txn,
+) -> redlinedb_kernel::Result<CommitOutcome> {
+    match session.reindex_since.take() {
+        Some(since) => conn.engine().commit_alone(tx, since),
+        None => conn.engine().commit(tx),
+    }
 }
 
 /// Rebuild, in one transaction, every index whose B-tree is at an older

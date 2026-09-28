@@ -37,6 +37,10 @@ pub struct RowLockManager {
     /// Optional Phase 11 telemetry sink. Populated post-construction by
     /// `set_phase11_counters` so the public `new` signature stays stable.
     phase11: RwLock<Option<Arc<Phase11Counters>>>,
+    /// Taken shared for the instant a transaction begins, and exclusive by
+    /// a commit that must be the only transaction (`Engine::commit_alone`),
+    /// so no transaction begins between its check and its commit.
+    begin_gate: parking_lot::RwLock<()>,
 }
 
 impl RowLockManager {
@@ -50,7 +54,23 @@ impl RowLockManager {
             shards,
             timeout: RwLock::new(timeout),
             phase11: RwLock::new(None),
+            begin_gate: parking_lot::RwLock::new(()),
         }
+    }
+
+    /// Held while a transaction begins.
+    pub(crate) fn begin_shared(&self) -> parking_lot::RwLockReadGuard<'_, ()> {
+        self.begin_gate.read()
+    }
+
+    /// Held by a commit that must be alone: no transaction begins meanwhile.
+    pub(crate) fn begin_exclusive(&self) -> parking_lot::RwLockWriteGuard<'_, ()> {
+        self.begin_gate.write()
+    }
+
+    /// The busy timeout lock waits use.
+    pub(crate) fn timeout(&self) -> Duration {
+        *self.timeout.read().expect("row lock timeout poisoned")
     }
 
     pub fn set_timeout(&self, timeout: Duration) {

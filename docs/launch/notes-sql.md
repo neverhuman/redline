@@ -95,6 +95,16 @@ index-format epoch below), so such an index is rebuilt at the first open.
   the object to be reindexed`). A rebuild takes effect at COMMIT. REINDEX of
   an attached database is not supported yet, and a custom collation is
   recognized only when some index uses it.
+- REINDEX commits only while its transaction is the one open and nothing
+  committed since its rebuild read the table: the new B-tree replaces the
+  old one for every connection, so a snapshot reader that began earlier saw
+  none of its entries, and an open writer's changes landed in the retired
+  B-tree. New transactions wait to begin during that commit; other open
+  transactions are waited for up to the busy timeout. Otherwise the REINDEX
+  (or the COMMIT of its transaction) fails with `lock timeout` and changes
+  nothing. Reads inside the REINDEX transaction use the new B-tree its own
+  writes maintain. Not yet: CREATE INDEX does not wait for other
+  transactions.
 - A leading DESC index key took its value bounds in ascending byte order, so
   `WHERE x > 1` through a DESC index returned no rows, and an ordered LIMIT
   walked a DESC key in the wrong direction. An index range with no lower

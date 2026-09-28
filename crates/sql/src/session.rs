@@ -102,6 +102,10 @@ pub struct SessionState {
     /// constraints behave as if DEFERRABLE INITIALLY DEFERRED until the
     /// next COMMIT. Defaults OFF and is auto-cleared at each COMMIT.
     pub defer_foreign_keys: bool,
+    /// Set by `REINDEX` in the open transaction: the earliest snapshot a
+    /// rebuild read. The transaction then commits only while it is alone
+    /// and nothing committed since (`Engine::commit_alone`).
+    pub reindex_since: Option<redlinedb_kernel::format::Csn>,
     /// Mirrors SQLite's `PRAGMA ignore_check_constraints`. When ON, the
     /// executor skips CHECK clause evaluation. Defaults OFF.
     pub ignore_check_constraints: bool,
@@ -367,6 +371,7 @@ impl Default for SessionState {
             query_only: false,
             case_sensitive_like: false,
             defer_foreign_keys: false,
+            reindex_since: None,
             ignore_check_constraints: false,
             trusted_schema: false,
             // SQLite's default is OFF (`0`) on a :memory: database; the

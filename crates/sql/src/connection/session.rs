@@ -581,6 +581,7 @@ impl Connection {
         session.sqlite_sequences_dirty.clear();
         session.tx = Some(tx);
         session.failed = false;
+        session.reindex_since = None;
         // A fresh tx can never replay — drop any leftover journal/savepoint
         // state from a prior rolled-back tx.
         session.clear_savepoints();
@@ -653,7 +654,7 @@ impl Connection {
             .tx
             .take()
             .ok_or(Error::TransactionState("no active transaction"))?;
-        match self.db.engine.commit(tx) {
+        match crate::exec::reindex::commit_session_tx(self, &mut session, tx) {
             Ok(CommitOutcome::Committed(_)) => {
                 session.kernel_unique_guards.clear();
                 session.unique_guards.clear();
@@ -747,6 +748,7 @@ impl Connection {
         // at the next transaction boundary.
         session.defer_foreign_keys = false;
         session.failed = false;
+        session.reindex_since = None;
         session.clear_savepoints();
         result?;
         Ok(())

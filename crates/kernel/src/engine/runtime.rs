@@ -14,6 +14,8 @@ use super::{BEGIN_LOCK_KEY, CommitDurability, CommitOutcome, Engine, EngineConfi
 
 #[path = "runtime/commit.rs"]
 mod commit;
+#[path = "runtime/commit_alone.rs"]
+mod commit_alone;
 #[path = "runtime/mutation.rs"]
 mod mutation;
 
@@ -33,7 +35,10 @@ impl Engine {
         if isolation == Isolation::Serializable {
             return Err(Error::UnsupportedIsolation);
         }
-        let mut tx = self.txs.begin_txn(isolation);
+        let mut tx = {
+            let _gate = self.locks.begin_shared();
+            self.txs.begin_txn(isolation)
+        };
         tx.attach_row_lock_manager(Arc::clone(&self.locks));
         Ok(tx)
     }

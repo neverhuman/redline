@@ -1642,6 +1642,7 @@ fn with_write_tx<T>(
             let sqlite_sequence_snapshot = session.sqlite_sequences.clone();
             let sqlite_sequence_dirty_snapshot = session.sqlite_sequences_dirty.clone();
             loop {
+                session.reindex_since = None;
                 let mut tx = conn.engine().begin(Isolation::ReadCommitted)?;
                 let tx_ptr: *mut Txn = &mut tx;
                 let result = with_current_session(session_ptr, || {
@@ -1672,7 +1673,7 @@ fn with_write_tx<T>(
                             session.sqlite_sequences_dirty = sqlite_sequence_dirty_snapshot.clone();
                             return Err(err);
                         }
-                        match conn.engine().commit(tx) {
+                        match crate::exec::reindex::commit_session_tx(conn, session, tx) {
                             Ok(CommitOutcome::Committed(_)) => {
                                 session.kernel_unique_guards.clear();
                                 session.unique_guards.clear();
