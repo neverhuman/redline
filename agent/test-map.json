@@ -105,6 +105,10 @@
       "command": "rtk bash scripts/ci-local.sh required",
       "purpose": "verify generated and published assets through the canonical host-required lane"
     },
+    "bench/perf/": {
+      "command": "cargo test --locked -p redlinedb-bench --lib perf_evidence",
+      "purpose": "verify the committed perf cohort lists (medium-set.txt and its digest) through the perf evidence validators that read them"
+    },
     "benchmark-results/": {
       "command": "rtk bash scripts/ci-local.sh required",
       "purpose": "verify benchmark evidence through the canonical host-required lane"

@@ -2,7 +2,7 @@
 //!
 //! Every line must be one JSON object describing one known sample: a
 //! warmup, `measured:K` with `repetition_index` K, or the single
-//! placeholder of a case that did not run (`skipped`/`skipped` or
+//! not-run row of a case that did not run (`skipped`/`skipped` or
 //! `not_run`/`failed`). Anything else is an error naming its line, never a
 //! row to skip: a summary built from the rows a parser happened to
 //! understand describes an experiment nobody ran.
@@ -28,7 +28,7 @@ pub(crate) enum SampleKey {
     /// Measured repetition K (1-based).
     Measured(usize),
     /// The one row of a case that did not run.
-    Placeholder,
+    NotRun,
 }
 
 impl std::fmt::Display for SampleKey {
@@ -37,7 +37,7 @@ impl std::fmt::Display for SampleKey {
             Self::Warmup(Some(index)) => write!(f, "warmup (sample {index})"),
             Self::Warmup(None) => f.write_str("warmup"),
             Self::Measured(repetition) => write!(f, "measured:{repetition}"),
-            Self::Placeholder => f.write_str("placeholder"),
+            Self::NotRun => f.write_str("not_run"),
         }
     }
 }
@@ -88,7 +88,7 @@ pub(crate) struct RawRow {
     pub(crate) timing: Option<Timing>,
     /// The row's `target_executable_sha256` and `reference_executable_sha256`
     /// (the binaries the runner timed); `None` when absent or empty, as on
-    /// the placeholder of a case that did not run.
+    /// the not-run row of a case that did not run.
     pub(crate) target_sha256: Option<String>,
     pub(crate) reference_sha256: Option<String>,
 }
@@ -141,12 +141,12 @@ fn parse_row(line: &str, number: usize) -> Result<RawRow> {
     } else if (role == "skipped" && status == RowStatus::Skipped)
         || (role == "not_run" && status == RowStatus::Failed)
     {
-        SampleKey::Placeholder
+        SampleKey::NotRun
     } else {
         bail!("sample_role {role:?} with status {status:?} is no known sample");
     };
     let timing = match sample {
-        SampleKey::Placeholder => None,
+        SampleKey::NotRun => None,
         SampleKey::Warmup(_) | SampleKey::Measured(_) => {
             if status == RowStatus::Skipped {
                 bail!("{sample} has status skipped");

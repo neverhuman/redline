@@ -288,7 +288,7 @@ fn p95_is_nearest_rank_across_cases() {
 }
 
 #[test]
-fn placeholder_rows_are_single_and_never_measured() {
+fn not_run_rows_are_single_and_never_measured() {
     let skipped = serde_json::json!({
         "case_id": "10009", "status": "skipped", "sample_role": "skipped",
     })
@@ -298,7 +298,7 @@ fn placeholder_rows_are_single_and_never_measured() {
     assert_eq!((summary.cases, summary.skipped_cases), (2, 1));
     // A skipped case that also carries a sample is no case the runner writes.
     let error = summarize(&jsonl(&[skipped, passed("10009", 1, 1_000, 900)]))
-        .expect_err("placeholder plus sample");
+        .expect_err("not-run row plus sample");
     assert!(format!("{error:#}").contains("case 10009"), "{error:#}");
     // Unknown roles and skipped samples are errors, not rows to drop.
     for bad in [

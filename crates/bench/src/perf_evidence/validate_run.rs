@@ -5,7 +5,7 @@
 //! must parse (`records::parse_rows`) and be one sample of the run's plan:
 //! each executed case has exactly `warmup` warmups and measured
 //! repetitions `1..=repetitions`, each once; a case that did not run is one
-//! placeholder row. The cases must be exactly `expected_cases` in number
+//! not-run row. The cases must be exactly `expected_cases` in number
 //! and, given the runner's own corpus listing, exactly its ids. The
 //! runner's completion marker (`<raw>.complete.json`) must exist and name
 //! this file's SHA-256, record count and case count: the runner writes it
@@ -49,7 +49,7 @@ pub struct RunValidation {
     pub executed_cases: usize,
     pub skipped_cases: usize,
     pub not_run_cases: usize,
-    /// Cases with any failed row, placeholders included.
+    /// Cases with any failed row, not-run rows included.
     pub failed_cases: usize,
     pub raw_sha256: String,
 }
@@ -98,7 +98,7 @@ struct CaseSamples {
     first_line: BTreeMap<SampleKey, usize>,
     warmups: usize,
     measured: BTreeSet<usize>,
-    placeholder: Option<RowStatus>,
+    not_run: Option<RowStatus>,
     failed: bool,
 }
 
@@ -132,7 +132,7 @@ pub(crate) fn validate_rows(rows: &[RawRow], plan: &RunPlan) -> Result<RunValida
             SampleKey::Measured(repetition) => {
                 case.measured.insert(repetition);
             }
-            SampleKey::Placeholder => case.placeholder = Some(row.status),
+            SampleKey::NotRun => case.not_run = Some(row.status),
         }
         case.failed |= row.status == RowStatus::Failed;
     }
@@ -148,11 +148,11 @@ pub(crate) fn validate_rows(rows: &[RawRow], plan: &RunPlan) -> Result<RunValida
     };
     let expected_measured = (1..=plan.repetitions).collect::<BTreeSet<_>>();
     for (case_id, case) in &cases {
-        match case.placeholder {
+        match case.not_run {
             Some(status) => {
                 if case.first_line.len() != 1 {
                     bail!(
-                        "case {case_id}: a case that did not run has one placeholder row, found {} rows",
+                        "case {case_id}: a case that did not run has one not-run row, found {} rows",
                         case.first_line.len()
                     );
                 }
@@ -234,7 +234,7 @@ fn check_sample(row: &RawRow, plan: &RunPlan) -> Result<()> {
                 );
             }
         }
-        SampleKey::Placeholder => {}
+        SampleKey::NotRun => {}
     }
     Ok(())
 }

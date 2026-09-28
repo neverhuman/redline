@@ -108,14 +108,14 @@ fn complete_run_validates() {
     rows.truncate(8);
     rows.extend(executed("10002", "failed"));
     assert_eq!(validate(&rows, &plan()).expect("complete").failed_cases, 1);
-    // Placeholders stand for cases that did not run.
+    // Not-run rows stand for cases that did not run.
     let mut rows = complete_rows();
     rows.truncate(8);
     rows.push(
         serde_json::json!({"case_id": "10002", "status": "skipped", "sample_role": "skipped"})
             .to_string(),
     );
-    let validation = validate(&rows, &plan()).expect("skip placeholder");
+    let validation = validate(&rows, &plan()).expect("skip not-run row");
     assert_eq!(
         (validation.executed_cases, validation.skipped_cases),
         (2, 1)

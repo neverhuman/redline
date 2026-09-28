@@ -214,16 +214,16 @@ pub(crate) fn classify_cases(rows: &[RawRow], options: SummaryOptions) -> Result
     };
     for (case_id, case) in &cases {
         table.invalid_rows += case.invalid_rows;
-        let placeholder = case.first_line.contains_key(&SampleKey::Placeholder);
-        if placeholder && case.first_line.len() != 1 {
+        let not_run = case.first_line.contains_key(&SampleKey::NotRun);
+        if not_run && case.first_line.len() != 1 {
             bail!(
-                "case {case_id}: a case that did not run has one placeholder row, found {}",
+                "case {case_id}: a case that did not run has one not-run row, found {}",
                 case.first_line.len()
             );
         }
         let repetitions = case.measured.keys().copied().collect::<BTreeSet<_>>();
         if let Some(expected) = options.expected_repetitions
-            && !placeholder
+            && !not_run
             && repetitions != (1..=expected).collect()
         {
             bail!(

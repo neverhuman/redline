@@ -308,7 +308,7 @@ pub struct RunDigest {
     pub raw: String,
     pub raw_sha256: String,
     pub passed: usize,
-    /// Cases with any failed row, the not-run placeholders included.
+    /// Cases with any failed row, the not-run rows included.
     pub failed: usize,
     pub skipped: usize,
     /// The runner's exit status; non-zero when a case failed.
