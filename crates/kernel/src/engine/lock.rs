@@ -175,6 +175,23 @@ impl RowLockManager {
         }
     }
 
+    /// Re-own a row lock `from` holds to `to`, keeping it held. Waiters
+    /// stay queued. False when `from` does not hold it.
+    pub(crate) fn transfer(&self, rel_id: RelId, row_id: RowId, from: TxId, to: TxId) -> bool {
+        let key = RowKey { rel_id, row_id };
+        let shard = self.shard(key);
+        let Ok(mut rows) = shard.rows.lock() else {
+            return false;
+        };
+        match rows.get_mut(&key) {
+            Some(state) if state.owner == Some(from) => {
+                state.owner = Some(to);
+                true
+            }
+            _ => false,
+        }
+    }
+
     fn dequeue_waiter(
         &self,
         rows: &mut HashMap<RowKey, RowLockState>,

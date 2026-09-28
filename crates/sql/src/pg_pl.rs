@@ -136,6 +136,7 @@ pub(crate) fn fire_after_insert(conn: &Connection, table: &str, values: &[SqlVal
         let Some(def) = lookup(conn, &trigger.function) else {
             continue;
         };
+        crate::replay::mark_hazard();
         let mut env = Env::default();
         env.insert(
             "new",

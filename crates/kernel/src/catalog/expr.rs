@@ -1,5 +1,6 @@
 #![allow(dead_code)]
 
+use std::cell::Cell;
 use std::cmp::Ordering;
 use std::sync::Arc;
 
@@ -404,10 +405,23 @@ struct UtcDateTime {
     second: u32,
 }
 
+thread_local! {
+    static CLOCK_READS: Cell<u64> = const { Cell::new(0) };
+}
+
+/// How many times this thread has read the wall clock for `CURRENT_DATE`,
+/// `CURRENT_TIME` or `CURRENT_TIMESTAMP` (column defaults included). The SQL
+/// layer compares it around a statement to learn whether re-running the
+/// statement could store a different value.
+pub fn clock_reads() -> u64 {
+    CLOCK_READS.with(Cell::get)
+}
+
 impl UtcDateTime {
     fn now() -> Self {
         use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
+        CLOCK_READS.with(|reads| reads.set(reads.get().wrapping_add(1)));
         let dur = match SystemTime::now().duration_since(UNIX_EPOCH) {
             Ok(dur) => dur,
             Err(_) => Duration::default(),

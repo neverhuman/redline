@@ -107,6 +107,7 @@ pub(crate) fn quote_value(value: &SqlValue) -> String {
 }
 
 pub(crate) fn random_i64() -> i64 {
+    crate::replay::mark_hazard();
     static COUNTER: AtomicU64 = AtomicU64::new(0);
     let now = SystemTime::now()
         .duration_since(UNIX_EPOCH)

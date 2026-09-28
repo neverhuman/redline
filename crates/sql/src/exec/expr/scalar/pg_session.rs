@@ -59,6 +59,7 @@ pub(crate) fn try_eval(name: &str, values: &[SqlValue]) -> Option<Result<SqlValu
         }),
         "pg_advisory_unlock_all" => zero(values, || {
             not_while_preparing("pg_advisory_unlock_all")?;
+            crate::replay::mark_hazard();
             let conn = session_connection("pg_advisory_unlock_all")?;
             let (locks, owner) = conn.advisory_locks();
             locks.unlock_all(owner);
@@ -131,6 +132,8 @@ fn void() -> SqlValue {
 
 fn current_transaction_id(function: &'static str) -> Result<SqlValue> {
     not_while_preparing(function)?;
+    // A replay runs in another transaction, with another id.
+    crate::replay::mark_hazard();
     let Some(tx) = crate::exec::current_tx() else {
         return Err(Error::TransactionState("txid_current needs a transaction"));
     };
@@ -159,6 +162,7 @@ fn advisory(
     f: impl FnOnce(&crate::pg_advisory::AdvisoryLocks, AdvisoryKey, u64) -> Result<SqlValue>,
 ) -> Result<SqlValue> {
     not_while_preparing(function)?;
+    crate::replay::mark_hazard();
     if values.iter().any(|value| matches!(value, SqlValue::Null)) {
         return Ok(SqlValue::Null);
     }

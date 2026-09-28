@@ -20,6 +20,7 @@ mod pg_search;
 mod pg_type;
 mod planner;
 mod regexp;
+mod replay;
 mod rql;
 mod session;
 mod statement;

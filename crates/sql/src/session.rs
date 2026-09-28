@@ -31,6 +31,10 @@ pub struct JournalEntry {
     /// Empty for statements driven through `Connection::execute(sql)`
     /// directly.
     pub bindings: Vec<Option<SqlValue>>,
+    /// Whether re-executing the statement reproduces what it did; see
+    /// `crate::replay`. ROLLBACK TO refuses to replay a prefix that holds
+    /// an entry without it.
+    pub replay_safe: bool,
 }
 
 /// A savepoint frame captures the journal length and counter snapshot at the

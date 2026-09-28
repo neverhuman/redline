@@ -1005,7 +1005,10 @@ impl Statement {
                 // the cache persists across those iterations because
                 // the thread-local scope only resets on a fresh
                 // `execute_prepared` call.
+                let hazards = crate::replay::HazardScope::begin();
                 let result = execute_prepared(conn, &self.template, &self.bindings)?;
+                let replay_safe =
+                    !hazards.finish() && crate::replay::kind_is_replayable(&self.template.kind);
                 self.affected_rows = result.affected_rows;
                 self.runtime = result.runtime;
                 // Journal this statement's SQL+bindings if the savepoint
@@ -1015,7 +1018,7 @@ impl Statement {
                 // not pollute the replay log. Pure SELECT/PRAGMA reads
                 // skip — they can be re-issued by the caller post-rewind
                 // and don't affect tx state.
-                self.maybe_journal();
+                self.maybe_journal(replay_safe);
             }
             match &mut self.runtime {
                 RuntimeState::Select(runtime) => {
@@ -1040,11 +1043,16 @@ impl Statement {
         })
     }
 
-    fn maybe_journal(&self) {
+    fn maybe_journal(&self, replay_safe: bool) {
         if self.template.readonly {
             return;
         }
         if is_rql_template(&self.template) {
+            // An RQL mutation cannot be re-run from SQL text. Journal it as
+            // unsafe so a later ROLLBACK TO refuses instead of dropping it.
+            let _ = self
+                .conn
+                .journal_statement(self.template.sql.as_ref(), Vec::new(), false);
             return;
         }
         // Skip kernel transaction-control statements — they are tracked by
@@ -1058,9 +1066,11 @@ impl Statement {
         ) {
             return;
         }
-        let _ = self
-            .conn
-            .journal_statement(self.template.sql.as_ref(), self.bindings.clone());
+        let _ = self.conn.journal_statement(
+            self.template.sql.as_ref(),
+            self.bindings.clone(),
+            replay_safe,
+        );
     }
 
     pub fn column_count(&self) -> usize {

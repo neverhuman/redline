@@ -30,7 +30,8 @@ pub use ddl::{
     TableConstraintSpec, TriggerEventKind, TriggerTimeKind,
 };
 pub use expr::{
-    CompiledExpr, EvalScratch, ExprAst, ExprError, ExprOp, RowValueSource, compile_expr, eval_expr,
+    CompiledExpr, EvalScratch, ExprAst, ExprError, ExprOp, RowValueSource, clock_reads,
+    compile_expr, eval_expr,
 };
 pub use ids::{ColumnId, ConstraintId, IndexId, ObjectId, RelationId, SchemaId, TableId};
 pub use key::{

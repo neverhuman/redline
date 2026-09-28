@@ -35,7 +35,12 @@ pub fn call_registered_scalar(
     name: &str,
     args: &[SqlValue],
 ) -> Option<Result<SqlValue, String>> {
-    DISPATCH.get().and_then(|f| f(db_addr, name, args))
+    let result = DISPATCH.get().and_then(|f| f(db_addr, name, args));
+    if result.is_some() {
+        // A user function may not return the same value twice.
+        crate::replay::mark_hazard();
+    }
+    result
 }
 
 /// Pluggable collation dispatcher analogous to [`install_dispatch`] but for
@@ -86,7 +91,11 @@ pub fn call_registered_aggregate(
     name: &str,
     rows: &[Vec<SqlValue>],
 ) -> Option<Result<SqlValue, String>> {
-    AGG_RUN.get().and_then(|f| f(db_addr, name, rows))
+    let result = AGG_RUN.get().and_then(|f| f(db_addr, name, rows));
+    if result.is_some() {
+        crate::replay::mark_hazard();
+    }
+    result
 }
 
 pub fn is_registered_aggregate(name: &str) -> bool {

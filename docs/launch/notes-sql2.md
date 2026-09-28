@@ -41,3 +41,20 @@ them into `CHANGELOG.md`.
   step, preparing `ROLLBACK TO s` discarded work, and reset + step of a
   prepared savepoint statement did nothing. An unknown savepoint name is now
   reported by the step. `sqlite3_stmt_readonly` is true for these statements.
+
+## ROLLBACK TO keeps the snapshot and refuses what it cannot replay (S9-05)
+
+- `ROLLBACK TO` re-executes the statements before the savepoint in the
+  transaction's own snapshot instead of a fresh one, so rows another
+  connection committed meanwhile no longer appear after it, and it keeps a
+  `BEGIN IMMEDIATE` / `BEGIN EXCLUSIVE` reservation instead of dropping it.
+- It refuses, before changing anything, when one of those statements is not
+  replay-safe: it read the clock, drew a random value, called a user-defined
+  or Postgres function, read `changes()`, `last_insert_rowid()`, a sequence
+  or the transaction id, fired a trigger, used `RETURNING`, or changed the
+  schema. The transaction is then failed and only `ROLLBACK` ends it. These
+  statements used to be re-evaluated, storing different values than the
+  ones the transaction had seen.
+- `RELEASE` of the last savepoint inside `BEGIN` no longer forgets the
+  statements before it: `BEGIN; SAVEPOINT a; INSERT ...; RELEASE a;
+  SAVEPOINT b; ...; ROLLBACK TO b` used to lose the first insert.

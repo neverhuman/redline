@@ -629,9 +629,11 @@ pub(crate) fn eval_scalar_function_values(
         _ => {
             if let Some(conn) = crate::exec::current_connection() {
                 if let Some(result) = crate::pg_pl::try_call(conn, name, &values) {
+                    crate::replay::mark_hazard();
                     return result;
                 }
                 if let Some(result) = crate::pg_fn::try_call(conn, name, &values) {
+                    crate::replay::mark_hazard();
                     return result;
                 }
             }
@@ -710,6 +712,7 @@ fn current_schema_value() -> SqlValue {
 /// `increment`. Unknown sequences raise an UnsupportedSql error
 /// mirroring `relation "<name>" does not exist`.
 fn pg_sequence_nextval(values: &[SqlValue]) -> Result<SqlValue> {
+    crate::replay::mark_hazard();
     if values.len() != 1 {
         return Err(Error::UnsupportedSql(
             "nextval expects one argument".to_owned(),
@@ -738,6 +741,7 @@ fn pg_sequence_nextval(values: &[SqlValue]) -> Result<SqlValue> {
 /// produced by `nextval`. Errors if `nextval` has never been called on
 /// the sequence in this session, mirroring Postgres' standard surface.
 fn pg_sequence_currval(values: &[SqlValue]) -> Result<SqlValue> {
+    crate::replay::mark_hazard();
     if values.len() != 1 {
         return Err(Error::UnsupportedSql(
             "currval expects one argument".to_owned(),
@@ -767,6 +771,7 @@ fn pg_sequence_currval(values: &[SqlValue]) -> Result<SqlValue> {
 /// the next `nextval` returns `value` rather than `value + increment`
 /// (Postgres semantics). When omitted, `is_called` defaults to true.
 fn pg_sequence_setval(values: &[SqlValue]) -> Result<SqlValue> {
+    crate::replay::mark_hazard();
     if values.len() < 2 || values.len() > 3 {
         return Err(Error::UnsupportedSql(
             "setval expects 2 or 3 arguments".to_owned(),
@@ -1007,6 +1012,7 @@ fn raise_message(arg: Option<&FunctionArg>) -> Result<String> {
 }
 
 fn last_insert_rowid_value() -> i64 {
+    crate::replay::mark_hazard();
     if let Some(ptr) = crate::exec::current_session_ptr() {
         // SAFETY: installed by `with_write_tx` for the duration of the
         // synchronous statement/trigger execution scope.
@@ -1019,6 +1025,7 @@ fn last_insert_rowid_value() -> i64 {
 }
 
 fn changes_value() -> i64 {
+    crate::replay::mark_hazard();
     if let Some(ptr) = crate::exec::current_session_ptr() {
         // SAFETY: installed by `with_write_tx` for the duration of the
         // synchronous statement/trigger execution scope.
@@ -1032,6 +1039,7 @@ fn changes_value() -> i64 {
 }
 
 fn total_changes_value() -> i64 {
+    crate::replay::mark_hazard();
     if let Some(ptr) = crate::exec::current_session_ptr() {
         // SAFETY: installed by `with_write_tx` for the duration of the
         // synchronous statement/trigger execution scope.

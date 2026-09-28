@@ -125,6 +125,8 @@ fn fire_one(
     old: Option<&TriggerRowValues>,
     new: Option<&TriggerRowValues>,
 ) -> Result<()> {
+    // A replay would fire the trigger again (S9-05).
+    crate::replay::mark_hazard();
     let depth = tx.increment_trigger_depth();
     if depth > TRIGGER_DEPTH_CAP {
         tx.decrement_trigger_depth();
@@ -195,6 +197,7 @@ pub(crate) fn fire_instead_of_insert(
             "cannot modify {view_name} because it is a view"
         )));
     }
+    crate::replay::mark_hazard();
     let table = synth_view_trigger_table(view_name, columns);
     let row = TriggerRowValues {
         rowid: RowId(1),

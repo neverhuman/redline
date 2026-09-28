@@ -427,12 +427,9 @@ impl Connection {
             .unwrap_or(false);
         session.savepoints.truncate(pos);
         let stack_now_empty = session.savepoints.is_empty();
-        if stack_now_empty {
-            // No more savepoints — clear the journal too. The DML up to
-            // this point will commit (or rollback) at the outer tx
-            // boundary; we don't need to keep replay material.
-            session.journal.clear();
-        }
+        // The journal stays until the transaction ends: a SAVEPOINT taken
+        // later in the same transaction replays everything before it (S9-05;
+        // clearing it here lost those statements).
         if stack_now_empty && bottom_was_implicit {
             // Drop the lock before going through commit() which re-locks.
             drop(session);
@@ -442,12 +439,18 @@ impl Connection {
     }
 
     /// ROLLBACK TO SAVEPOINT: rewind the active transaction to the state
-    /// captured when `name` was created. Implementation: close the kernel
-    /// tx, open a fresh one, replay the journal up to the savepoint's
-    /// prefix length. The savepoint frame stays on the stack (per SQLite).
+    /// captured when `name` was created. The kernel has no partial undo, so
+    /// this begins a transaction in the current one's snapshot, moves the
+    /// BEGIN IMMEDIATE/EXCLUSIVE reservation to it, rolls the current one
+    /// back and re-executes the statements journaled before the savepoint
+    /// (S9-05). It refuses, before touching the transaction, when one of
+    /// those statements is not replay-safe (`crate::replay`); the
+    /// transaction is then failed and only ROLLBACK ends it. The savepoint
+    /// frame stays on the stack (per SQLite).
     pub fn rollback_to(self: &Arc<Self>, name: &str) -> Result<()> {
-        // Phase 1: locate frame, snapshot the journal prefix, drop the
-        // active tx. The replay runs in phase 2 with no session lock held.
+        // Phase 1: locate the frame, check and snapshot the journal prefix,
+        // swap in the replay transaction. The replay runs in phase 2 with
+        // no session lock held.
         let (replay_entries, target_changes, target_total, target_last_rowid, target_journal_len) = {
             let mut session = self.session.lock().expect("session poisoned");
             let pos = session
@@ -455,15 +458,41 @@ impl Connection {
                 .iter()
                 .rposition(|frame| frame.name == name)
                 .ok_or(Error::TransactionState("no such savepoint"))?;
+            let journal_len = session.savepoints[pos].journal_len;
+            if session.journal[..journal_len]
+                .iter()
+                .any(|entry| !entry.replay_safe)
+            {
+                // Nothing was undone: the work since the savepoint is still
+                // in the transaction, so it must not commit.
+                session.failed = true;
+                return Err(Error::TransactionState(
+                    "ROLLBACK TO cannot be applied: the statements before the savepoint are \
+                     not replay-safe (they read the clock, a random value, a user function, \
+                     a sequence or the transaction, fired a trigger, returned rows or changed \
+                     the schema); issue ROLLBACK",
+                ));
+            }
+            let replay_tx = match session.tx.as_mut() {
+                Some(current) => {
+                    let mut replay = self
+                        .db
+                        .engine
+                        .begin_with_snapshot(current.isolation(), current.snapshot().clone())?;
+                    self.db.engine.transfer_begin_lock(current, &mut replay);
+                    replay
+                }
+                None => self.db.engine.begin(Isolation::Snapshot)?,
+            };
+            if let Some(tx) = session.tx.replace(replay_tx) {
+                let _ = self.db.engine.rollback(tx);
+            }
             // Drop frames *above* `pos` (they're rewound away), keep the
             // matching frame on the stack — RELEASE is a separate op.
             session.savepoints.truncate(pos + 1);
             let frame = session.savepoints[pos].clone();
             let journal_prefix: Vec<JournalEntry> = session.journal[..frame.journal_len].to_vec();
             session.journal.truncate(frame.journal_len);
-            if let Some(tx) = session.tx.take() {
-                let _ = self.db.engine.rollback(tx);
-            }
             session.kernel_unique_guards.clear();
             session.unique_guards.clear();
             session.failed = false;
@@ -488,13 +517,12 @@ impl Connection {
             )
         };
 
-        // Phase 2: open a fresh tx and replay the journal prefix.
-        {
-            let mut session = self.session.lock().expect("session poisoned");
-            let tx = self.db.engine.begin(Isolation::Snapshot)?;
-            session.tx = Some(tx);
-            session.replay_in_progress = true;
-        }
+        // Phase 2: replay the journal prefix in the new transaction. A
+        // statement that fails there fails the transaction (`with_write_tx`).
+        self.session
+            .lock()
+            .expect("session poisoned")
+            .replay_in_progress = true;
         let replay_result = self.replay_journal(&replay_entries);
         {
             let mut session = self.session.lock().expect("session poisoned");
@@ -569,6 +597,7 @@ impl Connection {
         &self,
         sql: &str,
         bindings: Vec<Option<crate::value::SqlValue>>,
+        replay_safe: bool,
     ) -> Result<()> {
         let mut session = self.session.lock().expect("session poisoned");
         if session.replay_in_progress || session.tx.is_none() {
@@ -577,6 +606,7 @@ impl Connection {
         session.journal.push(JournalEntry {
             sql: sql.to_owned(),
             bindings,
+            replay_safe,
         });
         Ok(())
     }

@@ -149,6 +149,14 @@ impl Txn {
         }
     }
 
+    /// Forget `key` without unlocking it; its lock now belongs to another
+    /// transaction (`Engine::transfer_begin_lock`).
+    pub(crate) fn remove_row_lock(&mut self, key: RowKey) {
+        if self.row_lock_set.remove(&key) {
+            self.row_locks.retain(|held| *held != key);
+        }
+    }
+
     pub(crate) fn drain_row_locks(&mut self) -> impl Iterator<Item = RowKey> + '_ {
         self.row_lock_set.clear();
         self.row_locks.drain(..)

@@ -48,6 +48,7 @@ pub struct DateTime {
 
 impl DateTime {
     pub fn now_utc() -> Self {
+        crate::replay::mark_hazard();
         let dur = match SystemTime::now().duration_since(UNIX_EPOCH) {
             Ok(d) => d,
             Err(_) => Duration::default(),
