@@ -128,6 +128,28 @@ authenticated GitHub CLI. `install.sh` repeats the repository slug and id from
 checks both. No development toolchain is needed at runtime, and the installer
 never replaces `sqlite3`.
 
+Installation is failure-atomic. Each version lives in
+`PREFIX/lib/redlinedb/versions/<tag>/`; the stable paths in `PREFIX/bin`,
+`PREFIX/lib` and `PREFIX/include` are links through
+`PREFIX/lib/redlinedb/current`. A candidate is staged on the prefix's
+filesystem under a `mkdir` lock, validated from the staged copy (`--version`,
+`SELECT 1` must print `1`, provenance), renamed into `versions/<tag>`, and
+activated by renaming a new `current` link over the old one (`mv -T` or BSD
+`mv -h`, chosen by probing). `previous` keeps the version it replaced and
+`REDLINEDB_ROLLBACK=1` swaps them. Files the installer did not create are never
+overwritten; `REDLINEDB_MIGRATE_LEGACY=1` moves a pre-v5 flat installation into
+`versions/legacy-<time>/` first. `scripts/install-from-source.sh` activates
+source builds through the same installer.
+
+`scripts/test-installer.sh` exercises the installer on every OS/architecture
+pair with shims (asset names, latest resolution, every refusal leaving the
+prefix byte-identical, a candidate that exits 42, a cp/mv/ln failure injected
+at every call, two concurrent installers, rollback, legacy migration, the glibc
+2.35 and macOS 15 floors). On each platform's hosted runner
+`scripts/test-native-install.sh` installs the real candidate archive with
+`install.sh` through a file-transport curl and links a C program against the
+installation.
+
 ## Evidence and rollback
 
 Acceptance artifacts are attached to the CI/release run: conformance evidence,

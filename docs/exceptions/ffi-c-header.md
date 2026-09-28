@@ -164,9 +164,11 @@ ABI major. `crates/ffi/build.rs` reads it and links the cdylib with soname
 `libredlinedb.so.<major>` (Linux and other ELF targets) or install name
 `@rpath/libredlinedb.<major>.dylib` (macOS). The packaging scripts install the
 library under that name as a regular file (`lib/libredlinedb.so.5`,
-`lib/libredlinedb.5.dylib`); `scripts/install-from-source.sh` also creates the
-unversioned development symlink unless `REDLINEDB_DEV_LINKS=0`, which package
-staging sets because archives hold regular files only. A consumer linked with
+`lib/libredlinedb.5.dylib`). Archives, and the package tree that
+`scripts/install-from-source.sh --tree` writes for them, hold regular files
+only. The installer (`install.sh`, which `scripts/install-from-source.sh` also
+runs) creates the unversioned development symlink next to the library inside
+the installed version and links it from `PREFIX/lib`. A consumer linked with
 `-lredlinedb` through that symlink records the ABI-major name, so a later
 incompatible major cannot be loaded in its place.
 

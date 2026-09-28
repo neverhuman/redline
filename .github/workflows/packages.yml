@@ -63,3 +63,5 @@ jobs:
         with: {name: 'packages-${{ matrix.platform }}', path: target/packages}
       - name: Run archives in a fresh runner without building
         run: bash ops/ci/packages.sh runtime
+      - name: Install the candidate with install.sh and link a C program against it
+        run: bash ops/ci/packages.sh native-install

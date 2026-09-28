@@ -32,7 +32,7 @@ for package in redlinedb redline-web redline-testing; do
   cp LICENSE NOTICE "$stage/$package/share/redlinedb/"
   printf '%s\n' "$TAG" > "$stage/$package/share/redlinedb/VERSION"
 done
-REDLINEDB_DEV_LINKS=0 PREFIX="$stage/redlinedb" ./scripts/install-from-source.sh
+./scripts/install-from-source.sh --tree "$stage/redlinedb"
 install -m 644 contracts/c-abi/sqlite3.h "$stage/redlinedb/include/"
 install -m 755 "$CARGO_TARGET_DIR/release/redline-web" "$stage/redline-web/bin/"
 install -m 755 "$CARGO_TARGET_DIR/release/redline-testing" "$CARGO_TARGET_DIR/release/redlinedb-client-smoke" "$stage/redline-testing/bin/"

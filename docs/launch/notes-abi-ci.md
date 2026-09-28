@@ -22,8 +22,9 @@ against the v5 headers. There is no v4 compatibility alias.
   `lib/libredlinedb.so.5` (soname `libredlinedb.so.5`) and macOS archives
   `lib/libredlinedb.5.dylib` (install name `@rpath/libredlinedb.5.dylib`),
   as regular files. Archives no longer contain `libredlinedb.so` or
-  `libredlinedb.dylib`; the installer creates that development link, and
-  `scripts/install-from-source.sh` creates it too. Programs linked against v4
+  `libredlinedb.dylib`; the installer creates that development link inside
+  the installed version, and `scripts/install-from-source.sh` installs
+  through the same installer. Programs linked against v4
   (`libredlinedb.so` with no soname) do not load the v5 library by accident.
   The header defines `RLDB_ABI_MAJOR 5`.
 
@@ -278,3 +279,63 @@ against the v5 headers. There is no v4 compatibility alias.
   `releases/latest` redirects to `/releases`), and archives from before this
   change would be refused anyway, so those examples need the v5.0.0 tag
   once it is published.
+
+## Installer: one version at a time, never a mix (DX-04, DX-06)
+
+- Breaking for scripts that read the installed files directly: `install.sh`
+  now installs each release into `PREFIX/lib/redlinedb/versions/<tag>/`.
+  `PREFIX/bin/redlinedb`, `redlinedb-server` and `redlinedb-cli`,
+  `PREFIX/lib/libredlinedb.so.5` (macOS `libredlinedb.5.dylib`), the
+  development link `libredlinedb.so` (`libredlinedb.dylib`),
+  `libredlinedb.a`, and `PREFIX/include/redlinedb.h` and `sqlite3.h` are
+  links through `PREFIX/lib/redlinedb/current`. Licences and provenance of
+  the active version are in `PREFIX/lib/redlinedb/current/share/redlinedb/`.
+- Fixed: the installer copied the archive straight into the prefix and only
+  then ran the new CLI, so a candidate that could not run (a CLI exiting 42
+  in the test) or a copy that failed partway left new files, or new and old
+  files mixed, in place. Now it verifies the archive in a temporary
+  directory, stages it on the prefix's filesystem under a lock, validates the
+  staged copy (`--version`; `-batch :memory: 'SELECT 1;'` must print `1`; the
+  provenance again), renames it to `versions/<tag>`, and activates it with
+  one rename of the `current` link (`mv -T`, or `mv -h` on BSD and macOS,
+  chosen by probing). A failure at any step before that rename leaves the
+  previous version active and whole.
+- `PREFIX/lib/redlinedb/previous` names the version an install replaced, and
+  `REDLINEDB_ROLLBACK=1` swaps `current` and `previous` after validating the
+  previous version. Installing a tag that is already installed keeps it.
+- The installer never overwrites a file it did not create. A prefix that an
+  earlier installer filled (4.x copied files flat) is refused, with the list
+  of paths, before anything is written; `REDLINEDB_MIGRATE_LEGACY=1` moves
+  exactly those files into `versions/legacy-<time>/` and keeps them as the
+  previous version, so `REDLINEDB_ROLLBACK=1` brings them back.
+- Two installers on one prefix take turns (`mkdir` lock,
+  `REDLINEDB_LOCK_TIMEOUT`, default 300 seconds). A lock left by a killed
+  installer is reported with its recorded owner and is removed by hand; the
+  installer never breaks a lock. Staging left by a killed installer is
+  removed by the next one.
+- The installer stops before writing anything on glibc older than 2.35 (or
+  without glibc, such as musl) and on macOS older than 15, the systems the
+  packages are built for, and points to building from source. It refuses an
+  archive that ships `bin/sqlite3`, rejects hard links that BusyBox tar lists
+  with `->`, and does not link `sqlite3.h` into `/usr/include` or
+  `/usr/local/include`, where it would shadow the system SQLite header.
+- `scripts/install-from-source.sh` lays the build out as a package and
+  installs it through `install.sh`, as
+  `versions/source-<commit>-<time>-<pid>`, with the same validation, lock and
+  rollback. `--tree DIR` only writes the package tree (package-release.sh
+  uses it). `REDLINEDB_DEV_LINKS` and `REDLINEDB_INSTALL_DIR` are gone.
+- `scripts/test-installer.sh` now checks all four supported OS/architecture
+  pairs (the asset each requests), that every refusal (404, missing
+  `.sha256`, wrong `REDLINEDB_SHA256`, another repository's provenance,
+  unsupported OS or architecture, old glibc or macOS, and more) leaves the
+  prefix byte-identical, a candidate that exits 42 or answers `SELECT 1`
+  wrongly, a `cp`, `mv` or `ln` failure injected at each call, two
+  concurrent installers, a held lock, rollback, legacy migration and source
+  installs. It passes under bash 3.2 (macOS `/bin/bash`) and with BusyBox
+  tools. In the `packages` workflow each hosted runner also installs its
+  platform's candidate archive with the real `install.sh`
+  (`scripts/test-native-install.sh`) and links a C program through the
+  installed development link.
+- For the integrator (not a release-note line): the macOS `mv -h` path and
+  the `@rpath` lookup through the stable links run only on the hosted macOS
+  runners of the `packages` workflow; they were not exercised locally.
