@@ -16,6 +16,10 @@ jobs:
       attestations: read
   publish:
     needs: acceptance
+    # TODO(Phase 6, DX-05/S8-06): publish on a GitHub-hosted runner (or a
+    # dedicated release host) under `environment: release` with required
+    # reviewers and tag-only deployments. Until then it shares the self-hosted
+    # runners, which only trusted jobs reach (docs/ci-trust-boundary.md).
     runs-on: [self-hosted, Linux, X64]
     timeout-minutes: 20
     permissions:
@@ -31,7 +35,9 @@ jobs:
           fi
           exit 0
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
-        with: {fetch-depth: 0}
+        with:
+          fetch-depth: 0
+          persist-credentials: false
       - name: Verify stable release ancestry
         env: {TAG: '${{ github.ref_name }}'}
         run: |

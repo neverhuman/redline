@@ -197,3 +197,29 @@ against the v5 headers. There is no v4 compatibility alias.
   `gh api -X PUT repos/neverhuman/redline/private-vulnerability-reporting`
   and confirm `gh api repos/neverhuman/redline/private-vulnerability-reporting --jq .enabled`
   prints `true`; until then the advisory form refuses reports.
+
+## CI trust boundary (S8-06)
+
+- Pull requests from forks now run only on GitHub-hosted runners, each job
+  with its own `CARGO_HOME` under `$RUNNER_TEMP`. Before, every CI job ran on
+  the self-hosted runners and shared their cargo cache and its `bin` on
+  `PATH` with the trusted jobs that publish releases. The Postgres parity
+  lane and the kernel test stage stay on the self-hosted runners, so for a
+  fork pull request `RedlineDB/required` fails with "Maintainer run required"
+  until a maintainer runs CI on a reviewed copy of the commit.
+- cargo-nextest is downloaded as one pinned release, checked against a pinned
+  SHA-256 and installed into a job-local directory
+  (`ops/ci/install-nextest.sh`). CI used to pipe an unverified download into
+  `tar`, and skipped even that when any `cargo-nextest` was on `PATH`.
+- Every workflow checkout drops its token (`persist-credentials: false`)
+  except the parity report job, which pushes its branch.
+- New self-hosted runner hook `ops/ci/runner-job-started.sh` refuses jobs for
+  pull requests from forks, which the workflow files alone cannot prevent
+  because a pull request runs its own copy of them.
+  `docs/ci-trust-boundary.md` covers it, the fork merge procedure, the
+  maintainer host work and the canary.
+- Maintainer step before launch (not a release-note line): deploy the hook on
+  both self-hosted hosts, move the runners to a user with no credentials,
+  wipe the shared caches once, and run the canary in
+  `docs/ci-trust-boundary.md`. The release `publish` job still runs on the
+  self-hosted runners without `environment: release`; Phase 6 moves it.

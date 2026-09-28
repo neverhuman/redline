@@ -27,3 +27,7 @@ Thanks for the interest in RedlineDB.
 - The workspace is Apache-2.0 licensed.
 - Avoid committing generated artifacts or local database state.
 - If a change affects public APIs, update the README or other relevant docs.
+- CI for a pull request from a fork runs on GitHub-hosted runners without the
+  parity lane and the kernel test stage, so `RedlineDB/required` reports
+  "Maintainer run required". After review, a maintainer runs the full CI on a
+  copy of your commit (`docs/ci-trust-boundary.md`).

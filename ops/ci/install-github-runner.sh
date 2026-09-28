@@ -12,6 +12,7 @@
 #   RUNNER_VERSION       default 2.337.0
 #   RUNNER_REPO_URL      default https://github.com/neverhuman/RedlineDB
 set -euo pipefail
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 if [[ -z "${GITHUB_RUNNER_TOKEN:-}" ]]; then
   echo "GITHUB_RUNNER_TOKEN is required" >&2
@@ -59,20 +60,10 @@ fi
 
 HOOK_DIR="$(cd "${DIR}/.." && pwd)"
 HOOK="${HOOK_DIR}/job-started.sh"
-cat > "${HOOK}" <<'EOS'
-#!/usr/bin/env bash
-# GitHub Actions job_started hook. Self-hosted workdirs persist; tests
-# may chmod 0444 directories that actions/checkout cannot unlink.
-set +e
-if [ -n "${GITHUB_WORKSPACE}" ] && [ -d "${GITHUB_WORKSPACE}" ]; then
-  chmod -R u+rwx "${GITHUB_WORKSPACE}"
-fi
-if [ -n "${RUNNER_TOOL_CACHE}" ] && [ -d "${RUNNER_TOOL_CACHE}/redlinedb-target" ]; then
-  chmod -R u+rwx "${RUNNER_TOOL_CACHE}/redlinedb-target"
-fi
-exit 0
-EOS
-chmod 0755 "${HOOK}"
+# The hook unlocks leftover workspace files and refuses jobs for pull requests
+# from forks (docs/ci-trust-boundary.md). It needs jq on the host. Rerun this
+# script on every runner host when the hook changes.
+install -m 0755 "${SCRIPT_DIR}/runner-job-started.sh" "${HOOK}"
 if [[ -f .env ]]; then
   if ! grep -q '^ACTIONS_RUNNER_HOOK_JOB_STARTED=' .env; then
     printf '\nACTIONS_RUNNER_HOOK_JOB_STARTED=%s\n' "${HOOK}" >> .env

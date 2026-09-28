@@ -15,6 +15,9 @@ and the Jankurai ratchet; none is advisory or soft-gated. Local packaging checks
 the current platform. GitHub additionally builds and tests all four native targets.
 The branch-protection check `RedlineDB/required` rejects failed, cancelled or
 skipped required jobs. Merge with a squash commit to preserve linear history.
+Pull requests from forks run only on GitHub-hosted runners and cannot pass
+`RedlineDB/required` on their own; `docs/ci-trust-boundary.md` describes the
+runner trust boundary, the maintainer run, the host hardening and the canary.
 
 CI uses the included `subrepos/redline-testing` runner and an engine from the
 same parent commit. Missing evidence, including `rql_phase1`, and compatibility
