@@ -19,14 +19,15 @@ trap 'rm -rf "$work"' EXIT
 failures=0
 fail() { printf 'package-layout: %s\n' "$*" >&2; failures=$((failures + 1)); }
 records=(LICENSE NOTICE VERSION build-provenance.json)
-
-declare -A by_platform=()
+# macOS runners ship bash 3.2, so no associative arrays or mapfile here.
+platforms=(linux-x86_64 linux-arm64 macos-x86_64 macos-arm64)
+archives_seen=0
 for archive in "$packages"/*.tar.gz; do
   [[ -f $archive ]] || continue
   name=${archive##*/}
   package=$(archive_package "$name") || { fail "$name: not a release archive name"; continue; }
   platform=''
-  for candidate in linux-x86_64 linux-arm64 macos-x86_64 macos-arm64; do
+  for candidate in "${platforms[@]}"; do
     [[ $name != *-$candidate.tar.gz ]] || platform=$candidate
   done
   [[ -n $platform ]] || { fail "$name: unknown platform"; continue; }
@@ -45,9 +46,9 @@ for archive in "$packages"/*.tar.gz; do
         fail "$name: writes share/redlinedb/$record, which belongs to the core package"
     done
   fi
-  by_platform[$platform]+="$archive"$'\n'
+  archives_seen=$((archives_seen + 1))
 done
-((${#by_platform[@]})) || { fail "no release archives in $packages"; exit 1; }
+((archives_seen)) || { fail "no release archives in $packages"; exit 1; }
 
 # permutations <items...>: every order, one per line, space-separated.
 permutations() {
@@ -62,10 +63,14 @@ permutations() {
   done
 }
 
-for platform in "${!by_platform[@]}"; do
-  mapfile -t group < <(printf '%s' "${by_platform[$platform]}")
+platforms_checked=0
+for platform in "${platforms[@]}"; do
   names=()
-  for archive in "${group[@]}"; do names+=("${archive##*/}"); done
+  for archive in "$packages"/*-"$platform".tar.gz; do
+    [[ -f $archive ]] && names+=("${archive##*/}")
+  done
+  ((${#names[@]})) || continue
+  platforms_checked=$((platforms_checked + 1))
   while read -r -a order; do
     combined=$work/combined
     rm -rf "$combined"
@@ -93,4 +98,4 @@ if ((failures)); then
   printf 'package-layout: %d failure(s)\n' "$failures" >&2
   exit 1
 fi
-printf 'package-layout: ok (%d platform(s))\n' "${#by_platform[@]}"
+printf 'package-layout: ok (%d platform(s))\n' "$platforms_checked"
