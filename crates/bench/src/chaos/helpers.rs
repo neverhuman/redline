@@ -398,10 +398,7 @@ pub(super) fn chaos_stats(
     busy_timeout_ms: u64,
 ) -> BTreeMap<String, serde_json::Value> {
     let mut stats = BTreeMap::new();
-    stats.insert(
-        "chaos_suite".to_owned(),
-        serde_json::json!("chaos"),
-    );
+    stats.insert("chaos_suite".to_owned(), serde_json::json!("chaos"));
     stats.insert(
         "test_code_path".to_owned(),
         serde_json::json!("crates/bench/src/chaos/mod.rs"),
