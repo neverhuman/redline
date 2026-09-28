@@ -208,9 +208,12 @@ mod tests {
             assert!(ids.contains(id), "{id} must be declared");
         }
         // So are the cases the pinned oracle build cannot express: the
-        // shared soundex() and UPDATE/DELETE ... LIMIT rejections, and the
+        // shared soundex() and UPDATE/DELETE ... LIMIT rejections, the
+        // `.unmodule` rejection of a build without SQLITE_DEBUG, and the
         // median()-is-absent case the pinned build contradicts.
-        for id in ["00219", "00220", "10546", "11437", "11438", "11439"] {
+        for id in [
+            "00167", "00219", "00220", "10546", "11437", "11438", "11439",
+        ] {
             assert!(ids.contains(id), "{id} must be declared");
         }
         let kind_of = |id: &str| {
@@ -219,7 +222,7 @@ mod tests {
                 .find(|deviation| deviation.case_id == id)
                 .map(|deviation| deviation.kind)
         };
-        for id in ["00219", "00220", "11437", "11438", "11439"] {
+        for id in ["00167", "00219", "00220", "11437", "11438", "11439"] {
             assert_eq!(kind_of(id), Some(DeviationKind::SharedRejection), "{id}");
         }
         assert_eq!(kind_of("10546"), Some(DeviationKind::OracleBuild));

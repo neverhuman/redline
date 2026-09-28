@@ -32,7 +32,7 @@
   "raw_sha256": "9a9974fe1f8e130faa81b99065fc4ed15616ae89b110874bfac224cfc7d64421",
   "renderer": {
     "version": "redline-testing 1.0.1",
-    "binary_sha256": "ff45e8536a00bd0d0e29bcfcd965cbb7086dcfd122858bd4f1fcd9328a8a9f29"
+    "binary_sha256": "6fa34f7222dd89a03af0916ed1b503f8585181569fbb16e35443ba68efcd0d68"
   },
   "command_line": [
     "redline-testing",
@@ -70,8 +70,8 @@
   ],
   "updated_date": "2026-09-24",
   "output_file_hashes": {
-    "README.md#sqlite-parity-badge": "37875d4fbc0b4b980129f7515c9c30295e99c69d188c812293d82b6d9736b7dd",
-    "README.md#sqlite-parity-report": "bab6e1005c5abe5cd18e4bb003571e4dbbe1d57df73e969485055ee3a49a06fa",
+    "README.md#sqlite-parity-badge": "8398567eb24f8197bc71d4f09d3c4e99aacd29b46b82c555b365a9b46bae6726",
+    "README.md#sqlite-parity-report": "8f0c544ac72d141e1e19bd45b13daac644bcef3002a2cdf0636c7558fafe046f",
     "assets/sqlite-median-test-performance.svg": "946a466877912761c74c8b9b8e0e2b17386751da8751760c86a32d85bc22f0c6",
     "assets/sqlite-parity-latency-gap.svg": "1fbe2cb885370a23a14f0023c0934ebbbb00c40e9dd4bce57a11444f5bc34e5e",
     "assets/sqlite-parity-performance-histogram.svg": "63111bd9f0f8948f2288b04e40c48edb76ad6a8821062bf9ca73486de43aa4c8",

@@ -10,7 +10,7 @@
 
 <p align="center">
   <!-- sqlite-parity-badge:begin -->
-  <a href="#sqlite-parity-status"><img src="https://img.shields.io/badge/SQLite%20SQL%2FCLI%20corpus-2445%2F2445%20%C2%B7%200%20failed%20%C2%B7%200%20skipped%20%C2%B7%203.53.1-brightgreen" alt="SQLite SQL/CLI corpus: 2445/2445 cases passed, 0 failed, 0 skipped against the sqlite3 3.53.1 shell; 12 declared deviations; not full SQLite compatibility"></a><!-- sqlite-parity-badge:end -->
+  <a href="#sqlite-parity-status"><img src="https://img.shields.io/badge/SQLite%20SQL%2FCLI%20corpus-2445%2F2445%20%C2%B7%200%20failed%20%C2%B7%200%20skipped%20%C2%B7%203.53.1-brightgreen" alt="SQLite SQL/CLI corpus: 2445/2445 cases passed, 0 failed, 0 skipped against the sqlite3 3.53.1 shell; 13 declared deviations; not full SQLite compatibility"></a><!-- sqlite-parity-badge:end -->
   <a href="#whats-new-in-v400"><img src="https://img.shields.io/badge/corpus%20cases-2445-blue" alt="corpus cases"></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-Apache--2.0-blue" alt="license"></a>
   <a href="rust-toolchain.toml"><img src="https://img.shields.io/badge/rust-1.95-orange" alt="rust"></a>
@@ -366,8 +366,9 @@ Current acceptance evidence is attached to the GitHub CI run.
 - `10405` PRAGMA_MODULE_LIST_FILTER: `pragma_module_list` prints SQLite's module names, including `fts3`, `fts4`, `fts3tokenize`, `fts4aux` and `fts5vocab`, which create no table.
 - `12023` PRAGMA_COMPILE_OPTIONS: `PRAGMA compile_options` prints a fixed copy of the reference build's option list, not how RedlineDB was built.
 
-**Declared shared rejections (5):** the pinned sqlite3 build lacks the feature, so these cases declare its error; a pass means RedlineDB rejected the statement too, not that the feature works.
+**Declared shared rejections (6):** the pinned sqlite3 build lacks the feature, so these cases declare its error; a pass means RedlineDB rejected the statement too, not that the feature works.
 
+- `00167` DOT_UNMODULE_CATALOG: The pinned sqlite3 is not an `SQLITE_DEBUG` build, and the 3.53.1 shell compiles `.unmodule` only under `SQLITE_DEBUG`, so `.unmodule fts5` is `unknown command or invalid arguments` and `.unmodule` itself is not tested.
 - `00219` UPDATE_LIMIT_OPTIONAL: The 3.53.1 amalgamation parser is generated without SQLITE_UDL_CAPABLE_PARSER, so `UPDATE ... ORDER BY ... LIMIT` is `near "ORDER": syntax error` even though the reference build passes `-DSQLITE_ENABLE_UPDATE_DELETE_LIMIT`.
 - `00220` DELETE_LIMIT_OPTIONAL: As 00219, for `DELETE ... ORDER BY ... LIMIT`.
 - `11437` STRING_SOUNDEX_ROBERT: The pinned sqlite3 is built without `SQLITE_SOUNDEX`, so `soundex()` is `no such function` and `soundex()` itself is not tested.

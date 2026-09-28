@@ -27,6 +27,12 @@
       "reason": "`USING dbstat` creates a one-row table so `count(*) > 0` is 1; it reports no page statistics."
     },
     {
+      "case_id": "00167",
+      "name": "DOT_UNMODULE_CATALOG",
+      "kind": "shared_rejection",
+      "reason": "The pinned sqlite3 is not an `SQLITE_DEBUG` build, and the 3.53.1 shell compiles `.unmodule` only under `SQLITE_DEBUG`, so `.unmodule fts5` is `unknown command or invalid arguments` and `.unmodule` itself is not tested."
+    },
+    {
       "case_id": "00219",
       "name": "UPDATE_LIMIT_OPTIONAL",
       "kind": "shared_rejection",

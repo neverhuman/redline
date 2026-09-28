@@ -96,7 +96,7 @@ or combined fragment. That is why 00142 changed.
 | 00110, 00176 | `DOT_MODE_LINE_COLUMN_TABLE_BOX_MARKDOWN`, `OPT_LINE_MODE` | line mode fragment `a = 1` | `a: 1` (and `b: x`) |
 | 00163 | `DOT_FILECTRL_CATALOG` | exit 0 | exit 1, prints `Available file-controls:` |
 | 00164 | `DOT_IMPOSTER_CATALOG` | exit 0 | exit 1, `Usage: .imposter INDEX IMPOSTER` |
-| 00167 | `DOT_UNMODULE_CATALOG` | exit 0 | exit 1, unknown command `unmodule` |
+| 00167 | `DOT_UNMODULE_CATALOG` | exit 0 | exit 1, unknown command `unmodule`: the pinned build is not `SQLITE_DEBUG`, the only build with `.unmodule` (declared shared rejection) |
 | 00168 | `DOT_CHECK_CATALOG` | exit 0 | exit 1, `no .testcase is active` |
 | 00171 | `OPT_HELP` | exit 1 | exit 0; help text on stderr |
 | 00178 | `OPT_HTML_MODE` | fragment `<TD>1</TD>` | `<TD>1` then `<TD>x`, no closing tags |
