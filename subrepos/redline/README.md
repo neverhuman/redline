@@ -1,4 +1,4 @@
-> Source, reviews, CI and releases: [neverhuman/RedlineDB](https://github.com/neverhuman/RedlineDB).
+> Source, reviews, CI and releases: [neverhuman/redline](https://github.com/neverhuman/redline).
 > This component lives at `subrepos/redline` in the canonical checkout.
 > Follow the [root release process](../../docs/release.md); historical component release examples below are archival.
 
@@ -13,7 +13,7 @@ observability console in [`redline-web`](../redline-web).
 This directory intentionally contains no Cargo workspace and no engine source.
 Release tooling lives in [`redline-split-ops`](../redline-split-ops). The
 separate family manifest and lock file were retired with the multi-repo
-layout; [neverhuman/RedlineDB](https://github.com/neverhuman/RedlineDB) is now
+layout; [neverhuman/redline](https://github.com/neverhuman/redline) is now
 the sole source and release authority.
 
 ## Public entry points
