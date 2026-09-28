@@ -33,137 +33,148 @@ fn open_db() -> (TempDir, *mut rldb) {
     (dir, db)
 }
 
-static COMMIT_COUNT: AtomicU64 = AtomicU64::new(0);
-static ROLLBACK_COUNT: AtomicU64 = AtomicU64::new(0);
-static UPDATE_COUNT: AtomicU64 = AtomicU64::new(0);
-static TRACE_COUNT: AtomicU64 = AtomicU64::new(0);
-static PROFILE_NS: AtomicU64 = AtomicU64::new(0);
-static AUTH_COUNT: AtomicU64 = AtomicU64::new(0);
-static BUSY_ATTEMPTS: AtomicU64 = AtomicU64::new(0);
+// Tests run on parallel threads of one process (`cargo test`), so each test
+// counts through its own `user_data`. With one static per hook, the exec-walk
+// test's trace, commit and profile callbacks landed in the counters of the
+// single-hook tests below and failed them intermittently.
 
-unsafe extern "C" fn commit_ok(_: *mut c_void) -> c_int {
-    COMMIT_COUNT.fetch_add(1, Ordering::Relaxed);
+/// The `AtomicU64` that a test registered as its callback's `user_data`.
+fn slot<'a>(user_data: *mut c_void) -> &'a AtomicU64 {
+    // SAFETY: every registration that uses these callbacks passes
+    // `as_user_data` of an AtomicU64 that its test keeps alive until after
+    // rldb_close.
+    unsafe { &*(user_data as *const AtomicU64) }
+}
+
+fn as_user_data(slot: &AtomicU64) -> *mut c_void {
+    slot as *const AtomicU64 as *mut c_void
+}
+
+unsafe extern "C" fn commit_ok(user_data: *mut c_void) -> c_int {
+    slot(user_data).fetch_add(1, Ordering::Relaxed);
     0
 }
 
-unsafe extern "C" fn commit_veto(_: *mut c_void) -> c_int {
-    COMMIT_COUNT.fetch_add(1, Ordering::Relaxed);
+unsafe extern "C" fn commit_veto(user_data: *mut c_void) -> c_int {
+    slot(user_data).fetch_add(1, Ordering::Relaxed);
     1
 }
 
-unsafe extern "C" fn rollback_cb(_: *mut c_void) {
-    ROLLBACK_COUNT.fetch_add(1, Ordering::Relaxed);
+unsafe extern "C" fn rollback_cb(user_data: *mut c_void) {
+    slot(user_data).fetch_add(1, Ordering::Relaxed);
 }
 
 unsafe extern "C" fn update_cb(
-    _: *mut c_void,
+    user_data: *mut c_void,
     _op: c_int,
     _db: *const c_char,
     _tbl: *const c_char,
     _rowid: i64,
 ) {
-    UPDATE_COUNT.fetch_add(1, Ordering::Relaxed);
+    slot(user_data).fetch_add(1, Ordering::Relaxed);
 }
 
-unsafe extern "C" fn trace_cb(_: *mut c_void, _sql: *const c_char) {
-    TRACE_COUNT.fetch_add(1, Ordering::Relaxed);
+unsafe extern "C" fn trace_cb(user_data: *mut c_void, _sql: *const c_char) {
+    slot(user_data).fetch_add(1, Ordering::Relaxed);
 }
 
-unsafe extern "C" fn profile_cb(_: *mut c_void, _sql: *const c_char, nanos: u64) {
-    PROFILE_NS.store(nanos, Ordering::Relaxed);
+unsafe extern "C" fn profile_cb(user_data: *mut c_void, _sql: *const c_char, nanos: u64) {
+    slot(user_data).store(nanos, Ordering::Relaxed);
 }
 
 unsafe extern "C" fn authorizer_cb(
-    _: *mut c_void,
+    user_data: *mut c_void,
     _action: c_int,
     _arg3: *const c_char,
     _arg4: *const c_char,
     _arg5: *const c_char,
     _arg6: *const c_char,
 ) -> c_int {
-    AUTH_COUNT.fetch_add(1, Ordering::Relaxed);
+    slot(user_data).fetch_add(1, Ordering::Relaxed);
     1 // SQLITE_DENY
 }
 
-unsafe extern "C" fn busy_cb(_: *mut c_void, attempts: c_int) -> c_int {
-    BUSY_ATTEMPTS.store(attempts as u64, Ordering::Relaxed);
+unsafe extern "C" fn busy_cb(user_data: *mut c_void, attempts: c_int) -> c_int {
+    slot(user_data).store(attempts as u64, Ordering::Relaxed);
     if attempts < 3 { 1 } else { 0 }
 }
 
 #[test]
 fn commit_hook_fires_and_can_veto() {
     let (_dir, db) = open_db();
-    COMMIT_COUNT.store(0, Ordering::Relaxed);
-    unsafe { sqlite3_commit_hook(db, Some(commit_ok), ptr::null_mut()) };
+    let commits = AtomicU64::new(0);
+    unsafe { sqlite3_commit_hook(db, Some(commit_ok), as_user_data(&commits)) };
     let vetoed = __test_fire_commit(db);
     assert!(!vetoed);
-    assert_eq!(COMMIT_COUNT.load(Ordering::Relaxed), 1);
+    assert_eq!(commits.load(Ordering::Relaxed), 1);
 
-    unsafe { sqlite3_commit_hook(db, Some(commit_veto), ptr::null_mut()) };
+    unsafe { sqlite3_commit_hook(db, Some(commit_veto), as_user_data(&commits)) };
     let vetoed = __test_fire_commit(db);
     assert!(vetoed);
+    assert_eq!(commits.load(Ordering::Relaxed), 2);
     unsafe { rldb_close(db) };
 }
 
 #[test]
 fn rollback_hook_fires() {
     let (_dir, db) = open_db();
-    ROLLBACK_COUNT.store(0, Ordering::Relaxed);
-    unsafe { sqlite3_rollback_hook(db, Some(rollback_cb), ptr::null_mut()) };
+    let rollbacks = AtomicU64::new(0);
+    unsafe { sqlite3_rollback_hook(db, Some(rollback_cb), as_user_data(&rollbacks)) };
     __test_fire_rollback(db);
-    assert_eq!(ROLLBACK_COUNT.load(Ordering::Relaxed), 1);
+    assert_eq!(rollbacks.load(Ordering::Relaxed), 1);
     unsafe { rldb_close(db) };
 }
 
 #[test]
 fn update_hook_fires_with_table_and_rowid() {
     let (_dir, db) = open_db();
-    UPDATE_COUNT.store(0, Ordering::Relaxed);
-    unsafe { sqlite3_update_hook(db, Some(update_cb), ptr::null_mut()) };
+    let updates = AtomicU64::new(0);
+    unsafe { sqlite3_update_hook(db, Some(update_cb), as_user_data(&updates)) };
     __test_fire_update(db, 18, "users", 42);
-    assert_eq!(UPDATE_COUNT.load(Ordering::Relaxed), 1);
+    assert_eq!(updates.load(Ordering::Relaxed), 1);
     unsafe { rldb_close(db) };
 }
 
 #[test]
 fn trace_hook_fires_with_sql_string() {
     let (_dir, db) = open_db();
-    TRACE_COUNT.store(0, Ordering::Relaxed);
-    unsafe { sqlite3_trace(db, Some(trace_cb), ptr::null_mut()) };
+    let traces = AtomicU64::new(0);
+    unsafe { sqlite3_trace(db, Some(trace_cb), as_user_data(&traces)) };
     __test_fire_trace(db, "SELECT 1");
-    assert_eq!(TRACE_COUNT.load(Ordering::Relaxed), 1);
+    assert_eq!(traces.load(Ordering::Relaxed), 1);
     unsafe { rldb_close(db) };
 }
 
 #[test]
 fn profile_hook_captures_nanoseconds() {
     let (_dir, db) = open_db();
-    PROFILE_NS.store(0, Ordering::Relaxed);
-    unsafe { sqlite3_profile(db, Some(profile_cb), ptr::null_mut()) };
+    let nanos = AtomicU64::new(0);
+    unsafe { sqlite3_profile(db, Some(profile_cb), as_user_data(&nanos)) };
     __test_fire_profile(db, "SELECT 1", 12345);
-    assert_eq!(PROFILE_NS.load(Ordering::Relaxed), 12345);
+    assert_eq!(nanos.load(Ordering::Relaxed), 12345);
     unsafe { rldb_close(db) };
 }
 
 #[test]
 fn authorizer_returns_decision_code() {
     let (_dir, db) = open_db();
-    AUTH_COUNT.store(0, Ordering::Relaxed);
-    unsafe { sqlite3_set_authorizer(db, Some(authorizer_cb), ptr::null_mut()) };
+    let calls = AtomicU64::new(0);
+    unsafe { sqlite3_set_authorizer(db, Some(authorizer_cb), as_user_data(&calls)) };
     let decision = __test_fire_authorizer(db, 9 /* SQLITE_DELETE */, Some("users"));
     assert_eq!(decision, 1); // SQLITE_DENY
-    assert_eq!(AUTH_COUNT.load(Ordering::Relaxed), 1);
+    assert_eq!(calls.load(Ordering::Relaxed), 1);
     unsafe { rldb_close(db) };
 }
 
 #[test]
 fn busy_handler_retry_decision() {
     let (_dir, db) = open_db();
-    BUSY_ATTEMPTS.store(0, Ordering::Relaxed);
-    unsafe { sqlite3_busy_handler(db, Some(busy_cb), ptr::null_mut()) };
+    let last_attempt = AtomicU64::new(0);
+    unsafe { sqlite3_busy_handler(db, Some(busy_cb), as_user_data(&last_attempt)) };
     assert!(__test_fire_busy(db, 1));
     assert!(__test_fire_busy(db, 2));
     assert!(!__test_fire_busy(db, 3));
+    assert_eq!(last_attempt.load(Ordering::Relaxed), 3);
     unsafe { rldb_close(db) };
 }
 
@@ -343,12 +354,13 @@ fn set_authorizer_denies_table_access() {
 #[test]
 fn exec_walk_invokes_trace_profile_commit_hooks() {
     let (_dir, db) = open_db();
-    TRACE_COUNT.store(0, Ordering::Relaxed);
-    COMMIT_COUNT.store(0, Ordering::Relaxed);
+    let traces = AtomicU64::new(0);
+    let commits = AtomicU64::new(0);
+    let nanos = AtomicU64::new(0);
     unsafe {
-        sqlite3_trace(db, Some(trace_cb), ptr::null_mut());
-        sqlite3_commit_hook(db, Some(commit_ok), ptr::null_mut());
-        sqlite3_profile(db, Some(profile_cb), ptr::null_mut());
+        sqlite3_trace(db, Some(trace_cb), as_user_data(&traces));
+        sqlite3_commit_hook(db, Some(commit_ok), as_user_data(&commits));
+        sqlite3_profile(db, Some(profile_cb), as_user_data(&nanos));
     }
     let sql =
         CString::new("CREATE TABLE t(id INTEGER); INSERT INTO t VALUES (1); COMMIT;").unwrap();
@@ -357,9 +369,9 @@ fn exec_walk_invokes_trace_profile_commit_hooks() {
     let _rc =
         unsafe { redlinedb::rldb_exec(db, sql.as_ptr(), None, ptr::null_mut(), ptr::null_mut()) };
     // Trace fires once per non-empty input split — at least 3.
-    assert!(TRACE_COUNT.load(Ordering::Relaxed) >= 1);
+    assert!(traces.load(Ordering::Relaxed) >= 1);
     // Commit hook may fire when the COMMIT keyword is detected.
-    let _ = COMMIT_COUNT.load(Ordering::Relaxed);
+    let _ = commits.load(Ordering::Relaxed);
     unsafe { rldb_close(db) };
 }
 
