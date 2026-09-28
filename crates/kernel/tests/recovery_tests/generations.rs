@@ -93,8 +93,8 @@ pub(super) fn assert_rows_read_back(engine: &Engine, rows: &[(RowId, Vec<u8>)]) 
     }
 }
 
-/// Assert a scan of every heap page finds each row once and nothing else.
-pub(super) fn assert_scan_finds_each_row_once(engine: &Engine, rows: &[(RowId, Vec<u8>)]) {
+/// How many times a scan of every heap page returns each (row, payload).
+pub(super) fn scan_counts(engine: &Engine) -> BTreeMap<(RowId, Vec<u8>), usize> {
     let tx = engine.begin(Isolation::Snapshot).unwrap();
     let pages = engine
         .relation_entries(RelId(1))
@@ -116,6 +116,34 @@ pub(super) fn assert_scan_finds_each_row_once(engine: &Engine, rows: &[(RowId, V
     {
         *found.entry((row.row_id, row.payload)).or_insert(0_usize) += 1;
     }
+    found
+}
+
+/// Assert a scan of every heap page finds every row, at least once, and
+/// nothing else. For paths with the open duplicate-row defect, where a
+/// scan may return a row twice but must not lose or invent one.
+pub(super) fn assert_scan_finds_every_row(engine: &Engine, rows: &[(RowId, Vec<u8>)]) {
+    let found = scan_counts(engine);
+    let expected: std::collections::BTreeSet<_> = rows.iter().cloned().collect();
+    let missing: Vec<u64> = expected
+        .iter()
+        .filter(|key| !found.contains_key(*key))
+        .map(|(row, _)| row.0)
+        .collect();
+    let unexpected: Vec<u64> = found
+        .keys()
+        .filter(|key| !expected.contains(*key))
+        .map(|(row, _)| row.0)
+        .collect();
+    assert!(
+        missing.is_empty() && unexpected.is_empty(),
+        "a page scan lost rows {missing:?} or returned rows it should not have {unexpected:?}"
+    );
+}
+
+/// Assert a scan of every heap page finds each row once and nothing else.
+pub(super) fn assert_scan_finds_each_row_once(engine: &Engine, rows: &[(RowId, Vec<u8>)]) {
+    let found = scan_counts(engine);
     let expected: BTreeMap<_, _> = rows
         .iter()
         .map(|(row, bytes)| ((*row, bytes.clone()), 1_usize))
@@ -146,7 +174,7 @@ pub(super) fn assert_scan_finds_each_row_once(engine: &Engine, rows: &[(RowId, V
     }
 }
 
-fn corrupt_byte(path: &Path, offset: u64) {
+pub(super) fn corrupt_byte(path: &Path, offset: u64) {
     let mut file = OpenOptions::new()
         .read(true)
         .write(true)
@@ -159,19 +187,19 @@ fn corrupt_byte(path: &Path, offset: u64) {
 
 /// A closed database with two checkpoints over a WAL of several segments
 /// and commits after the second: its rows and both control files.
-struct TwoGenerations {
-    temp: TempDir,
-    config: EngineConfig,
-    rows: Vec<(RowId, Vec<u8>)>,
-    first: redlinedb_kernel::storage::ControlFile,
-    second: redlinedb_kernel::storage::ControlFile,
+pub(super) struct TwoGenerations {
+    pub(super) temp: TempDir,
+    pub(super) config: EngineConfig,
+    pub(super) rows: Vec<(RowId, Vec<u8>)>,
+    pub(super) first: redlinedb_kernel::storage::ControlFile,
+    pub(super) second: redlinedb_kernel::storage::ControlFile,
 }
 
 /// Generation 1 starts past segment 2 and generation 2 at least two
 /// segments later, so the second checkpoint prunes WAL generation 1 does
 /// not need, and would have pruned WAL it does need had it pruned below
 /// its own checkpoint LSN.
-fn two_generations_over_pruned_segments() -> TwoGenerations {
+pub(super) fn two_generations_over_pruned_segments() -> TwoGenerations {
     let config = config();
     assert_eq!(config.wal.segment_bytes, 65_536);
     let temp = TempDir::new().unwrap();
@@ -233,19 +261,22 @@ fn fallback_control_keeps_wal_needed_by_previous_generation() {
         "the report does not say CONTROL_B was skipped: {:?}",
         report.warnings
     );
-    // Every row reads back. A page scan is not checked here: generation 2
-    // wrote its heap pages before its control file, and with that control
-    // unreadable, heap redo from generation 1 adds a second copy of each row
-    // generation 2 wrote to a page generation 1 already had. That happens
-    // the same way when a checkpoint dies between its page writes and its
-    // control write, with no corrupt slot at all, and is recorded in
-    // docs/launch/notes-kernel.md as open.
+    // Every row reads back, and a page scan finds every row and nothing
+    // else. It may find a row twice: generation 2 wrote its heap pages
+    // before its control file, and with that control unreadable, heap redo
+    // from generation 1 adds a second copy of each row generation 2 wrote
+    // to a page generation 1 already had. That happens the same way when a
+    // checkpoint dies between its page writes and its control write, with
+    // no corrupt slot at all; it is open in docs/launch/notes-kernel.md and
+    // tracked by `fallback_after_corrupt_newer_control_scans_each_row_once`.
     assert_rows_read_back(&reopened, &image.rows);
+    assert_scan_finds_every_row(&reopened, &image.rows);
     drop(reopened);
 
     // The fallback generation keeps working across another reopen.
     let reopened = Engine::open(root, image.config.clone()).unwrap();
     assert_rows_read_back(&reopened, &image.rows);
+    assert_scan_finds_every_row(&reopened, &image.rows);
 }
 
 #[test]

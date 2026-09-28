@@ -1350,3 +1350,6 @@ mod pitr;
 
 #[path = "recovery_tests/control_versions.rs"]
 mod control_versions;
+
+#[path = "recovery_tests/generation_fallback.rs"]
+mod generation_fallback;
