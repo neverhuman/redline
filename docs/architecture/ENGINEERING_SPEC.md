@@ -1413,10 +1413,10 @@ typedef rldb_stmt sqlite3_stmt;
 ```rust
 #[repr(C)]
 pub struct rldb_config {
-    pub struct_size: u32,           // sizeof(rldb_config) for forward-compat
-    pub flags: u32,                 // SQLITE_OPEN_* flag bits
-    pub durability: u32,            // 0=Normal, 1=Strict, 2=UnsafeDev
-    pub cache_bytes: u64,           // Buffer pool size
+    pub struct_size: u32,           // bytes the caller supplies; read first, bounds every read
+    pub flags: u32,                 // reserved, must be 0
+    pub durability: u32,            // 0=default (Strict), 1=Strict, 2=Normal
+    pub cache_bytes: u64,           // Buffer pool size (0 = default, as for every field below)
     pub work_mem_bytes: u64,        // Per-query memory budget
     pub max_spill_bytes: u64,       // Sort/hash spill limit
     pub statement_cache_capacity: u32,

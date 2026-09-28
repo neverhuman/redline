@@ -28,6 +28,13 @@ itself fails. The declarations and pointer lifetimes are in
   `crates/ffi/tests/bounded_prepare.rs` checks this against a `PROT_NONE`
   guard page, and `scripts/compatibility/phase2-abi-probe.sh` checks it from
   C.
+- `rldb_open_v2` reads `config->struct_size` first (unaligned) and never reads
+  past it. A size below 4, above 4096 or ending inside a field, a non-zero
+  `flags`, an unknown `durability`, or a non-zero byte past the fields this
+  library knows returns `SQLITE_MISUSE` with no handle and nothing created.
+  `rldb_backup_init` refuses a non-NULL `dst_config`. The rules are next to
+  `rldb_config` in `redlinedb.h`; `crates/ffi/tests/open_config.rs` checks
+  them, with a short struct placed against a `PROT_NONE` guard page.
 
 ## Rust callers
 

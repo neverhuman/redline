@@ -40,8 +40,8 @@ pub unsafe extern "C" fn rldb_free(ptr: *mut c_void) {
     if !ptr.is_null() {
         // SAFETY: matching constructor/destructor pair — every pointer handed to
         // rldb_free originates from CString::new(...).into_raw() in
-        // errmsg_to_c_string (crates/ffi/src/util.rs:391), routed through
-        // set_errmsg (crates/ffi/src/util.rs:409); ownership invariant: this
+        // errmsg_to_c_string (crates/ffi/src/util.rs:380), routed through
+        // set_errmsg (crates/ffi/src/util.rs:398); ownership invariant: this
         // library has exclusive access as the sole producer of such pointers per
         // redlinedb.h:128; double-free guarded by the caller's obligation to
         // NULL the handle after rldb_free (redlinedb.h:128); ledgered at

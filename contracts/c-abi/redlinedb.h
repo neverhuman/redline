@@ -104,6 +104,22 @@ typedef rldb_backup sqlite3_backup;
 #define SQLITE_PREPARE_DONT_LOG 0x10
 #define SQLITE_PREPARE_FROM_DDL 0x20
 
+/* rldb_open_v2 configuration. Set struct_size to sizeof(rldb_config); it is
+ * read first and no byte past it is read, so a program built against an older,
+ * shorter struct keeps working. The call fails with RLDB_MISUSE, returns no
+ * handle and creates nothing when:
+ *   - struct_size is below 4, above 4096, or ends inside a field;
+ *   - flags is not 0 (reserved);
+ *   - durability is not one of the RLDB_DURABILITY_* values;
+ *   - struct_size is larger than this header's struct and a byte past its
+ *     fields is not 0 (a newer field this library cannot honour).
+ * A zero field, or one past struct_size, keeps the built-in default (it does
+ * not turn the limit off). RLDB_DURABILITY_NORMAL also makes
+ * PRAGMA synchronous report NORMAL (1). A NULL config opens with the defaults. */
+#define RLDB_DURABILITY_DEFAULT 0 /* Strict */
+#define RLDB_DURABILITY_STRICT 1  /* fsync at every commit */
+#define RLDB_DURABILITY_NORMAL 2  /* commits written without fsync (PRAGMA synchronous=NORMAL) */
+
 typedef struct rldb_config {
     uint32_t struct_size;
     uint32_t flags;
@@ -183,6 +199,9 @@ int rldb_checkpoint(rldb *db);
 int rldb_vacuum(rldb *db);
 int rldb_stats_json(rldb *db, char **out_json);
 
+/* dst_config must be NULL: a backup copies the database files, and no open-time
+ * option applies to the copy. A non-NULL dst_config returns RLDB_MISUSE; pass
+ * the config to rldb_open_v2 when opening the copy. */
 int rldb_backup_init(rldb *src, const char *dst_path, const rldb_config *dst_config, rldb_backup **out);
 int rldb_backup_step(rldb_backup *backup, int batches);
 int rldb_backup_finish(rldb_backup *backup);

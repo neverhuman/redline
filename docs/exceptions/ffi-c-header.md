@@ -92,6 +92,30 @@ There is no v4 compatibility alias.
   build with URI handling off. Backup into an in-memory destination fails
   with `SQLITE_CANTOPEN`.
 
+## ABI v5 `rldb_config` contract
+
+v4 read the whole `rldb_config` whatever `struct_size` said, ignored `flags`
+and `durability`, and copied zero fields over the defaults (a zero
+`work_mem_bytes` and `max_spill_bytes` made every sort fail its memory
+budget). v5 checks it; the declarations are unchanged.
+
+- `struct_size` is read first, without assuming alignment, and no byte past
+  it is read. 4 through 4096 is accepted if it ends on a field boundary
+  (4, 8, 12, 16, 24, 32, 40, 44, or 48 and above). Above 48 (a struct from a
+  newer header) every byte past the 48 known ones must be zero.
+- `flags` is reserved and must be 0.
+- `durability`: `RLDB_DURABILITY_DEFAULT` (0, Strict),
+  `RLDB_DURABILITY_STRICT` (1, fsync at every commit) or
+  `RLDB_DURABILITY_NORMAL` (2, commits written without fsync;
+  `PRAGMA synchronous` reads back 1). Anything else is refused.
+- Every refusal is `RLDB_MISUSE`, with `*out_db` untouched and nothing created
+  at the path. A failed open has no handle, so there is no `rldb_errmsg`
+  text; the reasons are listed in the header.
+- A zero field, or one past `struct_size`, keeps the `DbOptions::default()`
+  value.
+- `rldb_backup_init` with a non-NULL `dst_config` is `RLDB_MISUSE`: a backup
+  copies the database files and no open-time option applies to the copy.
+
 ## ABI v5 registration, hook and blob contracts
 
 These change behaviour behind declarations the header already has; no

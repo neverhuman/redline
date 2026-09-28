@@ -12,17 +12,20 @@ use crate::util::{api, flatten_code, io, reclaim_box, recursive_copy};
 ///
 /// - `src` must be NULL or a live database handle.
 /// - `dst_path` must be NULL or point to a NUL-terminated string.
-/// - `dst_config` is not read.
+/// - `dst_config` must be NULL; it is not read, and a non-NULL value is
+///   refused with `RLDB_MISUSE`.
 /// - `out` must be NULL or valid for writing one pointer.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn rldb_backup_init(
     src: *mut rldb,
     dst_path: *const c_char,
-    _dst_config: *const rldb_config,
+    dst_config: *const rldb_config,
     out: *mut *mut rldb_backup,
 ) -> c_int {
     flatten_code(api(|| {
-        if src.is_null() || dst_path.is_null() || out.is_null() {
+        // The backup is a copy of the database files: no open-time option
+        // applies to it, so a destination config would be silently ignored.
+        if src.is_null() || dst_path.is_null() || out.is_null() || !dst_config.is_null() {
             return Err(RLDB_MISUSE);
         }
         // SAFETY: per redlinedb.h:138 `src` is a non-null *mut rldb from
@@ -105,12 +108,12 @@ pub unsafe extern "C" fn rldb_backup_close(backup: *mut rldb_backup) -> c_int {
         return RLDB_MISUSE;
     }
     // SAFETY: matching constructor/destructor pair — `backup` originates from
-    // Box::into_raw(backup) at rldb_backup_init (crates/ffi/src/snapshot.rs:54);
+    // Box::into_raw(backup) at rldb_backup_init (crates/ffi/src/snapshot.rs:57);
     // ownership invariant: the C caller may not free this pointer directly per
     // redlinedb.h:141; exclusive access upheld because backup handles are not
     // shared across threads in the documented contract; double-close guarded by
     // the null check above (caller must NULL after close); ledgered at
-    // .jankurai/unsafe-ledger.toml (file=crates/ffi/src/snapshot.rs, line=116,
+    // .jankurai/unsafe-ledger.toml (file=crates/ffi/src/snapshot.rs, line=119,
     // detector=rust.unsafe.raw-parts); proof:
     // crates/ffi/tests/safety_invariants.rs::backup_init_step_close_round_trips_box_ownership.
     unsafe {

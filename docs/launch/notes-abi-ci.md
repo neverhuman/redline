@@ -80,6 +80,23 @@ against the v5 headers. There is no v4 compatibility alias.
   does not implement yet (among them: no `SQLITE_READ` authorizer calls, no
   trace_v2 events, trace/profile/commit hooks only from `sqlite3_exec`).
 
+## Breaking: `rldb_config` is checked
+
+- `rldb_open_v2` reads `struct_size` first and never reads past it, so a
+  program built against a shorter struct is not read out of bounds. It
+  returns `RLDB_MISUSE` (no handle, nothing created) when `struct_size` is
+  below 4, above 4096 or ends inside a field, when `flags` is not 0, when
+  `durability` is not 0, 1 or 2, or when a byte past the known fields is not
+  zero. v4 read the whole struct and ignored `flags` and `durability`.
+- `durability` now takes effect: the header defines
+  `RLDB_DURABILITY_DEFAULT` (0, Strict), `RLDB_DURABILITY_STRICT` (1) and
+  `RLDB_DURABILITY_NORMAL` (2, `PRAGMA synchronous` reads back 1).
+- A zero field keeps its default. v4 copied zeros over the defaults, so a
+  zero-initialised config set the query memory and spill budgets to 0 and
+  every sort failed; it also zeroed the statement cache and busy timeout.
+- `rldb_backup_init` refuses a non-NULL `dst_config` with `RLDB_MISUSE`; v4
+  ignored it.
+
 ## Safety contract and panics
 
 - The caller contract for handles, pointers and input lengths, and the panic

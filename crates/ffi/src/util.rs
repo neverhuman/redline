@@ -82,19 +82,6 @@ pub(crate) fn io<T>(result: std::io::Result<T>) -> std::result::Result<T, c_int>
 
 // ---- Connection / handle helpers -------------------------------------------
 
-pub(crate) fn db_options_from_config(config: Option<&rldb_config>) -> DbOptions {
-    let mut options = DbOptions::default();
-    if let Some(config) = config {
-        let page_size = options.engine.page_size.max(1);
-        options.engine.buffer_pool_pages = (config.cache_bytes as usize / page_size).max(16);
-        options.query_memory.work_mem_bytes = config.work_mem_bytes as usize;
-        options.query_memory.max_spill_bytes = config.max_spill_bytes as usize;
-        options.statement_cache_capacity = config.statement_cache_capacity as usize;
-        options.busy_timeout = std::time::Duration::from_millis(config.busy_timeout_ms as u64);
-    }
-    options
-}
-
 /// Name that opens a private in-memory database, as in SQLite.
 pub(crate) const MEMORY_DB_NAME: &str = ":memory:";
 
@@ -107,7 +94,7 @@ pub(crate) const MEMORY_DB_NAME: &str = ":memory:";
 /// in SQLite its filename is reported as "".
 pub(crate) fn open_handle(
     path: &CStr,
-    config: Option<&rldb_config>,
+    options: Option<DbOptions>,
     create_if_missing: bool,
     in_memory: bool,
 ) -> Result<*mut rldb, c_int> {
@@ -116,7 +103,8 @@ pub(crate) fn open_handle(
     use std::sync::atomic::{AtomicBool, AtomicI32, AtomicUsize};
 
     let path = path.to_str().map_err(|_| RLDB_MISMATCH)?;
-    let options = db_options_from_config(config);
+    let options = options.unwrap_or_default();
+    let durability = options.engine.commit_durability;
     let (db, db_path, path_text) = if in_memory || path == MEMORY_DB_NAME {
         let db = sql_result(redlinedb_sql::Database::create_in_memory(options))?;
         let root = db.path().to_path_buf();
@@ -133,6 +121,7 @@ pub(crate) fn open_handle(
         (db, PathBuf::from(path), text)
     };
     let conn = db.connect();
+    crate::open_options::report_durability(&conn, durability)?;
     let handle = Box::new(rldb {
         db,
         conn,

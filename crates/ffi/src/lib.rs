@@ -47,6 +47,7 @@ pub mod config;
 pub mod error;
 pub mod exec;
 pub mod lifecycle;
+mod open_options;
 pub mod snapshot;
 pub mod sqlite3_api;
 pub mod stmt;
