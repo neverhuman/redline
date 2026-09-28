@@ -267,6 +267,16 @@
       "purpose": "verify performance JSONL statistics delegate to Rust and preserve the frozen exclusive-decile p90 contract",
       "proof_lane": "fast"
     },
+    "bench/perf/cases/": {
+      "command": "rtk cargo test -p redlinedb-bench --test medium_cohort_list --locked",
+      "purpose": "verify the restored 294-case medium cohort list is byte-identical to 0f831a2bb^ and its sha256 file names it",
+      "proof_lane": "fast"
+    },
+    "crates/bench/tests/medium_cohort_list.rs": {
+      "command": "rtk cargo test -p redlinedb-bench --test medium_cohort_list --locked",
+      "purpose": "pin the medium cohort's digest, 294 distinct ids and documented strata",
+      "proof_lane": "fast"
+    },
     "scripts/perf/full.sh": {
       "command": "rtk bash -n scripts/perf/full.sh && rtk cargo test -p redlinedb-bench --test perf_full_fail_closed --locked",
       "purpose": "verify the full-corpus perf lane fails closed: unique run directories, validate-run completeness, known-failures tolerance on the run's own file, runner exits propagated",

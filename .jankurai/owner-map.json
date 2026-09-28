@@ -32,6 +32,7 @@
     "assets/sqlite-median-test-performance.svg": "redline-testing",
     "assets/sqlite-parity-latency-gap.svg": "redline-testing",
     "assets/sqlite-parity-performance-histogram.svg": "redline-testing",
+    "bench/": "bench-harness",
     "benchmark-results/": "redline-testing",
     "contracts/": "contracts",
     "crates/": "tools",

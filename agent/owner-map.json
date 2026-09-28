@@ -27,6 +27,7 @@
     "agent/": "control-plane",
     "apps/": "apps",
     "assets/": "workspace",
+    "bench/": "tools",
     "benchmark-results/": "redline-testing",
     "branch_recovery_ledger.md": "control-plane",
     "contracts/": "contracts",
