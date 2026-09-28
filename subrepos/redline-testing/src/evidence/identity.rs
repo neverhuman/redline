@@ -73,14 +73,61 @@ pub(crate) struct RunIdentity {
     pub(crate) oracle_build_stamp: Option<String>,
 }
 
+/// The run identity of the checkout that contains the working directory.
+/// `run` captures it once, before any suite runs, and every evidence file
+/// of the run records that one value.
 pub(crate) fn capture(sqlite_bin: &Path) -> RunIdentity {
     let current_dir = std::env::current_dir().unwrap_or_else(|_| PathBuf::from("."));
+    capture_in(&current_dir, sqlite_bin)
+}
+
+pub(crate) fn capture_in(dir: &Path, sqlite_bin: &Path) -> RunIdentity {
     RunIdentity {
-        source: source_identity(&current_dir),
+        source: source_identity(dir),
         corpus_sha256: crate::sqlite_parity::corpus_sha256(),
         assertion_policy_sha256: crate::sqlite_parity::assertion_policy_sha256(),
         oracle_build_stamp: oracle_build_stamp(sqlite_bin),
     }
+}
+
+/// Fails when the committed source or the reference build a run started
+/// from is no longer what `start` recorded: a commit or checkout made in
+/// the same working tree while the run was going would otherwise be
+/// credited with binaries built before it. Uncommitted edits are already
+/// in `start.source.source_dirty`.
+pub(crate) fn ensure_unchanged(start: &RunIdentity, now: &RunIdentity) -> anyhow::Result<()> {
+    let fields = [
+        (
+            "source commit",
+            &start.source.source_commit,
+            &now.source.source_commit,
+        ),
+        (
+            "source tree",
+            &start.source.source_tree,
+            &now.source.source_tree,
+        ),
+        (
+            "source inputs hash",
+            &start.source.source_inputs_sha256,
+            &now.source.source_inputs_sha256,
+        ),
+        (
+            "oracle build stamp",
+            &start.oracle_build_stamp,
+            &now.oracle_build_stamp,
+        ),
+    ];
+    for (field, before, after) in fields {
+        if before != after {
+            anyhow::bail!(
+                "the {field} changed during the run ({before:?} when it started, {after:?} now): \
+                 the measured binaries cannot be attributed to one source, so no evidence is \
+                 written; rerun from a checkout nothing commits to while the run is going"
+            );
+        }
+    }
+    Ok(())
 }
 
 /// The source identity of the Git checkout that contains `dir`.
@@ -151,7 +198,9 @@ mod tests {
     use std::path::{Path, PathBuf};
     use std::process::Command;
 
-    use super::{SOURCE_INPUT_PATHS, oracle_build_stamp, source_identity};
+    use super::{
+        SOURCE_INPUT_PATHS, capture_in, ensure_unchanged, oracle_build_stamp, source_identity,
+    };
 
     fn repository_root() -> PathBuf {
         Path::new(env!("CARGO_MANIFEST_DIR")).join("../..")
@@ -288,6 +337,33 @@ mod tests {
         git(repo, &["commit", "--quiet", "-am", "native"]);
         let committed = source_identity(repo);
         assert_ne!(committed.source_inputs_sha256, clean.source_inputs_sha256);
+    }
+
+    #[test]
+    fn a_commit_after_the_start_is_a_changed_run_identity() {
+        let root = tempfile::Builder::new()
+            .prefix("redline-testing-identity-change-")
+            .tempdir()
+            .expect("temp repo");
+        let repo = root.path();
+        git(repo, &["init", "--quiet"]);
+        fs::create_dir_all(repo.join("crates")).expect("crates dir");
+        fs::write(repo.join("crates/lib.rs"), "fn a() {}\n").expect("source");
+        git(repo, &["add", "."]);
+        git(repo, &["commit", "--quiet", "-m", "start"]);
+        let sqlite = repo.join("sqlite3");
+        let start = capture_in(repo, &sqlite);
+        ensure_unchanged(&start, &capture_in(repo, &sqlite)).expect("nothing changed");
+        // An uncommitted edit is the run's dirtiness, not a changed start.
+        fs::write(repo.join("crates/lib.rs"), "fn b() {}\n").expect("edit");
+        ensure_unchanged(&start, &capture_in(repo, &sqlite)).expect("still the same commit");
+        git(repo, &["commit", "--quiet", "-am", "during the run"]);
+        let error = ensure_unchanged(&start, &capture_in(repo, &sqlite))
+            .expect_err("a new commit is a different source");
+        assert!(
+            format!("{error:#}").contains("the source commit changed during the run"),
+            "{error:#}"
+        );
     }
 
     #[test]

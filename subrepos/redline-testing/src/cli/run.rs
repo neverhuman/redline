@@ -20,6 +20,10 @@ pub(crate) fn run_suite(args: RunArgs) -> Result<()> {
     fs::create_dir_all(&tmp_root)
         .with_context(|| format!("create tmp root {}", tmp_root.display()))?;
     let sqlite_bin = resolve_sqlite_bin(&args.sqlite_bin);
+    // The source the measured binaries were built from, taken before any
+    // suite runs; every evidence file records this one value, and none is
+    // written if it has changed by then.
+    let run_identity = evidence::identity::capture(&sqlite_bin);
     let known_failures = load_known_failures(args.sqlite_known_failures.as_deref())?;
     if !args.case_ids.is_empty() && matches!(args.suite, Suite::All | Suite::BeyondSqlite) {
         bail!(
@@ -37,6 +41,7 @@ pub(crate) fn run_suite(args: RunArgs) -> Result<()> {
             sqlite_bin,
             &known_failures,
             &scope_policy,
+            &run_identity,
         ),
         Suite::SqliteParity | Suite::Memory | Suite::RqlPhase1 => {
             prepare_output(&args.output)?;
@@ -48,6 +53,7 @@ pub(crate) fn run_suite(args: RunArgs) -> Result<()> {
                 workers,
                 tmp_root,
                 sqlite_bin,
+                &run_identity,
             )?;
             if progress_enabled(args.progress) {
                 eprintln!(
@@ -148,6 +154,7 @@ fn run_all_suites(
     sqlite_bin: PathBuf,
     known_failures: &KnownFailures,
     scope_policy: &ScopePolicy,
+    run_identity: &evidence::RunIdentity,
 ) -> Result<()> {
     let generated_at_unix_ms = evidence::now_unix_ms();
     let output_dir = args
@@ -169,6 +176,7 @@ fn run_all_suites(
         workers,
         tmp_root.clone(),
         sqlite_bin.clone(),
+        run_identity,
     )?;
     prepare_output(&memory_output)?;
     let memory_summary = run_sqlite_like_suite(
@@ -178,6 +186,7 @@ fn run_all_suites(
         workers,
         tmp_root.clone(),
         sqlite_bin.clone(),
+        run_identity,
     )?;
     prepare_output(&rql_output)?;
     let rql_summary = run_sqlite_like_suite(
@@ -187,6 +196,7 @@ fn run_all_suites(
         workers,
         tmp_root.clone(),
         sqlite_bin.clone(),
+        run_identity,
     )?;
     prepare_output(&beyond_output)?;
     let beyond_summary = run_beyond_sqlite_suite(args, beyond_output.clone())?;
@@ -300,6 +310,7 @@ fn run_all_suites(
         official: args.official,
         case_timeout_ms: u128::from(args.case_timeout_ms),
         max_output_bytes: args.max_output_bytes,
+        run_identity: run_identity.clone(),
     })?;
     join_problems(sqlite_gates.into_iter().chain([postgres_gate]))
 }
@@ -311,6 +322,7 @@ fn run_sqlite_like_suite(
     workers: usize,
     tmp_root: PathBuf,
     sqlite_bin: PathBuf,
+    run_identity: &evidence::RunIdentity,
 ) -> Result<sqlite_parity::RunSummary> {
     let memory_samples = args.memory_samples || matches!(suite, Suite::Memory);
     let started_unix_ms = evidence::now_unix_ms();
@@ -350,6 +362,7 @@ fn run_sqlite_like_suite(
         started_unix_ms,
         ended_unix_ms: evidence::now_unix_ms(),
         summary: summary.clone(),
+        run_identity: run_identity.clone(),
     })?;
     Ok(summary)
 }

@@ -74,7 +74,7 @@ fn write_evidence_with(raw_text: &str, summary: RunSummary) -> (tempfile::TempDi
         suite: "sqlite_parity".to_owned(),
         output,
         target_bin,
-        sqlite_bin,
+        sqlite_bin: sqlite_bin.clone(),
         tmp_root: root.path().join("tmp"),
         workers: "4".to_owned(),
         repetitions: 3,
@@ -85,6 +85,7 @@ fn write_evidence_with(raw_text: &str, summary: RunSummary) -> (tempfile::TempDi
         started_unix_ms: 1,
         ended_unix_ms: 2,
         summary,
+        run_identity: super::identity::capture(&sqlite_bin),
     })
     .expect("write runner evidence");
     let ranked = fs::read_to_string(root.path().join("ranked.csv")).expect("ranked.csv");

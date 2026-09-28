@@ -36,6 +36,8 @@ pub struct EvidenceConfig {
     pub started_unix_ms: u128,
     pub ended_unix_ms: u128,
     pub summary: RunSummary,
+    /// Captured once when the run started (`identity::capture`).
+    pub run_identity: RunIdentity,
 }
 
 #[derive(Debug)]
@@ -143,6 +145,8 @@ pub struct OfficialEvidenceConfig {
     /// The bound on every engine run (SQ-09).
     pub case_timeout_ms: u128,
     pub max_output_bytes: usize,
+    /// Captured once when the run started (`identity::capture`).
+    pub run_identity: RunIdentity,
 }
 
 #[derive(Debug, Serialize)]
@@ -298,6 +302,7 @@ struct ProvenanceJson {
 }
 
 pub fn write_sqlite_parity_evidence(config: EvidenceConfig) -> Result<()> {
+    identity::ensure_unchanged(&config.run_identity, &identity::capture(&config.sqlite_bin))?;
     let raw_text = fs::read_to_string(&config.output)
         .with_context(|| format!("read raw output {}", config.output.display()))?;
     let raw_records = report::parse_raw_records(&raw_text)?;
@@ -376,7 +381,7 @@ pub fn write_sqlite_parity_evidence(config: EvidenceConfig) -> Result<()> {
     let provenance_json = serde_json::to_string_pretty(&ProvenanceJson {
         schema_version: RUN_PROVENANCE_SCHEMA.to_owned(),
         suite: config.suite,
-        run_identity: identity::capture(&config.sqlite_bin),
+        run_identity: config.run_identity,
         target_binary_path: canonical_display(&config.target_bin),
         target_binary_sha256: sha256_file(&resolve_executable_path(&config.target_bin)?)?,
         target_version: capture_version(&config.target_bin)?,
@@ -426,6 +431,7 @@ fn suite_artifact_name(suite: &str, base: &str) -> String {
 }
 
 pub fn write_official_evidence(config: OfficialEvidenceConfig) -> Result<()> {
+    identity::ensure_unchanged(&config.run_identity, &identity::capture(&config.sqlite_bin))?;
     let redline_testing_bin = std::env::current_exe().context("resolve current executable")?;
     let redline_testing_binary_sha256 = sha256_file(&redline_testing_bin)?;
     let release_binary_sha256 = env_sha("CI_REDLINE_TESTING_RELEASE_BINARY_SHA256")
@@ -523,7 +529,7 @@ pub fn write_official_evidence(config: OfficialEvidenceConfig) -> Result<()> {
     let evidence = OfficialEvidenceJson {
         schema_version: "redline-testing-official-evidence-v1".to_owned(),
         run_provenance_schema: RUN_PROVENANCE_SCHEMA.to_owned(),
-        run_identity: identity::capture(&config.sqlite_bin),
+        run_identity: config.run_identity,
         runner,
         target,
         sqlite,
