@@ -5,7 +5,6 @@
 //! dispatcher in `udf.rs` when materialising a SQL row of arguments), then
 //! handed to C as `*mut RldbValue` for read-only inspection.
 
-use std::ffi::CString;
 use std::os::raw::{c_int, c_uchar, c_uint, c_void};
 use std::ptr;
 use std::sync::{Arc, Mutex};
@@ -18,13 +17,14 @@ static DUP_VALUES: Mutex<Vec<Box<RldbValue>>> = Mutex::new(Vec::new());
 
 /// Opaque value type backing the C `sqlite3_value*` opaque pointer.
 ///
-/// The variant order matches SQLite's type-code mapping (`SQLITE_*`).
+/// Type codes are mapped explicitly to SQLite's (`SQLITE_NULL` is 5).
 #[allow(non_camel_case_types)]
 pub struct RldbValue {
     pub(crate) inner: RldbValueInner,
-    /// Lazily populated NUL-terminated cache for `sqlite3_value_text` so the
-    /// pointer returned to C remains valid for the lifetime of the value.
-    pub(crate) text_cache: std::cell::RefCell<Option<CString>>,
+    /// Lazily populated `sqlite3_value_text` form (bytes plus a trailing
+    /// NUL, interior NULs kept). Filled once, since `inner` never changes,
+    /// so the pointer returned to C stays valid for the life of the value.
+    pub(crate) text_cache: std::cell::RefCell<Option<Box<[u8]>>>,
 }
 
 #[derive(Clone)]
@@ -75,13 +75,13 @@ impl RldbValue {
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn sqlite3_value_type(value: *mut RldbValue) -> c_int {
     if value.is_null() {
-        return RLDB_NULL;
+        return SQLITE_NULL;
     }
     // SAFETY: caller obligation 1 — non-null per the # Safety contract;
     // shared borrow valid for the call duration only.
     let v = unsafe { &*value };
     match &v.inner {
-        RldbValueInner::Null => RLDB_NULL,
+        RldbValueInner::Null => SQLITE_NULL,
         RldbValueInner::Integer(_) => RLDB_INTEGER,
         RldbValueInner::Real(_) => RLDB_REAL,
         RldbValueInner::Text(_) => RLDB_TEXT,
@@ -150,25 +150,23 @@ pub unsafe extern "C" fn sqlite3_value_text(value: *mut RldbValue) -> *const c_u
     }
     // SAFETY: caller obligation; non-null checked above.
     let v = unsafe { &*value };
-    let text = match &v.inner {
-        RldbValueInner::Null => return ptr::null(),
-        RldbValueInner::Text(t) => t.to_string(),
-        RldbValueInner::Integer(i) => i.to_string(),
-        RldbValueInner::Real(f) => f.to_string(),
-        RldbValueInner::Blob(b) => match std::str::from_utf8(b) {
-            Ok(s) => s.to_owned(),
-            Err(_) => return ptr::null(),
-        },
-    };
-    let cstring = match CString::new(text) {
-        Ok(c) => c,
-        Err(_) => return ptr::null(),
-    };
     let mut cache = v.text_cache.borrow_mut();
-    *cache = Some(cstring);
+    if cache.is_none() {
+        // Same text as sqlite3_column_text: CAST-to-TEXT form for numbers,
+        // raw bytes for TEXT and BLOB (interior NULs kept).
+        let mut bytes = match &v.inner {
+            RldbValueInner::Null => return ptr::null(),
+            RldbValueInner::Text(t) => t.as_bytes().to_vec(),
+            RldbValueInner::Integer(i) => i.to_string().into_bytes(),
+            RldbValueInner::Real(f) => redlinedb_sql::format_real_sqlite(*f).into_bytes(),
+            RldbValueInner::Blob(b) => b.to_vec(),
+        };
+        bytes.push(0);
+        *cache = Some(bytes.into_boxed_slice());
+    }
     cache
-        .as_ref()
-        .map(|c| c.as_ptr() as *const c_uchar)
+        .as_deref()
+        .map(|bytes| bytes.as_ptr() as *const c_uchar)
         .unwrap_or(ptr::null())
 }
 
@@ -201,7 +199,7 @@ pub unsafe extern "C" fn sqlite3_value_bytes(value: *mut RldbValue) -> c_int {
         RldbValueInner::Blob(b) => b.len() as c_int,
         RldbValueInner::Text(t) => t.len() as c_int,
         RldbValueInner::Integer(i) => i.to_string().len() as c_int,
-        RldbValueInner::Real(f) => f.to_string().len() as c_int,
+        RldbValueInner::Real(f) => redlinedb_sql::format_real_sqlite(*f).len() as c_int,
         RldbValueInner::Null => 0,
     }
 }
@@ -249,7 +247,7 @@ pub unsafe extern "C" fn sqlite3_value_free(value: *mut RldbValue) {
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn sqlite3_value_numeric_type(value: *mut RldbValue) -> c_int {
     if value.is_null() {
-        return RLDB_NULL;
+        return SQLITE_NULL;
     }
     // SAFETY: caller obligation; non-null checked above.
     let v = unsafe { &*value };
@@ -267,7 +265,7 @@ pub unsafe extern "C" fn sqlite3_value_numeric_type(value: *mut RldbValue) -> c_
             }
         }
         RldbValueInner::Blob(_) => RLDB_BLOB,
-        RldbValueInner::Null => RLDB_NULL,
+        RldbValueInner::Null => SQLITE_NULL,
     }
 }
 

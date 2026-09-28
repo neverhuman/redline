@@ -9,8 +9,7 @@ use redlinedb_sql::Step;
 
 use crate::types::*;
 use crate::util::{
-    api, flatten_code, map_error, reclaim_box, record_status_with_message, refresh_text_cache,
-    sql_result,
+    api, flatten_code, map_error, reclaim_box, record_status_with_message, sql_result,
 };
 
 #[unsafe(no_mangle)]
@@ -77,13 +76,16 @@ pub extern "C" fn rldb_prepare_v2(
             value_cache: Vec::new(),
         });
         for index in 0..boxed.stmt.column_count() {
+            // A C string ends at its first NUL, so that is what a caller of
+            // sqlite3_column_name can see. Truncate there rather than fail
+            // the prepare (the engine can name a column after a folded
+            // constant such as char(97, 0, 98)).
+            let name = boxed.stmt.column_name(index);
+            let name = name.split('\0').next().unwrap_or_default();
             boxed
                 .column_names
-                .push(CString::new(boxed.stmt.column_name(index)).map_err(|_| RLDB_MISMATCH)?);
+                .push(CString::new(name).map_err(|_| RLDB_MISMATCH)?);
         }
-        boxed
-            .text_cache
-            .resize_with(boxed.stmt.column_count(), || CString::new("").unwrap());
         db_ref.active_statements.fetch_add(1, Ordering::Relaxed);
         // SAFETY: `out_stmt` non-null (checked at top); per C ABI it is a
         // writable rldb_stmt**; Box::into_raw transfers ownership to caller
@@ -111,19 +113,17 @@ pub extern "C" fn rldb_step(stmt: *mut rldb_stmt) -> c_int {
         if unsafe { (*db).interrupted.load(Ordering::Relaxed) } {
             return Err(RLDB_INTERRUPT);
         }
+        // Column text and value caches describe the previous row; drop them
+        // whatever the outcome. Text is converted lazily by the accessors, so
+        // a row whose TEXT holds an interior NUL steps normally.
+        stmt_ref.text_cache.clear();
+        stmt_ref.value_cache.clear();
         // Scope the udf/collation dispatcher to this connection for the
         // duration of step() so registered C callbacks can be looked up by
         // their `*mut sqlite3` connection identity.
         redlinedb_sql::udf::with_db(db as usize, || match stmt_ref.stmt.step() {
-            Ok(Step::Row) => {
-                stmt_ref.value_cache.clear();
-                refresh_text_cache(stmt_ref)?;
-                Ok(RLDB_ROW)
-            }
-            Ok(Step::Done) => {
-                stmt_ref.value_cache.clear();
-                Ok(RLDB_DONE)
-            }
+            Ok(Step::Row) => Ok(RLDB_ROW),
+            Ok(Step::Done) => Ok(RLDB_DONE),
             Err(err) => {
                 let msg = err.to_string();
                 let code = map_error(err);
@@ -157,7 +157,7 @@ pub extern "C" fn rldb_finalize(stmt: *mut rldb_stmt) -> c_int {
             return Err(RLDB_MISUSE);
         }
         // SAFETY: matching constructor/destructor pair — `stmt` originates from
-        // Box::into_raw(boxed) at rldb_prepare_v2 (crates/ffi/src/stmt.rs:92);
+        // Box::into_raw(boxed) at rldb_prepare_v2 (crates/ffi/src/stmt.rs:94);
         // ownership invariant: the C caller may not free this pointer directly
         // per redlinedb.h:99; exclusive access because rldb_stmt is documented
         // as single-thread-owned in redlinedb.h:99; double-finalize guarded by

@@ -37,15 +37,36 @@ pub(crate) const RLDB_NOTADB: c_int = 26;
 pub(crate) const RLDB_ROW: c_int = 100;
 pub(crate) const RLDB_DONE: c_int = 101;
 
+// Native storage classes (`rldb_column_type`). RLDB_NULL stays 0.
 pub(crate) const RLDB_NULL: c_int = 0;
 pub(crate) const RLDB_INTEGER: c_int = 1;
 pub(crate) const RLDB_REAL: c_int = 2;
 pub(crate) const RLDB_TEXT: c_int = 3;
 pub(crate) const RLDB_BLOB: c_int = 4;
 
+/// SQLite's NULL storage class. INTEGER..BLOB share the native values.
+pub(crate) const SQLITE_NULL: c_int = 5;
+
+/// Map a native storage class to the SQLite one. Anything that is not a
+/// non-NULL class (RLDB_NULL, or an error code from a native accessor)
+/// reports SQLITE_NULL, as upstream does for a missing row or column.
+pub(crate) fn sqlite_tag(native: c_int) -> c_int {
+    match native {
+        RLDB_INTEGER | RLDB_REAL | RLDB_TEXT | RLDB_BLOB => native,
+        _ => SQLITE_NULL,
+    }
+}
+
 pub(crate) const SQLITE_OPEN_READONLY: c_int = 0x0000_0001;
 pub(crate) const SQLITE_OPEN_READWRITE: c_int = 0x0000_0002;
 pub(crate) const SQLITE_OPEN_CREATE: c_int = 0x0000_0004;
+pub(crate) const SQLITE_OPEN_URI: c_int = 0x0000_0040;
+pub(crate) const SQLITE_OPEN_MEMORY: c_int = 0x0000_0080;
+
+/// `sqlite3_prepare_v3` flags RedlineDB accepts: PERSISTENT is an allocation
+/// hint and NORMALIZE is a no-op upstream. Any other flag asks for behaviour
+/// this implementation does not provide and is refused.
+pub(crate) const SQLITE_PREPARE_SUPPORTED: std::os::raw::c_uint = 0x01 | 0x02;
 
 // ---- C-visible structs ------------------------------------------------------
 
@@ -80,7 +101,9 @@ pub struct rldb_stmt {
     pub(crate) stmt: redlinedb_sql::Statement,
     pub(crate) sql_text: CString,
     pub(crate) column_names: Vec<CString>,
-    pub(crate) text_cache: Vec<CString>,
+    /// Lazily filled `column_text` form per column: the bytes plus a
+    /// trailing NUL. Cleared on every step and reset.
+    pub(crate) text_cache: Vec<Option<Box<[u8]>>>,
     pub(crate) value_cache: Vec<Option<Box<crate::sqlite3_api::value::RldbValue>>>,
 }
 

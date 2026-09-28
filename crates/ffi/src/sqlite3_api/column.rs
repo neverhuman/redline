@@ -1,7 +1,7 @@
 use std::os::raw::{c_char, c_int, c_uchar, c_void};
 use std::ptr;
 
-use crate::types::sqlite3_stmt;
+use crate::types::{sqlite_tag, sqlite3_stmt};
 use crate::{
     rldb_column_blob, rldb_column_bytes, rldb_column_count, rldb_column_double, rldb_column_int64,
     rldb_column_name, rldb_column_text, rldb_column_type,
@@ -21,7 +21,8 @@ pub extern "C" fn sqlite3_column_name(stmt: *mut sqlite3_stmt, index: c_int) -> 
 
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_column_type(stmt: *mut sqlite3_stmt, index: c_int) -> c_int {
-    rldb_column_type(stmt, index)
+    // Upstream storage classes: NULL is SQLITE_NULL (5), not RLDB_NULL (0).
+    sqlite_tag(rldb_column_type(stmt, index))
 }
 
 #[unsafe(no_mangle)]

@@ -83,10 +83,21 @@ pub(crate) fn db_options_from_config(config: Option<&rldb_config>) -> DbOptions 
     options
 }
 
+/// Name that opens a private in-memory database, as in SQLite.
+pub(crate) const MEMORY_DB_NAME: &str = ":memory:";
+
+/// Open (or create) the database for a new connection handle.
+///
+/// `:memory:`, or `in_memory` (SQLITE_OPEN_MEMORY), opens a private
+/// ephemeral database: each open is a separate database, it needs no
+/// SQLITE_OPEN_CREATE, and its backing directory is a private temporary one
+/// removed when the handle closes. Nothing is created at the given name. As
+/// in SQLite its filename is reported as "".
 pub(crate) fn open_handle(
     path: &CStr,
     config: Option<&rldb_config>,
     create_if_missing: bool,
+    in_memory: bool,
 ) -> Result<*mut rldb, c_int> {
     use std::path::PathBuf;
     use std::sync::Mutex;
@@ -94,19 +105,27 @@ pub(crate) fn open_handle(
 
     let path = path.to_str().map_err(|_| RLDB_MISMATCH)?;
     let options = db_options_from_config(config);
-    let db = if Path::new(path).exists() {
-        sql_result(redlinedb_sql::Database::open(path, options))?
-    } else if create_if_missing {
-        sql_result(redlinedb_sql::Database::create(path, options))?
+    let (db, db_path, path_text) = if in_memory || path == MEMORY_DB_NAME {
+        let db = sql_result(redlinedb_sql::Database::create_in_memory(options))?;
+        let root = db.path().to_path_buf();
+        (db, root, CString::default())
     } else {
-        return Err(RLDB_CANTOPEN);
+        let db = if Path::new(path).exists() {
+            sql_result(redlinedb_sql::Database::open(path, options))?
+        } else if create_if_missing {
+            sql_result(redlinedb_sql::Database::create(path, options))?
+        } else {
+            return Err(RLDB_CANTOPEN);
+        };
+        let text = CString::new(path).map_err(|_| RLDB_MISMATCH)?;
+        (db, PathBuf::from(path), text)
     };
     let conn = db.connect();
     let handle = Box::new(rldb {
         db,
         conn,
-        path: PathBuf::from(path),
-        path_text: CString::new(path).map_err(|_| RLDB_MISMATCH)?,
+        path: db_path,
+        path_text,
         last_code: AtomicI32::new(RLDB_OK),
         last_message: Mutex::new(CString::new("").unwrap()),
         interrupted: AtomicBool::new(false),
@@ -202,19 +221,6 @@ pub(crate) unsafe fn reclaim_cstring(ptr: *mut c_char) {
 }
 
 // ---- Statement helpers ------------------------------------------------------
-
-pub(crate) fn refresh_text_cache(stmt: &mut rldb_stmt) -> Result<(), c_int> {
-    stmt.text_cache.clear();
-    for index in 0..stmt.stmt.column_count() {
-        if let Ok(text) = stmt.stmt.column_text(index) {
-            stmt.text_cache
-                .push(CString::new(text).map_err(|_| RLDB_MISMATCH)?);
-        } else {
-            stmt.text_cache.push(CString::new("").unwrap());
-        }
-    }
-    Ok(())
-}
 
 pub(crate) fn to_hex(bytes: &[u8]) -> CString {
     const HEX: &[u8; 16] = b"0123456789abcdef";

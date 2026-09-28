@@ -39,7 +39,7 @@ fn free_value(ptr: *mut RldbValue) {
 fn null_value_reports_null_type_and_zero_accessors() {
     let v = make_value(SqlValue::Null);
     unsafe {
-        assert_eq!(sqlite3_value_type(v), 0); // SQLITE_NULL
+        assert_eq!(sqlite3_value_type(v), 5); // SQLITE_NULL
         assert_eq!(sqlite3_value_int(v), 0);
         assert_eq!(sqlite3_value_int64(v), 0);
         assert_eq!(sqlite3_value_double(v), 0.0);
@@ -158,7 +158,7 @@ fn result_setters_populate_context_slot() {
 fn null_pointers_to_value_accessors_are_safe() {
     unsafe {
         let null: *mut RldbValue = ptr::null_mut();
-        assert_eq!(sqlite3_value_type(null), 0);
+        assert_eq!(sqlite3_value_type(null), 5); // SQLITE_NULL
         assert_eq!(sqlite3_value_int(null), 0);
         assert_eq!(sqlite3_value_int64(null), 0);
         assert_eq!(sqlite3_value_double(null), 0.0);

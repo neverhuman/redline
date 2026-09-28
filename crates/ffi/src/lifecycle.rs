@@ -15,7 +15,7 @@ pub extern "C" fn rldb_open(path: *const c_char, out_db: *mut *mut rldb) -> c_in
         }
         // SAFETY: `path` non-null (checked); per redlinedb.h:85 it is a
         // NUL-terminated C string; open_handle copies it into owned PathBuf.
-        let handle = open_handle(unsafe { CStr::from_ptr(path) }, None, true)?;
+        let handle = open_handle(unsafe { CStr::from_ptr(path) }, None, true, false)?;
         // SAFETY: `out_db` non-null (checked); per redlinedb.h:85 it is a
         // writable rldb**; open_handle returned a Box::into_raw pointer
         // whose ownership transfers to the C caller (paired with rldb_close).
@@ -46,7 +46,7 @@ pub extern "C" fn rldb_open_v2(
         };
         // SAFETY: `path` non-null (checked); per redlinedb.h:86 it is a
         // NUL-terminated C string; open_handle copies it into owned PathBuf.
-        let handle = open_handle(unsafe { CStr::from_ptr(path) }, config, true)?;
+        let handle = open_handle(unsafe { CStr::from_ptr(path) }, config, true, false)?;
         // SAFETY: `out_db` non-null (checked); per redlinedb.h:86 it is a
         // writable rldb**; open_handle returned a Box::into_raw pointer
         // whose ownership transfers to the C caller (paired with rldb_close).
@@ -70,7 +70,7 @@ pub extern "C" fn rldb_close(db: *mut rldb) -> c_int {
             return Err(RLDB_BUSY);
         }
         // SAFETY: matching constructor/destructor pair — `db` originates from
-        // Box::into_raw(handle) at open_handle (crates/ffi/src/util.rs:112);
+        // Box::into_raw(handle) at open_handle (crates/ffi/src/util.rs:133);
         // ownership invariant: only rldb_close / rldb_close_v2 consume it
         // (caller never frees directly per redlinedb.h:87); exclusive access
         // upheld by the active_statements==0 check above; double-close guarded

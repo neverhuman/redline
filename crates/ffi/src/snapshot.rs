@@ -30,6 +30,11 @@ pub extern "C" fn rldb_backup_init(
             .to_str()
             .map_err(|_| RLDB_MISMATCH)?
             .to_owned();
+        // An empty destination (the "" filename of an in-memory database)
+        // would make backup_step copy into the working directory.
+        if dst.is_empty() {
+            return Err(RLDB_CANTOPEN);
+        }
         let backup = Box::new(rldb_backup {
             src_path: src_ref.path.clone(),
             dst_path: PathBuf::from(dst),
@@ -83,12 +88,12 @@ pub extern "C" fn rldb_backup_close(backup: *mut rldb_backup) -> c_int {
         return RLDB_MISUSE;
     }
     // SAFETY: matching constructor/destructor pair — `backup` originates from
-    // Box::into_raw(backup) at rldb_backup_init (crates/ffi/src/snapshot.rs:43);
+    // Box::into_raw(backup) at rldb_backup_init (crates/ffi/src/snapshot.rs:48);
     // ownership invariant: the C caller may not free this pointer directly per
     // redlinedb.h:141; exclusive access upheld because backup handles are not
     // shared across threads in the documented contract; double-close guarded by
     // the null check above (caller must NULL after close); ledgered at
-    // .jankurai/unsafe-ledger.toml (file=crates/ffi/src/snapshot.rs, line=94,
+    // .jankurai/unsafe-ledger.toml (file=crates/ffi/src/snapshot.rs, line=99,
     // detector=rust.unsafe.raw-parts); proof:
     // crates/ffi/tests/safety_invariants.rs::backup_init_step_close_round_trips_box_ownership.
     unsafe {

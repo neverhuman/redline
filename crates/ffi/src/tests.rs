@@ -136,7 +136,7 @@ fn sqlite3_prepare_v3_is_compatible_with_prepare_v2() {
     let sql = CString::new("SELECT 1").unwrap();
     let mut stmt: *mut sqlite3_stmt = ptr::null_mut();
     assert_eq!(
-        sqlite3_prepare_v3(db, sql.as_ptr(), -1, &mut stmt, ptr::null_mut(), 0),
+        sqlite3_prepare_v3(db, sql.as_ptr(), -1, 0, &mut stmt, ptr::null_mut()),
         RLDB_OK
     );
     assert_eq!(sqlite3_db_handle(stmt), db);
