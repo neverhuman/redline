@@ -129,8 +129,21 @@ impl Run {
             .collect()
     }
 
+    /// One passing beyond_sqlite feature record: no timings, no sqlite3.
+    fn beyond_records(&self) -> String {
+        let target_sha = sha256_hex(fs::read(&self.target).expect("target"));
+        let record = json!({
+            "case_id": "BEYOND-001", "name": "FEATURE", "case_file": "BEYOND-001.rs",
+            "priority": "P0", "profile": "beyond_sqlite", "category": "FEATURE",
+            "sample_role": "measured:1", "repetition_index": 1, "status": "passed",
+            "target_executable_sha256": target_sha,
+            "reference_elapsed_ns": 0, "target_elapsed_ns": 0,
+        });
+        format!("{record}\n")
+    }
+
     /// Writes one sqlite_parity suite (00001 passed, 00002 a listed
-    /// failure) and the run's official-evidence.json.
+    /// failure), a beyond_sqlite suite, and the run's official-evidence.json.
     fn write(&self) -> (Value, Value) {
         let out = self.out();
         fs::create_dir_all(&out).expect("out dir");
@@ -187,9 +200,19 @@ impl Run {
             "all-manifest.json",
             "postgres-qualification.json",
             "postgres-progress.md",
+            "beyond-sqlite-summary.json",
+            "beyond-sqlite-ranked.csv",
+            "beyond-sqlite-manifest.json",
+            "beyond-sqlite-provenance.json",
         ] {
             fs::write(out.join(name), "{}\n").expect("run artifact");
         }
+        fs::write(out.join("beyond_sqlite.raw.jsonl"), self.beyond_records()).expect("beyond raw");
+        let beyond_summary = RunSummary {
+            total: 1,
+            passed: 1,
+            ..RunSummary::default()
+        };
         let baseline = self.root.path().join("known-failures.json");
         fs::write(&baseline, "{\"listed\": [\"00002\"]}\n").expect("baseline");
         write_official_evidence(OfficialEvidenceConfig {
@@ -222,6 +245,16 @@ impl Run {
                 )
                 .with_known_failures(BTreeSet::from(["00002".to_owned()]))
                 .with_completion_marker(),
+                OfficialSuiteEvidence::new(
+                    "beyond_sqlite",
+                    out.join("beyond_sqlite.raw.jsonl"),
+                    out.join("beyond-sqlite-summary.json"),
+                    out.join("beyond-sqlite-ranked.csv"),
+                    out.join("beyond-sqlite-manifest.json"),
+                    out.join("beyond-sqlite-provenance.json"),
+                    &beyond_summary,
+                )
+                .without_case_ids(),
             ],
             known_failures: Some(BaselineSource {
                 path: baseline.clone(),
@@ -369,4 +402,83 @@ fn report_accepts_the_runners_own_evidence_in_official_mode() {
         official["source_commit"]
     );
     assert_eq!(report["measurement"]["elapsed_ns"], 7_000_000u64);
+}
+
+#[test]
+fn each_suite_names_the_schema_of_its_own_provenance() {
+    let run = Run::new();
+    let (official, _) = run.write();
+    assert_eq!(
+        official["suites"]["sqlite_parity"]["provenance_schema"], RUN_PROVENANCE_SCHEMA,
+        "{official}"
+    );
+    assert_eq!(
+        official["suites"]["beyond_sqlite"]["provenance_schema"],
+        crate::beyond_sqlite::taxonomy::PROVENANCE_SCHEMA,
+        "{official}"
+    );
+}
+
+#[test]
+fn report_refuses_beyond_sqlite_evidence_by_its_provenance_schema() {
+    // beyond-sqlite-provenance.json is not a run provenance `report` can
+    // bind, and it is not a run that predates run provenance either: the
+    // report says so in both modes instead of blaming the flags.
+    let run = Run::new();
+    let (official, _) = run.write();
+    let out = run.out();
+    let raw = fs::read_to_string(out.join("beyond_sqlite.raw.jsonl")).expect("raw");
+    let processed = json!({
+        "schema_version": "redline-testing-official-evidence-processed-v1",
+        "source_sha256": sha256_hex(fs::read(out.join("official-evidence.json")).expect("official")),
+        "status": official["status"],
+        "official_evidence": official,
+        "suite_summaries": {
+            "beyond_sqlite": {
+                "total": 1, "passed": 1, "failed": 0, "skipped": 0,
+                "raw_path": "beyond_sqlite.raw.jsonl",
+                "raw_sha256": sha256_hex(&raw),
+                "provenance_sha256": official["output_file_hashes"]["beyond-sqlite-provenance.json"],
+            }
+        },
+    });
+    let evidence = out.join("official-evidence.processed.json");
+    fs::write(&evidence, processed.to_string()).expect("write");
+    let readme = run.root.path().join("README.md");
+    fs::write(
+        &readme,
+        "<!-- sqlite-parity-report:begin -->\n<!-- sqlite-parity-report:end -->\n",
+    )
+    .expect("readme");
+    for (run_provenance, historical_run) in [
+        (Some(out.join("beyond-sqlite-provenance.json")), false),
+        (None, true),
+    ] {
+        let error = generate(ReportOptions {
+            suite: "beyond_sqlite".to_owned(),
+            input: out.join("beyond_sqlite.raw.jsonl"),
+            official_evidence: Some(evidence.clone()),
+            run_provenance,
+            historical_run,
+            local_diagnostics: false,
+            out_dir: run.root.path().join("report"),
+            readme: readme.clone(),
+            plot: None,
+            performance_histogram_plot: None,
+            median_test_performance_plot: None,
+            jankurai_score: None,
+            updated_date: "2026-09-28".to_owned(),
+            expected_repetitions: Some(1),
+            expected_warmup: Some(0),
+            check: false,
+            case_manifest: None,
+        })
+        .expect_err("beyond_sqlite evidence has no run provenance report can bind");
+        let message = format!("{error:#}");
+        assert!(
+            message.contains(crate::beyond_sqlite::taxonomy::PROVENANCE_SCHEMA)
+                && message.contains("check-postgres"),
+            "historical_run={historical_run}: {message}"
+        );
+    }
 }

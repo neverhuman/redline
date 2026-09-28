@@ -15,7 +15,7 @@ use anyhow::{Context, Result, anyhow, bail};
 use serde::Serialize;
 use serde_json::Value;
 
-use super::evidence::{recorded_provenance_sha256, recorded_raw_file_name};
+use super::evidence::{official_suite_entry, recorded_provenance_sha256, recorded_raw_file_name};
 use super::types::{RawRecord, ReportOptions};
 use super::utils::{sha256_bytes, sha256_hex};
 use crate::evidence::RUN_PROVENANCE_SCHEMA;
@@ -170,6 +170,21 @@ pub(crate) fn load_report_identity(
         .get("run_provenance_schema")
         .and_then(Value::as_str)
         .map(str::to_owned);
+    // Each suite entry names its own provenance file's schema. Only a run
+    // provenance can be bound, and a suite with another kind of provenance
+    // (beyond_sqlite's) is not a run that predates one either.
+    if let Some(schema) = official_suite_entry(run, &options.suite)
+        .and_then(|entry| entry.get("provenance_schema"))
+        .and_then(Value::as_str)
+        && schema != RUN_PROVENANCE_SCHEMA
+    {
+        bail!(
+            "official evidence records suite {}'s provenance as {schema:?}, which `report` cannot \
+             bind (it binds {RUN_PROVENANCE_SCHEMA:?}); the PostgreSQL results of beyond_sqlite \
+             are checked and published by `check-postgres`",
+            options.suite
+        );
+    }
     let recorded_sha256 = recorded_provenance_sha256(&evidence, &options.suite);
     let mut identity = ReportIdentity {
         mode: ReportMode::Historical,

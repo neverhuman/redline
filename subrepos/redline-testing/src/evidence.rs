@@ -179,6 +179,8 @@ struct OfficialSuiteJson {
     ranked_path: String,
     manifest_path: String,
     provenance_path: String,
+    /// The schema of the file at `provenance_path`.
+    provenance_schema: &'static str,
     #[serde(skip_serializing_if = "Option::is_none")]
     failed_case_ids: Option<BTreeSet<String>>,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -208,8 +210,10 @@ struct KnownFailuresJson {
 #[derive(Debug, Serialize)]
 struct OfficialEvidenceJson {
     schema_version: String,
-    /// The per-suite provenance files follow this schema; `report` requires
-    /// them for any evidence that names one.
+    /// The schema of the SQLite-shell suites' provenance files
+    /// (sqlite_parity, memory, rql_phase1), which `report` binds. Each
+    /// suite entry names its own file's schema (`provenance_schema`);
+    /// beyond_sqlite's is `redline-beyond-sqlite-provenance-v2`.
     run_provenance_schema: String,
     #[serde(flatten)]
     run_identity: RunIdentity,
@@ -504,6 +508,7 @@ pub fn write_official_evidence(config: OfficialEvidenceConfig) -> Result<()> {
         if let Some(completion_path) = &suite.completion_path {
             insert_hash(&mut output_file_hashes, &config.output_dir, completion_path)?;
         }
+        let provenance_schema = suite_provenance_schema(&suite.name);
         suites.insert(
             suite.name.clone(),
             OfficialSuiteJson {
@@ -517,6 +522,7 @@ pub fn write_official_evidence(config: OfficialEvidenceConfig) -> Result<()> {
                 ranked_path: relative_display(&config.output_dir, &suite.ranked_path),
                 manifest_path: relative_display(&config.output_dir, &suite.manifest_path),
                 provenance_path: relative_display(&config.output_dir, &suite.provenance_path),
+                provenance_schema,
                 failed_case_ids: suite.failed_case_ids,
                 known_failure_ids: suite.known_failure_ids,
                 skipped_case_ids: suite.skipped_case_ids,
@@ -569,6 +575,15 @@ pub fn write_official_evidence(config: OfficialEvidenceConfig) -> Result<()> {
         format!("{}\n", serde_json::to_string_pretty(&evidence)?),
     )
     .with_context(|| format!("write {}", evidence_path.display()))
+}
+
+/// The schema of the provenance file a suite writes.
+fn suite_provenance_schema(suite: &str) -> &'static str {
+    if suite == "beyond_sqlite" {
+        crate::beyond_sqlite::taxonomy::PROVENANCE_SCHEMA
+    } else {
+        RUN_PROVENANCE_SCHEMA
+    }
 }
 
 fn insert_hash(
