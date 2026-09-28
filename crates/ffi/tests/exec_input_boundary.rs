@@ -59,21 +59,21 @@ fn unique_db_path(label: &str) -> (TempDir, CString) {
 fn open_db(label: &str) -> (TempDir, *mut rldb) {
     let (dir, c_path) = unique_db_path(label);
     let mut db: *mut rldb = ptr::null_mut();
-    let rc = rldb_open(c_path.as_ptr(), &mut db);
+    let rc = unsafe { rldb_open(c_path.as_ptr(), &mut db) };
     assert_eq!(rc, RLDB_OK, "rldb_open failed rc={rc}");
     assert!(!db.is_null());
     (dir, db)
 }
 
 fn close_db(db: *mut rldb) {
-    let rc = rldb_close(db);
+    let rc = unsafe { rldb_close(db) };
     assert_eq!(rc, RLDB_OK, "rldb_close failed rc={rc}");
 }
 
 fn exec(db: *mut rldb, sql: &str) -> c_int {
     let cs = CString::new(sql).expect("sql nul-free");
     let mut errmsg: *mut c_char = ptr::null_mut();
-    rldb_exec(db, cs.as_ptr(), None, ptr::null_mut(), &mut errmsg)
+    unsafe { rldb_exec(db, cs.as_ptr(), None, ptr::null_mut(), &mut errmsg) }
 }
 
 fn exec_expect_ok(db: *mut rldb, sql: &str) {
@@ -108,20 +108,20 @@ fn sql_injection_classic_quote_escape() {
 
     let select = CString::new("SELECT id FROM users WHERE name = ?1").expect("nul-free");
     let mut stmt: *mut rldb_stmt = ptr::null_mut();
-    let rc = rldb_prepare_v2(db, select.as_ptr(), -1, &mut stmt, ptr::null_mut());
+    let rc = unsafe { rldb_prepare_v2(db, select.as_ptr(), -1, &mut stmt, ptr::null_mut()) };
     assert_eq!(rc, RLDB_OK, "prepare rc={rc}");
     assert!(!stmt.is_null());
 
     let injection = b"' OR 1=1 --";
     let value = CString::new(injection.to_vec()).expect("payload nul-free");
-    let rc = rldb_bind_text(stmt, 1, value.as_ptr(), injection.len() as c_int);
+    let rc = unsafe { rldb_bind_text(stmt, 1, value.as_ptr(), injection.len() as c_int) };
     assert_eq!(rc, RLDB_OK, "bind_text rc={rc}");
 
     // Walk every row the statement produces. With parameter binding the
     // injection becomes a literal name lookup → zero rows.
     let mut rows = 0;
     loop {
-        let step = rldb_step(stmt);
+        let step = unsafe { rldb_step(stmt) };
         match step {
             RLDB_ROW => rows += 1,
             RLDB_DONE => break,
@@ -132,20 +132,20 @@ fn sql_injection_classic_quote_escape() {
         rows, 0,
         "parameter binding must prevent injection; got {rows} rows",
     );
-    assert_eq!(rldb_finalize(stmt), RLDB_OK);
+    assert_eq!(unsafe { rldb_finalize(stmt) }, RLDB_OK);
 
     // And the table still has exactly 2 users — the injection didn't
     // smuggle an UPDATE/DELETE through.
     let count_sql = CString::new("SELECT COUNT(*) FROM users").expect("nul-free");
     let mut count_stmt: *mut rldb_stmt = ptr::null_mut();
     assert_eq!(
-        rldb_prepare_v2(db, count_sql.as_ptr(), -1, &mut count_stmt, ptr::null_mut()),
+        unsafe { rldb_prepare_v2(db, count_sql.as_ptr(), -1, &mut count_stmt, ptr::null_mut()) },
         RLDB_OK
     );
-    assert_eq!(rldb_step(count_stmt), RLDB_ROW);
-    let count = rldb_column_int64(count_stmt, 0);
+    assert_eq!(unsafe { rldb_step(count_stmt) }, RLDB_ROW);
+    let count = unsafe { rldb_column_int64(count_stmt, 0) };
     assert_eq!(count, 2, "users table must be unchanged");
-    assert_eq!(rldb_finalize(count_stmt), RLDB_OK);
+    assert_eq!(unsafe { rldb_finalize(count_stmt) }, RLDB_OK);
 
     close_db(db);
 }
@@ -185,16 +185,16 @@ fn sql_injection_stacked_statement_executes_per_documented_contract() {
     let count_sql = CString::new("SELECT COUNT(*) FROM users").expect("nul-free");
     let mut count_stmt: *mut rldb_stmt = ptr::null_mut();
     assert_eq!(
-        rldb_prepare_v2(db, count_sql.as_ptr(), -1, &mut count_stmt, ptr::null_mut()),
+        unsafe { rldb_prepare_v2(db, count_sql.as_ptr(), -1, &mut count_stmt, ptr::null_mut()) },
         RLDB_OK
     );
-    assert_eq!(rldb_step(count_stmt), RLDB_ROW);
+    assert_eq!(unsafe { rldb_step(count_stmt) }, RLDB_ROW);
     assert_eq!(
-        rldb_column_int64(count_stmt, 0),
+        unsafe { rldb_column_int64(count_stmt, 0) },
         1,
         "users table must survive a stacked-statement failure",
     );
-    assert_eq!(rldb_finalize(count_stmt), RLDB_OK);
+    assert_eq!(unsafe { rldb_finalize(count_stmt) }, RLDB_OK);
 
     close_db(db);
 }
@@ -220,16 +220,16 @@ fn multi_byte_utf8_handled() {
         .expect("nul-free count sql");
     let mut count_stmt: *mut rldb_stmt = ptr::null_mut();
     assert_eq!(
-        rldb_prepare_v2(db, count_sql.as_ptr(), -1, &mut count_stmt, ptr::null_mut()),
+        unsafe { rldb_prepare_v2(db, count_sql.as_ptr(), -1, &mut count_stmt, ptr::null_mut()) },
         RLDB_OK
     );
-    assert_eq!(rldb_step(count_stmt), RLDB_ROW);
-    let count = rldb_column_int64(count_stmt, 0);
+    assert_eq!(unsafe { rldb_step(count_stmt) }, RLDB_ROW);
+    let count = unsafe { rldb_column_int64(count_stmt, 0) };
     assert_eq!(
         count, 2,
         "multi-byte literal must match the two inserted rows"
     );
-    assert_eq!(rldb_finalize(count_stmt), RLDB_OK);
+    assert_eq!(unsafe { rldb_finalize(count_stmt) }, RLDB_OK);
 
     // Round-trip the label out and check the bytes match. We need to fetch
     // both the text pointer AND the byte length, because the C ABI exposes
@@ -238,20 +238,20 @@ fn multi_byte_utf8_handled() {
     let fetch_sql = CString::new("SELECT label FROM t WHERE score = 1").expect("nul-free");
     let mut fetch_stmt: *mut rldb_stmt = ptr::null_mut();
     assert_eq!(
-        rldb_prepare_v2(db, fetch_sql.as_ptr(), -1, &mut fetch_stmt, ptr::null_mut()),
+        unsafe { rldb_prepare_v2(db, fetch_sql.as_ptr(), -1, &mut fetch_stmt, ptr::null_mut()) },
         RLDB_OK
     );
-    assert_eq!(rldb_step(fetch_stmt), RLDB_ROW);
-    let text_ptr = rldb_column_text(fetch_stmt, 0);
+    assert_eq!(unsafe { rldb_step(fetch_stmt) }, RLDB_ROW);
+    let text_ptr = unsafe { rldb_column_text(fetch_stmt, 0) };
     assert!(!text_ptr.is_null(), "label column text pointer is null");
-    let nbytes = rldb_column_bytes(fetch_stmt, 0) as usize;
+    let nbytes = unsafe { rldb_column_bytes(fetch_stmt, 0) } as usize;
     let bytes = unsafe { std::slice::from_raw_parts(text_ptr as *const u8, nbytes) };
     assert_eq!(
         bytes,
         label.as_bytes(),
         "round-tripped label must be byte-identical",
     );
-    assert_eq!(rldb_finalize(fetch_stmt), RLDB_OK);
+    assert_eq!(unsafe { rldb_finalize(fetch_stmt) }, RLDB_OK);
 
     close_db(db);
 }
@@ -271,7 +271,7 @@ fn null_byte_in_bound_parameter() {
     let insert = CString::new("INSERT INTO b(id, payload) VALUES(?1, ?2)").expect("nul-free");
     let mut stmt: *mut rldb_stmt = ptr::null_mut();
     assert_eq!(
-        rldb_prepare_v2(db, insert.as_ptr(), -1, &mut stmt, ptr::null_mut()),
+        unsafe { rldb_prepare_v2(db, insert.as_ptr(), -1, &mut stmt, ptr::null_mut()) },
         RLDB_OK,
     );
     // Bind id via SQL literal would be simpler but we want to exercise
@@ -279,44 +279,46 @@ fn null_byte_in_bound_parameter() {
     // text path for the id by binding a stringified integer is awkward; we
     // re-prepare the insert with the id inline instead and only bind the
     // blob.
-    assert_eq!(rldb_finalize(stmt), RLDB_OK);
+    assert_eq!(unsafe { rldb_finalize(stmt) }, RLDB_OK);
 
     let insert2 = CString::new("INSERT INTO b(id, payload) VALUES(1, ?1)").expect("nul-free");
     let mut stmt2: *mut rldb_stmt = ptr::null_mut();
     assert_eq!(
-        rldb_prepare_v2(db, insert2.as_ptr(), -1, &mut stmt2, ptr::null_mut()),
+        unsafe { rldb_prepare_v2(db, insert2.as_ptr(), -1, &mut stmt2, ptr::null_mut()) },
         RLDB_OK,
     );
-    let rc = rldb_bind_blob(
-        stmt2,
-        1,
-        blob.as_ptr() as *const c_void,
-        blob.len() as c_int,
-    );
+    let rc = unsafe {
+        rldb_bind_blob(
+            stmt2,
+            1,
+            blob.as_ptr() as *const c_void,
+            blob.len() as c_int,
+        )
+    };
     assert_eq!(rc, RLDB_OK, "bind_blob rc={rc}");
-    let step = rldb_step(stmt2);
+    let step = unsafe { rldb_step(stmt2) };
     assert_eq!(step, RLDB_DONE, "insert step rc={step}");
-    assert_eq!(rldb_finalize(stmt2), RLDB_OK);
+    assert_eq!(unsafe { rldb_finalize(stmt2) }, RLDB_OK);
 
     // Now read the blob back out.
     let fetch = CString::new("SELECT payload FROM b WHERE id = 1").expect("nul-free");
     let mut fstmt: *mut rldb_stmt = ptr::null_mut();
     assert_eq!(
-        rldb_prepare_v2(db, fetch.as_ptr(), -1, &mut fstmt, ptr::null_mut()),
+        unsafe { rldb_prepare_v2(db, fetch.as_ptr(), -1, &mut fstmt, ptr::null_mut()) },
         RLDB_OK,
     );
-    assert_eq!(rldb_step(fstmt), RLDB_ROW);
-    let nbytes = rldb_column_bytes(fstmt, 0) as usize;
+    assert_eq!(unsafe { rldb_step(fstmt) }, RLDB_ROW);
+    let nbytes = unsafe { rldb_column_bytes(fstmt, 0) } as usize;
     assert_eq!(
         nbytes,
         blob.len(),
         "blob length must be preserved across NUL bytes",
     );
-    let blob_ptr = rldb_column_blob(fstmt, 0);
+    let blob_ptr = unsafe { rldb_column_blob(fstmt, 0) };
     assert!(!blob_ptr.is_null());
     let got = unsafe { std::slice::from_raw_parts(blob_ptr as *const u8, nbytes) };
     assert_eq!(got, &blob, "blob bytes must round-trip across NUL");
-    assert_eq!(rldb_finalize(fstmt), RLDB_OK);
+    assert_eq!(unsafe { rldb_finalize(fstmt) }, RLDB_OK);
 
     close_db(db);
 }

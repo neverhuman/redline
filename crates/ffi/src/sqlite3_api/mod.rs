@@ -46,8 +46,12 @@ use crate::{
     rldb_backup_remaining, rldb_backup_step,
 };
 
+/// # Safety
+///
+/// `dst` and `src` must each be NULL or a live database handle. The name
+/// arguments are not read.
 #[unsafe(no_mangle)]
-pub extern "C" fn sqlite3_backup_init(
+pub unsafe extern "C" fn sqlite3_backup_init(
     dst: *mut sqlite3,
     _dst_name: *const c_char,
     src: *mut sqlite3,
@@ -64,31 +68,57 @@ pub extern "C" fn sqlite3_backup_init(
         }
     };
     let mut backup = ptr::null_mut();
-    let rc = rldb_backup_init(src, dst_path, ptr::null(), &mut backup);
+    // SAFETY: `src` is live per this function's contract; `dst_path` points
+    // into the live `dst` handle's NUL-terminated path; the config is NULL and
+    // `backup` is a local slot.
+    let rc = unsafe { rldb_backup_init(src, dst_path, ptr::null(), &mut backup) };
     record_status(dst, rc);
     if rc == 0 { backup } else { ptr::null_mut() }
 }
 
+/// # Safety
+///
+/// `backup` must be NULL or a live backup handle.
 #[unsafe(no_mangle)]
-pub extern "C" fn sqlite3_backup_step(backup: *mut sqlite3_backup, pages: c_int) -> c_int {
-    rldb_backup_step(backup, pages)
+pub unsafe extern "C" fn sqlite3_backup_step(backup: *mut sqlite3_backup, pages: c_int) -> c_int {
+    // SAFETY: forwards the caller's arguments, so this function's `# Safety`
+    // contract is the callee's.
+    unsafe { rldb_backup_step(backup, pages) }
 }
 
+/// # Safety
+///
+/// `backup` must be NULL or a live backup handle. After a successful finish it
+/// is dangling and must not be used again.
 #[unsafe(no_mangle)]
-pub extern "C" fn sqlite3_backup_finish(backup: *mut sqlite3_backup) -> c_int {
-    let rc = rldb_backup_finish(backup);
+pub unsafe extern "C" fn sqlite3_backup_finish(backup: *mut sqlite3_backup) -> c_int {
+    // SAFETY: forwards the caller's arguments, so this function's `# Safety`
+    // contract is the callee's.
+    let rc = unsafe { rldb_backup_finish(backup) };
     if rc != 0 {
         return rc;
     }
-    rldb_backup_close(backup)
+    // SAFETY: `backup` is live per this function's contract and the finish
+    // above did not close it; it is closed exactly once here.
+    unsafe { rldb_backup_close(backup) }
 }
 
+/// # Safety
+///
+/// `backup` must be NULL or a live backup handle.
 #[unsafe(no_mangle)]
-pub extern "C" fn sqlite3_backup_remaining(backup: *mut sqlite3_backup) -> c_int {
-    rldb_backup_remaining(backup)
+pub unsafe extern "C" fn sqlite3_backup_remaining(backup: *mut sqlite3_backup) -> c_int {
+    // SAFETY: forwards the caller's arguments, so this function's `# Safety`
+    // contract is the callee's.
+    unsafe { rldb_backup_remaining(backup) }
 }
 
+/// # Safety
+///
+/// `backup` must be NULL or a live backup handle.
 #[unsafe(no_mangle)]
-pub extern "C" fn sqlite3_backup_pagecount(backup: *mut sqlite3_backup) -> c_int {
-    rldb_backup_pagecount(backup)
+pub unsafe extern "C" fn sqlite3_backup_pagecount(backup: *mut sqlite3_backup) -> c_int {
+    // SAFETY: forwards the caller's arguments, so this function's `# Safety`
+    // contract is the callee's.
+    unsafe { rldb_backup_pagecount(backup) }
 }

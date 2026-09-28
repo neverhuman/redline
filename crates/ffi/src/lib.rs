@@ -16,8 +16,30 @@
 //! `#[unsafe(no_mangle)]`. The `pub use` re-exports below keep the flat
 //! path (`redlinedb::rldb_open` etc.) for any in-crate consumer
 //! (notably the test module).
-
-#![allow(clippy::not_unsafe_ptr_arg_deref)]
+//!
+//! # Safety contract
+//!
+//! Every export that takes a raw pointer is an `unsafe extern "C" fn`: the
+//! library cannot check what a caller passes, so each function's `# Safety`
+//! section lists what it relies on. Those sections use these terms:
+//!
+//! - A *live database handle* was returned by `rldb_open`, `rldb_open_v2`,
+//!   `sqlite3_open` or `sqlite3_open_v2` and has not been closed.
+//! - A *live statement* was returned by `rldb_prepare_v2`,
+//!   `sqlite3_prepare_v2` or `sqlite3_prepare_v3`, has not been finalized, and
+//!   its database handle is live. A statement, and the text, blob and value
+//!   pointers it hands out, must not be used by two threads at the same time.
+//! - A *live backup handle* was returned by `rldb_backup_init` or
+//!   `sqlite3_backup_init` and has not been closed or finished.
+//!
+//! NULL is accepted wherever a contract says "NULL or": the function returns
+//! `RLDB_MISUSE` or its documented neutral value. Pointers the library returns
+//! stay valid for the lifetimes stated in `contracts/c-abi/redlinedb.h`.
+//!
+//! The `rlib` output exists so this crate's own integration tests can call
+//! the exports; it is not a supported Rust API. Rust programs use the
+//! `redlinedb` facade crate. Panics inside the library abort the process in
+//! release builds; see `docs/compatibility/abi-safety.md`.
 
 pub mod bind;
 pub mod column;

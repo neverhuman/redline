@@ -7,8 +7,12 @@ use std::sync::atomic::Ordering;
 use crate::types::*;
 use crate::util::{api, flatten_code, open_handle, reclaim_box};
 
+/// # Safety
+///
+/// - `path` must be NULL or point to a NUL-terminated string.
+/// - `out_db` must be NULL or valid for writing one pointer.
 #[unsafe(no_mangle)]
-pub extern "C" fn rldb_open(path: *const c_char, out_db: *mut *mut rldb) -> c_int {
+pub unsafe extern "C" fn rldb_open(path: *const c_char, out_db: *mut *mut rldb) -> c_int {
     flatten_code(api(|| {
         if path.is_null() || out_db.is_null() {
             return Err(RLDB_MISUSE);
@@ -26,8 +30,13 @@ pub extern "C" fn rldb_open(path: *const c_char, out_db: *mut *mut rldb) -> c_in
     }))
 }
 
+/// # Safety
+///
+/// - `path` must be NULL or point to a NUL-terminated string.
+/// - `config` must be NULL or point to a readable, initialised `rldb_config`.
+/// - `out_db` must be NULL or valid for writing one pointer.
 #[unsafe(no_mangle)]
-pub extern "C" fn rldb_open_v2(
+pub unsafe extern "C" fn rldb_open_v2(
     path: *const c_char,
     config: *const rldb_config,
     out_db: *mut *mut rldb,
@@ -57,8 +66,12 @@ pub extern "C" fn rldb_open_v2(
     }))
 }
 
+/// # Safety
+///
+/// `db` must be NULL or a live database handle. After a successful close the
+/// handle is dangling and must not be passed to any function again.
 #[unsafe(no_mangle)]
-pub extern "C" fn rldb_close(db: *mut rldb) -> c_int {
+pub unsafe extern "C" fn rldb_close(db: *mut rldb) -> c_int {
     flatten_code(api(|| {
         if db.is_null() {
             return Err(RLDB_MISUSE);
@@ -76,7 +89,7 @@ pub extern "C" fn rldb_close(db: *mut rldb) -> c_int {
         // upheld by the active_statements==0 check above; double-close guarded
         // by the null check above (caller must NULL the handle after close);
         // ledgered at .jankurai/unsafe-ledger.toml (file=crates/ffi/src/lifecycle.rs,
-        // line=81, detector=rust.unsafe.raw-parts); proof:
+        // line=94, detector=rust.unsafe.raw-parts); proof:
         // crates/ffi/tests/safety_invariants.rs::double_close_via_null_after_close_is_safe.
         unsafe {
             // SAFETY: reclaim and drop the leaked Box; matching destructor for
@@ -87,7 +100,13 @@ pub extern "C" fn rldb_close(db: *mut rldb) -> c_int {
     }))
 }
 
+/// # Safety
+///
+/// `db` must be NULL or a live database handle. After a successful close the
+/// handle is dangling and must not be passed to any function again.
 #[unsafe(no_mangle)]
-pub extern "C" fn rldb_close_v2(db: *mut rldb) -> c_int {
-    rldb_close(db)
+pub unsafe extern "C" fn rldb_close_v2(db: *mut rldb) -> c_int {
+    // SAFETY: forwards the caller's arguments, so this function's `# Safety`
+    // contract is the callee's.
+    unsafe { rldb_close(db) }
 }

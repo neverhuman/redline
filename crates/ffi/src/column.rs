@@ -8,8 +8,11 @@ use redlinedb_sql::value::SqlValue;
 use crate::types::*;
 use crate::util::{api, flatten_code, record_status_with_message};
 
+/// # Safety
+///
+/// `stmt` must be NULL or a live statement.
 #[unsafe(no_mangle)]
-pub extern "C" fn rldb_column_count(stmt: *mut rldb_stmt) -> c_int {
+pub unsafe extern "C" fn rldb_column_count(stmt: *mut rldb_stmt) -> c_int {
     if stmt.is_null() {
         return RLDB_MISUSE;
     }
@@ -18,8 +21,11 @@ pub extern "C" fn rldb_column_count(stmt: *mut rldb_stmt) -> c_int {
     unsafe { (*stmt).stmt.column_count() as c_int }
 }
 
+/// # Safety
+///
+/// `stmt` must be NULL or a live statement.
 #[unsafe(no_mangle)]
-pub extern "C" fn rldb_column_name(stmt: *mut rldb_stmt, index: c_int) -> *const c_char {
+pub unsafe extern "C" fn rldb_column_name(stmt: *mut rldb_stmt, index: c_int) -> *const c_char {
     if stmt.is_null() {
         return ptr::null();
     }
@@ -35,8 +41,11 @@ pub extern "C" fn rldb_column_name(stmt: *mut rldb_stmt, index: c_int) -> *const
     }
 }
 
+/// # Safety
+///
+/// `stmt` must be NULL or a live statement.
 #[unsafe(no_mangle)]
-pub extern "C" fn rldb_column_type(stmt: *mut rldb_stmt, index: c_int) -> c_int {
+pub unsafe extern "C" fn rldb_column_type(stmt: *mut rldb_stmt, index: c_int) -> c_int {
     flatten_code(api(|| {
         if stmt.is_null() {
             return Err(RLDB_MISUSE);
@@ -56,8 +65,11 @@ pub extern "C" fn rldb_column_type(stmt: *mut rldb_stmt, index: c_int) -> c_int 
     }))
 }
 
+/// # Safety
+///
+/// `stmt` must be NULL or a live statement.
 #[unsafe(no_mangle)]
-pub extern "C" fn rldb_column_int64(stmt: *mut rldb_stmt, index: c_int) -> i64 {
+pub unsafe extern "C" fn rldb_column_int64(stmt: *mut rldb_stmt, index: c_int) -> i64 {
     if stmt.is_null() {
         return 0;
     }
@@ -66,8 +78,11 @@ pub extern "C" fn rldb_column_int64(stmt: *mut rldb_stmt, index: c_int) -> i64 {
     unsafe { (*stmt).stmt.column_i64(index as usize).unwrap_or(0) }
 }
 
+/// # Safety
+///
+/// `stmt` must be NULL or a live statement.
 #[unsafe(no_mangle)]
-pub extern "C" fn rldb_column_double(stmt: *mut rldb_stmt, index: c_int) -> f64 {
+pub unsafe extern "C" fn rldb_column_double(stmt: *mut rldb_stmt, index: c_int) -> f64 {
     if stmt.is_null() {
         return 0.0;
     }
@@ -76,8 +91,11 @@ pub extern "C" fn rldb_column_double(stmt: *mut rldb_stmt, index: c_int) -> f64 
     unsafe { (*stmt).stmt.column_f64(index as usize).unwrap_or(0.0) }
 }
 
+/// # Safety
+///
+/// `stmt` must be NULL or a live statement.
 #[unsafe(no_mangle)]
-pub extern "C" fn rldb_column_text(stmt: *mut rldb_stmt, index: c_int) -> *const c_uchar {
+pub unsafe extern "C" fn rldb_column_text(stmt: *mut rldb_stmt, index: c_int) -> *const c_uchar {
     if stmt.is_null() {
         return ptr::null();
     }
@@ -91,8 +109,11 @@ pub extern "C" fn rldb_column_text(stmt: *mut rldb_stmt, index: c_int) -> *const
         .unwrap_or(ptr::null())
 }
 
+/// # Safety
+///
+/// `stmt` must be NULL or a live statement.
 #[unsafe(no_mangle)]
-pub extern "C" fn rldb_column_blob(stmt: *mut rldb_stmt, index: c_int) -> *const c_void {
+pub unsafe extern "C" fn rldb_column_blob(stmt: *mut rldb_stmt, index: c_int) -> *const c_void {
     if stmt.is_null() {
         return ptr::null();
     }
@@ -107,8 +128,11 @@ pub extern "C" fn rldb_column_blob(stmt: *mut rldb_stmt, index: c_int) -> *const
     }
 }
 
+/// # Safety
+///
+/// `stmt` must be NULL or a live statement.
 #[unsafe(no_mangle)]
-pub extern "C" fn rldb_column_bytes(stmt: *mut rldb_stmt, index: c_int) -> c_int {
+pub unsafe extern "C" fn rldb_column_bytes(stmt: *mut rldb_stmt, index: c_int) -> c_int {
     flatten_code(api(|| {
         if stmt.is_null() {
             return Err(RLDB_MISUSE);

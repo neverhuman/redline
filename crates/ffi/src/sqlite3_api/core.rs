@@ -15,9 +15,15 @@ use crate::{rldb_close, rldb_close_v2, rldb_open};
 
 use super::stmt::sqlite3_prepare_v2;
 
+/// # Safety
+///
+/// - `path` must be NULL or point to a NUL-terminated string.
+/// - `out_db` must be NULL or valid for writing one pointer.
 #[unsafe(no_mangle)]
-pub extern "C" fn sqlite3_open(path: *const c_char, out_db: *mut *mut sqlite3) -> c_int {
-    rldb_open(path, out_db)
+pub unsafe extern "C" fn sqlite3_open(path: *const c_char, out_db: *mut *mut sqlite3) -> c_int {
+    // SAFETY: forwards the caller's arguments, so this function's `# Safety`
+    // contract is the callee's.
+    unsafe { rldb_open(path, out_db) }
 }
 
 #[unsafe(no_mangle)]
@@ -59,8 +65,13 @@ pub extern "C" fn sqlite3_errstr(code: c_int) -> *const c_char {
     sqlite_errstr(code).as_ptr()
 }
 
+/// # Safety
+///
+/// - `path` must be NULL or point to a NUL-terminated string.
+/// - `out_db` must be NULL or valid for writing one pointer.
+/// - `_vfs` is not read.
 #[unsafe(no_mangle)]
-pub extern "C" fn sqlite3_open_v2(
+pub unsafe extern "C" fn sqlite3_open_v2(
     path: *const c_char,
     out_db: *mut *mut sqlite3,
     flags: c_int,
@@ -104,8 +115,18 @@ pub extern "C" fn sqlite3_open_v2(
 /// PERSISTENT and NORMALIZE are accepted (an allocation hint and a no-op
 /// upstream). Any other flag asks for behaviour RedlineDB does not provide,
 /// so it fails with SQLITE_ERROR and a NULL statement.
+///
+/// # Safety
+///
+/// - `db` must be NULL or a live database handle.
+/// - `sql` must be NULL or readable up to its first NUL byte when `nbytes` is
+///   negative; when `nbytes >= 0` only the bytes before the first NUL or the
+///   bound, whichever comes first, need to be readable (`nbytes == 0` reads
+///   nothing).
+/// - `out_stmt` must be NULL or valid for writing one pointer.
+/// - `tail` must be NULL or valid for writing one pointer.
 #[unsafe(no_mangle)]
-pub extern "C" fn sqlite3_prepare_v3(
+pub unsafe extern "C" fn sqlite3_prepare_v3(
     db: *mut sqlite3,
     sql: *const c_char,
     nbytes: c_int,
@@ -125,15 +146,29 @@ pub extern "C" fn sqlite3_prepare_v3(
         record_status_with_message(db, RLDB_ERROR, "unsupported sqlite3_prepare_v3 flags");
         return RLDB_ERROR;
     }
-    sqlite3_prepare_v2(db, sql, nbytes, out_stmt, tail)
+    // SAFETY: forwards the caller's arguments; sqlite3_prepare_v2 has the same
+    // `# Safety` contract.
+    unsafe { sqlite3_prepare_v2(db, sql, nbytes, out_stmt, tail) }
 }
 
+/// # Safety
+///
+/// `db` must be NULL or a live database handle. After a successful close the
+/// handle is dangling and must not be passed to any function again.
 #[unsafe(no_mangle)]
-pub extern "C" fn sqlite3_close(db: *mut sqlite3) -> c_int {
-    rldb_close(db)
+pub unsafe extern "C" fn sqlite3_close(db: *mut sqlite3) -> c_int {
+    // SAFETY: forwards the caller's arguments, so this function's `# Safety`
+    // contract is the callee's.
+    unsafe { rldb_close(db) }
 }
 
+/// # Safety
+///
+/// `db` must be NULL or a live database handle. After a successful close the
+/// handle is dangling and must not be passed to any function again.
 #[unsafe(no_mangle)]
-pub extern "C" fn sqlite3_close_v2(db: *mut sqlite3) -> c_int {
-    rldb_close_v2(db)
+pub unsafe extern "C" fn sqlite3_close_v2(db: *mut sqlite3) -> c_int {
+    // SAFETY: forwards the caller's arguments, so this function's `# Safety`
+    // contract is the callee's.
+    unsafe { rldb_close_v2(db) }
 }

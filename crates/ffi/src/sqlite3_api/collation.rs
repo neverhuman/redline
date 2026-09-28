@@ -11,7 +11,6 @@ use std::sync::Mutex;
 use redlinedb_sql::udf as sql_udf;
 
 use crate::types::*;
-use crate::util::caller_buffer;
 
 pub type CompareFn = unsafe extern "C" fn(
     user_data: *mut c_void,
@@ -108,7 +107,7 @@ fn invoke_needed(db: *mut rldb, name: &str) {
             // remains valid for the lifetime guaranteed by the SQLite ABI;
             // cstr lives for the entire call; ledgered at
             // .jankurai/unsafe-ledger.toml (file=crates/ffi/src/sqlite3_api/collation.rs,
-            // line=184, detector=rust.unsafe.extern-fn).
+            // line=123, detector=rust.unsafe.extern-fn).
             unsafe {
                 // SAFETY: see the documented FFI-ABI callback invariant above.
                 (entry.cb)(user_data, db, 1 /* SQLITE_UTF8 */, cstr.as_ptr());
@@ -201,14 +200,4 @@ pub unsafe extern "C" fn sqlite3_collation_needed(
 #[doc(hidden)]
 pub fn __test_invoke_needed(db: *mut rldb, name: &str) {
     invoke_needed(db, name);
-}
-
-#[doc(hidden)]
-pub fn __test_consume_buffer(ptr: *const u8, len: usize) -> usize {
-    if ptr.is_null() || len == 0 {
-        return 0;
-    }
-    // SAFETY: test-only helper; caller passes a length-bounded slice.
-    let slice = unsafe { caller_buffer(ptr, len) };
-    slice.len()
 }

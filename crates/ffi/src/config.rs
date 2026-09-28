@@ -9,8 +9,11 @@ use std::time::Duration;
 use crate::types::*;
 use crate::util::{api, flatten_code, sql_result, with_db};
 
+/// # Safety
+///
+/// `db` must be NULL or a live database handle.
 #[unsafe(no_mangle)]
-pub extern "C" fn rldb_busy_timeout(db: *mut rldb, milliseconds: c_int) -> c_int {
+pub unsafe extern "C" fn rldb_busy_timeout(db: *mut rldb, milliseconds: c_int) -> c_int {
     flatten_code(api(|| {
         if db.is_null() {
             return Err(RLDB_MISUSE);
@@ -25,18 +28,27 @@ pub extern "C" fn rldb_busy_timeout(db: *mut rldb, milliseconds: c_int) -> c_int
     }))
 }
 
+/// # Safety
+///
+/// `db` must be NULL or a live database handle.
 #[unsafe(no_mangle)]
-pub extern "C" fn rldb_changes(db: *mut rldb) -> c_int {
+pub unsafe extern "C" fn rldb_changes(db: *mut rldb) -> c_int {
     with_db(db, |db| db.conn.changes() as c_int).unwrap_or(RLDB_MISUSE)
 }
 
+/// # Safety
+///
+/// `db` must be NULL or a live database handle.
 #[unsafe(no_mangle)]
-pub extern "C" fn rldb_last_insert_rowid(db: *mut rldb) -> i64 {
+pub unsafe extern "C" fn rldb_last_insert_rowid(db: *mut rldb) -> i64 {
     with_db(db, |db| db.conn.last_insert_rowid().unwrap_or(0)).unwrap_or(0)
 }
 
+/// # Safety
+///
+/// `db` must be NULL or a live database handle.
 #[unsafe(no_mangle)]
-pub extern "C" fn rldb_checkpoint(db: *mut rldb) -> c_int {
+pub unsafe extern "C" fn rldb_checkpoint(db: *mut rldb) -> c_int {
     flatten_code(api(|| {
         if db.is_null() {
             return Err(RLDB_MISUSE);
@@ -49,8 +61,11 @@ pub extern "C" fn rldb_checkpoint(db: *mut rldb) -> c_int {
     }))
 }
 
+/// # Safety
+///
+/// `db` must be NULL or a live database handle.
 #[unsafe(no_mangle)]
-pub extern "C" fn rldb_vacuum(db: *mut rldb) -> c_int {
+pub unsafe extern "C" fn rldb_vacuum(db: *mut rldb) -> c_int {
     flatten_code(api(|| {
         if db.is_null() {
             return Err(RLDB_MISUSE);
@@ -63,8 +78,13 @@ pub extern "C" fn rldb_vacuum(db: *mut rldb) -> c_int {
     }))
 }
 
+/// # Safety
+///
+/// - `db` must be NULL or a live database handle.
+/// - `out_json` must be NULL or valid for writing one pointer; the string
+///   written there is owned by the caller and freed with `rldb_free`.
 #[unsafe(no_mangle)]
-pub extern "C" fn rldb_stats_json(db: *mut rldb, out_json: *mut *mut c_char) -> c_int {
+pub unsafe extern "C" fn rldb_stats_json(db: *mut rldb, out_json: *mut *mut c_char) -> c_int {
     flatten_code(api(|| {
         if db.is_null() || out_json.is_null() {
             return Err(RLDB_MISUSE);

@@ -8,8 +8,14 @@ use std::path::PathBuf;
 use crate::types::*;
 use crate::util::{api, flatten_code, io, reclaim_box, recursive_copy};
 
+/// # Safety
+///
+/// - `src` must be NULL or a live database handle.
+/// - `dst_path` must be NULL or point to a NUL-terminated string.
+/// - `dst_config` is not read.
+/// - `out` must be NULL or valid for writing one pointer.
 #[unsafe(no_mangle)]
-pub extern "C" fn rldb_backup_init(
+pub unsafe extern "C" fn rldb_backup_init(
     src: *mut rldb,
     dst_path: *const c_char,
     _dst_config: *const rldb_config,
@@ -51,8 +57,11 @@ pub extern "C" fn rldb_backup_init(
     }))
 }
 
+/// # Safety
+///
+/// `backup` must be NULL or a live backup handle.
 #[unsafe(no_mangle)]
-pub extern "C" fn rldb_backup_step(backup: *mut rldb_backup, _batches: c_int) -> c_int {
+pub unsafe extern "C" fn rldb_backup_step(backup: *mut rldb_backup, _batches: c_int) -> c_int {
     flatten_code(api(|| {
         if backup.is_null() {
             return Err(RLDB_MISUSE);
@@ -74,26 +83,34 @@ pub extern "C" fn rldb_backup_step(backup: *mut rldb_backup, _batches: c_int) ->
     }))
 }
 
+/// # Safety
+///
+/// `backup` is only compared with NULL; it should still be NULL or a live
+/// backup handle.
 #[unsafe(no_mangle)]
-pub extern "C" fn rldb_backup_finish(backup: *mut rldb_backup) -> c_int {
+pub unsafe extern "C" fn rldb_backup_finish(backup: *mut rldb_backup) -> c_int {
     if backup.is_null() {
         return RLDB_MISUSE;
     }
     RLDB_OK
 }
 
+/// # Safety
+///
+/// `backup` must be NULL or a live backup handle. After a successful close it
+/// is dangling and must not be used again.
 #[unsafe(no_mangle)]
-pub extern "C" fn rldb_backup_close(backup: *mut rldb_backup) -> c_int {
+pub unsafe extern "C" fn rldb_backup_close(backup: *mut rldb_backup) -> c_int {
     if backup.is_null() {
         return RLDB_MISUSE;
     }
     // SAFETY: matching constructor/destructor pair — `backup` originates from
-    // Box::into_raw(backup) at rldb_backup_init (crates/ffi/src/snapshot.rs:48);
+    // Box::into_raw(backup) at rldb_backup_init (crates/ffi/src/snapshot.rs:54);
     // ownership invariant: the C caller may not free this pointer directly per
     // redlinedb.h:141; exclusive access upheld because backup handles are not
     // shared across threads in the documented contract; double-close guarded by
     // the null check above (caller must NULL after close); ledgered at
-    // .jankurai/unsafe-ledger.toml (file=crates/ffi/src/snapshot.rs, line=99,
+    // .jankurai/unsafe-ledger.toml (file=crates/ffi/src/snapshot.rs, line=116,
     // detector=rust.unsafe.raw-parts); proof:
     // crates/ffi/tests/safety_invariants.rs::backup_init_step_close_round_trips_box_ownership.
     unsafe {
@@ -104,8 +121,11 @@ pub extern "C" fn rldb_backup_close(backup: *mut rldb_backup) -> c_int {
     RLDB_OK
 }
 
+/// # Safety
+///
+/// `backup` must be NULL or a live backup handle.
 #[unsafe(no_mangle)]
-pub extern "C" fn rldb_backup_remaining(backup: *mut rldb_backup) -> c_int {
+pub unsafe extern "C" fn rldb_backup_remaining(backup: *mut rldb_backup) -> c_int {
     if backup.is_null() {
         return RLDB_MISUSE;
     }
@@ -114,8 +134,11 @@ pub extern "C" fn rldb_backup_remaining(backup: *mut rldb_backup) -> c_int {
     unsafe { (*backup).remaining as c_int }
 }
 
+/// # Safety
+///
+/// `backup` must be NULL or a live backup handle.
 #[unsafe(no_mangle)]
-pub extern "C" fn rldb_backup_pagecount(backup: *mut rldb_backup) -> c_int {
+pub unsafe extern "C" fn rldb_backup_pagecount(backup: *mut rldb_backup) -> c_int {
     if backup.is_null() {
         return RLDB_MISUSE;
     }

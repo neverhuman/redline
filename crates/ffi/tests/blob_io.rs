@@ -24,14 +24,14 @@ fn open_db() -> (TempDir, *mut rldb) {
     let path = dir.path().join("blob.redline");
     let c_path = CString::new(path.to_str().unwrap()).unwrap();
     let mut db: *mut rldb = ptr::null_mut();
-    let rc = rldb_open(c_path.as_ptr(), &mut db);
+    let rc = unsafe { rldb_open(c_path.as_ptr(), &mut db) };
     assert_eq!(rc, RLDB_OK);
     (dir, db)
 }
 
 fn exec(db: *mut rldb, sql: &str) {
     let c_sql = CString::new(sql).unwrap();
-    let rc = rldb_exec(db, c_sql.as_ptr(), None, ptr::null_mut(), ptr::null_mut());
+    let rc = unsafe { rldb_exec(db, c_sql.as_ptr(), None, ptr::null_mut(), ptr::null_mut()) };
     assert_eq!(rc, RLDB_OK, "exec({sql})");
 }
 
@@ -96,7 +96,7 @@ fn open_read_write_close_round_trip() {
         assert_eq!(&all[3..], &[3u8, 4, 5, 6, 7, 8, 9]);
         sqlite3_blob_close(blob2);
     }
-    rldb_close(db);
+    unsafe { rldb_close(db) };
 }
 
 #[test]
@@ -127,7 +127,7 @@ fn write_past_cell_length_is_rejected() {
         assert_eq!(rc, RLDB_ERROR);
         sqlite3_blob_close(blob);
     }
-    rldb_close(db);
+    unsafe { rldb_close(db) };
 }
 
 #[test]
@@ -159,7 +159,7 @@ fn reopen_changes_rowid() {
         assert_eq!(sqlite3_blob_bytes(blob), 2);
         sqlite3_blob_close(blob);
     }
-    rldb_close(db);
+    unsafe { rldb_close(db) };
 }
 
 #[test]

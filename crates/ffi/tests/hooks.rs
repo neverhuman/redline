@@ -29,7 +29,7 @@ fn open_db() -> (TempDir, *mut rldb) {
     let path = dir.path().join("h.redline");
     let c_path = CString::new(path.to_str().unwrap()).unwrap();
     let mut db: *mut rldb = ptr::null_mut();
-    let rc = rldb_open(c_path.as_ptr(), &mut db);
+    let rc = unsafe { rldb_open(c_path.as_ptr(), &mut db) };
     assert_eq!(rc, RLDB_OK);
     (dir, db)
 }
@@ -103,7 +103,7 @@ fn commit_hook_fires_and_can_veto() {
     unsafe { sqlite3_commit_hook(db, Some(commit_veto), ptr::null_mut()) };
     let vetoed = __test_fire_commit(db);
     assert!(vetoed);
-    rldb_close(db);
+    unsafe { rldb_close(db) };
 }
 
 #[test]
@@ -113,7 +113,7 @@ fn rollback_hook_fires() {
     unsafe { sqlite3_rollback_hook(db, Some(rollback_cb), ptr::null_mut()) };
     __test_fire_rollback(db);
     assert_eq!(ROLLBACK_COUNT.load(Ordering::Relaxed), 1);
-    rldb_close(db);
+    unsafe { rldb_close(db) };
 }
 
 #[test]
@@ -123,7 +123,7 @@ fn update_hook_fires_with_table_and_rowid() {
     unsafe { sqlite3_update_hook(db, Some(update_cb), ptr::null_mut()) };
     __test_fire_update(db, 18, "users", 42);
     assert_eq!(UPDATE_COUNT.load(Ordering::Relaxed), 1);
-    rldb_close(db);
+    unsafe { rldb_close(db) };
 }
 
 #[test]
@@ -133,7 +133,7 @@ fn trace_hook_fires_with_sql_string() {
     unsafe { sqlite3_trace(db, Some(trace_cb), ptr::null_mut()) };
     __test_fire_trace(db, "SELECT 1");
     assert_eq!(TRACE_COUNT.load(Ordering::Relaxed), 1);
-    rldb_close(db);
+    unsafe { rldb_close(db) };
 }
 
 #[test]
@@ -143,7 +143,7 @@ fn profile_hook_captures_nanoseconds() {
     unsafe { sqlite3_profile(db, Some(profile_cb), ptr::null_mut()) };
     __test_fire_profile(db, "SELECT 1", 12345);
     assert_eq!(PROFILE_NS.load(Ordering::Relaxed), 12345);
-    rldb_close(db);
+    unsafe { rldb_close(db) };
 }
 
 #[test]
@@ -154,7 +154,7 @@ fn authorizer_returns_decision_code() {
     let decision = __test_fire_authorizer(db, 9 /* SQLITE_SELECT */, Some("users"));
     assert_eq!(decision, 1); // SQLITE_DENY
     assert_eq!(AUTH_COUNT.load(Ordering::Relaxed), 1);
-    rldb_close(db);
+    unsafe { rldb_close(db) };
 }
 
 #[test]
@@ -165,7 +165,7 @@ fn busy_handler_retry_decision() {
     assert!(__test_fire_busy(db, 1));
     assert!(__test_fire_busy(db, 2));
     assert!(!__test_fire_busy(db, 3));
-    rldb_close(db);
+    unsafe { rldb_close(db) };
 }
 
 #[test]
@@ -226,7 +226,8 @@ fn update_hook_fires_per_row() {
          DELETE FROM t WHERE id = 3;",
     )
     .unwrap();
-    let rc = redlinedb::rldb_exec(db, sql.as_ptr(), None, ptr::null_mut(), ptr::null_mut());
+    let rc =
+        unsafe { redlinedb::rldb_exec(db, sql.as_ptr(), None, ptr::null_mut(), ptr::null_mut()) };
     assert_eq!(rc, RLDB_OK);
     let rows = UPDATE_ROWS.lock().unwrap().clone();
     // 3 INSERT + 2 UPDATE + 1 DELETE = 6 callbacks.
@@ -259,7 +260,7 @@ fn update_hook_fires_per_row() {
     assert_eq!(upd_ids, vec![1, 2]);
     // Delete rowid is 3.
     assert_eq!(deletes[0].2, 3);
-    rldb_close(db);
+    unsafe { rldb_close(db) };
 }
 
 // End-to-end: set_authorizer DENIES SELECT on a sensitive table.
@@ -294,7 +295,8 @@ fn set_authorizer_denies_table_access() {
          INSERT INTO allowed VALUES (1, 'hello');",
     )
     .unwrap();
-    let rc = redlinedb::rldb_exec(db, setup.as_ptr(), None, ptr::null_mut(), ptr::null_mut());
+    let rc =
+        unsafe { redlinedb::rldb_exec(db, setup.as_ptr(), None, ptr::null_mut(), ptr::null_mut()) };
     assert_eq!(rc, RLDB_OK);
 
     // Register the authorizer AFTER schema setup so the CREATE TABLE
@@ -304,7 +306,8 @@ fn set_authorizer_denies_table_access() {
     // SELECT on "allowed" should succeed.
     let ok_sql = CString::new("SELECT id FROM allowed").unwrap();
     let mut errmsg: *mut c_char = ptr::null_mut();
-    let rc = redlinedb::rldb_exec(db, ok_sql.as_ptr(), None, ptr::null_mut(), &mut errmsg);
+    let rc =
+        unsafe { redlinedb::rldb_exec(db, ok_sql.as_ptr(), None, ptr::null_mut(), &mut errmsg) };
     assert_eq!(rc, RLDB_OK, "errmsg={:?}", unsafe {
         if errmsg.is_null() {
             String::new()
@@ -316,7 +319,8 @@ fn set_authorizer_denies_table_access() {
     // SELECT on "sensitive" should fail with the auth code.
     let deny_sql = CString::new("SELECT secret FROM sensitive").unwrap();
     let mut errmsg: *mut c_char = ptr::null_mut();
-    let rc = redlinedb::rldb_exec(db, deny_sql.as_ptr(), None, ptr::null_mut(), &mut errmsg);
+    let rc =
+        unsafe { redlinedb::rldb_exec(db, deny_sql.as_ptr(), None, ptr::null_mut(), &mut errmsg) };
     // RLDB_AUTH = 23 (matches SQLITE_AUTH).
     assert_eq!(rc, 23, "expected RLDB_AUTH=23 got {rc}");
     if !errmsg.is_null() {
@@ -325,9 +329,9 @@ fn set_authorizer_denies_table_access() {
             msg.to_ascii_lowercase().contains("not authorized"),
             "msg={msg}"
         );
-        redlinedb::rldb_free(errmsg as *mut c_void);
+        unsafe { redlinedb::rldb_free(errmsg as *mut c_void) };
     }
-    rldb_close(db);
+    unsafe { rldb_close(db) };
 }
 
 // Drive trace/profile/commit hooks end-to-end through rldb_exec.
@@ -345,12 +349,13 @@ fn exec_walk_invokes_trace_profile_commit_hooks() {
         CString::new("CREATE TABLE t(id INTEGER); INSERT INTO t VALUES (1); COMMIT;").unwrap();
     // No active tx, the COMMIT statement is a no-op; trace fires per
     // statement, commit hook fires on the COMMIT keyword path.
-    let _rc = redlinedb::rldb_exec(db, sql.as_ptr(), None, ptr::null_mut(), ptr::null_mut());
+    let _rc =
+        unsafe { redlinedb::rldb_exec(db, sql.as_ptr(), None, ptr::null_mut(), ptr::null_mut()) };
     // Trace fires once per non-empty input split — at least 3.
     assert!(TRACE_COUNT.load(Ordering::Relaxed) >= 1);
     // Commit hook may fire when the COMMIT keyword is detected.
     let _ = COMMIT_COUNT.load(Ordering::Relaxed);
-    rldb_close(db);
+    unsafe { rldb_close(db) };
     // Silence unused imports under cfg.
     let _ = (Arc::new(0u8), CStr::from_bytes_with_nul(b"\0").ok());
 }

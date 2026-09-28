@@ -6,8 +6,11 @@ use std::os::raw::{c_char, c_int, c_void};
 use crate::types::*;
 use crate::util::{api, caller_buffer, flatten_code, sql_result};
 
+/// # Safety
+///
+/// `stmt` must be NULL or a live statement.
 #[unsafe(no_mangle)]
-pub extern "C" fn rldb_bind_null(stmt: *mut rldb_stmt, index: c_int) -> c_int {
+pub unsafe extern "C" fn rldb_bind_null(stmt: *mut rldb_stmt, index: c_int) -> c_int {
     flatten_code(api(|| {
         if stmt.is_null() {
             return Err(RLDB_MISUSE);
@@ -20,8 +23,11 @@ pub extern "C" fn rldb_bind_null(stmt: *mut rldb_stmt, index: c_int) -> c_int {
     }))
 }
 
+/// # Safety
+///
+/// `stmt` must be NULL or a live statement.
 #[unsafe(no_mangle)]
-pub extern "C" fn rldb_bind_int64(stmt: *mut rldb_stmt, index: c_int, value: i64) -> c_int {
+pub unsafe extern "C" fn rldb_bind_int64(stmt: *mut rldb_stmt, index: c_int, value: i64) -> c_int {
     flatten_code(api(|| {
         if stmt.is_null() {
             return Err(RLDB_MISUSE);
@@ -34,8 +40,11 @@ pub extern "C" fn rldb_bind_int64(stmt: *mut rldb_stmt, index: c_int, value: i64
     }))
 }
 
+/// # Safety
+///
+/// `stmt` must be NULL or a live statement.
 #[unsafe(no_mangle)]
-pub extern "C" fn rldb_bind_double(stmt: *mut rldb_stmt, index: c_int, value: f64) -> c_int {
+pub unsafe extern "C" fn rldb_bind_double(stmt: *mut rldb_stmt, index: c_int, value: f64) -> c_int {
     flatten_code(api(|| {
         if stmt.is_null() {
             return Err(RLDB_MISUSE);
@@ -48,8 +57,14 @@ pub extern "C" fn rldb_bind_double(stmt: *mut rldb_stmt, index: c_int, value: f6
     }))
 }
 
+/// # Safety
+///
+/// - `stmt` must be NULL or a live statement.
+/// - `value` must be NULL, or NUL-terminated when `nbytes` is negative, or
+///   readable for `nbytes` bytes otherwise. The bytes are copied before the
+///   call returns.
 #[unsafe(no_mangle)]
-pub extern "C" fn rldb_bind_text(
+pub unsafe extern "C" fn rldb_bind_text(
     stmt: *mut rldb_stmt,
     index: c_int,
     value: *const c_char,
@@ -77,8 +92,13 @@ pub extern "C" fn rldb_bind_text(
     }))
 }
 
+/// # Safety
+///
+/// - `stmt` must be NULL or a live statement.
+/// - `value` must be NULL or readable for `nbytes` bytes, and `nbytes` must not
+///   be negative. The bytes are copied before the call returns.
 #[unsafe(no_mangle)]
-pub extern "C" fn rldb_bind_blob(
+pub unsafe extern "C" fn rldb_bind_blob(
     stmt: *mut rldb_stmt,
     index: c_int,
     value: *const c_void,
@@ -98,8 +118,11 @@ pub extern "C" fn rldb_bind_blob(
     }))
 }
 
+/// # Safety
+///
+/// `stmt` must be NULL or a live statement.
 #[unsafe(no_mangle)]
-pub extern "C" fn rldb_parameter_count(stmt: *mut rldb_stmt) -> c_int {
+pub unsafe extern "C" fn rldb_parameter_count(stmt: *mut rldb_stmt) -> c_int {
     if stmt.is_null() {
         return RLDB_MISUSE;
     }
@@ -108,8 +131,15 @@ pub extern "C" fn rldb_parameter_count(stmt: *mut rldb_stmt) -> c_int {
     unsafe { (*stmt).stmt.parameter_count() as c_int }
 }
 
+/// # Safety
+///
+/// - `stmt` must be NULL or a live statement.
+/// - `name` must be NULL or point to a NUL-terminated string.
 #[unsafe(no_mangle)]
-pub extern "C" fn rldb_bind_parameter_index(stmt: *mut rldb_stmt, name: *const c_char) -> c_int {
+pub unsafe extern "C" fn rldb_bind_parameter_index(
+    stmt: *mut rldb_stmt,
+    name: *const c_char,
+) -> c_int {
     flatten_code(api(|| {
         if stmt.is_null() || name.is_null() {
             return Err(RLDB_MISUSE);

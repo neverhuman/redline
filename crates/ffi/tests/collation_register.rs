@@ -18,7 +18,7 @@ fn open_db() -> (TempDir, *mut rldb) {
     let path = dir.path().join("col.redline");
     let c_path = CString::new(path.to_str().unwrap()).unwrap();
     let mut db: *mut rldb = ptr::null_mut();
-    let rc = rldb_open(c_path.as_ptr(), &mut db);
+    let rc = unsafe { rldb_open(c_path.as_ptr(), &mut db) };
     assert_eq!(rc, 0);
     (dir, db)
 }
@@ -68,7 +68,7 @@ unsafe extern "C" fn needed_cb(
 
 fn exec(db: *mut rldb, sql: &str) {
     let c_sql = CString::new(sql).unwrap();
-    let rc = rldb_exec(db, c_sql.as_ptr(), None, ptr::null_mut(), ptr::null_mut());
+    let rc = unsafe { rldb_exec(db, c_sql.as_ptr(), None, ptr::null_mut(), ptr::null_mut()) };
     assert_eq!(rc, 0, "exec({sql})");
 }
 
@@ -109,13 +109,13 @@ fn reverse_nocase_orders_descending() {
         0
     }
     let c_sql = CString::new("SELECT s FROM t ORDER BY s COLLATE REVERSE_NOCASE").unwrap();
-    let rc = rldb_exec(db, c_sql.as_ptr(), Some(cb), ctx, ptr::null_mut());
+    let rc = unsafe { rldb_exec(db, c_sql.as_ptr(), Some(cb), ctx, ptr::null_mut()) };
     assert_eq!(rc, 0);
     let _ = unsafe { std::sync::Arc::from_raw(ctx as *const std::sync::Mutex<Vec<String>>) };
     let got = collected.lock().unwrap().clone();
     // Reverse alphabetical (case-insensitive).
     assert_eq!(got, vec!["cherry", "Banana", "apple"]);
-    rldb_close(db);
+    unsafe { rldb_close(db) };
 }
 
 #[test]
@@ -130,7 +130,7 @@ fn collation_needed_fires_when_invoked() {
     __test_invoke_needed(db, "FOO");
     let _ = unsafe { std::sync::Arc::from_raw(user as *const std::sync::Mutex<String>) };
     assert_eq!(*captured.lock().unwrap(), "FOO");
-    rldb_close(db);
+    unsafe { rldb_close(db) };
 }
 
 #[test]

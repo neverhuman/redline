@@ -87,7 +87,7 @@ fn open_db() -> (tempfile::TempDir, *mut rldb) {
     let path =
         CString::new(dir.path().join("bounded.redline").to_str().expect("utf8")).expect("cstring");
     let mut db: *mut rldb = ptr::null_mut();
-    assert_eq!(rldb_open(path.as_ptr(), &mut db), RLDB_OK);
+    assert_eq!(unsafe { rldb_open(path.as_ptr(), &mut db) }, RLDB_OK);
     (dir, db)
 }
 
@@ -102,7 +102,7 @@ fn bounded_sql_ending_at_guard_page_prepares() {
     let sql = guard.place_at_edge(b"SELECT 1");
     let mut stmt = sentinel();
     let mut tail: *const c_char = ptr::null();
-    let rc = rldb_prepare_v2(db, sql, 8, &mut stmt, &mut tail);
+    let rc = unsafe { rldb_prepare_v2(db, sql, 8, &mut stmt, &mut tail) };
     assert_eq!(rc, RLDB_OK);
     assert!(!stmt.is_null() && stmt != sentinel());
     assert_eq!(
@@ -110,10 +110,10 @@ fn bounded_sql_ending_at_guard_page_prepares() {
         guard.edge() as *const u8,
         "tail ends at the bound"
     );
-    assert_eq!(rldb_step(stmt), RLDB_ROW);
-    assert_eq!(rldb_column_int64(stmt, 0), 1);
-    assert_eq!(rldb_finalize(stmt), RLDB_OK);
-    assert_eq!(rldb_close(db), RLDB_OK);
+    assert_eq!(unsafe { rldb_step(stmt) }, RLDB_ROW);
+    assert_eq!(unsafe { rldb_column_int64(stmt, 0) }, 1);
+    assert_eq!(unsafe { rldb_finalize(stmt) }, RLDB_OK);
+    assert_eq!(unsafe { rldb_close(db) }, RLDB_OK);
 }
 
 #[test]
@@ -123,11 +123,11 @@ fn zero_length_at_guard_page_reads_nothing() {
     let sql = guard.edge() as *const c_char;
     let mut stmt = sentinel();
     let mut tail: *const c_char = ptr::null();
-    let rc = rldb_prepare_v2(db, sql, 0, &mut stmt, &mut tail);
+    let rc = unsafe { rldb_prepare_v2(db, sql, 0, &mut stmt, &mut tail) };
     assert_eq!(rc, RLDB_OK);
     assert!(stmt.is_null(), "empty input prepares no statement");
     assert_eq!(tail, sql);
-    assert_eq!(rldb_close(db), RLDB_OK);
+    assert_eq!(unsafe { rldb_close(db) }, RLDB_OK);
 }
 
 #[test]
@@ -137,14 +137,14 @@ fn embedded_nul_stops_scan() {
     let sql = input.as_ptr() as *const c_char;
     let mut stmt = sentinel();
     let mut tail: *const c_char = ptr::null();
-    let rc = rldb_prepare_v2(db, sql, input.len() as c_int, &mut stmt, &mut tail);
+    let rc = unsafe { rldb_prepare_v2(db, sql, input.len() as c_int, &mut stmt, &mut tail) };
     assert_eq!(rc, RLDB_OK);
     assert!(!stmt.is_null() && stmt != sentinel());
     assert_eq!(tail, sql.wrapping_add(8), "tail stops at the NUL");
-    assert_eq!(rldb_step(stmt), RLDB_ROW);
-    assert_eq!(rldb_column_int64(stmt, 0), 1);
-    assert_eq!(rldb_finalize(stmt), RLDB_OK);
-    assert_eq!(rldb_close(db), RLDB_OK);
+    assert_eq!(unsafe { rldb_step(stmt) }, RLDB_ROW);
+    assert_eq!(unsafe { rldb_column_int64(stmt, 0) }, 1);
+    assert_eq!(unsafe { rldb_finalize(stmt) }, RLDB_OK);
+    assert_eq!(unsafe { rldb_close(db) }, RLDB_OK);
 }
 
 #[test]
@@ -152,27 +152,29 @@ fn failed_prepare_nulls_out_stmt() {
     let (_dir, db) = open_db();
     let bad = CString::new("SELEC").expect("cstring");
     let mut stmt = sentinel();
-    let rc = rldb_prepare_v2(db, bad.as_ptr(), -1, &mut stmt, ptr::null_mut());
+    let rc = unsafe { rldb_prepare_v2(db, bad.as_ptr(), -1, &mut stmt, ptr::null_mut()) };
     assert_eq!(rc, RLDB_ERROR);
     assert!(stmt.is_null(), "parse failure leaves *out_stmt NULL");
 
     let good = CString::new("SELECT 1").expect("cstring");
     let mut stmt = sentinel();
-    let rc = rldb_prepare_v2(
-        ptr::null_mut(),
-        good.as_ptr(),
-        -1,
-        &mut stmt,
-        ptr::null_mut(),
-    );
+    let rc = unsafe {
+        rldb_prepare_v2(
+            ptr::null_mut(),
+            good.as_ptr(),
+            -1,
+            &mut stmt,
+            ptr::null_mut(),
+        )
+    };
     assert_eq!(rc, RLDB_MISUSE);
     assert!(stmt.is_null(), "NULL db leaves *out_stmt NULL");
 
     let mut stmt = sentinel();
-    let rc = rldb_prepare_v2(db, ptr::null(), -1, &mut stmt, ptr::null_mut());
+    let rc = unsafe { rldb_prepare_v2(db, ptr::null(), -1, &mut stmt, ptr::null_mut()) };
     assert_eq!(rc, RLDB_MISUSE);
     assert!(stmt.is_null(), "NULL sql leaves *out_stmt NULL");
-    assert_eq!(rldb_close(db), RLDB_OK);
+    assert_eq!(unsafe { rldb_close(db) }, RLDB_OK);
 }
 
 #[test]
@@ -182,8 +184,8 @@ fn invalid_utf8_bounded_returns_mismatch() {
     let input: &[u8] = b"SELECT '\xff'";
     let sql = guard.place_at_edge(input);
     let mut stmt = sentinel();
-    let rc = rldb_prepare_v2(db, sql, input.len() as c_int, &mut stmt, ptr::null_mut());
+    let rc = unsafe { rldb_prepare_v2(db, sql, input.len() as c_int, &mut stmt, ptr::null_mut()) };
     assert_eq!(rc, RLDB_MISMATCH);
     assert!(stmt.is_null(), "encoding failure leaves *out_stmt NULL");
-    assert_eq!(rldb_close(db), RLDB_OK);
+    assert_eq!(unsafe { rldb_close(db) }, RLDB_OK);
 }

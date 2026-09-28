@@ -11,8 +11,16 @@ use crate::util::{
     api, exec_value, flatten_code, map_error, record_status_with_message, set_errmsg,
 };
 
+/// # Safety
+///
+/// - `db` must be NULL or a live database handle.
+/// - `sql` must be NULL or point to a NUL-terminated string.
+/// - `callback`, when set, must be sound to call with `ctx`; the row and
+///   column-name arrays it receives are valid only during that call.
+/// - `errmsg` must be NULL or valid for writing one pointer; a message written
+///   there is owned by the caller and freed with `rldb_free` or `sqlite3_free`.
 #[unsafe(no_mangle)]
-pub extern "C" fn rldb_exec(
+pub unsafe extern "C" fn rldb_exec(
     db: *mut rldb,
     sql: *const c_char,
     callback: Option<

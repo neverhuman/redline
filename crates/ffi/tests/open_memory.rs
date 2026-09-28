@@ -31,17 +31,19 @@ const SQLITE_OPEN_MEMORY: c_int = 0x80;
 
 fn exec(db: *mut sqlite3, sql: &str) -> c_int {
     let sql = CString::new(sql).expect("cstring");
-    sqlite3_exec(db, sql.as_ptr(), None, ptr::null_mut(), ptr::null_mut())
+    unsafe { sqlite3_exec(db, sql.as_ptr(), None, ptr::null_mut(), ptr::null_mut()) }
 }
 
 fn count(db: *mut sqlite3, sql: &str) -> Option<i64> {
     let sql = CString::new(sql).expect("cstring");
     let mut stmt: *mut sqlite3_stmt = ptr::null_mut();
-    if sqlite3_prepare_v2(db, sql.as_ptr(), -1, &mut stmt, ptr::null_mut()) != SQLITE_OK {
+    if unsafe { sqlite3_prepare_v2(db, sql.as_ptr(), -1, &mut stmt, ptr::null_mut()) } != SQLITE_OK
+    {
         return None;
     }
-    let value = (sqlite3_step(stmt) == SQLITE_ROW).then(|| sqlite3_column_int64(stmt, 0));
-    assert_eq!(sqlite3_finalize(stmt), SQLITE_OK);
+    let value = (unsafe { sqlite3_step(stmt) } == SQLITE_ROW)
+        .then(|| unsafe { sqlite3_column_int64(stmt, 0) });
+    assert_eq!(unsafe { sqlite3_finalize(stmt) }, SQLITE_OK);
     value
 }
 
@@ -80,8 +82,8 @@ fn sqlite3_open_memory_creates_no_file() {
     // Two :memory: opens are two independent, working databases.
     let mut a: *mut sqlite3 = ptr::null_mut();
     let mut b: *mut sqlite3 = ptr::null_mut();
-    assert_eq!(sqlite3_open(memory.as_ptr(), &mut a), SQLITE_OK);
-    assert_eq!(sqlite3_open(memory.as_ptr(), &mut b), SQLITE_OK);
+    assert_eq!(unsafe { sqlite3_open(memory.as_ptr(), &mut a) }, SQLITE_OK);
+    assert_eq!(unsafe { sqlite3_open(memory.as_ptr(), &mut b) }, SQLITE_OK);
     assert_eq!(
         exec(a, "CREATE TABLE t(x); INSERT INTO t VALUES (1), (2)"),
         SQLITE_OK
@@ -100,30 +102,34 @@ fn sqlite3_open_memory_creates_no_file() {
     // Backup into an in-memory destination is refused rather than copied
     // into the working directory through the empty filename.
     let main = c"main".as_ptr();
-    assert!(sqlite3_backup_init(b, main, a, main).is_null());
-    assert_eq!(sqlite3_close(a), SQLITE_OK);
-    assert_eq!(sqlite3_close(b), SQLITE_OK);
+    assert!(unsafe { sqlite3_backup_init(b, main, a, main) }.is_null());
+    assert_eq!(unsafe { sqlite3_close(a) }, SQLITE_OK);
+    assert_eq!(unsafe { sqlite3_close(b) }, SQLITE_OK);
 
     // The native entry point and open_v2 follow the same rule; an in-memory
     // database needs no SQLITE_OPEN_CREATE.
     let mut native = ptr::null_mut();
-    assert_eq!(rldb_open(memory.as_ptr(), &mut native), SQLITE_OK);
-    assert_eq!(rldb_close(native), SQLITE_OK);
+    assert_eq!(
+        unsafe { rldb_open(memory.as_ptr(), &mut native) },
+        SQLITE_OK
+    );
+    assert_eq!(unsafe { rldb_close(native) }, SQLITE_OK);
     let mut v2: *mut sqlite3 = ptr::null_mut();
-    let rc = sqlite3_open_v2(memory.as_ptr(), &mut v2, SQLITE_OPEN_READWRITE, ptr::null());
+    let rc =
+        unsafe { sqlite3_open_v2(memory.as_ptr(), &mut v2, SQLITE_OPEN_READWRITE, ptr::null()) };
     assert_eq!(rc, SQLITE_OK);
-    assert_eq!(sqlite3_close(v2), SQLITE_OK);
+    assert_eq!(unsafe { sqlite3_close(v2) }, SQLITE_OK);
 
     // SQLITE_OPEN_MEMORY opens in memory whatever the name.
     let named = c"named-memory-db";
     let mut flagged: *mut sqlite3 = ptr::null_mut();
     let flags = SQLITE_OPEN_READWRITE | SQLITE_OPEN_CREATE | SQLITE_OPEN_MEMORY;
     assert_eq!(
-        sqlite3_open_v2(named.as_ptr(), &mut flagged, flags, ptr::null()),
+        unsafe { sqlite3_open_v2(named.as_ptr(), &mut flagged, flags, ptr::null()) },
         SQLITE_OK
     );
     assert_eq!(exec(flagged, "CREATE TABLE t(x)"), SQLITE_OK);
-    assert_eq!(sqlite3_close(flagged), SQLITE_OK);
+    assert_eq!(unsafe { sqlite3_close(flagged) }, SQLITE_OK);
 
     // URI filenames are not interpreted. With SQLITE_OPEN_URI a "file:" name
     // is refused rather than opened as a literal path.
@@ -131,7 +137,7 @@ fn sqlite3_open_memory_creates_no_file() {
     let mut refused: *mut sqlite3 = ptr::null_mut();
     let flags = SQLITE_OPEN_READWRITE | SQLITE_OPEN_CREATE | SQLITE_OPEN_URI;
     assert_eq!(
-        sqlite3_open_v2(uri, &mut refused, flags, ptr::null()),
+        unsafe { sqlite3_open_v2(uri, &mut refused, flags, ptr::null()) },
         SQLITE_CANTOPEN
     );
     assert!(refused.is_null());

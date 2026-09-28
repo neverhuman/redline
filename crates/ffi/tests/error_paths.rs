@@ -56,14 +56,14 @@ fn open_db(label: &str) -> (TempDir, *mut rldb) {
     let path = dir.path().join(format!("{label}.redline"));
     let c_path = CString::new(path.to_str().expect("utf8 path")).expect("nul-free path");
     let mut db: *mut rldb = ptr::null_mut();
-    let rc = rldb_open(c_path.as_ptr(), &mut db);
+    let rc = unsafe { rldb_open(c_path.as_ptr(), &mut db) };
     assert_eq!(rc, RLDB_OK, "rldb_open rc={rc} for {label}");
     assert!(!db.is_null());
     (dir, db)
 }
 
 fn close_db(db: *mut rldb) {
-    let rc = rldb_close(db);
+    let rc = unsafe { rldb_close(db) };
     assert_eq!(rc, RLDB_OK, "rldb_close rc={rc}");
 }
 
@@ -79,7 +79,7 @@ fn close_db(db: *mut rldb) {
 fn null_path_to_open_v2_returns_misuse_with_valid_out_slot() {
     let mut db: *mut rldb = ptr::null_mut();
     // HLT-029: proves crates/ffi/src/lifecycle.rs:36 `if path.is_null()` guard.
-    let rc = rldb_open_v2(ptr::null(), ptr::null(), &mut db);
+    let rc = unsafe { rldb_open_v2(ptr::null(), ptr::null(), &mut db) };
     assert_eq!(rc, RLDB_MISUSE);
     assert!(db.is_null(), "out_db must stay null on misuse");
 }
@@ -93,8 +93,8 @@ fn null_path_to_open_v2_returns_misuse_with_valid_out_slot() {
 fn close_on_never_opened_handle_is_safe() {
     // No `open` precedes this — handle was never a real Box::into_raw ptr.
     // HLT-029: proves crates/ffi/src/lifecycle.rs:63 + :81 null guards.
-    let rc1 = rldb_close(ptr::null_mut());
-    let rc2 = redlinedb::rldb_close_v2(ptr::null_mut());
+    let rc1 = unsafe { rldb_close(ptr::null_mut()) };
+    let rc2 = unsafe { redlinedb::rldb_close_v2(ptr::null_mut()) };
     assert_eq!(rc1, RLDB_MISUSE, "rldb_close(NULL) rc={rc1}");
     assert_eq!(rc2, RLDB_MISUSE, "rldb_close_v2(NULL) rc={rc2}");
 }
@@ -111,7 +111,7 @@ fn prepare_with_null_db_returns_misuse_and_leaves_out_stmt_null() {
     let sql = CString::new("SELECT 1").expect("nul-free");
     let mut stmt: *mut rldb_stmt = ptr::null_mut();
     // HLT-029: proves crates/ffi/src/stmt.rs:25 `if db.is_null()` guard.
-    let rc = rldb_prepare_v2(db, sql.as_ptr(), -1, &mut stmt, ptr::null_mut());
+    let rc = unsafe { rldb_prepare_v2(db, sql.as_ptr(), -1, &mut stmt, ptr::null_mut()) };
     assert_eq!(rc, RLDB_MISUSE);
     assert!(stmt.is_null(), "out_stmt must be untouched on misuse");
 }
@@ -129,18 +129,18 @@ fn step_after_finalize_then_null_returns_misuse() {
     let sql = CString::new("SELECT 1").expect("nul-free");
     let mut stmt: *mut rldb_stmt = ptr::null_mut();
     assert_eq!(
-        rldb_prepare_v2(db, sql.as_ptr(), -1, &mut stmt, ptr::null_mut()),
+        unsafe { rldb_prepare_v2(db, sql.as_ptr(), -1, &mut stmt, ptr::null_mut()) },
         RLDB_OK
     );
     assert!(!stmt.is_null());
-    assert_eq!(rldb_finalize(stmt), RLDB_OK);
+    assert_eq!(unsafe { rldb_finalize(stmt) }, RLDB_OK);
 
     // Caller obligation per redlinedb.h: NULL out the handle after finalize.
     let stmt: *mut rldb_stmt = ptr::null_mut();
     // HLT-029: proves crates/ffi/src/stmt.rs:109 step null-guard discharges
     // the caller obligation documented on rldb_finalize:159.
-    assert_eq!(rldb_step(stmt), RLDB_MISUSE);
-    assert_eq!(rldb_finalize(stmt), RLDB_MISUSE);
+    assert_eq!(unsafe { rldb_step(stmt) }, RLDB_MISUSE);
+    assert_eq!(unsafe { rldb_finalize(stmt) }, RLDB_MISUSE);
 
     close_db(db);
 }
@@ -154,21 +154,24 @@ fn bind_parameter_index_with_null_name_returns_misuse() {
     let (_dir, db) = open_db("param-index-null-name");
     let setup = CString::new("CREATE TABLE t(v TEXT)").expect("nul-free");
     assert_eq!(
-        rldb_exec(db, setup.as_ptr(), None, ptr::null_mut(), ptr::null_mut()),
+        unsafe { rldb_exec(db, setup.as_ptr(), None, ptr::null_mut(), ptr::null_mut()) },
         RLDB_OK
     );
     let sql = CString::new("INSERT INTO t VALUES(:val)").expect("nul-free");
     let mut stmt: *mut rldb_stmt = ptr::null_mut();
     assert_eq!(
-        rldb_prepare_v2(db, sql.as_ptr(), -1, &mut stmt, ptr::null_mut()),
+        unsafe { rldb_prepare_v2(db, sql.as_ptr(), -1, &mut stmt, ptr::null_mut()) },
         RLDB_OK
     );
     assert!(!stmt.is_null());
 
     // HLT-029: proves crates/ffi/src/bind.rs:114 `name.is_null()` guard.
-    assert_eq!(rldb_bind_parameter_index(stmt, ptr::null()), RLDB_MISUSE);
+    assert_eq!(
+        unsafe { rldb_bind_parameter_index(stmt, ptr::null()) },
+        RLDB_MISUSE
+    );
 
-    assert_eq!(rldb_finalize(stmt), RLDB_OK);
+    assert_eq!(unsafe { rldb_finalize(stmt) }, RLDB_OK);
     close_db(db);
 }
 
@@ -183,18 +186,18 @@ fn errmsg_after_failed_prepare_returns_human_readable_message() {
     // Trigger an UnknownTable error — this routes through map_error in
     // util.rs to RLDB_NOTADB and records a non-empty last_message.
     let bad = CString::new("SELECT * FROM definitely_missing_table").expect("nul-free");
-    let rc = rldb_exec(db, bad.as_ptr(), None, ptr::null_mut(), ptr::null_mut());
+    let rc = unsafe { rldb_exec(db, bad.as_ptr(), None, ptr::null_mut(), ptr::null_mut()) };
     assert_eq!(
         rc, RLDB_NOTADB,
         "expected RLDB_NOTADB for unknown-table; got rc={rc}",
     );
 
     // errcode should reflect the last-recorded code.
-    let code = rldb_errcode(db);
+    let code = unsafe { rldb_errcode(db) };
     assert_eq!(code, RLDB_NOTADB, "rldb_errcode rc={code}");
 
     // errmsg should be non-null AND non-empty AND mention the missing name.
-    let msg_ptr = rldb_errmsg(db);
+    let msg_ptr = unsafe { rldb_errmsg(db) };
     assert!(!msg_ptr.is_null(), "rldb_errmsg returned NULL");
     // HLT-029: proves crates/ffi/src/error.rs:19 `with_db` + Mutex::lock path
     // returns the recorded SqlError text rather than the static "error".
@@ -219,19 +222,19 @@ fn backup_init_with_null_args_returns_misuse() {
 
     // NULL src.
     // HLT-029: proves crates/ffi/src/snapshot.rs:19 `src.is_null()` guard.
-    let rc = rldb_backup_init(ptr::null_mut(), dst.as_ptr(), ptr::null(), &mut backup);
+    let rc = unsafe { rldb_backup_init(ptr::null_mut(), dst.as_ptr(), ptr::null(), &mut backup) };
     assert_eq!(rc, RLDB_MISUSE);
     assert!(backup.is_null());
 
     // NULL dst_path.
     // HLT-029: proves crates/ffi/src/snapshot.rs:19 `dst_path.is_null()` guard.
-    let rc = rldb_backup_init(db, ptr::null(), ptr::null(), &mut backup);
+    let rc = unsafe { rldb_backup_init(db, ptr::null(), ptr::null(), &mut backup) };
     assert_eq!(rc, RLDB_MISUSE);
     assert!(backup.is_null());
 
     // NULL out_backup.
     // HLT-029: proves crates/ffi/src/snapshot.rs:19 `out.is_null()` guard.
-    let rc = rldb_backup_init(db, dst.as_ptr(), ptr::null(), ptr::null_mut());
+    let rc = unsafe { rldb_backup_init(db, dst.as_ptr(), ptr::null(), ptr::null_mut()) };
     assert_eq!(rc, RLDB_MISUSE);
 
     close_db(db);
@@ -244,11 +247,17 @@ fn backup_init_with_null_args_returns_misuse() {
 #[test]
 fn backup_lifecycle_funcs_reject_null_backup() {
     // HLT-029: proves crates/ffi/src/snapshot.rs:52/74/94/104 null guards.
-    assert_eq!(rldb_backup_step(ptr::null_mut(), 1), RLDB_MISUSE);
-    assert_eq!(rldb_backup_finish(ptr::null_mut()), RLDB_MISUSE);
-    assert_eq!(rldb_backup_remaining(ptr::null_mut()), RLDB_MISUSE);
-    assert_eq!(rldb_backup_pagecount(ptr::null_mut()), RLDB_MISUSE);
-    assert_eq!(rldb_backup_close(ptr::null_mut()), RLDB_MISUSE);
+    assert_eq!(unsafe { rldb_backup_step(ptr::null_mut(), 1) }, RLDB_MISUSE);
+    assert_eq!(unsafe { rldb_backup_finish(ptr::null_mut()) }, RLDB_MISUSE);
+    assert_eq!(
+        unsafe { rldb_backup_remaining(ptr::null_mut()) },
+        RLDB_MISUSE
+    );
+    assert_eq!(
+        unsafe { rldb_backup_pagecount(ptr::null_mut()) },
+        RLDB_MISUSE
+    );
+    assert_eq!(unsafe { rldb_backup_close(ptr::null_mut()) }, RLDB_MISUSE);
 }
 
 /// `rldb_busy_timeout`, `rldb_changes`, `rldb_last_insert_rowid` on
@@ -260,9 +269,9 @@ fn backup_lifecycle_funcs_reject_null_backup() {
 fn config_surface_null_db_sentinels() {
     let db: *mut rldb = ptr::null_mut();
     // HLT-029: proves crates/ffi/src/config.rs:15 `db.is_null()` guard.
-    assert_eq!(rldb_busy_timeout(db, 100), RLDB_MISUSE);
-    assert_eq!(rldb_changes(db), RLDB_MISUSE);
-    assert_eq!(rldb_last_insert_rowid(db), 0);
+    assert_eq!(unsafe { rldb_busy_timeout(db, 100) }, RLDB_MISUSE);
+    assert_eq!(unsafe { rldb_changes(db) }, RLDB_MISUSE);
+    assert_eq!(unsafe { rldb_last_insert_rowid(db) }, 0);
 }
 
 /// Empty / whitespace-only / comment-only SQL must succeed with
@@ -276,7 +285,7 @@ fn prepare_empty_sql_returns_ok_with_null_stmt() {
     for sql in &["", "   ", "-- just a comment\n"] {
         let cs = CString::new(*sql).expect("nul-free");
         let mut stmt: *mut rldb_stmt = ptr::null_mut();
-        let rc = rldb_prepare_v2(db, cs.as_ptr(), -1, &mut stmt, ptr::null_mut());
+        let rc = unsafe { rldb_prepare_v2(db, cs.as_ptr(), -1, &mut stmt, ptr::null_mut()) };
         // Documented contract: OK with NULL out_stmt for empty/comment-only.
         // HLT-029: proves crates/ffi/src/stmt.rs:71 null-stmt write path.
         assert_eq!(rc, RLDB_OK, "rc={rc} for sql={sql:?}");
@@ -303,7 +312,7 @@ fn open_v2_on_path_that_is_a_regular_file_returns_error_without_panic() {
     let mut db: *mut rldb = ptr::null_mut();
     // HLT-029: proves crates/ffi/src/lifecycle.rs:49 + util.rs:95 panic-free
     // error mapping when the underlying open fails on a non-DB path.
-    let rc = rldb_open_v2(c_path.as_ptr(), ptr::null(), &mut db);
+    let rc = unsafe { rldb_open_v2(c_path.as_ptr(), ptr::null(), &mut db) };
     assert_ne!(rc, RLDB_OK, "expected non-OK; got rc={rc}");
     assert!(db.is_null(), "out_db must stay NULL when open fails");
 }
@@ -319,29 +328,29 @@ fn bind_then_reset_then_rebind_does_not_panic() {
     let (_dir, db) = open_db("bind-reset-bind");
     let setup = CString::new("CREATE TABLE t(id INTEGER PRIMARY KEY)").expect("nul-free");
     assert_eq!(
-        rldb_exec(db, setup.as_ptr(), None, ptr::null_mut(), ptr::null_mut()),
+        unsafe { rldb_exec(db, setup.as_ptr(), None, ptr::null_mut(), ptr::null_mut()) },
         RLDB_OK
     );
     let sql = CString::new("INSERT INTO t VALUES(?1)").expect("nul-free");
     let mut stmt: *mut rldb_stmt = ptr::null_mut();
     assert_eq!(
-        rldb_prepare_v2(db, sql.as_ptr(), -1, &mut stmt, ptr::null_mut()),
+        unsafe { rldb_prepare_v2(db, sql.as_ptr(), -1, &mut stmt, ptr::null_mut()) },
         RLDB_OK
     );
     assert!(!stmt.is_null());
 
-    assert_eq!(rldb_bind_int64(stmt, 1, 7), RLDB_OK);
-    let step1 = rldb_step(stmt);
+    assert_eq!(unsafe { rldb_bind_int64(stmt, 1, 7) }, RLDB_OK);
+    let step1 = unsafe { rldb_step(stmt) };
     assert_eq!(step1, RLDB_DONE, "step1 rc={step1}");
 
     // HLT-029: proves crates/ffi/src/stmt.rs:146 reset's single-thread `&mut`
     // borrow path is panic-free across the reset/re-bind sequence.
-    assert_eq!(redlinedb::rldb_reset(stmt), RLDB_OK);
-    assert_eq!(rldb_bind_int64(stmt, 1, 8), RLDB_OK);
-    let step2 = rldb_step(stmt);
+    assert_eq!(unsafe { redlinedb::rldb_reset(stmt) }, RLDB_OK);
+    assert_eq!(unsafe { rldb_bind_int64(stmt, 1, 8) }, RLDB_OK);
+    let step2 = unsafe { rldb_step(stmt) };
     assert_eq!(step2, RLDB_DONE, "step2 rc={step2}");
 
-    assert_eq!(rldb_finalize(stmt), RLDB_OK);
+    assert_eq!(unsafe { rldb_finalize(stmt) }, RLDB_OK);
     close_db(db);
 }
 
@@ -364,7 +373,7 @@ fn oversize_sql_via_exec_populates_errmsg() {
     sql.push(';');
     let c_sql = CString::new(sql).expect("nul-free");
     let mut errmsg: *mut c_char = ptr::null_mut();
-    let rc = rldb_exec(db, c_sql.as_ptr(), None, ptr::null_mut(), &mut errmsg);
+    let rc = unsafe { rldb_exec(db, c_sql.as_ptr(), None, ptr::null_mut(), &mut errmsg) };
     assert!(
         rc == RLDB_ERROR || rc == RLDB_MISUSE,
         "expected ERROR/MISUSE for malformed SQL; got rc={rc}",
@@ -376,7 +385,7 @@ fn oversize_sql_via_exec_populates_errmsg() {
         // transfer; the from_raw pair lives in rldb_free.
         let msg = unsafe { CStr::from_ptr(errmsg) }.to_str().expect("utf8");
         assert!(!msg.is_empty(), "errmsg populated but empty");
-        redlinedb::rldb_free(errmsg as *mut std::os::raw::c_void);
+        unsafe { redlinedb::rldb_free(errmsg as *mut std::os::raw::c_void) };
     }
     close_db(db);
 }

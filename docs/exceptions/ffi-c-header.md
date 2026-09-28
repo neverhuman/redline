@@ -122,6 +122,10 @@ incompatible major cannot be loaded in its place.
   `RLDB_ABI_MAJOR` (and so the soname) in the same change, with a migration
   note.
 - The header must compile cleanly with `-Wall -Wextra -Werror` in C and C++.
+- Every Rust export that takes a raw pointer is `pub unsafe extern "C" fn`
+  with a `# Safety` section; `crates/ffi/tests/unsafe_exports.rs` enforces
+  it. The caller contract and the fail-stop (`panic = "abort"`) policy are in
+  `docs/compatibility/abi-safety.md`.
 
 ## Owner
 

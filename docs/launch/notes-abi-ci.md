@@ -49,6 +49,18 @@ against the v5 headers. There is no v4 compatibility alias.
 - A column whose engine-generated name contains a NUL no longer fails
   `sqlite3_prepare_v2`; the name is truncated at the NUL.
 
+## Safety contract and panics
+
+- The caller contract for handles, pointers and input lengths, and the panic
+  policy, are written down in `docs/compatibility/abi-safety.md`. Release
+  builds of the C library use `panic = "abort"`: an internal panic aborts the
+  host process instead of returning `SQLITE_INTERNAL`. Treat the library as
+  fail-stop.
+- Rust only (no C ABI change): the `redlinedb-ffi` exports that take raw
+  pointers are now `unsafe fn`, each with a `# Safety` section, and the unused
+  hidden helper `sqlite3_api::collation::__test_consume_buffer` is gone. The
+  crate's `rlib` exists for its own tests and is not a supported Rust API.
+
 ## Verification
 
 - `bash scripts/compatibility/phase2-abi-probe.sh`: a C consumer compiled with

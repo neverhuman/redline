@@ -19,7 +19,7 @@ fn open_db() -> (TempDir, *mut rldb) {
     let path = dir.path().join("udf.redline");
     let c_path = CString::new(path.to_str().unwrap()).unwrap();
     let mut db: *mut rldb = ptr::null_mut();
-    let rc = rldb_open(c_path.as_ptr(), &mut db);
+    let rc = unsafe { rldb_open(c_path.as_ptr(), &mut db) };
     assert_eq!(rc, 0);
     (dir, db)
 }
@@ -27,7 +27,7 @@ fn open_db() -> (TempDir, *mut rldb) {
 fn exec(db: *mut rldb, sql: &str) {
     let c_sql = CString::new(sql).unwrap();
     let mut err: *mut std::os::raw::c_char = ptr::null_mut();
-    let rc = rldb_exec(db, c_sql.as_ptr(), None, ptr::null_mut(), &mut err);
+    let rc = unsafe { rldb_exec(db, c_sql.as_ptr(), None, ptr::null_mut(), &mut err) };
     assert_eq!(rc, 0, "exec({sql}) failed");
 }
 
@@ -81,11 +81,11 @@ fn times_two_scalar_udf_invoked_from_select() {
         0
     }
     let c_sql = CString::new("SELECT times_two(21)").unwrap();
-    let rc = rldb_exec(db, c_sql.as_ptr(), Some(cb), saw_ptr, ptr::null_mut());
+    let rc = unsafe { rldb_exec(db, c_sql.as_ptr(), Some(cb), saw_ptr, ptr::null_mut()) };
     assert_eq!(rc, 0);
     let _ = unsafe { std::sync::Arc::from_raw(saw_ptr as *const std::sync::Mutex<Option<i64>>) };
     assert_eq!(*saw.lock().unwrap(), Some(42));
-    rldb_close(db);
+    unsafe { rldb_close(db) };
 }
 
 #[test]
@@ -107,7 +107,7 @@ fn arity_any_matches_when_exact_arity_missing() {
     };
     assert_eq!(rc, 0);
     exec(db, "SELECT echo_label(1, 2, 3)");
-    rldb_close(db);
+    unsafe { rldb_close(db) };
 }
 
 #[test]
@@ -196,12 +196,12 @@ fn aggregate_udf_sum_squares_invoked_per_group() {
         0
     }
     let c_sql = CString::new("SELECT k, sum_squares(v) FROM t GROUP BY k ORDER BY k").unwrap();
-    let rc = rldb_exec(db, c_sql.as_ptr(), Some(cb), saw_ptr, ptr::null_mut());
+    let rc = unsafe { rldb_exec(db, c_sql.as_ptr(), Some(cb), saw_ptr, ptr::null_mut()) };
     assert_eq!(rc, 0);
     let _ =
         unsafe { std::sync::Arc::from_raw(saw_ptr as *const std::sync::Mutex<Vec<(i64, i64)>>) };
     let saw = saw.lock().unwrap();
     // Group k=1: 2^2 + 3^2 = 13. Group k=2: 4^2 + 5^2 = 41.
     assert_eq!(*saw, vec![(1, 13), (2, 41)]);
-    rldb_close(db);
+    unsafe { rldb_close(db) };
 }

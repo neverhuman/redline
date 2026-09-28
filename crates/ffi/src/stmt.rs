@@ -12,8 +12,17 @@ use crate::util::{
     api, flatten_code, map_error, reclaim_box, record_status_with_message, sql_result,
 };
 
+/// # Safety
+///
+/// - `db` must be NULL or a live database handle.
+/// - `sql` must be NULL or readable up to its first NUL byte when `nbytes` is
+///   negative; when `nbytes >= 0` only the bytes before the first NUL or the
+///   bound, whichever comes first, need to be readable (`nbytes == 0` reads
+///   nothing).
+/// - `out_stmt` must be NULL or valid for writing one pointer.
+/// - `tail` must be NULL or valid for writing one pointer.
 #[unsafe(no_mangle)]
-pub extern "C" fn rldb_prepare_v2(
+pub unsafe extern "C" fn rldb_prepare_v2(
     db: *mut rldb,
     sql: *const c_char,
     nbytes: c_int,
@@ -97,8 +106,11 @@ pub extern "C" fn rldb_prepare_v2(
     }))
 }
 
+/// # Safety
+///
+/// `stmt` must be NULL or a live statement.
 #[unsafe(no_mangle)]
-pub extern "C" fn rldb_step(stmt: *mut rldb_stmt) -> c_int {
+pub unsafe extern "C" fn rldb_step(stmt: *mut rldb_stmt) -> c_int {
     flatten_code(api(|| {
         if stmt.is_null() {
             return Err(RLDB_MISUSE);
@@ -134,8 +146,11 @@ pub extern "C" fn rldb_step(stmt: *mut rldb_stmt) -> c_int {
     }))
 }
 
+/// # Safety
+///
+/// `stmt` must be NULL or a live statement.
 #[unsafe(no_mangle)]
-pub extern "C" fn rldb_reset(stmt: *mut rldb_stmt) -> c_int {
+pub unsafe extern "C" fn rldb_reset(stmt: *mut rldb_stmt) -> c_int {
     flatten_code(api(|| {
         if stmt.is_null() {
             return Err(RLDB_MISUSE);
@@ -150,20 +165,24 @@ pub extern "C" fn rldb_reset(stmt: *mut rldb_stmt) -> c_int {
     }))
 }
 
+/// # Safety
+///
+/// `stmt` must be NULL or a live statement. After a successful finalize it is
+/// dangling and must not be used again.
 #[unsafe(no_mangle)]
-pub extern "C" fn rldb_finalize(stmt: *mut rldb_stmt) -> c_int {
+pub unsafe extern "C" fn rldb_finalize(stmt: *mut rldb_stmt) -> c_int {
     flatten_code(api(|| {
         if stmt.is_null() {
             return Err(RLDB_MISUSE);
         }
         // SAFETY: matching constructor/destructor pair — `stmt` originates from
-        // Box::into_raw(boxed) at rldb_prepare_v2 (crates/ffi/src/stmt.rs:94);
+        // Box::into_raw(boxed) at rldb_prepare_v2 (crates/ffi/src/stmt.rs:103);
         // ownership invariant: the C caller may not free this pointer directly
         // per redlinedb.h:99; exclusive access because rldb_stmt is documented
         // as single-thread-owned in redlinedb.h:99; double-finalize guarded by
         // the null check above (caller must NULL stmt after rldb_finalize per
         // redlinedb.h:99); ledgered at .jankurai/unsafe-ledger.toml
-        // (file=crates/ffi/src/stmt.rs, line=169, detector=rust.unsafe.raw-parts);
+        // (file=crates/ffi/src/stmt.rs, line=188, detector=rust.unsafe.raw-parts);
         // proof: crates/ffi/tests/safety_invariants.rs::oversize_sql_is_rejected_gracefully
         // and ::parameter_index_out_of_range_returns_range.
         let boxed = unsafe { reclaim_box(stmt) }; // SAFETY: reclaim the leaked Box; matching destructor for the Box::into_raw at prepare (see invariant above).
@@ -179,8 +198,11 @@ pub extern "C" fn rldb_finalize(stmt: *mut rldb_stmt) -> c_int {
     }))
 }
 
+/// # Safety
+///
+/// `stmt` must be NULL or a live statement.
 #[unsafe(no_mangle)]
-pub extern "C" fn rldb_clear_bindings(stmt: *mut rldb_stmt) -> c_int {
+pub unsafe extern "C" fn rldb_clear_bindings(stmt: *mut rldb_stmt) -> c_int {
     flatten_code(api(|| {
         if stmt.is_null() {
             return Err(RLDB_MISUSE);
