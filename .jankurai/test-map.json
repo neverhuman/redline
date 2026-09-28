@@ -139,16 +139,6 @@
       "command": "just score",
       "purpose": "ensure paper/figure assets stay routed and indexed"
     },
-    "assets/sqlite-parity-latency-gap.svg": {
-      "command": "rtk just sqlite-parity-report-check",
-      "purpose": "verify the generated SQLite parity latency-gap chart stays in sync with the committed official evidence artifact",
-      "proof_lane": "sqlite-parity-report-check"
-    },
-    "assets/sqlite-parity-performance-histogram.svg": {
-      "command": "rtk just sqlite-parity-report-check",
-      "purpose": "verify the generated SQLite parity performance histogram stays in sync with the committed official evidence artifact",
-      "proof_lane": "sqlite-parity-report-check"
-    },
     "CHANGELOG.md": {
       "command": "just score",
       "purpose": "verify release log discipline (docs/release.md)"
@@ -500,11 +490,6 @@
       "command": "rtk just redline-testing-official",
       "purpose": "prove the Rust sqlite_parity runner stays compatible with the external redline-testing gate",
       "proof_lane": "redline-testing-official"
-    },
-    "assets/sqlite-median-test-performance.svg": {
-      "command": "rtk just sqlite-parity-report-check",
-      "purpose": "verify the generated compact median test performance chart stays in sync with the committed official evidence artifact",
-      "proof_lane": "sqlite-parity-report-check"
     },
     "crates/bench/src/bin/sqlite_parity.rs": {
       "command": "rtk just redline-testing-official",

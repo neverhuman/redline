@@ -18,6 +18,11 @@ pub struct ReportOptions {
     pub plot: Option<PathBuf>,
     pub performance_histogram_plot: Option<PathBuf>,
     pub median_test_performance_plot: Option<PathBuf>,
+    /// Put the latency summary, latency plots and the ranked latency table
+    /// in the README block. The official lane runs every case at once on a
+    /// shared host, so its latencies measure contention; the README then
+    /// shows correctness only and points at the release benchmark.
+    pub readme_latency: bool,
     pub jankurai_score: Option<PathBuf>,
     pub updated_date: String,
     pub expected_repetitions: Option<usize>,

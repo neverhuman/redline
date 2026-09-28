@@ -24,24 +24,6 @@ source = "SQLite parity report raw data, ranked CSV, summary, manifest, and offi
 
 [[zone]]
 command = "just sqlite-parity-report-update"
-path = "assets/sqlite-parity-latency-gap.svg"
-read_only = false
-source = "SQLite SQL/CLI corpus per-case latency ratio chart generated from benchmark-results/sqlite-parity/latest/raw.jsonl"
-
-[[zone]]
-command = "just sqlite-parity-report-update"
-path = "assets/sqlite-parity-performance-histogram.svg"
-read_only = false
-source = "SQLite SQL/CLI corpus latency ratio-band histogram generated from benchmark-results/sqlite-parity/latest/raw.jsonl"
-
-[[zone]]
-command = "just sqlite-parity-report-update"
-path = "assets/sqlite-median-test-performance.svg"
-read_only = false
-source = "SQLite SQL/CLI corpus median per-case latency ratio chart generated from benchmark-results/sqlite-parity/latest/raw.jsonl"
-
-[[zone]]
-command = "just sqlite-parity-report-update"
 path = "benchmark-results/sqlite-parity/latest/jankurai-comparison.json"
 read_only = false
 source = "Compact Jankurai comparison generated from .jankurai/repo-score.json and target/sqlite-jankurai/repo-score.json"

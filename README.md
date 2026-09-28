@@ -391,50 +391,10 @@ Current acceptance evidence is attached to the GitHub CI run.
 
 - `10546` MEDIAN_REQUIRES_CAPABILITY: Written to show that a default build has no `median()`. The pinned sqlite3 is built with `SQLITE_ENABLE_PERCENTILE`, so the case checks that `median()` of 1..5 is 3.0; the missing-function error is not tested.
 
-**SQLite SQL/CLI corpus latency:** median per-case latency ratio **5.72x** (RedlineDB/SQLite, lower is better), p95 **56.85x**, worst **299.21x**, faster **43/2445**; **89** cases have a SQLite median under 3 ms (`below_resolution`).
+**Performance:** this lane runs every case at once on a shared host to check correctness, so its timings are not a benchmark. Latency is measured separately on a quiet host; see [Versions over time](#versions-over-time).
 
-**Measurement boundary:** per-case CLI process wall time (`cli_case_wall_time`: process spawn, case execution and output collection; fixture writes untimed); lane=`run --suite all --workers auto --repetitions 3 --warmup 1 --tmp-root /dev/shm/redline-testing`, workers=128; not a tuned benchmark.
+**Run metadata:** RedlineDB target version **redlinedb v4.1.0 (SQLite 3.45.1 compatibility)**, SQLite reference version **3.53.1 2026-05-05 10:34:17 c88b22011a54b4f6fbd149e9f8e4de77658ce58143a1af0e3785e4e6475127e9 (64-bit)**, redline-testing runner version **redline-testing 1.0.1**.
 
-**Benchmark metadata:** RedlineDB target version **redlinedb v4.1.0 (SQLite 3.45.1 compatibility)**, SQLite reference version **3.53.1 2026-05-05 10:34:17 c88b22011a54b4f6fbd149e9f8e4de77658ce58143a1af0e3785e4e6475127e9 (64-bit)**, redline-testing runner version **redline-testing 1.0.1**.
-
-![SQLite SQL/CLI corpus latency ratio plot](assets/sqlite-parity-latency-gap.svg)
-
-![SQLite SQL/CLI corpus performance distribution](assets/sqlite-parity-performance-histogram.svg)
-
-![SQLite SQL/CLI corpus median ratio](assets/sqlite-median-test-performance.svg)
-
-<details id="sqlite-parity-ranked-table">
-<summary>Slowest 25 cases by latency ratio (every case is in ranked.csv)</summary>
-
-| Rank | Case | Priority | Profile | Category | SQLite median ns | RedlineDB median ns | Ratio | Gap |
-| ---: | --- | --- | --- | --- | ---: | ---: | ---: | ---: |
-| 1 | PARTIAL_INDEX | P0 | memory | SQL_INDEX | 3047144 | 911739772 | 299.21x | -29821.13% |
-| 2 | DOT_PRINT | P0 | memory | CLI_DOT_COMMAND | 2361768 | 685558227 | 290.27x | -28927.33% |
-| 3 | CHECK_CONSTRAINT_FAILURE | P0 | memory | SQL_CONSTRAINTS_NEGATIVE | 3456378 | 908472310 | 262.84x | -26183.94% |
-| 4 | TEMP_TABLE_TEMP_SCHEMA | P0 | memory | SQL_TEMP | 3785040 | 992305133 | 262.17x | -26116.50% |
-| 5 | SUBQUERIES_EXISTS_IN | P0 | memory | SQL_SELECT | 3742951 | 917873034 | 245.23x | -24422.71% |
-| 6 | SCHEMA_SQLITE_SCHEMA | P0 | memory | SQL_SCHEMA | 4113482 | 999957150 | 243.09x | -24209.26% |
-| 7 | INDEXED_BY | P0 | memory | SQL_INDEX | 2879487 | 685922665 | 238.21x | -23721.00% |
-| 8 | WITH_MATERIALIZED_HINTS | P0 | memory | SQL_CTE | 2886891 | 687605831 | 238.18x | -23718.21% |
-| 9 | GROUP_BY_HAVING | P0 | memory | SQL_AGGREGATE | 2376285 | 550938004 | 231.85x | -23084.85% |
-| 10 | TABLE_CONSTRAINTS_SUCCESS | P0 | memory | SQL_CONSTRAINTS | 2682785 | 607672453 | 226.51x | -22550.81% |
-| 11 | DELETE_BASIC | P0 | memory | SQL_DELETE | 3336762 | 722818715 | 216.62x | -21562.28% |
-| 12 | DOT_DUMP | P0 | memory | CLI_DOT_COMMAND | 2839993 | 597795027 | 210.49x | -20949.17% |
-| 13 | PRAGMA_USER_VERSION | P0 | memory | SQL_PRAGMA | 2757767 | 579729371 | 210.22x | -20921.70% |
-| 14 | INSTEAD_OF_TRIGGER_ON_VIEW | P0 | memory | SQL_TRIGGER | 2916608 | 612825241 | 210.12x | -20911.57% |
-| 15 | DOT_SCHEMA_TABLES_INDEXES | P0 | memory | CLI_DOT_COMMAND | 3189524 | 660208320 | 206.99x | -20599.27% |
-| 16 | SELECT_CORE_EXPRESSIONS | P0 | memory | SQL_SELECT | 2748159 | 567483744 | 206.50x | -20549.60% |
-| 17 | WINDOW_NAMED_WINDOW | P0 | memory | SQL_WINDOW | 6223634 | 1265723631 | 203.37x | -20237.37% |
-| 18 | CLI_REGEXP_OPTIONAL | P2 | memory | CLI_EXTENSION_OPTIONAL | 2823471 | 562118686 | 199.09x | -19808.78% |
-| 19 | CREATE_VIRTUAL_TABLE_RTREE_OPTIONAL | P2 | memory | SQL_VIRTUAL_TABLE_OPTIONAL | 3203330 | 632614508 | 197.49x | -19648.65% |
-| 20 | DELETE_RETURNING | P0 | memory | SQL_DELETE | 2700067 | 528754227 | 195.83x | -19483.00% |
-| 21 | LITERALS_AND_TYPEOF | P0 | memory | SQL_EXPRESSIONS | 3491035 | 679937354 | 194.77x | -19376.67% |
-| 22 | CORE_FORMAT_QUOTE_HEX | P0 | memory | SQL_FUNCTIONS | 3306686 | 634109968 | 191.77x | -19076.60% |
-| 23 | UPDATE_RETURNING | P0 | memory | SQL_UPDATE | 2876762 | 551274229 | 191.63x | -19063.01% |
-| 24 | DOT_EXPLAIN | P0 | memory | CLI_DOT_COMMAND | 3259356 | 622250031 | 190.91x | -18991.20% |
-| 25 | DOT_TIMER | P3 | memory | CLI_DOT_COMMAND_DIAGNOSTIC | 3434697 | 650431214 | 189.37x | -18837.08% |
-
-</details>
 <!-- sqlite-parity-report:end -->
 
 ## RQL Phase 1

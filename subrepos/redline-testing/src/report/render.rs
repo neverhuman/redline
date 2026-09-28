@@ -98,6 +98,10 @@ pub(crate) fn ranked_csv(ranked: &[RankedCase]) -> String {
     out
 }
 
+/// Stands in for the latency lines when the README block shows correctness
+/// only (`ReportOptions::readme_latency` is false).
+const README_LATENCY_POINTER: &str = "**Performance:** this lane runs every case at once on a shared host to check correctness, so its timings are not a benchmark. Latency is measured separately on a quiet host; see [Versions over time](#versions-over-time).\n\n";
+
 pub(crate) fn render_report_block(
     summary: &SummaryJson,
     ranked: &[RankedCase],
@@ -172,38 +176,48 @@ pub(crate) fn render_report_block(
             block.push_str(&boundary_line);
         }
         _ => {
-            block.push_str(&format!("**{suite_label} latency:** {latency_line}.\n\n"));
-            block.push_str(&boundary_line);
+            if options.readme_latency {
+                block.push_str(&format!("**{suite_label} latency:** {latency_line}.\n\n"));
+                block.push_str(&boundary_line);
+            } else {
+                block.push_str(README_LATENCY_POINTER);
+            }
         }
     }
     if let Some(evidence_versions) = evidence_versions {
         block.push_str(&format!(
-            "**Benchmark metadata:** RedlineDB target version **{}**, SQLite reference version **{}**, redline-testing runner version **{}**.\n\n",
+            "**Run metadata:** RedlineDB target version **{}**, SQLite reference version **{}**, redline-testing runner version **{}**.\n\n",
             evidence_versions.target_version,
             evidence_versions.sqlite_version,
             evidence_versions.runner_version
         ));
     }
-    if let Some(plot) = &options.plot {
+    if let (true, Some(plot)) = (options.readme_latency, &options.plot) {
         block.push_str(&format!(
             "![{} latency ratio plot]({})\n\n",
             suite_label,
             plot.display()
         ));
     }
-    if let Some(plot) = &options.performance_histogram_plot {
+    if let (true, Some(plot)) = (options.readme_latency, &options.performance_histogram_plot) {
         block.push_str(&format!(
             "![{} performance distribution]({})\n\n",
             suite_label,
             plot.display()
         ));
     }
-    if let Some(plot) = &options.median_test_performance_plot {
+    if let (true, Some(plot)) = (
+        options.readme_latency,
+        &options.median_test_performance_plot,
+    ) {
         block.push_str(&format!(
             "![{} median ratio]({})\n\n",
             suite_label,
             plot.display()
         ));
+    }
+    if !options.readme_latency {
+        return block;
     }
     let table_id = format!("{}-ranked-table", options.suite.replace('_', "-"));
     let table_summary = if options.suite == "beyond_sqlite" {

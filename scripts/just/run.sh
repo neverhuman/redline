@@ -97,9 +97,7 @@ sqlite_parity_report_args() {
     "${sqlite_parity_full_select[@]}"
     --out-dir benchmark-results/sqlite-parity/latest
     --readme README.md
-    --plot assets/sqlite-parity-latency-gap.svg
-    --performance-histogram-plot assets/sqlite-parity-performance-histogram.svg
-    --median-test-performance-plot assets/sqlite-median-test-performance.svg
+    --no-readme-latency
     --jankurai-score .jankurai/repo-score.json
     --updated-date "$updated_date"
     --expected-repetitions "$sqlite_parity_repetitions"
@@ -469,6 +467,15 @@ case "$lane" in
     ;;
   sqlite-parity-report-check)
     run_sqlite_parity_report_check
+    ;;
+  sqlite-parity-report-render)
+    # Re-render the committed report, README blocks and artifacts from the
+    # committed evidence without a new corpus run (a renderer change only).
+    sqlite_parity_report_args "$(cat benchmark-results/sqlite-parity/latest/UPDATED_DATE)"
+    load_redline_testing_report_provenance benchmark-results/sqlite-parity/latest/official-evidence.processed.json
+    redline_testing_bin="$(ci_install_redline_testing)"
+    load_redline_testing_provenance "$redline_testing_bin"
+    "$redline_testing_bin" report "${sqlite_parity_report_args_result[@]}"
     ;;
   sqlite-jankurai-compare)
     reject_legacy_sqlite_parity_lane "$lane"

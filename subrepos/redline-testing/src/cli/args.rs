@@ -149,6 +149,11 @@ pub(crate) struct ReportArgs {
     pub(crate) performance_histogram_plot: Option<PathBuf>,
     #[arg(long)]
     pub(crate) median_test_performance_plot: Option<PathBuf>,
+    /// Keep the README block to correctness: no latency summary, plots or
+    /// ranked latency table (the official lane's latencies measure a shared
+    /// host running every case at once).
+    #[arg(long)]
+    pub(crate) no_readme_latency: bool,
     #[arg(long)]
     pub(crate) jankurai_score: Option<PathBuf>,
     #[arg(long)]

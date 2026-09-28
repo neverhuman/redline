@@ -147,6 +147,7 @@ fn report_requires_official_evidence_for_committed_artifacts() {
         plot: None,
         performance_histogram_plot: None,
         median_test_performance_plot: None,
+        readme_latency: true,
         jankurai_score: None,
         updated_date: "2026-05-24".to_owned(),
         expected_repetitions: None,
@@ -251,6 +252,7 @@ fn report_uses_official_evidence_versions_in_readme_block() {
         plot: None,
         performance_histogram_plot: None,
         median_test_performance_plot: None,
+        readme_latency: true,
         jankurai_score: None,
         updated_date: "2026-05-24".to_owned(),
         expected_repetitions: Some(1),
@@ -262,7 +264,7 @@ fn report_uses_official_evidence_versions_in_readme_block() {
     let rendered = fs::read_to_string(readme).expect("readme rendered");
     assert!(
         rendered.contains(
-            "**Benchmark metadata:** RedlineDB target version **redlinedb v2.0.6 (SQLite 3.45.1 compatibility)**, SQLite reference version **3.53.1 2026-05-05 10:34:17 example (64-bit)**, redline-testing runner version **redline-testing 0.1.3**."
+            "**Run metadata:** RedlineDB target version **redlinedb v2.0.6 (SQLite 3.45.1 compatibility)**, SQLite reference version **3.53.1 2026-05-05 10:34:17 example (64-bit)**, redline-testing runner version **redline-testing 0.1.3**."
         ),
         "{rendered}"
     );
@@ -334,6 +336,7 @@ fn beyond_sqlite_plot_uses_feature_progress_copy() {
             plot: Some(PathBuf::from("feature-progress.svg")),
             performance_histogram_plot: None,
             median_test_performance_plot: None,
+            readme_latency: true,
             jankurai_score: None,
             updated_date: "2026-05-24".to_owned(),
             expected_repetitions: None,

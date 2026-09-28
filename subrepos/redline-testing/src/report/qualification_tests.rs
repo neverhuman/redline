@@ -145,6 +145,7 @@ pub(super) fn options(root: &Path, evidence: Option<PathBuf>, raw_text: &str) ->
         plot: None,
         performance_histogram_plot: None,
         median_test_performance_plot: Some(root.join("median.svg")),
+        readme_latency: true,
         jankurai_score: None,
         updated_date: "2026-09-24".to_owned(),
         expected_repetitions: Some(3),

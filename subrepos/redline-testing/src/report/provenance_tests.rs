@@ -50,6 +50,7 @@ fn options(
         plot: None,
         performance_histogram_plot: None,
         median_test_performance_plot: None,
+        readme_latency: true,
         jankurai_score: None,
         updated_date: "2026-09-24".to_owned(),
         expected_repetitions: Some(3),

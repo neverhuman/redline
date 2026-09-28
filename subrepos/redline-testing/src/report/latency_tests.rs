@@ -96,6 +96,14 @@ struct Generated {
 }
 
 fn try_generate(suite: &str, raw_text: &str) -> anyhow::Result<Generated> {
+    try_generate_with(suite, raw_text, true)
+}
+
+fn try_generate_with(
+    suite: &str,
+    raw_text: &str,
+    readme_latency: bool,
+) -> anyhow::Result<Generated> {
     let root = temp_root("latency-report");
     let input = root.path().join("raw.jsonl");
     fs::write(&input, raw_text).expect("raw");
@@ -122,6 +130,7 @@ fn try_generate(suite: &str, raw_text: &str) -> anyhow::Result<Generated> {
         plot: svg(svg_paths[0]),
         performance_histogram_plot: svg(svg_paths[1]),
         median_test_performance_plot: svg(svg_paths[2]),
+        readme_latency,
         jankurai_score: None,
         updated_date: "2026-09-24".to_owned(),
         expected_repetitions: Some(3),
@@ -395,6 +404,7 @@ fn a_combined_all_suites_report_is_refused() {
         plot: None,
         performance_histogram_plot: None,
         median_test_performance_plot: None,
+        readme_latency: true,
         jankurai_score: None,
         updated_date: "2026-09-24".to_owned(),
         expected_repetitions: None,
@@ -447,4 +457,27 @@ fn summary_uses_per_case_ratio_order_statistics() {
     assert_eq!(summary.worst_ratio, Some(20.0));
     assert_eq!(summary.faster, 0, "equal or slower cases are never faster");
     assert_eq!(summary.below_resolution, 20);
+}
+
+#[test]
+fn readme_block_without_latency_shows_correctness_only() {
+    let generated = try_generate_with("sqlite_parity", &three_cases(), false).expect("report");
+    let readme = &generated.readme;
+    for absent in [
+        "latency ratio",
+        "![",
+        "<details",
+        "Benchmark metadata",
+        "Measurement boundary",
+    ] {
+        assert!(!readme.contains(absent), "{absent:?} in:\n{readme}");
+    }
+    for present in ["**Performance:**", "#versions-over-time", "Run metadata"] {
+        assert!(
+            readme.contains(present),
+            "missing {present:?} in:\n{readme}"
+        );
+    }
+    // The ranked evidence still records every case's ratio.
+    assert!(generated.ranked_csv.contains("latency_ratio"));
 }

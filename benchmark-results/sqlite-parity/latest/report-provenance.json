@@ -32,7 +32,7 @@
   "raw_sha256": "9a9974fe1f8e130faa81b99065fc4ed15616ae89b110874bfac224cfc7d64421",
   "renderer": {
     "version": "redline-testing 1.0.1",
-    "binary_sha256": "6fa34f7222dd89a03af0916ed1b503f8585181569fbb16e35443ba68efcd0d68"
+    "binary_sha256": "dccf62c12a46973ea95148b1cef2943bdab2f2a58aa51a331968439cc4ff1f70"
   },
   "command_line": [
     "redline-testing",
@@ -50,12 +50,7 @@
     "benchmark-results/sqlite-parity/latest",
     "--readme",
     "README.md",
-    "--plot",
-    "assets/sqlite-parity-latency-gap.svg",
-    "--performance-histogram-plot",
-    "assets/sqlite-parity-performance-histogram.svg",
-    "--median-test-performance-plot",
-    "assets/sqlite-median-test-performance.svg",
+    "--no-readme-latency",
     "--jankurai-score",
     ".jankurai/repo-score.json",
     "--updated-date",
@@ -71,11 +66,8 @@
   "updated_date": "2026-09-24",
   "output_file_hashes": {
     "README.md#sqlite-parity-badge": "8398567eb24f8197bc71d4f09d3c4e99aacd29b46b82c555b365a9b46bae6726",
-    "README.md#sqlite-parity-report": "8f0c544ac72d141e1e19bd45b13daac644bcef3002a2cdf0636c7558fafe046f",
-    "assets/sqlite-median-test-performance.svg": "946a466877912761c74c8b9b8e0e2b17386751da8751760c86a32d85bc22f0c6",
-    "assets/sqlite-parity-latency-gap.svg": "1fbe2cb885370a23a14f0023c0934ebbbb00c40e9dd4bce57a11444f5bc34e5e",
-    "assets/sqlite-parity-performance-histogram.svg": "63111bd9f0f8948f2288b04e40c48edb76ad6a8821062bf9ca73486de43aa4c8",
-    "manifest.json": "26fcbbfe823536bc77ffc7496d5d031075fcbf959e8a4aac511636ec07ecaf95",
+    "README.md#sqlite-parity-report": "bc8108381adbf1458f98375380c7d54946949854d189f0a9c70c81f7e0b5978c",
+    "manifest.json": "9776cc065e041d7d0a89dba3acb2d89c54307f079bd6025f97e4080751dc7f5b",
     "ranked.csv": "2cd8600cdaa39c0cfd6ebb1e602645786e7b5c4373395b989c75e9c0d5b62161",
     "raw.jsonl": "9a9974fe1f8e130faa81b99065fc4ed15616ae89b110874bfac224cfc7d64421",
     "summary.json": "3ff7f495c67cb0b60d046db15dec84df3b23f92d34768164cb00f8f63f5aebd6"

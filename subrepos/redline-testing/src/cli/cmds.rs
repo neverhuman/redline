@@ -19,6 +19,7 @@ pub(crate) fn report(args: ReportArgs) -> Result<()> {
         plot: args.plot,
         performance_histogram_plot: args.performance_histogram_plot,
         median_test_performance_plot: args.median_test_performance_plot,
+        readme_latency: !args.no_readme_latency,
         jankurai_score: args.jankurai_score,
         updated_date: args.updated_date,
         expected_repetitions: args.expected_repetitions,
