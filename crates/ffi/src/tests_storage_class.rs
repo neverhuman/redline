@@ -38,6 +38,15 @@ fn prepare(db: *mut sqlite3, sql: &str) -> *mut sqlite3_stmt {
     stmt
 }
 
+/// Copy `len` bytes starting at `ptr`, one byte at a time.
+fn read_bytes(ptr: *const u8, len: usize) -> Vec<u8> {
+    (0..len)
+        // SAFETY: callers pass a pointer the library documents as valid for
+        // `len` bytes until the next step/reset/finalize (or value free).
+        .map(|offset| unsafe { *ptr.add(offset) })
+        .collect()
+}
+
 fn column_bytes_view(stmt: *mut sqlite3_stmt, index: c_int) -> Option<Vec<u8>> {
     let text = sqlite3_column_text(stmt, index);
     let len = sqlite3_column_bytes(stmt, index);
@@ -45,11 +54,10 @@ fn column_bytes_view(stmt: *mut sqlite3_stmt, index: c_int) -> Option<Vec<u8>> {
         assert_eq!(len, 0, "NULL text has zero bytes");
         return None;
     }
-    // SAFETY: column_text returned a non-null pointer to `len` bytes plus a
-    // NUL terminator, valid until the next step/reset/finalize.
-    let bytes = unsafe { std::slice::from_raw_parts(text, len as usize + 1) };
-    assert_eq!(bytes[len as usize], 0, "text is NUL-terminated");
-    Some(bytes[..len as usize].to_vec())
+    // column_text is `len` bytes followed by a NUL terminator.
+    let mut bytes = read_bytes(text, len as usize + 1);
+    assert_eq!(bytes.pop(), Some(0), "text is NUL-terminated");
+    Some(bytes)
 }
 
 #[test]
@@ -123,9 +131,9 @@ fn sqlite3_column_text_converts_numbers() {
         // SAFETY: statement-owned value, valid until the next step.
         let text = unsafe { sqlite3_value_text(value) };
         let value_bytes = (!text.is_null()).then(|| {
-            // SAFETY: non-null pointer to value_bytes bytes owned by value.
+            // SAFETY: statement-owned value, valid until the next step.
             let len = unsafe { sqlite3_value_bytes(value) } as usize;
-            unsafe { std::slice::from_raw_parts(text, len) }.to_vec()
+            read_bytes(text, len)
         });
         assert_eq!(value_bytes.as_deref(), *want, "value column {index}");
     }

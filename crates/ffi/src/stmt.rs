@@ -50,10 +50,10 @@ pub extern "C" fn rldb_prepare_v2(
             }
         };
         let consumed_bytes = sql_text.len() - remainder.len();
+        // `consumed_bytes` never exceeds the bytes scanned from `sql`, so the
+        // tail stays within (or one past) the caller's input.
         // SAFETY: `tail` may be NULL (optional per C ABI); when non-null,
-        // caller guarantees writable *const c_char. `consumed_bytes` never
-        // exceeds the bytes scanned from `sql`, so the result stays within
-        // (or one past) the caller's input.
+        // caller guarantees a writable *const c_char.
         unsafe {
             if !tail.is_null() {
                 *tail = sql.wrapping_add(consumed_bytes);
@@ -201,10 +201,10 @@ pub extern "C" fn rldb_clear_bindings(stmt: *mut rldb_stmt) -> c_int {
 fn read_bounded_sql(sql: *const c_char, nbytes: c_int) -> Result<String, c_int> {
     let mut bytes = Vec::new();
     while nbytes < 0 || bytes.len() < nbytes as usize {
-        // SAFETY: `sql` non-null (checked by the caller); per the
-        // sqlite3_prepare_v2 contract the caller's buffer is readable up to
-        // the first NUL or the non-negative bound, whichever comes first, and
-        // the loop stops at both.
+        // The caller's buffer is readable up to the first NUL or the
+        // non-negative bound, whichever comes first; the loop stops at both.
+        // SAFETY: `sql` non-null (checked by the caller); this byte lies
+        // before both the first NUL and the bound (sqlite3_prepare_v2 rule).
         let byte = unsafe { *sql.cast::<u8>().add(bytes.len()) };
         if byte == 0 {
             break;

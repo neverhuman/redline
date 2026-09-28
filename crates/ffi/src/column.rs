@@ -81,10 +81,10 @@ pub extern "C" fn rldb_column_text(stmt: *mut rldb_stmt, index: c_int) -> *const
     if stmt.is_null() {
         return ptr::null();
     }
-    // SAFETY: `stmt` non-null (checked); per redlinedb.h from
-    // rldb_prepare_v2 not yet finalized; single-thread ownership. The
-    // returned pointer is into rldb_stmt.text_cache, valid until
-    // rldb_step/reset/finalize.
+    // The returned pointer is into rldb_stmt.text_cache, valid until the
+    // next rldb_step/reset/finalize.
+    // SAFETY: `stmt` non-null (checked); from rldb_prepare_v2 and not yet
+    // finalized; single-thread ownership per the C ABI.
     let stmt = unsafe { &mut *stmt };
     cached_text(stmt, index)
         .map(|bytes| bytes.as_ptr() as *const c_uchar)
