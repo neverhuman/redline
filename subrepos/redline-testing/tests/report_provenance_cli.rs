@@ -403,3 +403,131 @@ fn report_check_independent_of_git_state() {
         assert!(!text.contains("git_"), "{name} records Git state:\n{text}");
     }
 }
+
+fn assert_drift(output: &Output, what: &str) {
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(
+        !output.status.success() && stderr.contains("artifact drift detected"),
+        "{what}: --check must fail on drift ({}):\nstderr: {stderr}",
+        output.status
+    );
+}
+
+/// `--check` keeps only the committed `renderer` block (whichever build
+/// wrote the files); every other byte it compares must still be the
+/// rendered one.
+#[cfg(unix)]
+#[test]
+fn report_check_fails_on_drift_outside_the_renderer_block() {
+    let fixture = Fixture::new();
+    let path_env = std::env::var("PATH").unwrap_or_default();
+    let args = fixture.report_args();
+    let cwd = fixture.root.path();
+    assert_success(&report(&args, cwd, &path_env, &[]), "render");
+    let mut check = args.clone();
+    check.push("--check".into());
+    assert_success(&report(&check, cwd, &path_env, &[]), "clean --check");
+
+    let out = fixture.out_dir();
+    let readme = fixture.run_dir().join("README.md");
+    let provenance_path = out.join("report-provenance.json");
+    let summary_path = out.join("summary.json");
+    // Text edits, so that nothing but the named value changes.
+    let replace_once = |path: &Path, from: &str, to: &str| {
+        let text = fs::read_to_string(path).expect("read artifact");
+        assert_eq!(
+            text.matches(from).count(),
+            1,
+            "{from:?} in {}",
+            path.display()
+        );
+        fs::write(path, text.replace(from, to)).expect("write artifact");
+    };
+    let provenance: Value =
+        serde_json::from_str(&fs::read_to_string(&provenance_path).expect("provenance"))
+            .expect("provenance json");
+    let parent_sha = provenance["parent_run_provenance"]["sha256"]
+        .as_str()
+        .expect("parent sha")
+        .to_owned();
+    let renderer_sha = provenance["renderer"]["binary_sha256"]
+        .as_str()
+        .expect("renderer sha")
+        .to_owned();
+    let renderer_version = provenance["renderer"]["version"]
+        .as_str()
+        .expect("renderer version")
+        .to_owned();
+    type Mutation<'a> = (&'a str, &'a Path, Box<dyn Fn(&Path) + 'a>);
+    let mutations: Vec<Mutation> = vec![
+        (
+            "measurement.sqlite.version",
+            &provenance_path,
+            Box::new(|path| {
+                replace_once(
+                    path,
+                    &format!("\"version\": \"{SQLITE_VERSION}\""),
+                    &format!("\"version\": \"{PATH_SQLITE_VERSION}\""),
+                );
+            }),
+        ),
+        (
+            "parent_run_provenance.sha256",
+            &provenance_path,
+            Box::new(|path| replace_once(path, &parent_sha, &"0".repeat(64))),
+        ),
+        (
+            "one byte inside the README report block",
+            &readme,
+            Box::new(|path| {
+                let text = fs::read_to_string(path).expect("readme");
+                let begin = text
+                    .find("<!-- sqlite-parity-report:begin -->")
+                    .expect("report block");
+                let at = begin + text[begin..].find("**").expect("bold text in block");
+                let mut bytes = text.into_bytes();
+                bytes[at] = b'_';
+                fs::write(path, bytes).expect("write readme");
+            }),
+        ),
+        (
+            "summary.json elapsed_ns",
+            &summary_path,
+            Box::new(|path| {
+                replace_once(path, "\"elapsed_ns\": 1395000000", "\"elapsed_ns\": 1");
+            }),
+        ),
+    ];
+    for (what, path, mutate) in mutations {
+        let original = fs::read(path).expect("read artifact");
+        mutate(path);
+        assert_ne!(
+            fs::read(path).expect("reread"),
+            original,
+            "{what} unchanged"
+        );
+        assert_drift(&report(&check, cwd, &path_env, &[]), what);
+        fs::write(path, &original).expect("restore artifact");
+        assert_success(
+            &report(&check, cwd, &path_env, &[]),
+            &format!("--check after restoring {what}"),
+        );
+    }
+
+    // The renderer block alone may name another build.
+    replace_once(&provenance_path, &renderer_sha, &"f".repeat(64));
+    let text = fs::read_to_string(&provenance_path).expect("provenance");
+    let block = text.find("\"renderer\": {").expect("renderer block");
+    let version = format!("\"version\": \"{renderer_version}\"");
+    let at = block + text[block..].find(&version).expect("renderer version");
+    let edited = format!(
+        "{}\"version\": \"redline-testing 0.0.0-other-build\"{}",
+        &text[..at],
+        &text[at + version.len()..]
+    );
+    fs::write(&provenance_path, edited).expect("write provenance");
+    assert_success(
+        &report(&check, cwd, &path_env, &[]),
+        "--check with another build's renderer block",
+    );
+}
