@@ -81,7 +81,7 @@ max_syscalls = 30_000_000
 owner = "bench-harness"
 
 [[workload]]
-name = "dick-head-choas"
+name = "chaos"
 max_wall_clock_minutes = 120
 max_disk_gb = 50
 max_syscalls = 100_000_000

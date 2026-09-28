@@ -1,23 +1,23 @@
 {
   "artifacts": {
     "manifest_json": {
-      "path": "/Users/bentaylor/code/redlinedb/target/bench/phase11-oltp-gap/manifest.json",
+      "path": "<checkout>/target/bench/phase11-oltp-gap/manifest.json",
       "sha256": "eb90371ecc2cf5923ed8ca72ada9f3b189d86aa653b450909a5d582406be46f8"
     },
     "ratio_csv": {
-      "path": "/Users/bentaylor/code/redlinedb/target/bench/phase11-oltp-gap/ratio.csv",
+      "path": "<checkout>/target/bench/phase11-oltp-gap/ratio.csv",
       "sha256": "d4dbef79b59e08a368d11447f34ca317b9b6ae6ae834dc368bcfddcc69c49dca"
     },
     "report_json": {
-      "path": "/Users/bentaylor/code/redlinedb/target/bench/phase11-oltp-gap/report.json",
+      "path": "<checkout>/target/bench/phase11-oltp-gap/report.json",
       "sha256": "f33a49d917fc1c2e79cf3a536ee7d09ddd3ffca8bb3151d4029b29bba40e4fa3"
     },
     "runs_jsonl": {
-      "path": "/Users/bentaylor/code/redlinedb/target/bench/phase11-oltp-gap/runs.jsonl",
+      "path": "<checkout>/target/bench/phase11-oltp-gap/runs.jsonl",
       "sha256": "4ff51882308145d09ebd23e751d9425bed5a16798058ea024b65db53b789e1c6"
     },
     "summary_csv": {
-      "path": "/Users/bentaylor/code/redlinedb/target/bench/phase11-oltp-gap/summary.csv",
+      "path": "<checkout>/target/bench/phase11-oltp-gap/summary.csv",
       "sha256": "978097714619a929ddb427758b222d709872b2a238d7a21fba7cada870b7e0c2"
     }
   },
@@ -29,7 +29,7 @@
   "generated_at_utc": "2026-05-15T19:37:03.558798+00:00",
   "git_dirty": true,
   "git_sha": "25262bf7ae8a6d41b46855c55b5dfaad19f85ea8",
-  "input_dir": "/Users/bentaylor/code/redlinedb/target/bench/phase11-oltp-gap",
+  "input_dir": "<checkout>/target/bench/phase11-oltp-gap",
   "report": {
     "manifest": {
       "checksums": {

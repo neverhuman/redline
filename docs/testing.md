@@ -156,69 +156,58 @@ rtk scripts/ci-local.sh all
 
 ## Publication and review
 
-Two logins, one job each. `/home/ubuntu/.local/bin/gh-role` loads the named existing
-credential into the child `gh` process. It leaves the global active account alone and
-it does not print the credential. A `GH_TOKEN` already exported in the parent shell is
-cleared for that child. The git commit email does not choose the API user.
+`main` on `neverhuman/redline` (repository id `1390165945`, named in
+`ops/release/authority.env`) carries this protection:
 
-| Role | Login | Use it for |
-| --- | --- | --- |
-| `writer` | `jepsontaylor` | New commits, pushes, `pr create`, `pr merge`. Approves only a pull request this login did not open and did not author or commit. |
-| `reviewer` | `neverhuman` | `APPROVE` when that login did not open the pull request and did not author or commit any commit on it. |
+| Setting | Value |
+| --- | --- |
+| Required status check | `RedlineDB/required`, strict: the head must be up to date with `main` |
+| Approving reviews | 1, dismissed when a new commit is pushed |
+| History | linear; force-push and deletion refused; enforced for admins |
+| Merge method | rebase only; squash merges and merge commits are disabled |
 
-New commits use `Jepson Taylor <130782313+jepsontaylor@users.noreply.github.com>`.
+`bash ops/release/main-protection.sh check` compares the live settings with this
+table (read-only; any GitHub login that can read the protection) and lists every
+difference. A repository admin applies the table with
+`bash ops/release/main-protection.sh apply`. `ops/ci/tests/main-protection.sh`
+tests both against a stub `gh`.
 
-Leave credential files unread. Do not `cat` them, do not `source` them, and do not run
-`gh auth token` in a shell whose output is kept. The writer file ends in `.env` and is
-still a raw token.
-
-| Path | Mode | Role |
-| --- | --- | --- |
-| `/home/ubuntu/.local/bin/gh-role` | `0700` | Router. Arguments start with `writer` or `reviewer`. |
-| `/home/ubuntu/.config/gh/hosts.yml` | `0600` | GitHub CLI account store. A name in this file is not a working role until `gh-role` shows that login. |
-| `/home/ubuntu/.config/jopedime/secrets/gh.env` | `0600` | Writer token consumed by the git helper. |
-| `/home/ubuntu/.config/jopedime/bin/github-writer-credential.py` | `0700` | Git HTTPS helper for `neverhuman/redline` and `veox-ai/JopeDime`, as `jepsontaylor`. |
-| `/etc/jope-runner/github-pat` | root-owned, not readable by `ubuntu` | Runner registration. It cannot approve a pull request. Leave it unchanged. |
-
-`hosts.yml` also names `jeryu` and `jepsont`. Neither has a usable token. They are not
-reviewers. `jeppsontaylor` (two p's) lives on the operator Mac and is not installed
-here. Do not copy it onto this host.
-
-```sh
-/home/ubuntu/.local/bin/gh-role writer api user --jq .login
-/home/ubuntu/.local/bin/gh-role reviewer api user --jq .login
-/home/ubuntu/.local/bin/gh-role eligible reviewer neverhuman/redline <PR>
-```
-
-The first two logins are `jepsontaylor` and `neverhuman`. `eligible` prints who is
-excluded. Exit 0 means that role may approve. `reviewer pr create` is refused.
+A pull request needs an eligible reviewer: a login that did not open the pull
+request and did not author or commit any commit on it. Rewriting author or
+committer so a login becomes eligible is not a review. A commit whose author has
+no GitHub login (a bot address) is attributed to whoever produced it before any
+review. The logins, credentials and host paths the maintainers use for the two
+roles are operator configuration and are not kept in this repository.
 
 1. `just pr-ci` exits 0, then one push of that head.
-2. The writer opens the pull request.
-3. An eligible reviewer approves the full head SHA after the push:
+2. The writer opens the pull request:
 
 ```sh
-/home/ubuntu/.local/bin/gh-role reviewer api --method POST \
-  repos/neverhuman/redline/pulls/<PR>/reviews \
-  -f commit_id=<full sha> -f event=APPROVE -f body="$(cat <review-file>)"
+gh pr create --repo neverhuman/redline --base main --head <branch> \
+  --title "<subject>" --body-file <body-file>
 ```
 
-The helper refuses the approval when the selected login opened the pull request or
-authored or committed any commit. When both working logins are in that set, stop.
-A commit whose `author.login` is null (`jekko <bot@jekko.ai>`) needs
-`--ack-unassociated` after the producer is known. That flag does not invent a login.
-Rewriting author or committer so a login becomes eligible is not a review.
+3. The reviewer checks eligibility, then approves the full head SHA after the push:
+
+```sh
+gh pr view <PR> --repo neverhuman/redline --json author,headRefOid \
+  --jq '{opened_by: .author.login, head: .headRefOid}'
+gh api --paginate repos/neverhuman/redline/pulls/<PR>/commits \
+  --jq '.[] | {sha, author: .author.login, committer: .committer.login}'
+gh api --method POST repos/neverhuman/redline/pulls/<PR>/reviews \
+  -f commit_id=<full sha> -f event=APPROVE -F body=@<review-file>
+```
 
 4. The writer merges after `RedlineDB/required` is success on that same SHA:
 
 ```sh
-/home/ubuntu/.local/bin/gh-role writer pr merge <PR> --repo neverhuman/redline \
+gh pr merge <PR> --repo neverhuman/redline \
   --rebase --delete-branch --match-head-commit <full sha>
 ```
 
-`main` keeps one required approval, dismissal of reviews after a new push, enforcement
-for admins, strict `RedlineDB/required`, linear history, and a ban on force-push and
-deletion. JopeDime `main` protection still returns HTTP 403 until a paid plan is active.
+Rebase is the one merge method: it keeps the reviewed commits as they are on a
+linear `main`. The parity report bot (`.github/workflows/report-merge.yml`)
+merges its report pull requests the same way.
 
 ## Budgets and kill-switches
 
@@ -340,9 +329,10 @@ tagged release must satisfy:
 - **Monitoring** — bench `kill_receipt.json` plus
   `.jankurai/repo-score.json` archived per release; the
   audit upload step in `jankurai.yml` is the canonical artifact.
-- **Rollback** — `gh release delete` + `cargo yank` runbook in
-  `docs/release.md`; `release-bad-behavior` lane in
-  `.jankurai/proof-lanes.toml`.
+- **Rollback** — releases are never deleted or replaced: a defective
+  release is superseded by a corrected one (`docs/release.md`, "Evidence and
+  rollback"), and nothing is published to crates.io; `release-bad-behavior`
+  lane in `.jankurai/proof-lanes.toml`.
 - **Abuse controls** — FFI input boundary tests
   (`cargo test -p redlinedb-ffi shell`) plus the authz matrix lane
   cover misuse of the C ABI from untrusted callers.

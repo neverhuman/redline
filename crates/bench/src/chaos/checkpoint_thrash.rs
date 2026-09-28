@@ -30,9 +30,9 @@ pub(crate) fn run_checkpoint_thrash(engine: &dyn BenchEngine, spec: &RunSpec) ->
         |engine, spec| {
             seed_rows(
                 engine,
-                "CREATE TABLE IF NOT EXISTS dick_head_choas_checkpoint_thrash(pk INTEGER PRIMARY KEY, v INTEGER, payload BLOB)",
-                "DELETE FROM dick_head_choas_checkpoint_thrash",
-                "INSERT INTO dick_head_choas_checkpoint_thrash(pk, v, payload) VALUES (?1, 0, ?2)",
+                "CREATE TABLE IF NOT EXISTS chaos_checkpoint_thrash(pk INTEGER PRIMARY KEY, v INTEGER, payload BLOB)",
+                "DELETE FROM chaos_checkpoint_thrash",
+                "INSERT INTO chaos_checkpoint_thrash(pk, v, payload) VALUES (?1, 0, ?2)",
                 spec.rows.max(1),
                 pk_payload_seed_row,
             )?;
@@ -54,7 +54,7 @@ pub(crate) fn run_checkpoint_thrash(engine: &dyn BenchEngine, spec: &RunSpec) ->
                     counters.reads.fetch_add(1, Ordering::Relaxed);
                     let key = rng.random_range(0..spec.rows.max(1)) as i64;
                     let _ = conn.query_row(
-                        "SELECT COUNT(*) FROM dick_head_choas_checkpoint_thrash WHERE pk BETWEEN ?1 AND ?2",
+                        "SELECT COUNT(*) FROM chaos_checkpoint_thrash WHERE pk BETWEEN ?1 AND ?2",
                         &[
                             CellValue::Integer(key),
                             CellValue::Integer((key + 32).min(spec.rows.max(1) as i64)),
@@ -65,7 +65,7 @@ pub(crate) fn run_checkpoint_thrash(engine: &dyn BenchEngine, spec: &RunSpec) ->
                     let key = rng.random_range(0..spec.rows.max(1)) as i64;
                     conn.begin_immediate()?;
                     conn.execute(
-                        "UPDATE dick_head_choas_checkpoint_thrash SET v = v + 1, payload = ?1 WHERE pk = ?2",
+                        "UPDATE chaos_checkpoint_thrash SET v = v + 1, payload = ?1 WHERE pk = ?2",
                         &[
                             CellValue::Blob(blob_for(
                                 (worker << 12) ^ key as usize ^ rng.random::<u32>() as usize,
@@ -81,8 +81,8 @@ pub(crate) fn run_checkpoint_thrash(engine: &dyn BenchEngine, spec: &RunSpec) ->
         |engine, _| {
             checksum_query(
                 engine,
-                "dick-head-choas-checkpoint-thrash",
-                "SELECT pk, v, payload FROM dick_head_choas_checkpoint_thrash ORDER BY pk",
+                "chaos-checkpoint-thrash",
+                "SELECT pk, v, payload FROM chaos_checkpoint_thrash ORDER BY pk",
             )
         },
         |counters| {

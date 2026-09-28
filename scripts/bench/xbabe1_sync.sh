@@ -2,7 +2,8 @@
 set -euo pipefail
 
 REMOTE="${REMOTE:-xbabe1}"
-REMOTE_DIR="${REMOTE_DIR:-/home/ubuntu/RedlineDB}"
+# The checkout on the bench host; a relative path is under the remote login directory.
+REMOTE_DIR="${REMOTE_DIR:-RedlineDB}"
 
 rsync -a --delete \
   --exclude '.git/' \

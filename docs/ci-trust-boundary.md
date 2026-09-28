@@ -101,10 +101,11 @@ the workflow files; actionlint (security lane) checks their syntax.
    from it. That is a trusted run with every lane:
 
    ```bash
-   gh pr view <N> --json headRefOid --jq .headRefOid   # the reviewed commit
+   gh pr view <N> --repo neverhuman/redline --json headRefOid --jq .headRefOid   # the reviewed commit
    git fetch origin "pull/<N>/head:ci/pr-<N>"
    git push origin "ci/pr-<N>"
-   gh pr create --head "ci/pr-<N>" --base main --title "<title> (#<N>)" --body "Reviewed copy of #<N>."
+   gh pr create --repo neverhuman/redline --head "ci/pr-<N>" --base main \
+     --title "<title> (#<N>)" --body "Reviewed copy of #<N>."
    ```
 
 4. Merge that pull request once `RedlineDB/required` passes, close the fork

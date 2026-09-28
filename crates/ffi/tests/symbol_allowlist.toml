@@ -5,7 +5,6 @@
 # appear here with a one-line justification.
 #
 # IMPORTANT: per `.jankurai/JANKURAI_STANDARD.md` and the parity closure plan
-# at /Users/bentaylor/.claude/plans/it-is-important-that-dazzling-leaf.md
 # (rule "do not skip any libsqlite3 symbol to make the gate pass"), this
 # file MUST NOT include symbols that are merely "planned" by workstream
 # B1-B4. Such symbols must fail the gate so workstream B has a forcing

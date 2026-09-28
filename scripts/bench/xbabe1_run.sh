@@ -16,7 +16,9 @@ if [ "$#" -eq 0 ]; then
 fi
 
 REMOTE="${REMOTE:-xbabe1}"
-REMOTE_DIR="${REMOTE_DIR:-/home/ubuntu/RedlineDB}"
+# REMOTE_DIR is the checkout on the bench host. A relative path is resolved
+# against the remote login directory (docker needs the absolute path below).
+REMOTE_DIR="${REMOTE_DIR:-RedlineDB}"
 IMAGE="${IMAGE:-redlinedb-bench:1.95.0}"
 REMOTE_COMMAND="$(printf '%q ' "$@")"
 
@@ -35,6 +37,7 @@ export REDLINEDB_BENCH_GIT_SHA REDLINEDB_BENCH_GIT_SHORT REDLINEDB_BENCH_GIT_DIR
 # Build the image, then capture its digest so the certify manifest can record
 # the exact image used. Prefer a RepoDigest (set when the image has been
 # pushed/pulled); fall back to the local image ID otherwise.
+REMOTE_DIR="$(ssh "${REMOTE}" "cd '${REMOTE_DIR}' && pwd -P")"
 ssh "${REMOTE}" "cd '${REMOTE_DIR}' && docker build -f crates/bench/docker/Dockerfile -t '${IMAGE}' ."
 
 REDLINEDB_BENCH_IMAGE_DIGEST="$(ssh "${REMOTE}" "docker inspect --format '{{if .RepoDigests}}{{index .RepoDigests 0}}{{else}}{{.Id}}{{end}}' '${IMAGE}'")"

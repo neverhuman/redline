@@ -25,9 +25,9 @@ pub(crate) fn run_index_hammer(engine: &dyn BenchEngine, spec: &RunSpec) -> Resu
         |engine, spec| {
             seed_rows(
                 engine,
-                "CREATE TABLE IF NOT EXISTS dick_head_choas_index_hammer(pk INTEGER PRIMARY KEY, tenant INTEGER, v BLOB, version INTEGER)",
-                "DELETE FROM dick_head_choas_index_hammer",
-                "INSERT INTO dick_head_choas_index_hammer(pk, tenant, v, version) VALUES (?1, ?2, ?3, 1)",
+                "CREATE TABLE IF NOT EXISTS chaos_index_hammer(pk INTEGER PRIMARY KEY, tenant INTEGER, v BLOB, version INTEGER)",
+                "DELETE FROM chaos_index_hammer",
+                "INSERT INTO chaos_index_hammer(pk, tenant, v, version) VALUES (?1, ?2, ?3, 1)",
                 spec.rows.max(1),
                 tenant_seed_row,
             )?;
@@ -42,7 +42,7 @@ pub(crate) fn run_index_hammer(engine: &dyn BenchEngine, spec: &RunSpec) -> Resu
                     let low = rng.random_range(0..32) as i64;
                     let high = (low + 4).min(31);
                     let _ = conn.query_row(
-                        "SELECT COUNT(*) FROM dick_head_choas_index_hammer WHERE tenant BETWEEN ?1 AND ?2",
+                        "SELECT COUNT(*) FROM chaos_index_hammer WHERE tenant BETWEEN ?1 AND ?2",
                         &[CellValue::Integer(low), CellValue::Integer(high)],
                     )?;
                 } else if choice < 70 {
@@ -54,7 +54,7 @@ pub(crate) fn run_index_hammer(engine: &dyn BenchEngine, spec: &RunSpec) -> Resu
                         rng,
                         counters,
                         ChaosOp::Write,
-                        "UPDATE dick_head_choas_index_hammer SET tenant = ?1, v = ?2, version = version + 1 WHERE pk = ?3",
+                        "UPDATE chaos_index_hammer SET tenant = ?1, v = ?2, version = version + 1 WHERE pk = ?3",
                         &[
                             CellValue::Integer(tenant),
                             CellValue::Blob(blob_for(payload_seed)),
@@ -69,7 +69,7 @@ pub(crate) fn run_index_hammer(engine: &dyn BenchEngine, spec: &RunSpec) -> Resu
                         rng,
                         counters,
                         ChaosOp::Delete,
-                        "DELETE FROM dick_head_choas_index_hammer WHERE pk = ?1",
+                        "DELETE FROM chaos_index_hammer WHERE pk = ?1",
                         &[CellValue::Integer(key)],
                         6,
                     )?;
@@ -80,8 +80,8 @@ pub(crate) fn run_index_hammer(engine: &dyn BenchEngine, spec: &RunSpec) -> Resu
         |engine, _| {
             checksum_query(
                 engine,
-                "dick-head-choas-index-hammer",
-                "SELECT pk, tenant, v, version FROM dick_head_choas_index_hammer ORDER BY pk",
+                "chaos-index-hammer",
+                "SELECT pk, tenant, v, version FROM chaos_index_hammer ORDER BY pk",
             )
         },
         |counters| {

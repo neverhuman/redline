@@ -30,13 +30,13 @@ pub(crate) fn run_schema_storm(engine: &dyn BenchEngine, spec: &RunSpec) -> Resu
                 ddl_count.fetch_add(1, Ordering::Relaxed);
                 conn.execute(
                     &format!(
-                        "CREATE TABLE IF NOT EXISTS dick_head_choas_schema_{suffix}(id INTEGER PRIMARY KEY, v BLOB)"
+                        "CREATE TABLE IF NOT EXISTS chaos_schema_{suffix}(id INTEGER PRIMARY KEY, v BLOB)"
                     ),
                     &[],
                 )?;
                 if rng.random_range(0..2) == 0 {
                     conn.execute(
-                        &format!("CREATE INDEX IF NOT EXISTS dick_head_choas_schema_idx_{suffix} ON dick_head_choas_schema_{suffix}(id)"),
+                        &format!("CREATE INDEX IF NOT EXISTS chaos_schema_idx_{suffix} ON chaos_schema_{suffix}(id)"),
                         &[],
                     )?;
                 }
@@ -45,7 +45,7 @@ pub(crate) fn run_schema_storm(engine: &dyn BenchEngine, spec: &RunSpec) -> Resu
         },
         |_engine, ddl_count| {
             Ok(checksum_from_rows(
-                "dick-head-choas-schema-storm",
+                "chaos-schema-storm",
                 &[vec![
                     CellValue::Integer(0),
                     CellValue::Integer(ddl_count.load(Ordering::Relaxed) as i64),

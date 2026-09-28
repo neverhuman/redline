@@ -400,7 +400,7 @@ pub(super) fn chaos_stats(
     let mut stats = BTreeMap::new();
     stats.insert(
         "chaos_suite".to_owned(),
-        serde_json::json!("dick-head-choas"),
+        serde_json::json!("chaos"),
     );
     stats.insert(
         "test_code_path".to_owned(),

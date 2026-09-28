@@ -425,7 +425,7 @@ fn chaos_suite_workloads_smoke() {
                 .engine_stats
                 .get("chaos_suite")
                 .and_then(|v| v.as_str()),
-            Some("dick-head-choas")
+            Some("chaos")
         );
         assert_eq!(
             record

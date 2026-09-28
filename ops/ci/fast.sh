@@ -47,6 +47,8 @@ run_preflight() {
     bash scripts/check_file_sizes.sh
     bash scripts/check-publish-policy.sh
     bash ops/ci/tests/release-authority.sh
+    bash ops/ci/tests/main-protection.sh
+    bash scripts/check-public-hygiene.sh
     bash scripts/test-release-version.sh
     bash ops/ci/check-workflow-permissions.sh
     bash ops/ci/tests/workflow-permissions.sh

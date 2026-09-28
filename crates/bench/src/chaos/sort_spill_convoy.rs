@@ -29,9 +29,9 @@ pub(crate) fn run_sort_spill_convoy(engine: &dyn BenchEngine, spec: &RunSpec) ->
         |engine, spec| {
             seed_rows(
                 engine,
-                "CREATE TABLE IF NOT EXISTS dick_head_choas_sort_spill_convoy(pk INTEGER PRIMARY KEY, score INTEGER, payload BLOB, version INTEGER)",
-                "DELETE FROM dick_head_choas_sort_spill_convoy",
-                "INSERT INTO dick_head_choas_sort_spill_convoy(pk, score, payload, version) VALUES (?1, ?2, ?3, 1)",
+                "CREATE TABLE IF NOT EXISTS chaos_sort_spill_convoy(pk INTEGER PRIMARY KEY, score INTEGER, payload BLOB, version INTEGER)",
+                "DELETE FROM chaos_sort_spill_convoy",
+                "INSERT INTO chaos_sort_spill_convoy(pk, score, payload, version) VALUES (?1, ?2, ?3, 1)",
                 spec.rows.max(1),
                 |idx| {
                     vec![
@@ -53,7 +53,7 @@ pub(crate) fn run_sort_spill_convoy(engine: &dyn BenchEngine, spec: &RunSpec) ->
                     counters.spill_queries.fetch_add(1, Ordering::Relaxed);
                     let threshold = rng.random_range(0..1024) as i64;
                     let _ = conn.query_all(
-                        "SELECT pk, score FROM dick_head_choas_sort_spill_convoy WHERE score >= ?1 ORDER BY payload DESC LIMIT 128",
+                        "SELECT pk, score FROM chaos_sort_spill_convoy WHERE score >= ?1 ORDER BY payload DESC LIMIT 128",
                         &[CellValue::Integer(threshold)],
                     )?;
                 } else {
@@ -61,7 +61,7 @@ pub(crate) fn run_sort_spill_convoy(engine: &dyn BenchEngine, spec: &RunSpec) ->
                     let key = rng.random_range(0..spec.rows.max(1)) as i64;
                     conn.begin_immediate()?;
                     conn.execute(
-                        "UPDATE dick_head_choas_sort_spill_convoy SET score = score + 1, payload = ?1, version = version + 1 WHERE pk = ?2",
+                        "UPDATE chaos_sort_spill_convoy SET score = score + 1, payload = ?1, version = version + 1 WHERE pk = ?2",
                         &[
                             CellValue::Blob(large_blob(
                                 (worker << 14) ^ key as usize ^ rng.random::<u32>() as usize,
@@ -77,8 +77,8 @@ pub(crate) fn run_sort_spill_convoy(engine: &dyn BenchEngine, spec: &RunSpec) ->
         |engine, _| {
             checksum_query(
                 engine,
-                "dick-head-choas-sort-spill-convoy",
-                "SELECT pk, score, payload, version FROM dick_head_choas_sort_spill_convoy ORDER BY pk",
+                "chaos-sort-spill-convoy",
+                "SELECT pk, score, payload, version FROM chaos_sort_spill_convoy ORDER BY pk",
             )
         },
         |counters| {

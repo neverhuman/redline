@@ -1,4 +1,4 @@
-out_dir = "target/bench/dick-head-choas-smoke"
+out_dir = "target/bench/xbabe1/chaos-bounded"
 workloads = [
   "chaos-lock-convoy",
   "chaos-connection-churn",
@@ -7,7 +7,7 @@ workloads = [
   "chaos-sort-spill-convoy",
 ]
 durabilities = ["strict", "normal"]
-threads = [1, 4, 16]
-rows = 512
-seconds = 1
+threads = [16, 64, 128, 200, 256]
+rows = 4096
+seconds = 2
 cache_mib = 16

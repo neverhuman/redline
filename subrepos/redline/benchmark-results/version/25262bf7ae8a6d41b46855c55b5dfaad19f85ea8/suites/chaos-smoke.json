@@ -1,36 +1,36 @@
 {
   "artifacts": {
     "manifest_json": {
-      "path": "/Users/bentaylor/code/redlinedb/target/bench/dick-head-choas-smoke/manifest.json",
+      "path": "<checkout>/target/bench/chaos-smoke/manifest.json",
       "sha256": "cf022b31f44b15e31ef3a94c9112bf13b962689d7b223e7ad81ae243fbffe44b"
     },
     "ratio_csv": {
-      "path": "/Users/bentaylor/code/redlinedb/target/bench/dick-head-choas-smoke/ratio.csv",
+      "path": "<checkout>/target/bench/chaos-smoke/ratio.csv",
       "sha256": "0287db218259d377dd706d3d427f4e1731c27257a4e7c4e5fe9632e740552081"
     },
     "report_json": {
-      "path": "/Users/bentaylor/code/redlinedb/target/bench/dick-head-choas-smoke/report.json",
+      "path": "<checkout>/target/bench/chaos-smoke/report.json",
       "sha256": "897715a47f01fb2383c038371c6ecb60c39c65c93ee47e13eaad95385d006877"
     },
     "runs_jsonl": {
-      "path": "/Users/bentaylor/code/redlinedb/target/bench/dick-head-choas-smoke/runs.jsonl",
+      "path": "<checkout>/target/bench/chaos-smoke/runs.jsonl",
       "sha256": "0a6e80df5af39640f52548393b85282c9fadd71d1f341a8f27a786a13cdfe1fd"
     },
     "summary_csv": {
-      "path": "/Users/bentaylor/code/redlinedb/target/bench/dick-head-choas-smoke/summary.csv",
+      "path": "<checkout>/target/bench/chaos-smoke/summary.csv",
       "sha256": "d0f0820a1d52978407bc54e957e0f139151ef212f92abcb245c8691baeed1cec"
     }
   },
   "command": [
     "rtk cargo test -p redlinedb-bench --test lane_bh chaos_suite_workloads_smoke --locked",
-    "rtk cargo run -p redlinedb-bench -- certify --config crates/bench/bench/dick-head-choas.toml --out-dir target/bench/dick-head-choas-smoke --seed 7 --repetitions 1 --warmup 0"
+    "rtk cargo run -p redlinedb-bench -- certify --config crates/bench/bench/chaos.toml --out-dir target/bench/chaos-smoke --seed 7 --repetitions 1 --warmup 0"
   ],
   "config_hash": "866117be11cbf4a886fc634e52f8b0482003ac328bbdcfda17f24ea03ec11259",
-  "config_path": "crates/bench/bench/dick-head-choas.toml",
+  "config_path": "crates/bench/bench/chaos.toml",
   "generated_at_utc": "2026-05-15T19:37:03.576441+00:00",
   "git_dirty": true,
   "git_sha": "25262bf7ae8a6d41b46855c55b5dfaad19f85ea8",
-  "input_dir": "/Users/bentaylor/code/redlinedb/target/bench/dick-head-choas-smoke",
+  "input_dir": "<checkout>/target/bench/chaos-smoke",
   "report": {
     "manifest": {
       "checksums": {
@@ -96,11 +96,11 @@
         "Sqlite:chaos-temp-spill-convoy:strict:t4": "e883aebb461fdb64a5521ddbce90820100606edc0089624e78990607821a272f"
       },
       "config_hash": "866117be11cbf4a886fc634e52f8b0482003ac328bbdcfda17f24ea03ec11259",
-      "config_path": "crates/bench/bench/dick-head-choas.toml",
+      "config_path": "crates/bench/bench/chaos.toml",
       "git_dirty": true,
       "git_sha": "25262bf7ae8a6d41b46855c55b5dfaad19f85ea8",
       "measured_runs_per_combo": 1,
-      "out_dir": "target/bench/dick-head-choas-smoke",
+      "out_dir": "target/bench/chaos-smoke",
       "pragma_validation": "ok",
       "pragmas": {
         "redline": {
@@ -791,7 +791,7 @@
         "checksum": {
           "content_hash": "384d3329db86bce3db17e9c0b399fe89dc56c84fb4a101e5b1b1d3183c1514ff",
           "index_consistency": {
-            "dick-head-choas-lock-convoy": "rows=512"
+            "chaos-lock-convoy": "rows=512"
           },
           "payload_bytes": 7170,
           "rows": 512,
@@ -813,7 +813,7 @@
           "chaos_profile": "bounded",
           "chaos_rollbacks": 18,
           "chaos_seed_rows": 512,
-          "chaos_suite": "dick-head-choas",
+          "chaos_suite": "chaos",
           "chaos_workload": "lock-convoy",
           "checkpoint": {
             "generation": 1,
@@ -939,7 +939,7 @@
         "checksum": {
           "content_hash": "a864c2ca5265d438bcded725374900e5a78c971b19b94a37ab0548ff0c048486",
           "index_consistency": {
-            "dick-head-choas-lock-convoy": "rows=512"
+            "chaos-lock-convoy": "rows=512"
           },
           "payload_bytes": 7169,
           "rows": 512,
@@ -961,7 +961,7 @@
           "chaos_profile": "bounded",
           "chaos_rollbacks": 0,
           "chaos_seed_rows": 512,
-          "chaos_suite": "dick-head-choas",
+          "chaos_suite": "chaos",
           "chaos_workload": "lock-convoy",
           "checkpoint": {
             "generation": 1,
@@ -1087,7 +1087,7 @@
         "checksum": {
           "content_hash": "b1f019740e9b5767eea0f95c945560487ac391cefecb0eac4e335dd87a228cf9",
           "index_consistency": {
-            "dick-head-choas-lock-convoy": "rows=512"
+            "chaos-lock-convoy": "rows=512"
           },
           "payload_bytes": 7170,
           "rows": 512,
@@ -1109,7 +1109,7 @@
           "chaos_profile": "bounded",
           "chaos_rollbacks": 0,
           "chaos_seed_rows": 512,
-          "chaos_suite": "dick-head-choas",
+          "chaos_suite": "chaos",
           "chaos_workload": "lock-convoy",
           "checkpoint": {
             "generation": 1,
@@ -1235,7 +1235,7 @@
         "checksum": {
           "content_hash": "762181f404a13aab4e8143176518461fdfde46ac411427789ce723669f0cfdb4",
           "index_consistency": {
-            "dick-head-choas-lock-convoy": "rows=512"
+            "chaos-lock-convoy": "rows=512"
           },
           "payload_bytes": 7169,
           "rows": 512,
@@ -1257,7 +1257,7 @@
           "chaos_profile": "bounded",
           "chaos_rollbacks": 33,
           "chaos_seed_rows": 512,
-          "chaos_suite": "dick-head-choas",
+          "chaos_suite": "chaos",
           "chaos_workload": "lock-convoy",
           "checkpoint": {
             "generation": 1,
@@ -1383,7 +1383,7 @@
         "checksum": {
           "content_hash": "56569167be8b6912f62d907dc50e86a6ca178358542aa9bbaab08790668c47dd",
           "index_consistency": {
-            "dick-head-choas-lock-convoy": "rows=512"
+            "chaos-lock-convoy": "rows=512"
           },
           "payload_bytes": 7170,
           "rows": 512,
@@ -1405,7 +1405,7 @@
           "chaos_profile": "bounded",
           "chaos_rollbacks": 0,
           "chaos_seed_rows": 512,
-          "chaos_suite": "dick-head-choas",
+          "chaos_suite": "chaos",
           "chaos_workload": "lock-convoy",
           "checkpoint": {
             "generation": 1,
@@ -1531,7 +1531,7 @@
         "checksum": {
           "content_hash": "786c71f572ae235e908cc34d0aa0d0b2feabf159a0af47f99b72fa5ea9ec3492",
           "index_consistency": {
-            "dick-head-choas-lock-convoy": "rows=512"
+            "chaos-lock-convoy": "rows=512"
           },
           "payload_bytes": 7170,
           "rows": 512,
@@ -1553,7 +1553,7 @@
           "chaos_profile": "bounded",
           "chaos_rollbacks": 1,
           "chaos_seed_rows": 512,
-          "chaos_suite": "dick-head-choas",
+          "chaos_suite": "chaos",
           "chaos_workload": "lock-convoy",
           "checkpoint": {
             "generation": 1,
@@ -1679,7 +1679,7 @@
         "checksum": {
           "content_hash": "9816ff6898be386ad8ea19749c2047994f8d634ed4d3016c45531f412ead70c2",
           "index_consistency": {
-            "dick-head-choas-connection-churn": "rows=512"
+            "chaos-connection-churn": "rows=512"
           },
           "payload_bytes": 7395,
           "rows": 512,
@@ -1703,7 +1703,7 @@
           "chaos_reads": 390,
           "chaos_rollbacks": 19,
           "chaos_seed_rows": 512,
-          "chaos_suite": "dick-head-choas",
+          "chaos_suite": "chaos",
           "chaos_workload": "connection-churn",
           "chaos_writes": 171,
           "checkpoint": {
@@ -1830,7 +1830,7 @@
         "checksum": {
           "content_hash": "7f4ce48cc8fbe45064c2819176725ef05f26fdebfa0dc6cce96edcfe184e88b2",
           "index_consistency": {
-            "dick-head-choas-connection-churn": "rows=512"
+            "chaos-connection-churn": "rows=512"
           },
           "payload_bytes": 7233,
           "rows": 512,
@@ -1854,7 +1854,7 @@
           "chaos_reads": 686,
           "chaos_rollbacks": 4,
           "chaos_seed_rows": 512,
-          "chaos_suite": "dick-head-choas",
+          "chaos_suite": "chaos",
           "chaos_workload": "connection-churn",
           "chaos_writes": 329,
           "checkpoint": {
@@ -1981,7 +1981,7 @@
         "checksum": {
           "content_hash": "e023972aa27929e76bc18cb03b50b56f18d1f2b7ba1fb6f6a9c205465b92b333",
           "index_consistency": {
-            "dick-head-choas-connection-churn": "rows=512"
+            "chaos-connection-churn": "rows=512"
           },
           "payload_bytes": 7224,
           "rows": 512,
@@ -2005,7 +2005,7 @@
           "chaos_reads": 3007,
           "chaos_rollbacks": 2,
           "chaos_seed_rows": 512,
-          "chaos_suite": "dick-head-choas",
+          "chaos_suite": "chaos",
           "chaos_workload": "connection-churn",
           "chaos_writes": 1332,
           "checkpoint": {
@@ -2132,7 +2132,7 @@
         "checksum": {
           "content_hash": "7c7d61f922d344244964502fbb70da57689f25cadbf989925a076c10871041dc",
           "index_consistency": {
-            "dick-head-choas-connection-churn": "rows=512"
+            "chaos-connection-churn": "rows=512"
           },
           "payload_bytes": 7734,
           "rows": 512,
@@ -2156,7 +2156,7 @@
           "chaos_reads": 1202,
           "chaos_rollbacks": 58,
           "chaos_seed_rows": 512,
-          "chaos_suite": "dick-head-choas",
+          "chaos_suite": "chaos",
           "chaos_workload": "connection-churn",
           "chaos_writes": 555,
           "checkpoint": {
@@ -2283,7 +2283,7 @@
         "checksum": {
           "content_hash": "c0d8c949c934ac9dd24c975cc3fc7e4674542a37861c97d8419eea0f30cc4007",
           "index_consistency": {
-            "dick-head-choas-connection-churn": "rows=512"
+            "chaos-connection-churn": "rows=512"
           },
           "payload_bytes": 7236,
           "rows": 512,
@@ -2307,7 +2307,7 @@
           "chaos_reads": 822,
           "chaos_rollbacks": 5,
           "chaos_seed_rows": 512,
-          "chaos_suite": "dick-head-choas",
+          "chaos_suite": "chaos",
           "chaos_workload": "connection-churn",
           "chaos_writes": 351,
           "checkpoint": {
@@ -2434,7 +2434,7 @@
         "checksum": {
           "content_hash": "d1d2dd6913cbd48a96e13316da7437e234859bc75e54c6c480ebd8d8c0ec772a",
           "index_consistency": {
-            "dick-head-choas-connection-churn": "rows=512"
+            "chaos-connection-churn": "rows=512"
           },
           "payload_bytes": 7196,
           "rows": 512,
@@ -2458,7 +2458,7 @@
           "chaos_reads": 3059,
           "chaos_rollbacks": 2,
           "chaos_seed_rows": 512,
-          "chaos_suite": "dick-head-choas",
+          "chaos_suite": "chaos",
           "chaos_workload": "connection-churn",
           "chaos_writes": 1346,
           "checkpoint": {
@@ -2585,7 +2585,7 @@
         "checksum": {
           "content_hash": "5ae7b84bdcc94a2da9b141f9807228e3f8d61e2578828c6b8179cff5498d1286",
           "index_consistency": {
-            "dick-head-choas-checkpoint-thrash": "rows=512"
+            "chaos-checkpoint-thrash": "rows=512"
           },
           "payload_bytes": 7172,
           "rows": 512,
@@ -2607,7 +2607,7 @@
           "chaos_profile": "bounded",
           "chaos_reads": 4,
           "chaos_seed_rows": 512,
-          "chaos_suite": "dick-head-choas",
+          "chaos_suite": "chaos",
           "chaos_workload": "checkpoint-thrash",
           "chaos_writes": 3,
           "checkpoint": {
@@ -2734,7 +2734,7 @@
         "checksum": {
           "content_hash": "bd2bd09ca477be810c5ddaf258e5d37926a553ffdfe3beffecaa7b11e404095b",
           "index_consistency": {
-            "dick-head-choas-checkpoint-thrash": "rows=512"
+            "chaos-checkpoint-thrash": "rows=512"
           },
           "payload_bytes": 7360,
           "rows": 512,
@@ -2756,7 +2756,7 @@
           "chaos_profile": "bounded",
           "chaos_reads": 214,
           "chaos_seed_rows": 512,
-          "chaos_suite": "dick-head-choas",
+          "chaos_suite": "chaos",
           "chaos_workload": "checkpoint-thrash",
           "chaos_writes": 162,
           "checkpoint": {
@@ -2883,7 +2883,7 @@
         "checksum": {
           "content_hash": "125c15c366cceb1b97d5570649571822fb9e687f060515ea958e6737967acead",
           "index_consistency": {
-            "dick-head-choas-checkpoint-thrash": "rows=512"
+            "chaos-checkpoint-thrash": "rows=512"
           },
           "payload_bytes": 7176,
           "rows": 512,
@@ -2905,7 +2905,7 @@
           "chaos_profile": "bounded",
           "chaos_reads": 1326,
           "chaos_seed_rows": 512,
-          "chaos_suite": "dick-head-choas",
+          "chaos_suite": "chaos",
           "chaos_workload": "checkpoint-thrash",
           "chaos_writes": 1080,
           "checkpoint": {
@@ -3032,7 +3032,7 @@
         "checksum": {
           "content_hash": "5ae7b84bdcc94a2da9b141f9807228e3f8d61e2578828c6b8179cff5498d1286",
           "index_consistency": {
-            "dick-head-choas-checkpoint-thrash": "rows=512"
+            "chaos-checkpoint-thrash": "rows=512"
           },
           "payload_bytes": 7172,
           "rows": 512,
@@ -3054,7 +3054,7 @@
           "chaos_profile": "bounded",
           "chaos_reads": 5,
           "chaos_seed_rows": 512,
-          "chaos_suite": "dick-head-choas",
+          "chaos_suite": "chaos",
           "chaos_workload": "checkpoint-thrash",
           "chaos_writes": 3,
           "checkpoint": {
@@ -3181,7 +3181,7 @@
         "checksum": {
           "content_hash": "38c13c28669bcef59946f032ef1a6076c6f6e1cba9525de060f478db557470fb",
           "index_consistency": {
-            "dick-head-choas-checkpoint-thrash": "rows=512"
+            "chaos-checkpoint-thrash": "rows=512"
           },
           "payload_bytes": 7245,
           "rows": 512,
@@ -3203,7 +3203,7 @@
           "chaos_profile": "bounded",
           "chaos_reads": 647,
           "chaos_seed_rows": 512,
-          "chaos_suite": "dick-head-choas",
+          "chaos_suite": "chaos",
           "chaos_workload": "checkpoint-thrash",
           "chaos_writes": 524,
           "checkpoint": {
@@ -3330,7 +3330,7 @@
         "checksum": {
           "content_hash": "35497bf872208491417324cedaf7775372120d14de7774fef7661d6e3683c64c",
           "index_consistency": {
-            "dick-head-choas-checkpoint-thrash": "rows=512"
+            "chaos-checkpoint-thrash": "rows=512"
           },
           "payload_bytes": 7177,
           "rows": 512,
@@ -3352,7 +3352,7 @@
           "chaos_profile": "bounded",
           "chaos_reads": 1316,
           "chaos_seed_rows": 512,
-          "chaos_suite": "dick-head-choas",
+          "chaos_suite": "chaos",
           "chaos_workload": "checkpoint-thrash",
           "chaos_writes": 1095,
           "checkpoint": {
@@ -3479,7 +3479,7 @@
         "checksum": {
           "content_hash": "302cea305d188f4138d8183d0a8faeb7e88cc5678382cd2a19ceaa4602d6fb28",
           "index_consistency": {
-            "dick-head-choas-index-hammer": "rows=449"
+            "chaos-index-hammer": "rows=449"
           },
           "payload_bytes": 6397,
           "rows": 449,
@@ -3503,7 +3503,7 @@
           "chaos_reads": 122,
           "chaos_rollbacks": 41,
           "chaos_seed_rows": 512,
-          "chaos_suite": "dick-head-choas",
+          "chaos_suite": "chaos",
           "chaos_workload": "index-hammer",
           "chaos_writes": 99,
           "checkpoint": {
@@ -3630,7 +3630,7 @@
         "checksum": {
           "content_hash": "824e24b762d69eb08ed2fa5f41338e0f3172301637d7cc71efc057272463ed93",
           "index_consistency": {
-            "dick-head-choas-index-hammer": "rows=504"
+            "chaos-index-hammer": "rows=504"
           },
           "payload_bytes": 7062,
           "rows": 504,
@@ -3654,7 +3654,7 @@
           "chaos_reads": 648,
           "chaos_rollbacks": 0,
           "chaos_seed_rows": 512,
-          "chaos_suite": "dick-head-choas",
+          "chaos_suite": "chaos",
           "chaos_workload": "index-hammer",
           "chaos_writes": 606,
           "checkpoint": {
@@ -3781,7 +3781,7 @@
         "checksum": {
           "content_hash": "159cb3377e6f99d722776d926c7e76257255f09ae9271a49487deb2250093c03",
           "index_consistency": {
-            "dick-head-choas-index-hammer": "rows=482"
+            "chaos-index-hammer": "rows=482"
           },
           "payload_bytes": 6794,
           "rows": 482,
@@ -3805,7 +3805,7 @@
           "chaos_reads": 824,
           "chaos_rollbacks": 4,
           "chaos_seed_rows": 512,
-          "chaos_suite": "dick-head-choas",
+          "chaos_suite": "chaos",
           "chaos_workload": "index-hammer",
           "chaos_writes": 782,
           "checkpoint": {
@@ -3932,7 +3932,7 @@
         "checksum": {
           "content_hash": "b22df3ab5916ca3bc4a0d86cd0f07853fb0346a069e006d3cecd7acec5f54368",
           "index_consistency": {
-            "dick-head-choas-index-hammer": "rows=345"
+            "chaos-index-hammer": "rows=345"
           },
           "payload_bytes": 5053,
           "rows": 345,
@@ -3956,7 +3956,7 @@
           "chaos_reads": 304,
           "chaos_rollbacks": 96,
           "chaos_seed_rows": 512,
-          "chaos_suite": "dick-head-choas",
+          "chaos_suite": "chaos",
           "chaos_workload": "index-hammer",
           "chaos_writes": 289,
           "checkpoint": {
@@ -4083,7 +4083,7 @@
         "checksum": {
           "content_hash": "a017c22753e228dc7785f9240beddd769bb091977e9f18cffd43a6a84e906f20",
           "index_consistency": {
-            "dick-head-choas-index-hammer": "rows=503"
+            "chaos-index-hammer": "rows=503"
           },
           "payload_bytes": 7051,
           "rows": 503,
@@ -4107,7 +4107,7 @@
           "chaos_reads": 645,
           "chaos_rollbacks": 0,
           "chaos_seed_rows": 512,
-          "chaos_suite": "dick-head-choas",
+          "chaos_suite": "chaos",
           "chaos_workload": "index-hammer",
           "chaos_writes": 604,
           "checkpoint": {
@@ -4234,7 +4234,7 @@
         "checksum": {
           "content_hash": "d150244fc092b211528f59ff44dce85a5cbe06877d115ec440aceb6c023b8f18",
           "index_consistency": {
-            "dick-head-choas-index-hammer": "rows=488"
+            "chaos-index-hammer": "rows=488"
           },
           "payload_bytes": 6877,
           "rows": 488,
@@ -4258,7 +4258,7 @@
           "chaos_reads": 884,
           "chaos_rollbacks": 2,
           "chaos_seed_rows": 512,
-          "chaos_suite": "dick-head-choas",
+          "chaos_suite": "chaos",
           "chaos_workload": "index-hammer",
           "chaos_writes": 830,
           "checkpoint": {
@@ -4385,7 +4385,7 @@
         "checksum": {
           "content_hash": "2f9baa33a751c8a3f71cc5a2165142e8fb3b6368bbd21e2af78f2200524713af",
           "index_consistency": {
-            "dick-head-choas-temp-spill-convoy": "rows=512"
+            "chaos-temp-spill-convoy": "rows=512"
           },
           "payload_bytes": 131072,
           "rows": 512,
@@ -4406,7 +4406,7 @@
           "chaos_profile": "bounded",
           "chaos_seed_rows": 512,
           "chaos_spill_queries": 143,
-          "chaos_suite": "dick-head-choas",
+          "chaos_suite": "chaos",
           "chaos_workload": "temp-spill-convoy",
           "chaos_writes": 95,
           "checkpoint": {
@@ -4533,7 +4533,7 @@
         "checksum": {
           "content_hash": "1b08874b83a74c821c9aee909498ba6fc12d4f8abbb3bac6761ba01f71bf1441",
           "index_consistency": {
-            "dick-head-choas-temp-spill-convoy": "rows=512"
+            "chaos-temp-spill-convoy": "rows=512"
           },
           "payload_bytes": 131072,
           "rows": 512,
@@ -4554,7 +4554,7 @@
           "chaos_profile": "bounded",
           "chaos_seed_rows": 512,
           "chaos_spill_queries": 519,
-          "chaos_suite": "dick-head-choas",
+          "chaos_suite": "chaos",
           "chaos_workload": "temp-spill-convoy",
           "chaos_writes": 323,
           "checkpoint": {
@@ -4681,7 +4681,7 @@
         "checksum": {
           "content_hash": "d860471d8e5ebe5f9f52b27c642e91ce890b9dedc086616381d271a6c1f457b1",
           "index_consistency": {
-            "dick-head-choas-temp-spill-convoy": "rows=512"
+            "chaos-temp-spill-convoy": "rows=512"
           },
           "payload_bytes": 131072,
           "rows": 512,
@@ -4702,7 +4702,7 @@
           "chaos_profile": "bounded",
           "chaos_seed_rows": 512,
           "chaos_spill_queries": 1273,
-          "chaos_suite": "dick-head-choas",
+          "chaos_suite": "chaos",
           "chaos_workload": "temp-spill-convoy",
           "chaos_writes": 829,
           "checkpoint": {
@@ -4829,7 +4829,7 @@
         "checksum": {
           "content_hash": "5876f09cb8a94187c510f1f06f6322823af752732df489c4a18d7f56c53485f2",
           "index_consistency": {
-            "dick-head-choas-temp-spill-convoy": "rows=512"
+            "chaos-temp-spill-convoy": "rows=512"
           },
           "payload_bytes": 131072,
           "rows": 512,
@@ -4850,7 +4850,7 @@
           "chaos_profile": "bounded",
           "chaos_seed_rows": 512,
           "chaos_spill_queries": 318,
-          "chaos_suite": "dick-head-choas",
+          "chaos_suite": "chaos",
           "chaos_workload": "temp-spill-convoy",
           "chaos_writes": 210,
           "checkpoint": {
@@ -4977,7 +4977,7 @@
         "checksum": {
           "content_hash": "2ec68ffcf53cd34c8d867219fb03df580980bd8c3497441736d75dae09957fb1",
           "index_consistency": {
-            "dick-head-choas-temp-spill-convoy": "rows=512"
+            "chaos-temp-spill-convoy": "rows=512"
           },
           "payload_bytes": 131072,
           "rows": 512,
@@ -4998,7 +4998,7 @@
           "chaos_profile": "bounded",
           "chaos_seed_rows": 512,
           "chaos_spill_queries": 694,
-          "chaos_suite": "dick-head-choas",
+          "chaos_suite": "chaos",
           "chaos_workload": "temp-spill-convoy",
           "chaos_writes": 464,
           "checkpoint": {
@@ -5125,7 +5125,7 @@
         "checksum": {
           "content_hash": "c32c280a506819ec2afa766b50dd6224a671adf6f538331b76e12f7b949d1203",
           "index_consistency": {
-            "dick-head-choas-temp-spill-convoy": "rows=512"
+            "chaos-temp-spill-convoy": "rows=512"
           },
           "payload_bytes": 131072,
           "rows": 512,
@@ -5146,7 +5146,7 @@
           "chaos_profile": "bounded",
           "chaos_seed_rows": 512,
           "chaos_spill_queries": 1261,
-          "chaos_suite": "dick-head-choas",
+          "chaos_suite": "chaos",
           "chaos_workload": "temp-spill-convoy",
           "chaos_writes": 827,
           "checkpoint": {
@@ -5273,7 +5273,7 @@
         "checksum": {
           "content_hash": "4949c0a7f780a504d9d6a43b6bfe3c442843a8e1d1580a54df3742053e5b6fd3",
           "index_consistency": {
-            "dick-head-choas-lock-convoy": "rows=512"
+            "chaos-lock-convoy": "rows=512"
           },
           "payload_bytes": 7170,
           "rows": 512,
@@ -5288,7 +5288,7 @@
           "chaos_profile": "bounded",
           "chaos_rollbacks": 62,
           "chaos_seed_rows": 512,
-          "chaos_suite": "dick-head-choas",
+          "chaos_suite": "chaos",
           "chaos_workload": "lock-convoy",
           "journal_mode": "wal",
           "synchronous": 2,
@@ -5343,7 +5343,7 @@
         "checksum": {
           "content_hash": "60f87edcbf7e673f499a90fcf6bf7e7f28975f7088e6289343c2b6d7d17402e3",
           "index_consistency": {
-            "dick-head-choas-lock-convoy": "rows=512"
+            "chaos-lock-convoy": "rows=512"
           },
           "payload_bytes": 7170,
           "rows": 512,
@@ -5358,7 +5358,7 @@
           "chaos_profile": "bounded",
           "chaos_rollbacks": 63,
           "chaos_seed_rows": 512,
-          "chaos_suite": "dick-head-choas",
+          "chaos_suite": "chaos",
           "chaos_workload": "lock-convoy",
           "journal_mode": "wal",
           "synchronous": 2,
@@ -5413,7 +5413,7 @@
         "checksum": {
           "content_hash": "23f7cdbe2901dfd8d575f991a8aba1726f89f485487b753bc0323546bd380cd2",
           "index_consistency": {
-            "dick-head-choas-lock-convoy": "rows=512"
+            "chaos-lock-convoy": "rows=512"
           },
           "payload_bytes": 7170,
           "rows": 512,
@@ -5428,7 +5428,7 @@
           "chaos_profile": "bounded",
           "chaos_rollbacks": 57,
           "chaos_seed_rows": 512,
-          "chaos_suite": "dick-head-choas",
+          "chaos_suite": "chaos",
           "chaos_workload": "lock-convoy",
           "journal_mode": "wal",
           "synchronous": 2,
@@ -5483,7 +5483,7 @@
         "checksum": {
           "content_hash": "2c03ebce5e68021894e087682a8ff1089ced6d8a6e56e67c6e60f8641e845708",
           "index_consistency": {
-            "dick-head-choas-lock-convoy": "rows=512"
+            "chaos-lock-convoy": "rows=512"
           },
           "payload_bytes": 7170,
           "rows": 512,
@@ -5498,7 +5498,7 @@
           "chaos_profile": "bounded",
           "chaos_rollbacks": 63,
           "chaos_seed_rows": 512,
-          "chaos_suite": "dick-head-choas",
+          "chaos_suite": "chaos",
           "chaos_workload": "lock-convoy",
           "journal_mode": "wal",
           "synchronous": 1,
@@ -5553,7 +5553,7 @@
         "checksum": {
           "content_hash": "80060623f5afb57b85408a5d6ba0199c67c6b6990bd16ab4b24c29cc59ceb439",
           "index_consistency": {
-            "dick-head-choas-lock-convoy": "rows=512"
+            "chaos-lock-convoy": "rows=512"
           },
           "payload_bytes": 7170,
           "rows": 512,
@@ -5568,7 +5568,7 @@
           "chaos_profile": "bounded",
           "chaos_rollbacks": 69,
           "chaos_seed_rows": 512,
-          "chaos_suite": "dick-head-choas",
+          "chaos_suite": "chaos",
           "chaos_workload": "lock-convoy",
           "journal_mode": "wal",
           "synchronous": 1,
@@ -5623,7 +5623,7 @@
         "checksum": {
           "content_hash": "382f346caf5e0216b2c93d7b96e7a541cb4ffc12a2bbfc962e4e42fedb6ddf3c",
           "index_consistency": {
-            "dick-head-choas-lock-convoy": "rows=512"
+            "chaos-lock-convoy": "rows=512"
           },
           "payload_bytes": 7170,
           "rows": 512,
@@ -5638,7 +5638,7 @@
           "chaos_profile": "bounded",
           "chaos_rollbacks": 60,
           "chaos_seed_rows": 512,
-          "chaos_suite": "dick-head-choas",
+          "chaos_suite": "chaos",
           "chaos_workload": "lock-convoy",
           "journal_mode": "wal",
           "synchronous": 1,
@@ -5693,7 +5693,7 @@
         "checksum": {
           "content_hash": "3bc398aa21b3e01334f3f769febaae0d614b441b9e557347a91c8c8b3a0cd0f1",
           "index_consistency": {
-            "dick-head-choas-connection-churn": "rows=512"
+            "chaos-connection-churn": "rows=512"
           },
           "payload_bytes": 7771,
           "rows": 512,
@@ -5710,7 +5710,7 @@
           "chaos_reads": 1492,
           "chaos_rollbacks": 73,
           "chaos_seed_rows": 512,
-          "chaos_suite": "dick-head-choas",
+          "chaos_suite": "chaos",
           "chaos_workload": "connection-churn",
           "chaos_writes": 683,
           "journal_mode": "wal",
@@ -5766,7 +5766,7 @@
         "checksum": {
           "content_hash": "4f41a8a035556df34e7126bdcbc791431b8d479a006d911bf190e7ad6351ca84",
           "index_consistency": {
-            "dick-head-choas-connection-churn": "rows=512"
+            "chaos-connection-churn": "rows=512"
           },
           "payload_bytes": 8035,
           "rows": 512,
@@ -5783,7 +5783,7 @@
           "chaos_reads": 6449,
           "chaos_rollbacks": 284,
           "chaos_seed_rows": 512,
-          "chaos_suite": "dick-head-choas",
+          "chaos_suite": "chaos",
           "chaos_workload": "connection-churn",
           "chaos_writes": 2809,
           "journal_mode": "wal",
@@ -5839,7 +5839,7 @@
         "checksum": {
           "content_hash": "99c1bdcc50cd3259e4fe946d9738fe84d91df6375d56cda413ccec797434564c",
           "index_consistency": {
-            "dick-head-choas-connection-churn": "rows=512"
+            "chaos-connection-churn": "rows=512"
           },
           "payload_bytes": 8029,
           "rows": 512,
@@ -5856,7 +5856,7 @@
           "chaos_reads": 5919,
           "chaos_rollbacks": 264,
           "chaos_seed_rows": 512,
-          "chaos_suite": "dick-head-choas",
+          "chaos_suite": "chaos",
           "chaos_workload": "connection-churn",
           "chaos_writes": 2581,
           "journal_mode": "wal",
@@ -5912,7 +5912,7 @@
         "checksum": {
           "content_hash": "881b4c7f05d66e7e161f81d335f2c8b4c3c452ee0ed91d3d1eadac08913acc6d",
           "index_consistency": {
-            "dick-head-choas-connection-churn": "rows=512"
+            "chaos-connection-churn": "rows=512"
           },
           "payload_bytes": 7765,
           "rows": 512,
@@ -5929,7 +5929,7 @@
           "chaos_reads": 1459,
           "chaos_rollbacks": 72,
           "chaos_seed_rows": 512,
-          "chaos_suite": "dick-head-choas",
+          "chaos_suite": "chaos",
           "chaos_workload": "connection-churn",
           "chaos_writes": 669,
           "journal_mode": "wal",
@@ -5985,7 +5985,7 @@
         "checksum": {
           "content_hash": "6917af7d532ed31222863dc12250352f15906815f30760014bf6050ae4530c90",
           "index_consistency": {
-            "dick-head-choas-connection-churn": "rows=512"
+            "chaos-connection-churn": "rows=512"
           },
           "payload_bytes": 8039,
           "rows": 512,
@@ -6002,7 +6002,7 @@
           "chaos_reads": 5882,
           "chaos_rollbacks": 260,
           "chaos_seed_rows": 512,
-          "chaos_suite": "dick-head-choas",
+          "chaos_suite": "chaos",
           "chaos_workload": "connection-churn",
           "chaos_writes": 2561,
           "journal_mode": "wal",
@@ -6058,7 +6058,7 @@
         "checksum": {
           "content_hash": "5ea83fafe903ff14312f8f6d8f84d94cab8d7d8126cea7227db1f996fcfc29cd",
           "index_consistency": {
-            "dick-head-choas-connection-churn": "rows=512"
+            "chaos-connection-churn": "rows=512"
           },
           "payload_bytes": 8036,
           "rows": 512,
@@ -6075,7 +6075,7 @@
           "chaos_reads": 5875,
           "chaos_rollbacks": 270,
           "chaos_seed_rows": 512,
-          "chaos_suite": "dick-head-choas",
+          "chaos_suite": "chaos",
           "chaos_workload": "connection-churn",
           "chaos_writes": 2558,
           "journal_mode": "wal",
@@ -6131,7 +6131,7 @@
         "checksum": {
           "content_hash": "4f0f1791a31c22afd2424e4bbf80e52d34efc3d6a39804f4c615157a313c43cc",
           "index_consistency": {
-            "dick-head-choas-checkpoint-thrash": "rows=512"
+            "chaos-checkpoint-thrash": "rows=512"
           },
           "payload_bytes": 7964,
           "rows": 512,
@@ -6146,7 +6146,7 @@
           "chaos_profile": "bounded",
           "chaos_reads": 1658,
           "chaos_seed_rows": 512,
-          "chaos_suite": "dick-head-choas",
+          "chaos_suite": "chaos",
           "chaos_workload": "checkpoint-thrash",
           "chaos_writes": 1433,
           "journal_mode": "wal",
@@ -6202,7 +6202,7 @@
         "checksum": {
           "content_hash": "7df0564899e4738f216eea1f476f138486cba6460ac2669d1ead017d5021ba92",
           "index_consistency": {
-            "dick-head-choas-checkpoint-thrash": "rows=512"
+            "chaos-checkpoint-thrash": "rows=512"
           },
           "payload_bytes": 8071,
           "rows": 512,
@@ -6217,7 +6217,7 @@
           "chaos_profile": "bounded",
           "chaos_reads": 24205,
           "chaos_seed_rows": 512,
-          "chaos_suite": "dick-head-choas",
+          "chaos_suite": "chaos",
           "chaos_workload": "checkpoint-thrash",
           "chaos_writes": 19855,
           "journal_mode": "wal",
@@ -6273,7 +6273,7 @@
         "checksum": {
           "content_hash": "ae4d2bc49517484c9f68afeb866f6c8b5403eb3595851cdd858171be07fd3bcd",
           "index_consistency": {
-            "dick-head-choas-checkpoint-thrash": "rows=512"
+            "chaos-checkpoint-thrash": "rows=512"
           },
           "payload_bytes": 8085,
           "rows": 512,
@@ -6288,7 +6288,7 @@
           "chaos_profile": "bounded",
           "chaos_reads": 28996,
           "chaos_seed_rows": 512,
-          "chaos_suite": "dick-head-choas",
+          "chaos_suite": "chaos",
           "chaos_workload": "checkpoint-thrash",
           "chaos_writes": 23740,
           "journal_mode": "wal",
@@ -6344,7 +6344,7 @@
         "checksum": {
           "content_hash": "0798c917215f3b8e23e96efc672312fac022f475bcdd3ab4a2c65c52118d8a4b",
           "index_consistency": {
-            "dick-head-choas-checkpoint-thrash": "rows=512"
+            "chaos-checkpoint-thrash": "rows=512"
           },
           "payload_bytes": 7964,
           "rows": 512,
@@ -6359,7 +6359,7 @@
           "chaos_profile": "bounded",
           "chaos_reads": 1656,
           "chaos_seed_rows": 512,
-          "chaos_suite": "dick-head-choas",
+          "chaos_suite": "chaos",
           "chaos_workload": "checkpoint-thrash",
           "chaos_writes": 1431,
           "journal_mode": "wal",
@@ -6415,7 +6415,7 @@
         "checksum": {
           "content_hash": "78ce3d58ba22c60fc27006870968bb6a24f683588eab356fcc74c17d63f04a79",
           "index_consistency": {
-            "dick-head-choas-checkpoint-thrash": "rows=512"
+            "chaos-checkpoint-thrash": "rows=512"
           },
           "payload_bytes": 8061,
           "rows": 512,
@@ -6430,7 +6430,7 @@
           "chaos_profile": "bounded",
           "chaos_reads": 40752,
           "chaos_seed_rows": 512,
-          "chaos_suite": "dick-head-choas",
+          "chaos_suite": "chaos",
           "chaos_workload": "checkpoint-thrash",
           "chaos_writes": 33383,
           "journal_mode": "wal",
@@ -6486,7 +6486,7 @@
         "checksum": {
           "content_hash": "886ed2e4fa28467c59ec78a83edf8ffb9cbb980bca2356618905aa11da73bb5f",
           "index_consistency": {
-            "dick-head-choas-checkpoint-thrash": "rows=512"
+            "chaos-checkpoint-thrash": "rows=512"
           },
           "payload_bytes": 8062,
           "rows": 512,
@@ -6501,7 +6501,7 @@
           "chaos_profile": "bounded",
           "chaos_reads": 45821,
           "chaos_seed_rows": 512,
-          "chaos_suite": "dick-head-choas",
+          "chaos_suite": "chaos",
           "chaos_workload": "checkpoint-thrash",
           "chaos_writes": 37453,
           "journal_mode": "wal",
@@ -6557,7 +6557,7 @@
         "checksum": {
           "content_hash": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
           "index_consistency": {
-            "dick-head-choas-index-hammer": "rows=0"
+            "chaos-index-hammer": "rows=0"
           },
           "payload_bytes": 0,
           "rows": 0,
@@ -6574,7 +6574,7 @@
           "chaos_reads": 43238,
           "chaos_rollbacks": 12543,
           "chaos_seed_rows": 512,
-          "chaos_suite": "dick-head-choas",
+          "chaos_suite": "chaos",
           "chaos_workload": "index-hammer",
           "chaos_writes": 43335,
           "journal_mode": "wal",
@@ -6630,7 +6630,7 @@
         "checksum": {
           "content_hash": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
           "index_consistency": {
-            "dick-head-choas-index-hammer": "rows=0"
+            "chaos-index-hammer": "rows=0"
           },
           "payload_bytes": 0,
           "rows": 0,
@@ -6647,7 +6647,7 @@
           "chaos_reads": 41362,
           "chaos_rollbacks": 11961,
           "chaos_seed_rows": 512,
-          "chaos_suite": "dick-head-choas",
+          "chaos_suite": "chaos",
           "chaos_workload": "index-hammer",
           "chaos_writes": 41814,
           "journal_mode": "wal",
@@ -6703,7 +6703,7 @@
         "checksum": {
           "content_hash": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
           "index_consistency": {
-            "dick-head-choas-index-hammer": "rows=0"
+            "chaos-index-hammer": "rows=0"
           },
           "payload_bytes": 0,
           "rows": 0,
@@ -6720,7 +6720,7 @@
           "chaos_reads": 43626,
           "chaos_rollbacks": 12567,
           "chaos_seed_rows": 512,
-          "chaos_suite": "dick-head-choas",
+          "chaos_suite": "chaos",
           "chaos_workload": "index-hammer",
           "chaos_writes": 43852,
           "journal_mode": "wal",
@@ -6776,7 +6776,7 @@
         "checksum": {
           "content_hash": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
           "index_consistency": {
-            "dick-head-choas-index-hammer": "rows=0"
+            "chaos-index-hammer": "rows=0"
           },
           "payload_bytes": 0,
           "rows": 0,
@@ -6793,7 +6793,7 @@
           "chaos_reads": 45449,
           "chaos_rollbacks": 13153,
           "chaos_seed_rows": 512,
-          "chaos_suite": "dick-head-choas",
+          "chaos_suite": "chaos",
           "chaos_workload": "index-hammer",
           "chaos_writes": 45517,
           "journal_mode": "wal",
@@ -6849,7 +6849,7 @@
         "checksum": {
           "content_hash": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
           "index_consistency": {
-            "dick-head-choas-index-hammer": "rows=0"
+            "chaos-index-hammer": "rows=0"
           },
           "payload_bytes": 0,
           "rows": 0,
@@ -6866,7 +6866,7 @@
           "chaos_reads": 43557,
           "chaos_rollbacks": 12541,
           "chaos_seed_rows": 512,
-          "chaos_suite": "dick-head-choas",
+          "chaos_suite": "chaos",
           "chaos_workload": "index-hammer",
           "chaos_writes": 43823,
           "journal_mode": "wal",
@@ -6922,7 +6922,7 @@
         "checksum": {
           "content_hash": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
           "index_consistency": {
-            "dick-head-choas-index-hammer": "rows=0"
+            "chaos-index-hammer": "rows=0"
           },
           "payload_bytes": 0,
           "rows": 0,
@@ -6939,7 +6939,7 @@
           "chaos_reads": 45085,
           "chaos_rollbacks": 12917,
           "chaos_seed_rows": 512,
-          "chaos_suite": "dick-head-choas",
+          "chaos_suite": "chaos",
           "chaos_workload": "index-hammer",
           "chaos_writes": 45248,
           "journal_mode": "wal",
@@ -6995,7 +6995,7 @@
         "checksum": {
           "content_hash": "6dd9bfa258bb63e6274774866753b6be07f5792d57f3c2044d01028c5f979e16",
           "index_consistency": {
-            "dick-head-choas-temp-spill-convoy": "rows=512"
+            "chaos-temp-spill-convoy": "rows=512"
           },
           "payload_bytes": 131072,
           "rows": 512,
@@ -7009,7 +7009,7 @@
           "chaos_profile": "bounded",
           "chaos_seed_rows": 512,
           "chaos_spill_queries": 4769,
-          "chaos_suite": "dick-head-choas",
+          "chaos_suite": "chaos",
           "chaos_workload": "temp-spill-convoy",
           "chaos_writes": 3177,
           "journal_mode": "wal",
@@ -7065,7 +7065,7 @@
         "checksum": {
           "content_hash": "1ae5dbcb902f0cdb3db0cd44837ca5e3557665b2035eab59108dd01515aa16c8",
           "index_consistency": {
-            "dick-head-choas-temp-spill-convoy": "rows=512"
+            "chaos-temp-spill-convoy": "rows=512"
           },
           "payload_bytes": 131072,
           "rows": 512,
@@ -7079,7 +7079,7 @@
           "chaos_profile": "bounded",
           "chaos_seed_rows": 512,
           "chaos_spill_queries": 6596,
-          "chaos_suite": "dick-head-choas",
+          "chaos_suite": "chaos",
           "chaos_workload": "temp-spill-convoy",
           "chaos_writes": 4401,
           "journal_mode": "wal",
@@ -7135,7 +7135,7 @@
         "checksum": {
           "content_hash": "8811feec9f64843facdba12ef0cc1986d722a20e73dd4bc4e684bde988f61787",
           "index_consistency": {
-            "dick-head-choas-temp-spill-convoy": "rows=512"
+            "chaos-temp-spill-convoy": "rows=512"
           },
           "payload_bytes": 131072,
           "rows": 512,
@@ -7149,7 +7149,7 @@
           "chaos_profile": "bounded",
           "chaos_seed_rows": 512,
           "chaos_spill_queries": 4294,
-          "chaos_suite": "dick-head-choas",
+          "chaos_suite": "chaos",
           "chaos_workload": "temp-spill-convoy",
           "chaos_writes": 2829,
           "journal_mode": "wal",
@@ -7205,7 +7205,7 @@
         "checksum": {
           "content_hash": "272170aeb2c13786cf0a17a9ecdc8af0eff6d281f26f19ff133f6cab2bb69dc3",
           "index_consistency": {
-            "dick-head-choas-temp-spill-convoy": "rows=512"
+            "chaos-temp-spill-convoy": "rows=512"
           },
           "payload_bytes": 131072,
           "rows": 512,
@@ -7219,7 +7219,7 @@
           "chaos_profile": "bounded",
           "chaos_seed_rows": 512,
           "chaos_spill_queries": 5215,
-          "chaos_suite": "dick-head-choas",
+          "chaos_suite": "chaos",
           "chaos_workload": "temp-spill-convoy",
           "chaos_writes": 3452,
           "journal_mode": "wal",
@@ -7275,7 +7275,7 @@
         "checksum": {
           "content_hash": "5742ec158720c6ccce524c212bcd261e63da4bdc78acd5f9af6397795fadacd4",
           "index_consistency": {
-            "dick-head-choas-temp-spill-convoy": "rows=512"
+            "chaos-temp-spill-convoy": "rows=512"
           },
           "payload_bytes": 131072,
           "rows": 512,
@@ -7289,7 +7289,7 @@
           "chaos_profile": "bounded",
           "chaos_seed_rows": 512,
           "chaos_spill_queries": 6959,
-          "chaos_suite": "dick-head-choas",
+          "chaos_suite": "chaos",
           "chaos_workload": "temp-spill-convoy",
           "chaos_writes": 4624,
           "journal_mode": "wal",
@@ -7345,7 +7345,7 @@
         "checksum": {
           "content_hash": "23a6a3da11a073e69807eb62f60ec192df29361e99a94552d35f17ae6a5c5826",
           "index_consistency": {
-            "dick-head-choas-temp-spill-convoy": "rows=512"
+            "chaos-temp-spill-convoy": "rows=512"
           },
           "payload_bytes": 131072,
           "rows": 512,
@@ -7359,7 +7359,7 @@
           "chaos_profile": "bounded",
           "chaos_seed_rows": 512,
           "chaos_spill_queries": 4069,
-          "chaos_suite": "dick-head-choas",
+          "chaos_suite": "chaos",
           "chaos_workload": "temp-spill-convoy",
           "chaos_writes": 2694,
           "journal_mode": "wal",
@@ -7418,7 +7418,7 @@
       "checksum": {
         "content_hash": "384d3329db86bce3db17e9c0b399fe89dc56c84fb4a101e5b1b1d3183c1514ff",
         "index_consistency": {
-          "dick-head-choas-lock-convoy": "rows=512"
+          "chaos-lock-convoy": "rows=512"
         },
         "payload_bytes": 7170,
         "rows": 512,
@@ -7440,7 +7440,7 @@
         "chaos_profile": "bounded",
         "chaos_rollbacks": 18,
         "chaos_seed_rows": 512,
-        "chaos_suite": "dick-head-choas",
+        "chaos_suite": "chaos",
         "chaos_workload": "lock-convoy",
         "checkpoint": {
           "generation": 1,
@@ -7566,7 +7566,7 @@
       "checksum": {
         "content_hash": "a864c2ca5265d438bcded725374900e5a78c971b19b94a37ab0548ff0c048486",
         "index_consistency": {
-          "dick-head-choas-lock-convoy": "rows=512"
+          "chaos-lock-convoy": "rows=512"
         },
         "payload_bytes": 7169,
         "rows": 512,
@@ -7588,7 +7588,7 @@
         "chaos_profile": "bounded",
         "chaos_rollbacks": 0,
         "chaos_seed_rows": 512,
-        "chaos_suite": "dick-head-choas",
+        "chaos_suite": "chaos",
         "chaos_workload": "lock-convoy",
         "checkpoint": {
           "generation": 1,
@@ -7714,7 +7714,7 @@
       "checksum": {
         "content_hash": "b1f019740e9b5767eea0f95c945560487ac391cefecb0eac4e335dd87a228cf9",
         "index_consistency": {
-          "dick-head-choas-lock-convoy": "rows=512"
+          "chaos-lock-convoy": "rows=512"
         },
         "payload_bytes": 7170,
         "rows": 512,
@@ -7736,7 +7736,7 @@
         "chaos_profile": "bounded",
         "chaos_rollbacks": 0,
         "chaos_seed_rows": 512,
-        "chaos_suite": "dick-head-choas",
+        "chaos_suite": "chaos",
         "chaos_workload": "lock-convoy",
         "checkpoint": {
           "generation": 1,
@@ -7862,7 +7862,7 @@
       "checksum": {
         "content_hash": "762181f404a13aab4e8143176518461fdfde46ac411427789ce723669f0cfdb4",
         "index_consistency": {
-          "dick-head-choas-lock-convoy": "rows=512"
+          "chaos-lock-convoy": "rows=512"
         },
         "payload_bytes": 7169,
         "rows": 512,
@@ -7884,7 +7884,7 @@
         "chaos_profile": "bounded",
         "chaos_rollbacks": 33,
         "chaos_seed_rows": 512,
-        "chaos_suite": "dick-head-choas",
+        "chaos_suite": "chaos",
         "chaos_workload": "lock-convoy",
         "checkpoint": {
           "generation": 1,
@@ -8010,7 +8010,7 @@
       "checksum": {
         "content_hash": "56569167be8b6912f62d907dc50e86a6ca178358542aa9bbaab08790668c47dd",
         "index_consistency": {
-          "dick-head-choas-lock-convoy": "rows=512"
+          "chaos-lock-convoy": "rows=512"
         },
         "payload_bytes": 7170,
         "rows": 512,
@@ -8032,7 +8032,7 @@
         "chaos_profile": "bounded",
         "chaos_rollbacks": 0,
         "chaos_seed_rows": 512,
-        "chaos_suite": "dick-head-choas",
+        "chaos_suite": "chaos",
         "chaos_workload": "lock-convoy",
         "checkpoint": {
           "generation": 1,
@@ -8158,7 +8158,7 @@
       "checksum": {
         "content_hash": "786c71f572ae235e908cc34d0aa0d0b2feabf159a0af47f99b72fa5ea9ec3492",
         "index_consistency": {
-          "dick-head-choas-lock-convoy": "rows=512"
+          "chaos-lock-convoy": "rows=512"
         },
         "payload_bytes": 7170,
         "rows": 512,
@@ -8180,7 +8180,7 @@
         "chaos_profile": "bounded",
         "chaos_rollbacks": 1,
         "chaos_seed_rows": 512,
-        "chaos_suite": "dick-head-choas",
+        "chaos_suite": "chaos",
         "chaos_workload": "lock-convoy",
         "checkpoint": {
           "generation": 1,
@@ -8306,7 +8306,7 @@
       "checksum": {
         "content_hash": "9816ff6898be386ad8ea19749c2047994f8d634ed4d3016c45531f412ead70c2",
         "index_consistency": {
-          "dick-head-choas-connection-churn": "rows=512"
+          "chaos-connection-churn": "rows=512"
         },
         "payload_bytes": 7395,
         "rows": 512,
@@ -8330,7 +8330,7 @@
         "chaos_reads": 390,
         "chaos_rollbacks": 19,
         "chaos_seed_rows": 512,
-        "chaos_suite": "dick-head-choas",
+        "chaos_suite": "chaos",
         "chaos_workload": "connection-churn",
         "chaos_writes": 171,
         "checkpoint": {
@@ -8457,7 +8457,7 @@
       "checksum": {
         "content_hash": "7f4ce48cc8fbe45064c2819176725ef05f26fdebfa0dc6cce96edcfe184e88b2",
         "index_consistency": {
-          "dick-head-choas-connection-churn": "rows=512"
+          "chaos-connection-churn": "rows=512"
         },
         "payload_bytes": 7233,
         "rows": 512,
@@ -8481,7 +8481,7 @@
         "chaos_reads": 686,
         "chaos_rollbacks": 4,
         "chaos_seed_rows": 512,
-        "chaos_suite": "dick-head-choas",
+        "chaos_suite": "chaos",
         "chaos_workload": "connection-churn",
         "chaos_writes": 329,
         "checkpoint": {
@@ -8608,7 +8608,7 @@
       "checksum": {
         "content_hash": "e023972aa27929e76bc18cb03b50b56f18d1f2b7ba1fb6f6a9c205465b92b333",
         "index_consistency": {
-          "dick-head-choas-connection-churn": "rows=512"
+          "chaos-connection-churn": "rows=512"
         },
         "payload_bytes": 7224,
         "rows": 512,
@@ -8632,7 +8632,7 @@
         "chaos_reads": 3007,
         "chaos_rollbacks": 2,
         "chaos_seed_rows": 512,
-        "chaos_suite": "dick-head-choas",
+        "chaos_suite": "chaos",
         "chaos_workload": "connection-churn",
         "chaos_writes": 1332,
         "checkpoint": {
@@ -8759,7 +8759,7 @@
       "checksum": {
         "content_hash": "7c7d61f922d344244964502fbb70da57689f25cadbf989925a076c10871041dc",
         "index_consistency": {
-          "dick-head-choas-connection-churn": "rows=512"
+          "chaos-connection-churn": "rows=512"
         },
         "payload_bytes": 7734,
         "rows": 512,
@@ -8783,7 +8783,7 @@
         "chaos_reads": 1202,
         "chaos_rollbacks": 58,
         "chaos_seed_rows": 512,
-        "chaos_suite": "dick-head-choas",
+        "chaos_suite": "chaos",
         "chaos_workload": "connection-churn",
         "chaos_writes": 555,
         "checkpoint": {
@@ -8910,7 +8910,7 @@
       "checksum": {
         "content_hash": "c0d8c949c934ac9dd24c975cc3fc7e4674542a37861c97d8419eea0f30cc4007",
         "index_consistency": {
-          "dick-head-choas-connection-churn": "rows=512"
+          "chaos-connection-churn": "rows=512"
         },
         "payload_bytes": 7236,
         "rows": 512,
@@ -8934,7 +8934,7 @@
         "chaos_reads": 822,
         "chaos_rollbacks": 5,
         "chaos_seed_rows": 512,
-        "chaos_suite": "dick-head-choas",
+        "chaos_suite": "chaos",
         "chaos_workload": "connection-churn",
         "chaos_writes": 351,
         "checkpoint": {
@@ -9061,7 +9061,7 @@
       "checksum": {
         "content_hash": "d1d2dd6913cbd48a96e13316da7437e234859bc75e54c6c480ebd8d8c0ec772a",
         "index_consistency": {
-          "dick-head-choas-connection-churn": "rows=512"
+          "chaos-connection-churn": "rows=512"
         },
         "payload_bytes": 7196,
         "rows": 512,
@@ -9085,7 +9085,7 @@
         "chaos_reads": 3059,
         "chaos_rollbacks": 2,
         "chaos_seed_rows": 512,
-        "chaos_suite": "dick-head-choas",
+        "chaos_suite": "chaos",
         "chaos_workload": "connection-churn",
         "chaos_writes": 1346,
         "checkpoint": {
@@ -9212,7 +9212,7 @@
       "checksum": {
         "content_hash": "5ae7b84bdcc94a2da9b141f9807228e3f8d61e2578828c6b8179cff5498d1286",
         "index_consistency": {
-          "dick-head-choas-checkpoint-thrash": "rows=512"
+          "chaos-checkpoint-thrash": "rows=512"
         },
         "payload_bytes": 7172,
         "rows": 512,
@@ -9234,7 +9234,7 @@
         "chaos_profile": "bounded",
         "chaos_reads": 4,
         "chaos_seed_rows": 512,
-        "chaos_suite": "dick-head-choas",
+        "chaos_suite": "chaos",
         "chaos_workload": "checkpoint-thrash",
         "chaos_writes": 3,
         "checkpoint": {
@@ -9361,7 +9361,7 @@
       "checksum": {
         "content_hash": "bd2bd09ca477be810c5ddaf258e5d37926a553ffdfe3beffecaa7b11e404095b",
         "index_consistency": {
-          "dick-head-choas-checkpoint-thrash": "rows=512"
+          "chaos-checkpoint-thrash": "rows=512"
         },
         "payload_bytes": 7360,
         "rows": 512,
@@ -9383,7 +9383,7 @@
         "chaos_profile": "bounded",
         "chaos_reads": 214,
         "chaos_seed_rows": 512,
-        "chaos_suite": "dick-head-choas",
+        "chaos_suite": "chaos",
         "chaos_workload": "checkpoint-thrash",
         "chaos_writes": 162,
         "checkpoint": {
@@ -9510,7 +9510,7 @@
       "checksum": {
         "content_hash": "125c15c366cceb1b97d5570649571822fb9e687f060515ea958e6737967acead",
         "index_consistency": {
-          "dick-head-choas-checkpoint-thrash": "rows=512"
+          "chaos-checkpoint-thrash": "rows=512"
         },
         "payload_bytes": 7176,
         "rows": 512,
@@ -9532,7 +9532,7 @@
         "chaos_profile": "bounded",
         "chaos_reads": 1326,
         "chaos_seed_rows": 512,
-        "chaos_suite": "dick-head-choas",
+        "chaos_suite": "chaos",
         "chaos_workload": "checkpoint-thrash",
         "chaos_writes": 1080,
         "checkpoint": {
@@ -9659,7 +9659,7 @@
       "checksum": {
         "content_hash": "5ae7b84bdcc94a2da9b141f9807228e3f8d61e2578828c6b8179cff5498d1286",
         "index_consistency": {
-          "dick-head-choas-checkpoint-thrash": "rows=512"
+          "chaos-checkpoint-thrash": "rows=512"
         },
         "payload_bytes": 7172,
         "rows": 512,
@@ -9681,7 +9681,7 @@
         "chaos_profile": "bounded",
         "chaos_reads": 5,
         "chaos_seed_rows": 512,
-        "chaos_suite": "dick-head-choas",
+        "chaos_suite": "chaos",
         "chaos_workload": "checkpoint-thrash",
         "chaos_writes": 3,
         "checkpoint": {
@@ -9808,7 +9808,7 @@
       "checksum": {
         "content_hash": "38c13c28669bcef59946f032ef1a6076c6f6e1cba9525de060f478db557470fb",
         "index_consistency": {
-          "dick-head-choas-checkpoint-thrash": "rows=512"
+          "chaos-checkpoint-thrash": "rows=512"
         },
         "payload_bytes": 7245,
         "rows": 512,
@@ -9830,7 +9830,7 @@
         "chaos_profile": "bounded",
         "chaos_reads": 647,
         "chaos_seed_rows": 512,
-        "chaos_suite": "dick-head-choas",
+        "chaos_suite": "chaos",
         "chaos_workload": "checkpoint-thrash",
         "chaos_writes": 524,
         "checkpoint": {
@@ -9957,7 +9957,7 @@
       "checksum": {
         "content_hash": "35497bf872208491417324cedaf7775372120d14de7774fef7661d6e3683c64c",
         "index_consistency": {
-          "dick-head-choas-checkpoint-thrash": "rows=512"
+          "chaos-checkpoint-thrash": "rows=512"
         },
         "payload_bytes": 7177,
         "rows": 512,
@@ -9979,7 +9979,7 @@
         "chaos_profile": "bounded",
         "chaos_reads": 1316,
         "chaos_seed_rows": 512,
-        "chaos_suite": "dick-head-choas",
+        "chaos_suite": "chaos",
         "chaos_workload": "checkpoint-thrash",
         "chaos_writes": 1095,
         "checkpoint": {
@@ -10106,7 +10106,7 @@
       "checksum": {
         "content_hash": "302cea305d188f4138d8183d0a8faeb7e88cc5678382cd2a19ceaa4602d6fb28",
         "index_consistency": {
-          "dick-head-choas-index-hammer": "rows=449"
+          "chaos-index-hammer": "rows=449"
         },
         "payload_bytes": 6397,
         "rows": 449,
@@ -10130,7 +10130,7 @@
         "chaos_reads": 122,
         "chaos_rollbacks": 41,
         "chaos_seed_rows": 512,
-        "chaos_suite": "dick-head-choas",
+        "chaos_suite": "chaos",
         "chaos_workload": "index-hammer",
         "chaos_writes": 99,
         "checkpoint": {
@@ -10257,7 +10257,7 @@
       "checksum": {
         "content_hash": "824e24b762d69eb08ed2fa5f41338e0f3172301637d7cc71efc057272463ed93",
         "index_consistency": {
-          "dick-head-choas-index-hammer": "rows=504"
+          "chaos-index-hammer": "rows=504"
         },
         "payload_bytes": 7062,
         "rows": 504,
@@ -10281,7 +10281,7 @@
         "chaos_reads": 648,
         "chaos_rollbacks": 0,
         "chaos_seed_rows": 512,
-        "chaos_suite": "dick-head-choas",
+        "chaos_suite": "chaos",
         "chaos_workload": "index-hammer",
         "chaos_writes": 606,
         "checkpoint": {
@@ -10408,7 +10408,7 @@
       "checksum": {
         "content_hash": "159cb3377e6f99d722776d926c7e76257255f09ae9271a49487deb2250093c03",
         "index_consistency": {
-          "dick-head-choas-index-hammer": "rows=482"
+          "chaos-index-hammer": "rows=482"
         },
         "payload_bytes": 6794,
         "rows": 482,
@@ -10432,7 +10432,7 @@
         "chaos_reads": 824,
         "chaos_rollbacks": 4,
         "chaos_seed_rows": 512,
-        "chaos_suite": "dick-head-choas",
+        "chaos_suite": "chaos",
         "chaos_workload": "index-hammer",
         "chaos_writes": 782,
         "checkpoint": {
@@ -10559,7 +10559,7 @@
       "checksum": {
         "content_hash": "b22df3ab5916ca3bc4a0d86cd0f07853fb0346a069e006d3cecd7acec5f54368",
         "index_consistency": {
-          "dick-head-choas-index-hammer": "rows=345"
+          "chaos-index-hammer": "rows=345"
         },
         "payload_bytes": 5053,
         "rows": 345,
@@ -10583,7 +10583,7 @@
         "chaos_reads": 304,
         "chaos_rollbacks": 96,
         "chaos_seed_rows": 512,
-        "chaos_suite": "dick-head-choas",
+        "chaos_suite": "chaos",
         "chaos_workload": "index-hammer",
         "chaos_writes": 289,
         "checkpoint": {
@@ -10710,7 +10710,7 @@
       "checksum": {
         "content_hash": "a017c22753e228dc7785f9240beddd769bb091977e9f18cffd43a6a84e906f20",
         "index_consistency": {
-          "dick-head-choas-index-hammer": "rows=503"
+          "chaos-index-hammer": "rows=503"
         },
         "payload_bytes": 7051,
         "rows": 503,
@@ -10734,7 +10734,7 @@
         "chaos_reads": 645,
         "chaos_rollbacks": 0,
         "chaos_seed_rows": 512,
-        "chaos_suite": "dick-head-choas",
+        "chaos_suite": "chaos",
         "chaos_workload": "index-hammer",
         "chaos_writes": 604,
         "checkpoint": {
@@ -10861,7 +10861,7 @@
       "checksum": {
         "content_hash": "d150244fc092b211528f59ff44dce85a5cbe06877d115ec440aceb6c023b8f18",
         "index_consistency": {
-          "dick-head-choas-index-hammer": "rows=488"
+          "chaos-index-hammer": "rows=488"
         },
         "payload_bytes": 6877,
         "rows": 488,
@@ -10885,7 +10885,7 @@
         "chaos_reads": 884,
         "chaos_rollbacks": 2,
         "chaos_seed_rows": 512,
-        "chaos_suite": "dick-head-choas",
+        "chaos_suite": "chaos",
         "chaos_workload": "index-hammer",
         "chaos_writes": 830,
         "checkpoint": {
@@ -11012,7 +11012,7 @@
       "checksum": {
         "content_hash": "2f9baa33a751c8a3f71cc5a2165142e8fb3b6368bbd21e2af78f2200524713af",
         "index_consistency": {
-          "dick-head-choas-temp-spill-convoy": "rows=512"
+          "chaos-temp-spill-convoy": "rows=512"
         },
         "payload_bytes": 131072,
         "rows": 512,
@@ -11033,7 +11033,7 @@
         "chaos_profile": "bounded",
         "chaos_seed_rows": 512,
         "chaos_spill_queries": 143,
-        "chaos_suite": "dick-head-choas",
+        "chaos_suite": "chaos",
         "chaos_workload": "temp-spill-convoy",
         "chaos_writes": 95,
         "checkpoint": {
@@ -11160,7 +11160,7 @@
       "checksum": {
         "content_hash": "1b08874b83a74c821c9aee909498ba6fc12d4f8abbb3bac6761ba01f71bf1441",
         "index_consistency": {
-          "dick-head-choas-temp-spill-convoy": "rows=512"
+          "chaos-temp-spill-convoy": "rows=512"
         },
         "payload_bytes": 131072,
         "rows": 512,
@@ -11181,7 +11181,7 @@
         "chaos_profile": "bounded",
         "chaos_seed_rows": 512,
         "chaos_spill_queries": 519,
-        "chaos_suite": "dick-head-choas",
+        "chaos_suite": "chaos",
         "chaos_workload": "temp-spill-convoy",
         "chaos_writes": 323,
         "checkpoint": {
@@ -11308,7 +11308,7 @@
       "checksum": {
         "content_hash": "d860471d8e5ebe5f9f52b27c642e91ce890b9dedc086616381d271a6c1f457b1",
         "index_consistency": {
-          "dick-head-choas-temp-spill-convoy": "rows=512"
+          "chaos-temp-spill-convoy": "rows=512"
         },
         "payload_bytes": 131072,
         "rows": 512,
@@ -11329,7 +11329,7 @@
         "chaos_profile": "bounded",
         "chaos_seed_rows": 512,
         "chaos_spill_queries": 1273,
-        "chaos_suite": "dick-head-choas",
+        "chaos_suite": "chaos",
         "chaos_workload": "temp-spill-convoy",
         "chaos_writes": 829,
         "checkpoint": {
@@ -11456,7 +11456,7 @@
       "checksum": {
         "content_hash": "5876f09cb8a94187c510f1f06f6322823af752732df489c4a18d7f56c53485f2",
         "index_consistency": {
-          "dick-head-choas-temp-spill-convoy": "rows=512"
+          "chaos-temp-spill-convoy": "rows=512"
         },
         "payload_bytes": 131072,
         "rows": 512,
@@ -11477,7 +11477,7 @@
         "chaos_profile": "bounded",
         "chaos_seed_rows": 512,
         "chaos_spill_queries": 318,
-        "chaos_suite": "dick-head-choas",
+        "chaos_suite": "chaos",
         "chaos_workload": "temp-spill-convoy",
         "chaos_writes": 210,
         "checkpoint": {
@@ -11604,7 +11604,7 @@
       "checksum": {
         "content_hash": "2ec68ffcf53cd34c8d867219fb03df580980bd8c3497441736d75dae09957fb1",
         "index_consistency": {
-          "dick-head-choas-temp-spill-convoy": "rows=512"
+          "chaos-temp-spill-convoy": "rows=512"
         },
         "payload_bytes": 131072,
         "rows": 512,
@@ -11625,7 +11625,7 @@
         "chaos_profile": "bounded",
         "chaos_seed_rows": 512,
         "chaos_spill_queries": 694,
-        "chaos_suite": "dick-head-choas",
+        "chaos_suite": "chaos",
         "chaos_workload": "temp-spill-convoy",
         "chaos_writes": 464,
         "checkpoint": {
@@ -11752,7 +11752,7 @@
       "checksum": {
         "content_hash": "c32c280a506819ec2afa766b50dd6224a671adf6f538331b76e12f7b949d1203",
         "index_consistency": {
-          "dick-head-choas-temp-spill-convoy": "rows=512"
+          "chaos-temp-spill-convoy": "rows=512"
         },
         "payload_bytes": 131072,
         "rows": 512,
@@ -11773,7 +11773,7 @@
         "chaos_profile": "bounded",
         "chaos_seed_rows": 512,
         "chaos_spill_queries": 1261,
-        "chaos_suite": "dick-head-choas",
+        "chaos_suite": "chaos",
         "chaos_workload": "temp-spill-convoy",
         "chaos_writes": 827,
         "checkpoint": {
@@ -11900,7 +11900,7 @@
       "checksum": {
         "content_hash": "4949c0a7f780a504d9d6a43b6bfe3c442843a8e1d1580a54df3742053e5b6fd3",
         "index_consistency": {
-          "dick-head-choas-lock-convoy": "rows=512"
+          "chaos-lock-convoy": "rows=512"
         },
         "payload_bytes": 7170,
         "rows": 512,
@@ -11915,7 +11915,7 @@
         "chaos_profile": "bounded",
         "chaos_rollbacks": 62,
         "chaos_seed_rows": 512,
-        "chaos_suite": "dick-head-choas",
+        "chaos_suite": "chaos",
         "chaos_workload": "lock-convoy",
         "journal_mode": "wal",
         "synchronous": 2,
@@ -11970,7 +11970,7 @@
       "checksum": {
         "content_hash": "60f87edcbf7e673f499a90fcf6bf7e7f28975f7088e6289343c2b6d7d17402e3",
         "index_consistency": {
-          "dick-head-choas-lock-convoy": "rows=512"
+          "chaos-lock-convoy": "rows=512"
         },
         "payload_bytes": 7170,
         "rows": 512,
@@ -11985,7 +11985,7 @@
         "chaos_profile": "bounded",
         "chaos_rollbacks": 63,
         "chaos_seed_rows": 512,
-        "chaos_suite": "dick-head-choas",
+        "chaos_suite": "chaos",
         "chaos_workload": "lock-convoy",
         "journal_mode": "wal",
         "synchronous": 2,
@@ -12040,7 +12040,7 @@
       "checksum": {
         "content_hash": "23f7cdbe2901dfd8d575f991a8aba1726f89f485487b753bc0323546bd380cd2",
         "index_consistency": {
-          "dick-head-choas-lock-convoy": "rows=512"
+          "chaos-lock-convoy": "rows=512"
         },
         "payload_bytes": 7170,
         "rows": 512,
@@ -12055,7 +12055,7 @@
         "chaos_profile": "bounded",
         "chaos_rollbacks": 57,
         "chaos_seed_rows": 512,
-        "chaos_suite": "dick-head-choas",
+        "chaos_suite": "chaos",
         "chaos_workload": "lock-convoy",
         "journal_mode": "wal",
         "synchronous": 2,
@@ -12110,7 +12110,7 @@
       "checksum": {
         "content_hash": "2c03ebce5e68021894e087682a8ff1089ced6d8a6e56e67c6e60f8641e845708",
         "index_consistency": {
-          "dick-head-choas-lock-convoy": "rows=512"
+          "chaos-lock-convoy": "rows=512"
         },
         "payload_bytes": 7170,
         "rows": 512,
@@ -12125,7 +12125,7 @@
         "chaos_profile": "bounded",
         "chaos_rollbacks": 63,
         "chaos_seed_rows": 512,
-        "chaos_suite": "dick-head-choas",
+        "chaos_suite": "chaos",
         "chaos_workload": "lock-convoy",
         "journal_mode": "wal",
         "synchronous": 1,
@@ -12180,7 +12180,7 @@
       "checksum": {
         "content_hash": "80060623f5afb57b85408a5d6ba0199c67c6b6990bd16ab4b24c29cc59ceb439",
         "index_consistency": {
-          "dick-head-choas-lock-convoy": "rows=512"
+          "chaos-lock-convoy": "rows=512"
         },
         "payload_bytes": 7170,
         "rows": 512,
@@ -12195,7 +12195,7 @@
         "chaos_profile": "bounded",
         "chaos_rollbacks": 69,
         "chaos_seed_rows": 512,
-        "chaos_suite": "dick-head-choas",
+        "chaos_suite": "chaos",
         "chaos_workload": "lock-convoy",
         "journal_mode": "wal",
         "synchronous": 1,
@@ -12250,7 +12250,7 @@
       "checksum": {
         "content_hash": "382f346caf5e0216b2c93d7b96e7a541cb4ffc12a2bbfc962e4e42fedb6ddf3c",
         "index_consistency": {
-          "dick-head-choas-lock-convoy": "rows=512"
+          "chaos-lock-convoy": "rows=512"
         },
         "payload_bytes": 7170,
         "rows": 512,
@@ -12265,7 +12265,7 @@
         "chaos_profile": "bounded",
         "chaos_rollbacks": 60,
         "chaos_seed_rows": 512,
-        "chaos_suite": "dick-head-choas",
+        "chaos_suite": "chaos",
         "chaos_workload": "lock-convoy",
         "journal_mode": "wal",
         "synchronous": 1,
@@ -12320,7 +12320,7 @@
       "checksum": {
         "content_hash": "3bc398aa21b3e01334f3f769febaae0d614b441b9e557347a91c8c8b3a0cd0f1",
         "index_consistency": {
-          "dick-head-choas-connection-churn": "rows=512"
+          "chaos-connection-churn": "rows=512"
         },
         "payload_bytes": 7771,
         "rows": 512,
@@ -12337,7 +12337,7 @@
         "chaos_reads": 1492,
         "chaos_rollbacks": 73,
         "chaos_seed_rows": 512,
-        "chaos_suite": "dick-head-choas",
+        "chaos_suite": "chaos",
         "chaos_workload": "connection-churn",
         "chaos_writes": 683,
         "journal_mode": "wal",
@@ -12393,7 +12393,7 @@
       "checksum": {
         "content_hash": "4f41a8a035556df34e7126bdcbc791431b8d479a006d911bf190e7ad6351ca84",
         "index_consistency": {
-          "dick-head-choas-connection-churn": "rows=512"
+          "chaos-connection-churn": "rows=512"
         },
         "payload_bytes": 8035,
         "rows": 512,
@@ -12410,7 +12410,7 @@
         "chaos_reads": 6449,
         "chaos_rollbacks": 284,
         "chaos_seed_rows": 512,
-        "chaos_suite": "dick-head-choas",
+        "chaos_suite": "chaos",
         "chaos_workload": "connection-churn",
         "chaos_writes": 2809,
         "journal_mode": "wal",
@@ -12466,7 +12466,7 @@
       "checksum": {
         "content_hash": "99c1bdcc50cd3259e4fe946d9738fe84d91df6375d56cda413ccec797434564c",
         "index_consistency": {
-          "dick-head-choas-connection-churn": "rows=512"
+          "chaos-connection-churn": "rows=512"
         },
         "payload_bytes": 8029,
         "rows": 512,
@@ -12483,7 +12483,7 @@
         "chaos_reads": 5919,
         "chaos_rollbacks": 264,
         "chaos_seed_rows": 512,
-        "chaos_suite": "dick-head-choas",
+        "chaos_suite": "chaos",
         "chaos_workload": "connection-churn",
         "chaos_writes": 2581,
         "journal_mode": "wal",
@@ -12539,7 +12539,7 @@
       "checksum": {
         "content_hash": "881b4c7f05d66e7e161f81d335f2c8b4c3c452ee0ed91d3d1eadac08913acc6d",
         "index_consistency": {
-          "dick-head-choas-connection-churn": "rows=512"
+          "chaos-connection-churn": "rows=512"
         },
         "payload_bytes": 7765,
         "rows": 512,
@@ -12556,7 +12556,7 @@
         "chaos_reads": 1459,
         "chaos_rollbacks": 72,
         "chaos_seed_rows": 512,
-        "chaos_suite": "dick-head-choas",
+        "chaos_suite": "chaos",
         "chaos_workload": "connection-churn",
         "chaos_writes": 669,
         "journal_mode": "wal",
@@ -12612,7 +12612,7 @@
       "checksum": {
         "content_hash": "6917af7d532ed31222863dc12250352f15906815f30760014bf6050ae4530c90",
         "index_consistency": {
-          "dick-head-choas-connection-churn": "rows=512"
+          "chaos-connection-churn": "rows=512"
         },
         "payload_bytes": 8039,
         "rows": 512,
@@ -12629,7 +12629,7 @@
         "chaos_reads": 5882,
         "chaos_rollbacks": 260,
         "chaos_seed_rows": 512,
-        "chaos_suite": "dick-head-choas",
+        "chaos_suite": "chaos",
         "chaos_workload": "connection-churn",
         "chaos_writes": 2561,
         "journal_mode": "wal",
@@ -12685,7 +12685,7 @@
       "checksum": {
         "content_hash": "5ea83fafe903ff14312f8f6d8f84d94cab8d7d8126cea7227db1f996fcfc29cd",
         "index_consistency": {
-          "dick-head-choas-connection-churn": "rows=512"
+          "chaos-connection-churn": "rows=512"
         },
         "payload_bytes": 8036,
         "rows": 512,
@@ -12702,7 +12702,7 @@
         "chaos_reads": 5875,
         "chaos_rollbacks": 270,
         "chaos_seed_rows": 512,
-        "chaos_suite": "dick-head-choas",
+        "chaos_suite": "chaos",
         "chaos_workload": "connection-churn",
         "chaos_writes": 2558,
         "journal_mode": "wal",
@@ -12758,7 +12758,7 @@
       "checksum": {
         "content_hash": "4f0f1791a31c22afd2424e4bbf80e52d34efc3d6a39804f4c615157a313c43cc",
         "index_consistency": {
-          "dick-head-choas-checkpoint-thrash": "rows=512"
+          "chaos-checkpoint-thrash": "rows=512"
         },
         "payload_bytes": 7964,
         "rows": 512,
@@ -12773,7 +12773,7 @@
         "chaos_profile": "bounded",
         "chaos_reads": 1658,
         "chaos_seed_rows": 512,
-        "chaos_suite": "dick-head-choas",
+        "chaos_suite": "chaos",
         "chaos_workload": "checkpoint-thrash",
         "chaos_writes": 1433,
         "journal_mode": "wal",
@@ -12829,7 +12829,7 @@
       "checksum": {
         "content_hash": "7df0564899e4738f216eea1f476f138486cba6460ac2669d1ead017d5021ba92",
         "index_consistency": {
-          "dick-head-choas-checkpoint-thrash": "rows=512"
+          "chaos-checkpoint-thrash": "rows=512"
         },
         "payload_bytes": 8071,
         "rows": 512,
@@ -12844,7 +12844,7 @@
         "chaos_profile": "bounded",
         "chaos_reads": 24205,
         "chaos_seed_rows": 512,
-        "chaos_suite": "dick-head-choas",
+        "chaos_suite": "chaos",
         "chaos_workload": "checkpoint-thrash",
         "chaos_writes": 19855,
         "journal_mode": "wal",
@@ -12900,7 +12900,7 @@
       "checksum": {
         "content_hash": "ae4d2bc49517484c9f68afeb866f6c8b5403eb3595851cdd858171be07fd3bcd",
         "index_consistency": {
-          "dick-head-choas-checkpoint-thrash": "rows=512"
+          "chaos-checkpoint-thrash": "rows=512"
         },
         "payload_bytes": 8085,
         "rows": 512,
@@ -12915,7 +12915,7 @@
         "chaos_profile": "bounded",
         "chaos_reads": 28996,
         "chaos_seed_rows": 512,
-        "chaos_suite": "dick-head-choas",
+        "chaos_suite": "chaos",
         "chaos_workload": "checkpoint-thrash",
         "chaos_writes": 23740,
         "journal_mode": "wal",
@@ -12971,7 +12971,7 @@
       "checksum": {
         "content_hash": "0798c917215f3b8e23e96efc672312fac022f475bcdd3ab4a2c65c52118d8a4b",
         "index_consistency": {
-          "dick-head-choas-checkpoint-thrash": "rows=512"
+          "chaos-checkpoint-thrash": "rows=512"
         },
         "payload_bytes": 7964,
         "rows": 512,
@@ -12986,7 +12986,7 @@
         "chaos_profile": "bounded",
         "chaos_reads": 1656,
         "chaos_seed_rows": 512,
-        "chaos_suite": "dick-head-choas",
+        "chaos_suite": "chaos",
         "chaos_workload": "checkpoint-thrash",
         "chaos_writes": 1431,
         "journal_mode": "wal",
@@ -13042,7 +13042,7 @@
       "checksum": {
         "content_hash": "78ce3d58ba22c60fc27006870968bb6a24f683588eab356fcc74c17d63f04a79",
         "index_consistency": {
-          "dick-head-choas-checkpoint-thrash": "rows=512"
+          "chaos-checkpoint-thrash": "rows=512"
         },
         "payload_bytes": 8061,
         "rows": 512,
@@ -13057,7 +13057,7 @@
         "chaos_profile": "bounded",
         "chaos_reads": 40752,
         "chaos_seed_rows": 512,
-        "chaos_suite": "dick-head-choas",
+        "chaos_suite": "chaos",
         "chaos_workload": "checkpoint-thrash",
         "chaos_writes": 33383,
         "journal_mode": "wal",
@@ -13113,7 +13113,7 @@
       "checksum": {
         "content_hash": "886ed2e4fa28467c59ec78a83edf8ffb9cbb980bca2356618905aa11da73bb5f",
         "index_consistency": {
-          "dick-head-choas-checkpoint-thrash": "rows=512"
+          "chaos-checkpoint-thrash": "rows=512"
         },
         "payload_bytes": 8062,
         "rows": 512,
@@ -13128,7 +13128,7 @@
         "chaos_profile": "bounded",
         "chaos_reads": 45821,
         "chaos_seed_rows": 512,
-        "chaos_suite": "dick-head-choas",
+        "chaos_suite": "chaos",
         "chaos_workload": "checkpoint-thrash",
         "chaos_writes": 37453,
         "journal_mode": "wal",
@@ -13184,7 +13184,7 @@
       "checksum": {
         "content_hash": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
         "index_consistency": {
-          "dick-head-choas-index-hammer": "rows=0"
+          "chaos-index-hammer": "rows=0"
         },
         "payload_bytes": 0,
         "rows": 0,
@@ -13201,7 +13201,7 @@
         "chaos_reads": 43238,
         "chaos_rollbacks": 12543,
         "chaos_seed_rows": 512,
-        "chaos_suite": "dick-head-choas",
+        "chaos_suite": "chaos",
         "chaos_workload": "index-hammer",
         "chaos_writes": 43335,
         "journal_mode": "wal",
@@ -13257,7 +13257,7 @@
       "checksum": {
         "content_hash": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
         "index_consistency": {
-          "dick-head-choas-index-hammer": "rows=0"
+          "chaos-index-hammer": "rows=0"
         },
         "payload_bytes": 0,
         "rows": 0,
@@ -13274,7 +13274,7 @@
         "chaos_reads": 41362,
         "chaos_rollbacks": 11961,
         "chaos_seed_rows": 512,
-        "chaos_suite": "dick-head-choas",
+        "chaos_suite": "chaos",
         "chaos_workload": "index-hammer",
         "chaos_writes": 41814,
         "journal_mode": "wal",
@@ -13330,7 +13330,7 @@
       "checksum": {
         "content_hash": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
         "index_consistency": {
-          "dick-head-choas-index-hammer": "rows=0"
+          "chaos-index-hammer": "rows=0"
         },
         "payload_bytes": 0,
         "rows": 0,
@@ -13347,7 +13347,7 @@
         "chaos_reads": 43626,
         "chaos_rollbacks": 12567,
         "chaos_seed_rows": 512,
-        "chaos_suite": "dick-head-choas",
+        "chaos_suite": "chaos",
         "chaos_workload": "index-hammer",
         "chaos_writes": 43852,
         "journal_mode": "wal",
@@ -13403,7 +13403,7 @@
       "checksum": {
         "content_hash": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
         "index_consistency": {
-          "dick-head-choas-index-hammer": "rows=0"
+          "chaos-index-hammer": "rows=0"
         },
         "payload_bytes": 0,
         "rows": 0,
@@ -13420,7 +13420,7 @@
         "chaos_reads": 45449,
         "chaos_rollbacks": 13153,
         "chaos_seed_rows": 512,
-        "chaos_suite": "dick-head-choas",
+        "chaos_suite": "chaos",
         "chaos_workload": "index-hammer",
         "chaos_writes": 45517,
         "journal_mode": "wal",
@@ -13476,7 +13476,7 @@
       "checksum": {
         "content_hash": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
         "index_consistency": {
-          "dick-head-choas-index-hammer": "rows=0"
+          "chaos-index-hammer": "rows=0"
         },
         "payload_bytes": 0,
         "rows": 0,
@@ -13493,7 +13493,7 @@
         "chaos_reads": 43557,
         "chaos_rollbacks": 12541,
         "chaos_seed_rows": 512,
-        "chaos_suite": "dick-head-choas",
+        "chaos_suite": "chaos",
         "chaos_workload": "index-hammer",
         "chaos_writes": 43823,
         "journal_mode": "wal",
@@ -13549,7 +13549,7 @@
       "checksum": {
         "content_hash": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
         "index_consistency": {
-          "dick-head-choas-index-hammer": "rows=0"
+          "chaos-index-hammer": "rows=0"
         },
         "payload_bytes": 0,
         "rows": 0,
@@ -13566,7 +13566,7 @@
         "chaos_reads": 45085,
         "chaos_rollbacks": 12917,
         "chaos_seed_rows": 512,
-        "chaos_suite": "dick-head-choas",
+        "chaos_suite": "chaos",
         "chaos_workload": "index-hammer",
         "chaos_writes": 45248,
         "journal_mode": "wal",
@@ -13622,7 +13622,7 @@
       "checksum": {
         "content_hash": "6dd9bfa258bb63e6274774866753b6be07f5792d57f3c2044d01028c5f979e16",
         "index_consistency": {
-          "dick-head-choas-temp-spill-convoy": "rows=512"
+          "chaos-temp-spill-convoy": "rows=512"
         },
         "payload_bytes": 131072,
         "rows": 512,
@@ -13636,7 +13636,7 @@
         "chaos_profile": "bounded",
         "chaos_seed_rows": 512,
         "chaos_spill_queries": 4769,
-        "chaos_suite": "dick-head-choas",
+        "chaos_suite": "chaos",
         "chaos_workload": "temp-spill-convoy",
         "chaos_writes": 3177,
         "journal_mode": "wal",
@@ -13692,7 +13692,7 @@
       "checksum": {
         "content_hash": "1ae5dbcb902f0cdb3db0cd44837ca5e3557665b2035eab59108dd01515aa16c8",
         "index_consistency": {
-          "dick-head-choas-temp-spill-convoy": "rows=512"
+          "chaos-temp-spill-convoy": "rows=512"
         },
         "payload_bytes": 131072,
         "rows": 512,
@@ -13706,7 +13706,7 @@
         "chaos_profile": "bounded",
         "chaos_seed_rows": 512,
         "chaos_spill_queries": 6596,
-        "chaos_suite": "dick-head-choas",
+        "chaos_suite": "chaos",
         "chaos_workload": "temp-spill-convoy",
         "chaos_writes": 4401,
         "journal_mode": "wal",
@@ -13762,7 +13762,7 @@
       "checksum": {
         "content_hash": "8811feec9f64843facdba12ef0cc1986d722a20e73dd4bc4e684bde988f61787",
         "index_consistency": {
-          "dick-head-choas-temp-spill-convoy": "rows=512"
+          "chaos-temp-spill-convoy": "rows=512"
         },
         "payload_bytes": 131072,
         "rows": 512,
@@ -13776,7 +13776,7 @@
         "chaos_profile": "bounded",
         "chaos_seed_rows": 512,
         "chaos_spill_queries": 4294,
-        "chaos_suite": "dick-head-choas",
+        "chaos_suite": "chaos",
         "chaos_workload": "temp-spill-convoy",
         "chaos_writes": 2829,
         "journal_mode": "wal",
@@ -13832,7 +13832,7 @@
       "checksum": {
         "content_hash": "272170aeb2c13786cf0a17a9ecdc8af0eff6d281f26f19ff133f6cab2bb69dc3",
         "index_consistency": {
-          "dick-head-choas-temp-spill-convoy": "rows=512"
+          "chaos-temp-spill-convoy": "rows=512"
         },
         "payload_bytes": 131072,
         "rows": 512,
@@ -13846,7 +13846,7 @@
         "chaos_profile": "bounded",
         "chaos_seed_rows": 512,
         "chaos_spill_queries": 5215,
-        "chaos_suite": "dick-head-choas",
+        "chaos_suite": "chaos",
         "chaos_workload": "temp-spill-convoy",
         "chaos_writes": 3452,
         "journal_mode": "wal",
@@ -13902,7 +13902,7 @@
       "checksum": {
         "content_hash": "5742ec158720c6ccce524c212bcd261e63da4bdc78acd5f9af6397795fadacd4",
         "index_consistency": {
-          "dick-head-choas-temp-spill-convoy": "rows=512"
+          "chaos-temp-spill-convoy": "rows=512"
         },
         "payload_bytes": 131072,
         "rows": 512,
@@ -13916,7 +13916,7 @@
         "chaos_profile": "bounded",
         "chaos_seed_rows": 512,
         "chaos_spill_queries": 6959,
-        "chaos_suite": "dick-head-choas",
+        "chaos_suite": "chaos",
         "chaos_workload": "temp-spill-convoy",
         "chaos_writes": 4624,
         "journal_mode": "wal",
@@ -13972,7 +13972,7 @@
       "checksum": {
         "content_hash": "23a6a3da11a073e69807eb62f60ec192df29361e99a94552d35f17ae6a5c5826",
         "index_consistency": {
-          "dick-head-choas-temp-spill-convoy": "rows=512"
+          "chaos-temp-spill-convoy": "rows=512"
         },
         "payload_bytes": 131072,
         "rows": 512,
@@ -13986,7 +13986,7 @@
         "chaos_profile": "bounded",
         "chaos_seed_rows": 512,
         "chaos_spill_queries": 4069,
-        "chaos_suite": "dick-head-choas",
+        "chaos_suite": "chaos",
         "chaos_workload": "temp-spill-convoy",
         "chaos_writes": 2694,
         "journal_mode": "wal",
@@ -14041,7 +14041,7 @@
   "schema_version": 1,
   "source_files": [
     {
-      "path": "crates/bench/bench/dick-head-choas.toml",
+      "path": "crates/bench/bench/chaos.toml",
       "sha256": "866117be11cbf4a886fc634e52f8b0482003ac328bbdcfda17f24ea03ec11259"
     },
     {
@@ -14081,10 +14081,10 @@
       "sha256": "0a8c4365e9fefaee80ec4e575ffe6f2789cfc35193fee037d1f450b4dc41c33a"
     },
     {
-      "path": "scripts/bench/dick_head_choas_xbabe1.sh",
+      "path": "scripts/bench/chaos_xbabe1.sh",
       "sha256": "b6999c072793c9c3ef93e95cc720f96d304e19f05c2c4c67d55912d308990c1d"
     }
   ],
-  "suite_id": "dick-head-choas-smoke",
+  "suite_id": "chaos-smoke",
   "suite_kind": "certify"
 }

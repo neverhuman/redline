@@ -6,7 +6,7 @@ use std::path::PathBuf;
 use std::process::Command;
 
 pub(crate) const DEFAULT_VERSION_ROOT_REL: &str = "target/bench/versioned";
-pub(crate) const DEFAULT_SUITE: &str = "dick-head-choas";
+pub(crate) const DEFAULT_SUITE: &str = "chaos";
 
 #[derive(Debug)]
 pub(crate) struct Args {

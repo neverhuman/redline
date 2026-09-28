@@ -61,4 +61,4 @@ jobs:
             [ "$passed" -gt 0 ] || { echo "::error::ci has not passed on $head, the head of #$number"; exit 1; }
             TESTED_HEAD=$head
           fi
-          gh pr merge "$number" --squash --delete-branch --match-head-commit "$TESTED_HEAD"
+          gh pr merge "$number" --rebase --delete-branch --match-head-commit "$TESTED_HEAD"

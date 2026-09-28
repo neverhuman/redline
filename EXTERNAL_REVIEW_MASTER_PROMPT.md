@@ -72,9 +72,9 @@ Use the configs below as the navigation map for the benchmark tree. Verify each 
 | `crates/bench/bench/connection-limit-256.toml` | Connection-limit sweep at fixed high concurrency |
 | `crates/bench/bench/connection-fixed-high.toml` | Fixed-high-connection workload |
 | `crates/bench/bench/queue-mixed-highload.toml` | Queue mixed high-load workload |
-| `crates/bench/bench/dick-head-choas.toml` | Chaos smoke suite |
-| `crates/bench/bench/dick-head-choas-bounded.toml` | Chaos bounded certification profile |
-| `crates/bench/bench/dick-head-choas-extreme.toml` | Chaos extreme profile |
+| `crates/bench/bench/chaos.toml` | Chaos smoke suite |
+| `crates/bench/bench/chaos-bounded.toml` | Chaos bounded certification profile |
+| `crates/bench/bench/chaos-extreme.toml` | Chaos extreme profile |
 | `phase9-xbabe1-certify-with-strace` | Strace-enabled certification lane |
 | `phase9-xbabe1-gap-strace` | Strace-enabled gap-cert lane |
 

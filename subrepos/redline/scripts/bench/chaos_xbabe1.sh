@@ -7,10 +7,10 @@ REMOTE_DIR="${REMOTE_DIR:-/home/ubuntu/RedlineDB}"
 
 case "${PROFILE}" in
   bounded)
-    CONFIG="crates/bench/bench/dick-head-choas-bounded.toml"
+    CONFIG="crates/bench/bench/chaos-bounded.toml"
     ;;
   extreme)
-    CONFIG="crates/bench/bench/dick-head-choas-extreme.toml"
+    CONFIG="crates/bench/bench/chaos-extreme.toml"
     ;;
   *)
     echo "unknown profile ${PROFILE}" >&2
@@ -56,7 +56,7 @@ build_thread_list() {
   done
 }
 
-STAMP="dick-head-choas-${PROFILE}-$(date +%Y%m%d-%H%M%S)"
+STAMP="chaos-${PROFILE}-$(date +%Y%m%d-%H%M%S)"
 
 ./scripts/bench/xbabe1_sync.sh
 

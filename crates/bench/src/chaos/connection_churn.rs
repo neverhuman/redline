@@ -32,9 +32,9 @@ pub(crate) fn run_connection_churn(engine: &dyn BenchEngine, spec: &RunSpec) -> 
         |engine, spec| {
             seed_rows(
                 engine,
-                "CREATE TABLE IF NOT EXISTS dick_head_choas_connection_churn(pk INTEGER PRIMARY KEY, tenant INTEGER, v INTEGER, payload BLOB)",
-                "DELETE FROM dick_head_choas_connection_churn",
-                "INSERT INTO dick_head_choas_connection_churn(pk, tenant, v, payload) VALUES (?1, ?2, 0, ?3)",
+                "CREATE TABLE IF NOT EXISTS chaos_connection_churn(pk INTEGER PRIMARY KEY, tenant INTEGER, v INTEGER, payload BLOB)",
+                "DELETE FROM chaos_connection_churn",
+                "INSERT INTO chaos_connection_churn(pk, tenant, v, payload) VALUES (?1, ?2, 0, ?3)",
                 spec.rows.max(1),
                 tenant_seed_row,
             )?;
@@ -52,7 +52,7 @@ pub(crate) fn run_connection_churn(engine: &dyn BenchEngine, spec: &RunSpec) -> 
                     counters.ops.reads.fetch_add(1, Ordering::Relaxed);
                     let key = rng.random_range(0..spec.rows.max(1)) as i64;
                     let _ = conn.query_row(
-                        "SELECT v FROM dick_head_choas_connection_churn WHERE pk = ?1",
+                        "SELECT v FROM chaos_connection_churn WHERE pk = ?1",
                         &[CellValue::Integer(key)],
                     )?;
                 } else {
@@ -63,7 +63,7 @@ pub(crate) fn run_connection_churn(engine: &dyn BenchEngine, spec: &RunSpec) -> 
                         rng,
                         &counters.ops,
                         ChaosOp::Write,
-                        "UPDATE dick_head_choas_connection_churn SET v = v + 1, payload = ?1 WHERE pk = ?2",
+                        "UPDATE chaos_connection_churn SET v = v + 1, payload = ?1 WHERE pk = ?2",
                         &[
                             CellValue::Blob(blob_for(payload_seed)),
                             CellValue::Integer(key),
@@ -77,8 +77,8 @@ pub(crate) fn run_connection_churn(engine: &dyn BenchEngine, spec: &RunSpec) -> 
         |engine, _| {
             checksum_query(
                 engine,
-                "dick-head-choas-connection-churn",
-                "SELECT pk, tenant, v, payload FROM dick_head_choas_connection_churn ORDER BY pk",
+                "chaos-connection-churn",
+                "SELECT pk, tenant, v, payload FROM chaos_connection_churn ORDER BY pk",
             )
         },
         |counters| {

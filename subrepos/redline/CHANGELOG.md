@@ -925,7 +925,7 @@ No FFI ABI break; downstream consumers unaffected.
 - `repo-rot-bad-behavior` (B): renamed `certification-phase10-v3*.toml`,
   rewrote `backup.rs:1` doc comments.
 - `python-direct-product-truth-or-db-ownership` (B): ported
-  `scripts/bench/dick_head_choas_report.py` to `crates/bench/src/bin/chaos_report/`.
+  the Python chaos report script to `crates/bench/src/bin/chaos_report/`.
 - `no-agent-friendly-exception-pattern` (F): added typed `DomainError` in
   `crates/domain/`, wired one kernel error path through it.
 - `missing-agent-readable-docs` (F): authored `docs/{audit-rubric,

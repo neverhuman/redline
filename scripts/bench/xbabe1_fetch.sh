@@ -15,7 +15,8 @@ set -euo pipefail
 # silently rsyncing from the wrong remote path.
 
 REMOTE="${REMOTE:-xbabe1}"
-REMOTE_DIR="${REMOTE_DIR:-/home/ubuntu/RedlineDB}"
+# The checkout on the bench host; a relative path is under the remote login directory.
+REMOTE_DIR="${REMOTE_DIR:-RedlineDB}"
 LOCAL_ROOT="${LOCAL_ROOT:-target/bench/xbabe1}"
 STAMP="${1:-}"
 

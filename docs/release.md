@@ -14,7 +14,12 @@ suites, central client, web, integration, packaging, security, full-graph depend
 and the Jankurai ratchet; none is advisory or soft-gated. Local packaging checks
 the current platform. GitHub additionally builds and tests all four native targets.
 The branch-protection check `RedlineDB/required` rejects failed, cancelled or
-skipped required jobs. Merge with a squash commit to preserve linear history.
+skipped required jobs. `main` on `neverhuman/redline` requires that check
+(strict), one approving review dismissed by a new push, and linear history, and
+pull requests merge by rebase only (`gh pr merge <PR> --repo neverhuman/redline
+--rebase`); squash merges and merge commits are disabled. `docs/testing.md`
+("Publication and review") has the full table, and
+`bash ops/release/main-protection.sh check` compares it with the live settings.
 Pull requests from forks run only on GitHub-hosted runners and cannot pass
 `RedlineDB/required` on their own; `docs/ci-trust-boundary.md` describes the
 runner trust boundary, the maintainer run, the host hardening and the canary.

@@ -142,7 +142,7 @@ fn assert_stats_keys(record: &RunRecord, workload: &str, required: &[&str]) {
     );
     assert_eq!(
         stats.get("chaos_suite").and_then(|v| v.as_str()),
-        Some("dick-head-choas"),
+        Some("chaos"),
         "chaos_suite tag must be present"
     );
     assert_eq!(

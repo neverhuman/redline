@@ -1,6 +1,6 @@
 //! Summarize chaos benchmark raw records and persist versioned JSON.
 //!
-//! Rust port of the previous `scripts/bench/dick_head_choas_report.py` tool.
+//! Rust port of the earlier Python chaos report script.
 //! The output JSON shape matches the Python version byte-for-byte except for
 //! the live `generated_at_utc` timestamps, which are emitted in the same
 //! ISO-8601 UTC form (`YYYY-MM-DDTHH:MM:SS.mmmuuu+00:00`) the original used.
@@ -374,7 +374,7 @@ mod tests {
         source_paths.dedup();
         let report = json!({
             "schema_version": 1,
-            "suite": "dick-head-choas",
+            "suite": "chaos",
             "stamp": "tiny",
             "git_sha": "deadbeef",
             "generated_at_utc": "2024-01-02T03:04:05+00:00",
@@ -432,6 +432,6 @@ mod tests {
         assert_eq!(reports.len(), 1);
         assert_eq!(reports[0]["file"], "tiny.json");
         assert_eq!(reports[0]["stamp"], "tiny");
-        assert_eq!(reports[0]["suite"], "dick-head-choas");
+        assert_eq!(reports[0]["suite"], "chaos");
     }
 }

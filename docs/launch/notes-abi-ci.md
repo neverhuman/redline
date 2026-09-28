@@ -510,3 +510,45 @@ against the v5 headers. There is no v4 compatibility alias.
   `--workers auto` on a shared runner after merge and rewrote the README's
   generated blocks from that run. `docs/release.md` ("Parity report") says
   how the report is regenerated for a release.
+
+## Public hygiene and merge policy (DOCS-HYGIENE)
+
+- The chaos benchmark suite has a neutral name: configs
+  `crates/bench/bench/chaos.toml`, `chaos-bounded.toml` and
+  `chaos-extreme.toml`, the xbabe1 driver `scripts/bench/chaos_xbabe1.sh`,
+  suite tag `chaos` in `chaos_report` and in each record's `chaos_suite`, and
+  tables `chaos_*`. The one committed chaos result was renamed to
+  `benchmark-results/version/25262bf…/suites/chaos-smoke.json` with the same
+  substitution inside it; no hash anywhere names that file. Reports written
+  before this change carry the old suite tag; pass `chaos_report --suite
+  <old tag>` to read them.
+- Committed benchmark records no longer carry a personal home path (replaced
+  by `<checkout>`), and the xbabe1 bench scripts default `REMOTE_DIR` to
+  `RedlineDB` under the remote login directory instead of an absolute host
+  path (`xbabe1_run.sh` resolves it to an absolute path for docker).
+  `scripts/check-public-hygiene.sh` (CI preflight) keeps both out.
+- `docs/testing.md` ("Publication and review") now describes the protection
+  `main` must carry on `neverhuman/redline` — strict `RedlineDB/required`,
+  one approving review dismissed by a new push, linear history, enforced for
+  admins, no force-push or deletion — and one merge method, rebase. It no
+  longer lists operator logins, credential files or host paths. Every `gh`
+  command in `docs/` names `--repo neverhuman/redline`. `docs/release.md` no
+  longer says "merge with a squash commit", and the parity report bot
+  (`report-merge.yml`) merges by rebase. `bash ops/release/main-protection.sh
+  check|apply` compares or applies that policy.
+- For the integrator (not a release-note line):
+  - On 2026-09-28 `main-protection.sh check` against the live repository
+    reported `main` unprotected (`protected: false`) and squash merges and
+    merge commits allowed. A repository admin must run
+    `bash ops/release/main-protection.sh apply` (it was not run from this lane).
+  - The removed operator table (logins, credential and helper paths) is in
+    git history at the parent of this change; move it to the operators'
+    private notes if it is still needed.
+  - Still carrying the old suite path until regenerated or edited by their
+    owner: `CHANGELOG.md` (line ~947, "scripts/bench/<old>_report.py" in the
+    history; please reword to "the Python chaos report script"),
+    `.jankurai/repo-score.json` and
+    `benchmark-results/sqlite-parity/latest/jankurai-score.txt` (next
+    `jankurai audit` / report update), and the hash-chained audit baselines
+    under `.jankurai/baselines/` and `subrepos/redline/.jankurai/`.
+    `scripts/check-public-hygiene.sh` exempts exactly those files.

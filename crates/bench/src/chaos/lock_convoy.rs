@@ -31,9 +31,9 @@ pub(crate) fn run_lock_convoy(engine: &dyn BenchEngine, spec: &RunSpec) -> Resul
         |engine, spec| {
             seed_rows(
                 engine,
-                "CREATE TABLE IF NOT EXISTS dick_head_choas_lock_convoy(pk INTEGER PRIMARY KEY, v INTEGER, payload BLOB)",
-                "DELETE FROM dick_head_choas_lock_convoy",
-                "INSERT INTO dick_head_choas_lock_convoy(pk, v, payload) VALUES (?1, 0, ?2)",
+                "CREATE TABLE IF NOT EXISTS chaos_lock_convoy(pk INTEGER PRIMARY KEY, v INTEGER, payload BLOB)",
+                "DELETE FROM chaos_lock_convoy",
+                "INSERT INTO chaos_lock_convoy(pk, v, payload) VALUES (?1, 0, ?2)",
                 spec.rows.max(1),
                 pk_payload_seed_row,
             )?;
@@ -47,7 +47,7 @@ pub(crate) fn run_lock_convoy(engine: &dyn BenchEngine, spec: &RunSpec) -> Resul
                 conn.set_busy_timeout(Duration::from_millis(busy_timeout_ms))?;
                 conn.begin_immediate()?;
                 conn.execute(
-                    "UPDATE dick_head_choas_lock_convoy SET v = v + 1, payload = ?1 WHERE pk = 0",
+                    "UPDATE chaos_lock_convoy SET v = v + 1, payload = ?1 WHERE pk = 0",
                     &[CellValue::Blob(blob_for(
                         (worker << 16) ^ rng.random::<u32>() as usize,
                     ))],
@@ -68,8 +68,8 @@ pub(crate) fn run_lock_convoy(engine: &dyn BenchEngine, spec: &RunSpec) -> Resul
         |engine, _| {
             checksum_query(
                 engine,
-                "dick-head-choas-lock-convoy",
-                "SELECT pk, v, payload FROM dick_head_choas_lock_convoy ORDER BY pk",
+                "chaos-lock-convoy",
+                "SELECT pk, v, payload FROM chaos_lock_convoy ORDER BY pk",
             )
         },
         |counters| {
