@@ -1,22 +1,26 @@
+# Each run kills the child `kill_windows_ms` after it prints READY. A child
+# that finishes its key range first exits 0, which is a no-fault run and
+# fails the gate, so `rows` must stay far above what the fastest engine
+# commits in the largest window (SQLite normal does about 10k rows/s here).
 durabilities = ["strict", "normal"]
 
 [[cases]]
 name = "wal"
 scenario = "wal"
-rows = 4096
+rows = 1000000
 kill_windows_ms = [150, 350, 700]
 checkpoint_every_rows = 64
 
 [[cases]]
 name = "catalog"
 scenario = "catalog"
-rows = 1024
+rows = 1000000
 kill_windows_ms = [150, 350, 700]
 checkpoint_every_rows = 32
 
 [[cases]]
 name = "checkpoint"
 scenario = "checkpoint"
-rows = 4096
+rows = 1000000
 kill_windows_ms = [150, 350, 700]
 checkpoint_every_rows = 16

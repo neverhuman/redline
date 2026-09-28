@@ -99,6 +99,12 @@ fn matrix_toml_cases_target_only_known_failpoints() {
 /// opts the case into the "zero-ack is OK" branch of the lane-fp
 /// gate; without it the new gate (correctly) flags the case as a
 /// vacuous-oracle false pass.
+///
+/// The child must be the real `redlinedb-bench` binary. The runner used
+/// to spawn `current_exe()`, which inside this test is the libtest
+/// harness: it rejected `failpoint-child` with exit 101, and that
+/// non-zero exit plus zero acks "passed" without any failpoint firing.
+/// The run must now show READY and a panic marker naming the failpoint.
 #[test]
 fn end_to_end_commit_publish_recovers_zero_lost_acked() {
     // Use an isolated tempdir so concurrent tests cannot poison each
@@ -129,6 +135,7 @@ expect_zero_acks = true
         config: cfg_path,
         out: out_path.clone(),
         seed: 7,
+        child_exe: Some(PathBuf::from(env!("CARGO_BIN_EXE_redlinedb-bench"))),
     };
     let report = failpoint_matrix::run(&args).expect("run failpoint matrix");
     failpoint_matrix::write_report(&out_path, &report).expect("write report");
@@ -146,6 +153,18 @@ expect_zero_acks = true
         run.lost_acked_commits, 0,
         "strict durability must lose zero acked commits"
     );
+    assert!(run.child_started, "child must reach READY: {run:?}");
+    assert!(
+        run.fault_observed,
+        "the armed failpoint must have fired: {run:?}"
+    );
+    assert!(
+        run.hit_marker
+            .as_deref()
+            .is_some_and(|marker| marker.contains("engine::commit::before_publish")),
+        "panic marker must name the failpoint: {run:?}"
+    );
+    assert!(run.verdict.qualified, "oracle must qualify: {run:?}");
     assert!(run.passed, "case must pass: {:?}", run);
     assert!(report.passed, "report must report overall pass");
 }
@@ -172,13 +191,14 @@ fn ack_log_is_fsynced() {
     let keys = [0_usize, 1, 2, 3, 7, 11, 42, 1023];
     let mut expected_bytes: u64 = 0;
     for &key in &keys {
-        failpoint_matrix::ack_row(&mut handle, key).expect("ack row durably");
+        let digest = format!("digest-{key}");
+        failpoint_matrix::ack_row(&mut handle, key, &digest).expect("ack row durably");
         // Snapshot the on-disk size IMMEDIATELY (without flushing the
         // handle again) — if the implementation deferred the write
         // to a `BufWriter`, the metadata size would be smaller than
         // expected at this point.
         let metadata = std::fs::metadata(&path).expect("stat ack log");
-        expected_bytes += format!("{key}\n").len() as u64;
+        expected_bytes += format!("{key}\t{digest}\n").len() as u64;
         assert_eq!(
             metadata.len(),
             expected_bytes,
@@ -193,7 +213,7 @@ fn ack_log_is_fsynced() {
     let body = std::fs::read_to_string(&path).expect("read ack log");
     let mut recorded: Vec<usize> = body
         .lines()
-        .filter_map(|line| line.trim().parse::<usize>().ok())
+        .filter_map(|line| line.split_once('\t')?.0.parse::<usize>().ok())
         .collect();
     recorded.sort_unstable();
     let mut expected = keys.to_vec();
@@ -275,11 +295,10 @@ fn failpoint_action_return_is_honored() {
 /// The runner's three-clause gate (`evaluate_verdict`) is independent
 /// of the spawn pipeline; tests construct synthetic
 /// (`case`, `observed`) pairs to exercise verdict logic without
-/// spawning a child binary. (Spawning a child from the cargo test
-/// harness invokes the test binary itself, which has no
-/// `failpoint-child` subcommand and panics during clap parsing —
-/// that's why the existing end-to-end test has to opt into
-/// `expect_zero_acks = true`.)
+/// spawning a child binary. Tests that do spawn one must pass
+/// `child_exe: CARGO_BIN_EXE_redlinedb-bench`; the default
+/// `current_exe()` is the libtest harness, which has no
+/// `failpoint-child` subcommand.
 fn synthetic_case(
     action: &str,
     expect_child_exit: ExpectExit,

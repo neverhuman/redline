@@ -137,7 +137,7 @@ pub(crate) fn kv_checksum(conn: &mut dyn BenchConn) -> Result<crate::report::Che
     })
 }
 
-fn hash_cell(hasher: &mut Sha256, cell: &CellValue) {
+pub(crate) fn hash_cell(hasher: &mut Sha256, cell: &CellValue) {
     match cell {
         CellValue::Null => hasher.update(b"n\0"),
         CellValue::Integer(value) => {

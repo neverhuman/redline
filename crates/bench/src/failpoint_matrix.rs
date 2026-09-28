@@ -6,21 +6,22 @@
 //! catalog,storage}` with an action that kills the process the moment
 //! the site fires (typically `panic`).
 //!
-//! Inside the child the workload follows the strict fsynced-ack
-//! protocol used by the recovery matrix: for every row the child
-//! issues `INSERT ... COMMIT` and only after the commit succeeds does
-//! it append `key\n` to `ack_log` and `flush()` the file. The kernel
-//! has already fsynced both the WAL record and the ack-log line by the
-//! time we proceed to the next row. When the parent observes the
-//! child has died, the highest line in `ack_log` is the contractual
-//! upper bound on rows the engine guaranteed durable.
+//! Inside the child the workload follows the fsynced-ack protocol:
+//! for every row the child issues `INSERT ... COMMIT` and only after
+//! the commit succeeds does it append `key<TAB>sha256(row values)` to
+//! `ack_log` with one write and `sync_all()` the file. When the parent
+//! observes the child has died, the ack log is the contractual list of
+//! transactions (and their contents) the engine acknowledged.
 //!
-//! The parent then opens a fresh `redlinedb::Database` over the same
-//! directory and counts surviving rows. If `recovered < acked`, that
-//! is a lost-acked-commit and the case fails the strict gate.
+//! The parent then recovers the directory twice and grades it with
+//! `recover::oracle`: every acked key must come back with its exact
+//! contents, nothing else but the one in-flight key may appear, the
+//! index must agree with a full scan, and integrity_check must be ok.
+//! A kill case also needs the child's panic marker (`<ack>.hit`) to
+//! name the armed failpoint, which proves the fault actually fired.
 
 use std::fs::{self, File, OpenOptions};
-use std::io::{BufRead, BufReader, Write};
+use std::io::Write;
 use std::path::Path;
 use std::process::{Command, Stdio};
 
@@ -31,11 +32,15 @@ use crate::config::{
     DurabilityKind, EngineKind, ExpectExit, FailpointChildArgs, FailpointMatrixArgs,
     FailpointMatrixCase, FailpointMatrixConfig,
 };
-use crate::engine::engine_name;
+use crate::engine::{CellValue, engine_name};
+use crate::recover::harness::{self, FailureEvidence, HarnessContext};
+use crate::recover::oracle::{self, RecoveryVerdict, Workload};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct FailpointMatrixReport {
     pub seed: u64,
+    #[serde(default)]
+    pub git_sha: Option<String>,
     pub passed: bool,
     pub failed_cases: usize,
     pub runs: Vec<FailpointMatrixRun>,
@@ -66,10 +71,24 @@ pub struct FailpointMatrixRun {
     /// Surfaced in the per-case JSON so a falling case is debuggable
     /// from the report alone, without reproducing the run.
     pub pass_reason: String,
+    /// The child printed READY after schema setup and arming.
+    #[serde(default)]
+    pub child_started: bool,
+    /// The panic marker names this case's failpoint.
+    #[serde(default)]
+    pub fault_observed: bool,
+    /// Contents of the child's panic marker, if it wrote one.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub hit_marker: Option<String>,
+    #[serde(default)]
+    pub verdict: RecoveryVerdict,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub evidence: Option<FailureEvidence>,
 }
 
 pub fn run(args: &FailpointMatrixArgs) -> Result<FailpointMatrixReport> {
     let config = FailpointMatrixConfig::load(&args.config)?;
+    let ctx = HarnessContext::new(args.child_exe.as_deref(), args.seed)?;
     let mut runs = Vec::new();
     let mut failed = 0_usize;
 
@@ -118,7 +137,7 @@ pub fn run(args: &FailpointMatrixArgs) -> Result<FailpointMatrixReport> {
                     durability.as_str(),
                     kill_after_n_hits
                 );
-                let run = run_case(engine, durability, case, kill_after_n_hits)?;
+                let run = run_case(&ctx, engine, durability, case, kill_after_n_hits)?;
                 if !run.passed {
                     failed += 1;
                 }
@@ -137,9 +156,10 @@ pub fn run(args: &FailpointMatrixArgs) -> Result<FailpointMatrixReport> {
         }
     }
 
-    let passed = failed == 0;
+    let passed = failed == 0 && !runs.is_empty();
     let report = FailpointMatrixReport {
         seed: args.seed,
+        git_sha: ctx.git_sha.clone(),
         passed,
         failed_cases: failed,
         runs,
@@ -187,9 +207,18 @@ pub fn run_child(args: &FailpointChildArgs) -> Result<()> {
     // foreground operations would block forever waiting on the dead
     // worker. Install an abort-on-panic hook so any failpoint panic
     // anywhere in the child terminates the whole process and lets the
-    // parent observe a clean death.
+    // parent observe a clean death. Before aborting, the hook writes the
+    // panic payload to `<ack>.hit`; the parent requires that marker to
+    // name the armed failpoint before it counts the kill as the injected
+    // fault (a panic from anywhere else is not evidence).
+    let hit_marker = args.ack_log.with_extension("hit");
     let original_hook = std::panic::take_hook();
     std::panic::set_hook(Box::new(move |info| {
+        let payload = info
+            .payload_as_str()
+            .unwrap_or("<non-string panic payload>");
+        let location = info.location().map(ToString::to_string).unwrap_or_default();
+        let _ = fs::write(&hit_marker, format!("{payload}\n{location}\n"));
         original_hook(info);
         std::process::abort();
     }));
@@ -259,6 +288,11 @@ pub fn run_child(args: &FailpointChildArgs) -> Result<()> {
         redlinedb_kernel::failpoints::cfg(&args.failpoint, &action)
             .map_err(|err| anyhow::anyhow!("arm failpoint {}: {}", args.failpoint, err))?;
     }
+    {
+        let mut stdout = std::io::stdout().lock();
+        writeln!(stdout, "{}", harness::READY_LINE)?;
+        stdout.flush()?;
+    }
 
     // Every 16 rows the child also calls `Database::checkpoint()` so
     // failpoints that gate the checkpoint path (`engine::checkpoint`,
@@ -274,13 +308,9 @@ pub fn run_child(args: &FailpointChildArgs) -> Result<()> {
         // matrix runner each child has a unique db_dir so this never
         // triggers, but keeping the SQL idempotent matches the
         // recover.rs convention.
+        let row = oracle::kv_row_values(Workload::FailpointKv, key as u64, args.rows);
         let result = (|| -> Result<()> {
-            let params = vec![
-                redlinedb::Value::Integer(key as i64),
-                redlinedb::Value::Integer((key % 32) as i64),
-                redlinedb::Value::Blob(format!("value-{key:08}").into_bytes().into()),
-                redlinedb::Value::Integer(1),
-            ];
+            let params: Vec<redlinedb::Value> = row.iter().map(facade_value).collect();
             conn.begin(redlinedb::BeginMode::Immediate)?;
             conn.execute(
                 "INSERT OR REPLACE INTO kv(k, tenant, v, version) VALUES (?, ?, ?, ?)",
@@ -294,7 +324,8 @@ pub fn run_child(args: &FailpointChildArgs) -> Result<()> {
             // a meaningful ack count up to this point.
             return Ok(());
         }
-        ack_row(&mut ack, key)?;
+        let digest = oracle::expected_txn_digest(Workload::FailpointKv, key as u64, args.rows);
+        ack_row(&mut ack, key, &digest)?;
 
         if key > 0 && key.is_multiple_of(CHECKPOINT_EVERY_ROWS) && db.checkpoint().is_err() {
             // The checkpoint failpoint fires here; treat error as
@@ -307,18 +338,24 @@ pub fn run_child(args: &FailpointChildArgs) -> Result<()> {
 }
 
 fn run_case(
+    ctx: &HarnessContext,
     engine: EngineKind,
     durability: DurabilityKind,
     case: &FailpointMatrixCase,
     kill_after_n_hits: u64,
 ) -> Result<FailpointMatrixRun> {
-    let tmp = tempfile::tempdir()
+    let tmp = tempfile::Builder::new()
+        .prefix("redline-failpoint-")
+        .tempdir()
         .with_context(|| format!("create failpoint matrix tempdir for {}", case.name))?;
     let db_dir = tmp.path().join(format!("{engine:?}-{}", case.name));
     let ack_log = tmp.path().join(format!("{engine:?}-{}.ack", case.name));
+    let hit_path = ack_log.with_extension("hit");
+    let stdout_path = tmp.path().join("child.stdout");
+    let stderr_path = tmp.path().join("child.stderr");
+    let rows = case.rows.max(1);
 
-    let exe = std::env::current_exe()?;
-    let mut command = Command::new(exe);
+    let mut command = Command::new(&ctx.child_exe);
     command
         .arg("failpoint-child")
         .arg("--engine")
@@ -334,30 +371,51 @@ fn run_case(
         .arg("--action")
         .arg(&case.action)
         .arg("--rows")
-        .arg(case.rows.max(1).to_string())
+        .arg(rows.to_string())
         .arg("--kill-after-n-hits")
         .arg(kill_after_n_hits.to_string())
-        .stdout(Stdio::null())
-        .stderr(Stdio::null());
+        .stdin(Stdio::null())
+        .stdout(Stdio::from(File::create(&stdout_path)?))
+        .stderr(Stdio::from(File::create(&stderr_path)?));
 
-    let status = command
-        .status()
-        .with_context(|| format!("spawn failpoint child for case {}", case.name))?;
+    let status = command.status().with_context(|| {
+        format!(
+            "spawn failpoint child {} for case {}",
+            ctx.child_exe.display(),
+            case.name
+        )
+    })?;
 
-    let acknowledged = read_ack_count(&ack_log)?;
-    let recovered = match verify_recovered(durability, &db_dir) {
-        Ok(value) => value,
-        Err(err) => {
-            eprintln!(
-                "failpoint-matrix:   verify_recovered failed for {}: {err:#}",
-                case.name
-            );
-            0
-        }
-    };
-    let lost = acknowledged as i64 - recovered as i64;
-    let lost_clamped = lost.max(0);
+    let child_started = fs::read_to_string(&stdout_path)
+        .is_ok_and(|out| out.lines().any(|line| line == harness::READY_LINE));
+    let hit_marker = fs::read_to_string(&hit_path).ok();
+    let fault_observed = hit_marker
+        .as_deref()
+        .is_some_and(|marker| marker.contains(&case.failpoint));
+    let expect_fault = case.expect_child_exit == ExpectExit::NonZero;
 
+    let mut harness_errors = Vec::new();
+    let ledger = harness::read_ledger(
+        &ack_log,
+        Workload::FailpointKv,
+        rows,
+        expect_fault,
+        child_started,
+        &mut harness_errors,
+    );
+    let mut state =
+        harness::recover_twice_with(engine, durability, &db_dir, false, &mut harness_errors);
+    state.child_started = child_started;
+    state.fault_observed = fault_observed;
+    state.harness_errors = harness_errors;
+    let verdict = oracle::evaluate(&ledger, &state);
+
+    let acknowledged = verdict.acknowledged;
+    let recovered = state
+        .tables
+        .get(oracle::KV_TABLE)
+        .map_or(0, |rows| rows.len());
+    let lost_clamped = verdict.lost_ack_ids.len() as i64;
     let child_exit_status = status.code();
     let observed = ObservedRun {
         child_exit_status,
@@ -366,7 +424,20 @@ fn run_case(
         recovered,
         lost_acked_commits: lost_clamped,
     };
-    let (passed, pass_reason) = evaluate_verdict(case, &observed);
+    let (exit_passed, exit_reason) = evaluate_verdict(case, &observed);
+    let passed = exit_passed && verdict.qualified;
+    let pass_reason = if passed {
+        format!("{exit_reason}; {}", verdict.summary())
+    } else if exit_passed {
+        format!("verdict=FAIL: {}", verdict.summary())
+    } else {
+        format!("{exit_reason}; oracle {}", verdict.summary())
+    };
+    let evidence = if passed {
+        None
+    } else {
+        Some(harness::keep_evidence(tmp, ctx, "child.stderr"))
+    };
 
     Ok(FailpointMatrixRun {
         case: case.name.clone(),
@@ -375,14 +446,30 @@ fn run_case(
         engine,
         durability,
         kill_after_n_hits,
-        child_status: format_status(child_exit_status, status.success()),
+        child_status: harness::describe(status),
         child_exit_status,
         acknowledged,
         recovered,
         lost_acked_commits: lost_clamped,
         passed,
         pass_reason,
+        child_started,
+        fault_observed,
+        hit_marker,
+        verdict,
+        evidence,
     })
+}
+
+/// Redline facade value for one oracle cell.
+fn facade_value(value: &CellValue) -> redlinedb::Value {
+    match value {
+        CellValue::Null => redlinedb::Value::Null,
+        CellValue::Integer(v) => redlinedb::Value::Integer(*v),
+        CellValue::Real(v) => redlinedb::Value::Real(*v),
+        CellValue::Text(v) => redlinedb::Value::Text(v.clone().into()),
+        CellValue::Blob(v) => redlinedb::Value::Blob(v.clone().into()),
+    }
 }
 
 /// Snapshot of what the parent observed about a single child run.
@@ -462,66 +549,6 @@ pub fn evaluate_verdict(case: &FailpointMatrixCase, observed: &ObservedRun) -> (
     (passed, reason)
 }
 
-fn verify_recovered(durability: DurabilityKind, db_dir: &Path) -> Result<usize> {
-    let mut options = redlinedb::OpenOptions::default();
-    options.memory.cache_bytes = 8 * 1024 * 1024;
-    // CRITICAL: `create: true` (the default) routes the redlinedb facade
-    // through `Database::create`, which re-initialises the page file
-    // and wipes any existing data. For recovery verification we need
-    // `Database::open`, which replays the WAL on top of the existing
-    // page file.
-    options.create = false;
-    options.durability = match durability {
-        DurabilityKind::Strict => redlinedb::Durability::Strict,
-        DurabilityKind::Normal => redlinedb::Durability::Normal,
-        DurabilityKind::Unsafe => redlinedb::Durability::UnsafeDev,
-    };
-    let path = db_dir.join("bench.redline");
-    let db = redlinedb::Database::open_with_options(&path, options)
-        .with_context(|| format!("open recovered db at {}", path.display()))?;
-    let mut conn = db.connect().with_context(|| "connect to recovered db")?;
-    // The kv table may not exist if the child died before the
-    // CREATE TABLE durably committed. Treat that as zero recovered
-    // rows rather than propagating the error: the gate is about
-    // whether *acknowledged* rows are recovered, and ack count is
-    // zero in that scenario, so the case naturally passes.
-    let count = match conn.query("SELECT COUNT(*) FROM kv", ()) {
-        Ok(mut rows) => match rows.step()? {
-            redlinedb::Step::Row(row) => match row.get_ref(0)? {
-                redlinedb::ValueRef::Integer(value) => value,
-                redlinedb::ValueRef::Null => 0,
-                _ => 0,
-            },
-            redlinedb::Step::Done => 0,
-        },
-        Err(err) => {
-            eprintln!(
-                "failpoint-matrix:   recovered db at {} has no kv table ({err})",
-                path.display()
-            );
-            0
-        }
-    };
-    Ok(count.max(0) as usize)
-}
-
-fn read_ack_count(path: &Path) -> Result<usize> {
-    let file = match File::open(path) {
-        Ok(file) => file,
-        Err(err) if err.kind() == std::io::ErrorKind::NotFound => return Ok(0),
-        Err(err) => return Err(err.into()),
-    };
-    let reader = BufReader::new(file);
-    let mut count = 0_usize;
-    for line in reader.lines() {
-        let line = line?;
-        if !line.trim().is_empty() {
-            count += 1;
-        }
-    }
-    Ok(count)
-}
-
 /// Open the ack log used by the failpoint-matrix child to record
 /// contractually-durable rows.
 ///
@@ -535,7 +562,7 @@ fn read_ack_count(path: &Path) -> Result<usize> {
 ///   metadata (size = 0, length zero) is on disk before the first
 ///   write. This matters when the workload crashes before the first
 ///   commit: without the initial fsync the directory entry might not
-///   exist on disk and `read_ack_count` would return zero even when
+///   exist on disk and the parent would read an empty ledger even when
 ///   the on-disk WAL contains acked rows.
 /// - We `sync_all()` the parent directory so the directory entry that
 ///   names the ack log is itself durable. macOS HFS+/APFS and Linux
@@ -566,19 +593,21 @@ pub fn open_ack_log(path: &Path) -> Result<File> {
     Ok(file)
 }
 
-/// Append `{key}\n` to the ack log and fsync the file.
+/// Append `{key}\t{digest}\n` to the ack log with one write and fsync
+/// the file.
 ///
 /// This is the per-row gate-oracle write. Every entry that returns
 /// `Ok(())` is contractually durable: a subsequent process crash MUST
-/// leave the line on disk for `read_ack_count` to discover. If the
+/// leave the line on disk for the parent's ledger parser. If the
 /// engine then fails to recover the row, that constitutes a
 /// lost-acked-commit and the strict gate fails.
 ///
 /// `flush()` would only drain Rust's `BufWriter`; we use `sync_all()`
 /// to issue a real fsync(2) that flushes the OS page cache. The
 /// failpoint matrix's correctness depends on this distinction.
-pub fn ack_row(file: &mut File, key: usize) -> Result<()> {
-    writeln!(file, "{key}").with_context(|| format!("write ack row {key}"))?;
+pub fn ack_row(file: &mut File, key: usize, digest: &str) -> Result<()> {
+    file.write_all(oracle::ack_line(key as u64, digest).as_bytes())
+        .with_context(|| format!("write ack row {key}"))?;
     file.sync_all()
         .with_context(|| format!("sync ack row {key}"))?;
     Ok(())

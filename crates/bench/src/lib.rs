@@ -11,7 +11,7 @@ mod metrics;
 pub mod perf_evidence;
 pub mod process_metrics;
 pub mod qps;
-mod recover;
+pub mod recover;
 pub mod report;
 pub mod score_policy;
 pub mod strace_capture;
@@ -46,19 +46,22 @@ pub fn run(cli: Cli) -> Result<()> {
         config::Command::Recover(args) => {
             let report = recover::run(&args)?;
             report::write_json(args.out.as_deref(), &report)?;
+            report.ensure_passed()?;
         }
         config::Command::RecoverMatrix(args) => {
             let report = recover::run_matrix(&args)?;
             report::write_json(args.out.as_deref(), &report)?;
+            report.ensure_passed()?;
         }
         config::Command::RecoverChild(args) => recover::run_child(&args)?,
         config::Command::FailpointMatrix(args) => {
             let report = failpoint_matrix::run(&args)?;
             failpoint_matrix::write_report(&args.out, &report)?;
-            if !report.passed {
+            if !report.passed || report.runs.is_empty() {
                 bail!(
-                    "failpoint-matrix gate failed: {} cases reported lost acked commits",
-                    report.failed_cases
+                    "failpoint-matrix gate failed: {}/{} runs did not qualify",
+                    report.failed_cases,
+                    report.runs.len()
                 );
             }
         }

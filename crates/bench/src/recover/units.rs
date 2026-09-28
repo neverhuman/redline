@@ -1,8 +1,14 @@
 use anyhow::Result;
 
 use crate::config::RecoveryScenarioKind;
-use crate::engine::{self, CellValue};
+use crate::engine;
 
+use super::oracle::{self, Workload};
+
+/// Run transaction `key` and return the digest of the rows it leaves
+/// behind, which the child writes to its ack ledger after the commit.
+/// Row values come from the oracle so the workload and the check that
+/// grades it cannot drift apart.
 pub fn commit_recovery_unit(
     engine: &dyn engine::BenchEngine,
     conn: &mut dyn engine::BenchConn,
@@ -10,26 +16,25 @@ pub fn commit_recovery_unit(
     key: usize,
     total_rows: usize,
     checkpoint_every_rows: usize,
-) -> Result<()> {
+) -> Result<String> {
+    let workload = Workload::from_scenario(scenario);
+    let key_u64 = key as u64;
     conn.begin_immediate()?;
     match scenario {
-        RecoveryScenarioKind::Wal => {
-            recovery_wal_unit(conn, key)?;
+        RecoveryScenarioKind::Wal | RecoveryScenarioKind::Checkpoint => {
+            let params = oracle::kv_row_values(workload, key_u64, total_rows);
+            let _ = conn.execute(
+                "INSERT OR REPLACE INTO kv(k, tenant, v, version) VALUES (?1, ?2, ?3, ?4)",
+                &params,
+            )?;
         }
         RecoveryScenarioKind::Catalog => {
-            recovery_catalog_unit(conn, key)?;
-        }
-        RecoveryScenarioKind::Checkpoint => {
-            recovery_checkpoint_unit(conn, key, total_rows)?;
+            recovery_catalog_unit(conn, key_u64)?;
         }
     }
     conn.execute(
         "INSERT OR REPLACE INTO crash_progress(id, scenario, note) VALUES (?1, ?2, ?3)",
-        &[
-            CellValue::Integer(key as i64),
-            CellValue::Text(scenario.as_str().to_owned()),
-            CellValue::Text(format!("ack-{key}")),
-        ],
+        &oracle::progress_row_values(workload, key_u64),
     )?;
     conn.commit()?;
     if matches!(scenario, RecoveryScenarioKind::Checkpoint)
@@ -39,64 +44,34 @@ pub fn commit_recovery_unit(
     {
         engine.checkpoint()?;
     }
-    Ok(())
+    let rows = oracle::expected_row_values(workload, key_u64, total_rows)
+        .into_iter()
+        .map(|(table, values)| (table, oracle::row_digest(&values)))
+        .collect();
+    Ok(oracle::txn_digest(&rows))
 }
 
-pub fn recovery_wal_unit(conn: &mut dyn engine::BenchConn, key: usize) -> Result<()> {
-    let params = [
-        CellValue::Integer(key as i64),
-        CellValue::Integer((key % 32) as i64),
-        CellValue::Blob(format!("value-{key:08}").into_bytes()),
-        CellValue::Integer(1),
-    ];
-    let _ = conn.execute(
-        "INSERT OR REPLACE INTO kv(k, tenant, v, version) VALUES (?1, ?2, ?3, ?4)",
-        &params,
-    )?;
-    Ok(())
-}
-
-pub fn recovery_catalog_unit(conn: &mut dyn engine::BenchConn, key: usize) -> Result<()> {
-    let slot = key % 8;
-    let table = format!("scratch_{slot}");
+/// Create `scratch_{key % 8}` with an index, insert the key, and for even
+/// keys drop the index and table again inside the same transaction.
+fn recovery_catalog_unit(conn: &mut dyn engine::BenchConn, key: u64) -> Result<()> {
+    let (table, values) = oracle::catalog_scratch_values(key);
+    let index = oracle::scratch_index(key % oracle::CATALOG_SLOTS);
     conn.execute(
         &format!("CREATE TABLE IF NOT EXISTS {table}(id INTEGER PRIMARY KEY, note TEXT)"),
         &[],
     )?;
     conn.execute(
-        &format!("CREATE INDEX IF NOT EXISTS {table}_note_idx ON {table}(note)"),
+        &format!("CREATE INDEX IF NOT EXISTS {index} ON {table}(note)"),
         &[],
     )?;
     conn.execute(
         &format!("INSERT INTO {table}(id, note) VALUES (?1, ?2)"),
-        &[
-            CellValue::Integer(key as i64),
-            CellValue::Text(format!("catalog-{key}")),
-        ],
+        &values,
     )?;
     if key.is_multiple_of(2) {
-        let _ = conn.execute(&format!("DROP INDEX IF EXISTS {table}_note_idx"), &[])?;
+        let _ = conn.execute(&format!("DROP INDEX IF EXISTS {index}"), &[])?;
         let _ = conn.execute(&format!("DROP TABLE IF EXISTS {table}"), &[])?;
     }
-    Ok(())
-}
-
-pub fn recovery_checkpoint_unit(
-    conn: &mut dyn engine::BenchConn,
-    key: usize,
-    total_rows: usize,
-) -> Result<()> {
-    let version = ((key % total_rows.max(1)) + 1) as i64;
-    let params = [
-        CellValue::Integer(key as i64),
-        CellValue::Integer((key % 32) as i64),
-        CellValue::Blob(format!("checkpoint-{key:08}").into_bytes()),
-        CellValue::Integer(version),
-    ];
-    let _ = conn.execute(
-        "INSERT OR REPLACE INTO kv(k, tenant, v, version) VALUES (?1, ?2, ?3, ?4)",
-        &params,
-    )?;
     Ok(())
 }
 

@@ -148,6 +148,11 @@ pub struct RecoverArgs {
     pub seed: u64,
     #[arg(long)]
     pub out: Option<PathBuf>,
+    /// Executable spawned as the crash child. Defaults to the running
+    /// binary; tests pass the built `redlinedb-bench` because their own
+    /// executable is the libtest harness.
+    #[arg(long, hide = true)]
+    pub child_exe: Option<PathBuf>,
 }
 
 #[derive(Debug, Clone, Args)]
@@ -160,6 +165,11 @@ pub struct RecoverMatrixArgs {
     pub seed: u64,
     #[arg(long)]
     pub out: Option<PathBuf>,
+    /// Executable spawned as the crash child. Defaults to the running
+    /// binary; tests pass the built `redlinedb-bench` because their own
+    /// executable is the libtest harness.
+    #[arg(long, hide = true)]
+    pub child_exe: Option<PathBuf>,
 }
 
 #[derive(Debug, Clone, Args)]
@@ -196,6 +206,11 @@ pub struct FailpointMatrixArgs {
     pub out: PathBuf,
     #[arg(long, default_value_t = 7)]
     pub seed: u64,
+    /// Executable spawned as the crash child. Defaults to the running
+    /// binary; tests pass the built `redlinedb-bench` because their own
+    /// executable is the libtest harness.
+    #[arg(long, hide = true)]
+    pub child_exe: Option<PathBuf>,
 }
 
 #[derive(Debug, Clone, Args)]
