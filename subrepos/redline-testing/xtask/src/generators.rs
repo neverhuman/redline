@@ -868,3 +868,7 @@ fn sanitize(s: &str) -> String {
 // GENERATORS table dispatch.
 #[allow(dead_code)]
 fn _silence_dead(_p: &PathBuf) {}
+
+#[cfg(all(test, unix))]
+#[path = "generators_tests.rs"]
+mod tests;
