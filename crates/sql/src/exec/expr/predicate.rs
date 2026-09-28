@@ -1,6 +1,9 @@
 use super::*;
 use std::cell::RefCell;
 
+use super::affinity::CmpAffinity;
+use redlinedb_kernel::catalog::Affinity;
+
 #[derive(Clone, Copy, Debug, Hash, PartialEq, Eq)]
 struct SubqueryCacheKey {
     ast_addr: usize,
@@ -30,6 +33,13 @@ pub(crate) fn truthy_opt(value: &SqlValue) -> Option<bool> {
 
 pub(crate) trait CaseEvaluator {
     fn eval_case_expr(&mut self, expr: &Expr) -> Result<SqlValue>;
+
+    /// The comparison affinity of `CASE operand WHEN value`: SQLite codes
+    /// each WHEN as `operand = value`. Contexts that cannot resolve columns
+    /// convert nothing.
+    fn comparison_affinity(&self, _operand: &Expr, _value: &Expr) -> CmpAffinity {
+        CmpAffinity::None
+    }
 }
 
 pub(crate) fn eval_case<E>(
@@ -41,8 +51,8 @@ pub(crate) fn eval_case<E>(
 where
     E: CaseEvaluator,
 {
-    if let Some(operand) = operand {
-        let operand = evaluator.eval_case_expr(operand)?;
+    if let Some(operand_expr) = operand {
+        let operand = evaluator.eval_case_expr(operand_expr)?;
         if matches!(operand, SqlValue::Null) {
             return match else_result {
                 Some(expr) => evaluator.eval_case_expr(expr),
@@ -54,7 +64,15 @@ where
             if matches!(condition, SqlValue::Null) {
                 continue;
             }
-            if compare_values(&operand, &condition) == Ordering::Equal {
+            let equal = if super::affinity::may_convert(&operand, &condition) {
+                let affinity = evaluator.comparison_affinity(operand_expr, &when.condition);
+                let (left, right) =
+                    super::affinity::apply_pair(operand.clone(), condition, affinity);
+                compare_values(&left, &right) == Ordering::Equal
+            } else {
+                compare_values(&operand, &condition) == Ordering::Equal
+            };
+            if equal {
                 return evaluator.eval_case_expr(&when.result);
             }
         }
@@ -171,7 +189,14 @@ fn row_values_for_expr(
     }
 }
 
-fn row_eq(left: &[SqlValue], right: &[SqlValue]) -> Result<Option<bool>> {
+/// Row-value equality under comparison affinity. `affinity(i)` gives the
+/// affinity of component `i`; it is only asked when a component pair could
+/// compare differently under some affinity, so callers compute it lazily.
+fn row_eq(
+    left: &[SqlValue],
+    right: &[SqlValue],
+    affinity: &mut dyn FnMut(usize) -> CmpAffinity,
+) -> Result<Option<bool>> {
     if left.len() != right.len() {
         return Err(Error::UnsupportedSql(format!(
             "row value arity mismatch: {} vs {}",
@@ -179,16 +204,74 @@ fn row_eq(left: &[SqlValue], right: &[SqlValue]) -> Result<Option<bool>> {
             right.len()
         )));
     }
-    for (l, r) in left.iter().zip(right.iter()) {
+    for (i, (l, r)) in left.iter().zip(right.iter()).enumerate() {
         if matches!(l, SqlValue::Null) || matches!(r, SqlValue::Null) {
             return Ok(None);
         }
-        match compare_values(l, r) {
-            Ordering::Equal => {}
-            _ => return Ok(Some(false)),
+        let ord = if super::affinity::may_convert(l, r) {
+            let (l, r) = super::affinity::apply_pair(l.clone(), r.clone(), affinity(i));
+            compare_values(&l, &r)
+        } else {
+            compare_values(l, r)
+        };
+        if ord != Ordering::Equal {
+            return Ok(Some(false));
         }
     }
     Ok(Some(true))
+}
+
+/// The affinities of the left operand of `IN`: one per row-value component.
+fn in_lhs_affinities(expr: &Expr, row: &RowContext<'_>) -> Vec<Option<Affinity>> {
+    match expr {
+        Expr::Tuple(exprs) => exprs
+            .iter()
+            .map(|expr| super::affinity::expr_affinity(row, expr))
+            .collect(),
+        Expr::Nested(inner) => in_lhs_affinities(inner, row),
+        _ => vec![super::affinity::expr_affinity(row, expr)],
+    }
+}
+
+/// Lazily computed per-component affinities, filled on first use.
+struct LazyAffinities<'a> {
+    cached: Option<Vec<CmpAffinity>>,
+    compute: Box<dyn FnMut() -> Vec<CmpAffinity> + 'a>,
+}
+
+impl<'a> LazyAffinities<'a> {
+    fn new(compute: impl FnMut() -> Vec<CmpAffinity> + 'a) -> Self {
+        Self {
+            cached: None,
+            compute: Box::new(compute),
+        }
+    }
+
+    fn get(&mut self, index: usize) -> CmpAffinity {
+        if self.cached.is_none() {
+            self.cached = Some((self.compute)());
+        }
+        self.cached
+            .as_ref()
+            .and_then(|all| all.get(index).copied())
+            .unwrap_or(CmpAffinity::None)
+    }
+}
+
+/// The affinity of result column `index` of a scalar or IN subquery, from
+/// its bound plan (`sqlite3ExprAffinity` of that result expression).
+pub(crate) fn subquery_column_affinity(
+    subquery: &sqlparser::ast::Query,
+    index: usize,
+) -> Option<Affinity> {
+    let conn = current_connection()?;
+    let template = bind_subquery(conn, subquery).ok()?;
+    match &template.kind {
+        crate::statement::PreparedKind::Select(plan) => {
+            super::affinity::plan_column_affinity(plan, index)
+        }
+        _ => None,
+    }
 }
 
 pub(crate) fn in_list_result(
@@ -204,9 +287,16 @@ pub(crate) fn in_list_result(
     }
     let mut found = false;
     let mut saw_null = false;
+    // SQLite compares `x IN (list)` with the affinity of `x` alone.
+    let mut affinities = LazyAffinities::new(|| {
+        in_lhs_affinities(expr, row)
+            .into_iter()
+            .map(CmpAffinity::of_optional)
+            .collect()
+    });
     for item in list {
         let candidate = row_values_for_expr(item, row, bindings)?;
-        match row_eq(&value, &candidate)? {
+        match row_eq(&value, &candidate, &mut |i| affinities.get(i))? {
             Some(true) => {
                 found = true;
                 break;
@@ -241,12 +331,26 @@ pub(crate) fn in_subquery_result(
         ));
     }
     let cache_key = subquery_cache_key(conn, subquery);
+    // `x IN (SELECT y ...)` compares with the affinity of `x` against `y`.
+    let mut affinities = LazyAffinities::new(|| {
+        let lhs = in_lhs_affinities(expr, row);
+        lhs.into_iter()
+            .enumerate()
+            .map(|(i, left)| CmpAffinity::between(left, subquery_column_affinity(subquery, i)))
+            .collect()
+    });
+    let mut affinity = |i| affinities.get(i);
     if in_subquery_is_cacheable(subquery) {
         if let Some(result) = IN_SUBQUERY_ROW_CACHE.with(|cache| {
             let cache = cache.borrow();
-            cache
-                .get(&cache_key)
-                .map(|rows| finish_in_rows(&value, rows.iter().map(Vec::as_slice), negated))
+            cache.get(&cache_key).map(|rows| {
+                finish_in_rows(
+                    &value,
+                    rows.iter().map(Vec::as_slice),
+                    negated,
+                    &mut affinity,
+                )
+            })
         }) {
             return result;
         }
@@ -258,7 +362,12 @@ pub(crate) fn in_subquery_result(
             })
         });
         let rows = rows?;
-        let result = finish_in_rows(&value, rows.iter().map(Vec::as_slice), negated)?;
+        let result = finish_in_rows(
+            &value,
+            rows.iter().map(Vec::as_slice),
+            negated,
+            &mut affinity,
+        )?;
         if !used_correlated_lookup {
             IN_SUBQUERY_ROW_CACHE.with(|cache| {
                 cache.borrow_mut().insert(cache_key, rows);
@@ -271,17 +380,27 @@ pub(crate) fn in_subquery_result(
     let rows = crate::exec::with_outer_row(owned, || {
         materialize_prepared_rows(conn, &template, bindings)
     })?;
-    finish_in_rows(&value, rows.iter().map(Vec::as_slice), negated)
+    finish_in_rows(
+        &value,
+        rows.iter().map(Vec::as_slice),
+        negated,
+        &mut affinity,
+    )
 }
 
-fn finish_in_rows<'a, I>(value: &[SqlValue], rows: I, negated: bool) -> Result<SqlValue>
+fn finish_in_rows<'a, I>(
+    value: &[SqlValue],
+    rows: I,
+    negated: bool,
+    affinity: &mut dyn FnMut(usize) -> CmpAffinity,
+) -> Result<SqlValue>
 where
     I: IntoIterator<Item = &'a [SqlValue]>,
 {
     let mut found = false;
     let mut saw_null = false;
     for row in rows {
-        match row_eq(value, row)? {
+        match row_eq(value, row, affinity)? {
             Some(true) => {
                 found = true;
                 break;

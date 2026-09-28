@@ -978,7 +978,30 @@ fn fold_constant_expr(expr: Expr) -> Expr {
         return expr;
     }
     match crate::exec::expr::eval_scalar(&expr, &crate::exec::expr::RowContext::Empty, &[]) {
-        Ok(value) => sql_value_to_expr(value),
+        Ok(value) => {
+            let literal = sql_value_to_expr(value);
+            match expr {
+                // A CAST keeps its node around the folded value: its type's
+                // affinity is part of how a comparison reads it
+                // (`CAST(5 AS INTEGER) = '5'` is 1, `5 = '5'` is 0). Every
+                // cast is idempotent, so re-casting the folded value is
+                // harmless.
+                Expr::Cast {
+                    kind,
+                    data_type,
+                    array,
+                    format,
+                    ..
+                } => Expr::Cast {
+                    kind,
+                    expr: Box::new(literal),
+                    data_type,
+                    array,
+                    format,
+                },
+                _ => literal,
+            }
+        }
         Err(_) => expr,
     }
 }

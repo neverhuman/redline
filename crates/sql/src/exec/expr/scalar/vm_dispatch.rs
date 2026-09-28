@@ -69,6 +69,9 @@ pub(crate) fn try_eval_scalar_via_vm(
         // should fire) from cached negative hits (it should NOT —
         // otherwise the counter explodes on a 1M-row scan).
         let was_first_seen = !cache.entries_contains_key(expr, &ctx);
+        if was_first_seen && compares_a_column(expr) {
+            cache.reject(expr, &ctx);
+        }
         cache
             .get_or_compile(expr, &ctx)
             .map(|res| (res, was_first_seen))
@@ -91,6 +94,61 @@ pub(crate) fn try_eval_scalar_via_vm(
     };
     let row_values = flatten_row(row)?;
     Some(evaluate(&compiled, &row_values, bindings))
+}
+
+/// A comparison with a column operand takes SQLite's comparison affinity
+/// from the column's declared type (`x = '5'` finds INTEGER 5 in an INTEGER
+/// column). The VM knows column ordinals, not types, so such an expression
+/// stays on the AST evaluator.
+fn compares_a_column(expr: &Expr) -> bool {
+    use sqlparser::ast::BinaryOperator as Op;
+    fn is_column(expr: &Expr) -> bool {
+        match expr {
+            Expr::Nested(inner) => is_column(inner),
+            Expr::Identifier(_) | Expr::CompoundIdentifier(_) => true,
+            _ => false,
+        }
+    }
+    match expr {
+        Expr::BinaryOp { left, op, right } => {
+            let comparison = matches!(
+                op,
+                Op::Eq | Op::NotEq | Op::Lt | Op::LtEq | Op::Gt | Op::GtEq
+            );
+            (comparison && (is_column(left) || is_column(right)))
+                || compares_a_column(left)
+                || compares_a_column(right)
+        }
+        Expr::Nested(inner) | Expr::UnaryOp { expr: inner, .. } => compares_a_column(inner),
+        Expr::Case {
+            operand,
+            conditions,
+            else_result,
+            ..
+        } => {
+            operand.as_deref().is_some_and(compares_a_column)
+                || conditions.iter().any(|when| {
+                    compares_a_column(&when.condition) || compares_a_column(&when.result)
+                })
+                || else_result.as_deref().is_some_and(compares_a_column)
+        }
+        Expr::Function(func) => match &func.args {
+            sqlparser::ast::FunctionArguments::List(list) => {
+                list.args.iter().any(|arg| match arg {
+                    sqlparser::ast::FunctionArg::Unnamed(
+                        sqlparser::ast::FunctionArgExpr::Expr(e),
+                    )
+                    | sqlparser::ast::FunctionArg::Named {
+                        arg: sqlparser::ast::FunctionArgExpr::Expr(e),
+                        ..
+                    } => compares_a_column(e),
+                    _ => false,
+                })
+            }
+            _ => false,
+        },
+        _ => false,
+    }
 }
 
 /// Build a `CompileCtx` column map from a row context. Returns an

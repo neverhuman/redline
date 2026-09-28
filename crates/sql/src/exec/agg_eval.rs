@@ -59,6 +59,20 @@ impl<'group, 'ctx> CaseEvaluator for GroupCaseEvaluator<'group, 'ctx> {
     fn eval_case_expr(&mut self, expr: &Expr) -> Result<SqlValue> {
         eval_group_scalar_with_ctx(expr, self.group, self.first_context, self.bindings)
     }
+
+    fn comparison_affinity(
+        &self,
+        operand: &Expr,
+        value: &Expr,
+    ) -> crate::exec::expr::affinity::CmpAffinity {
+        use crate::exec::expr::affinity::{CmpAffinity, expr_affinity};
+        match self.first_context {
+            Some(row) => {
+                CmpAffinity::between(expr_affinity(row, operand), expr_affinity(row, value))
+            }
+            None => CmpAffinity::None,
+        }
+    }
 }
 
 pub(super) fn project_group_row(

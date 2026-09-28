@@ -159,3 +159,42 @@ index-format epoch below), so such an index is rebuilt at the first open.
   `CAST(... AS NUMERIC)` follows `sqlite3VdbeMemNumerify` (`'1.0'` is
   INTEGER 1, `'inf'` and `'nan'` are 0). `::` casts and the Postgres dialect
   keep the Postgres readings.
+
+## Comparison affinity (Phase 1 finding, datatype3.html §4.2)
+
+- Comparisons now convert their operands by SQLite's comparison affinity
+  (`sqlite3CompareAffinity`): a column has its declared affinity (a column
+  without a type has BLOB affinity), `CAST(x AS T)` has T's, a scalar or
+  `IN` subquery has its result column's, and literals, parameters and
+  other expressions have none. If one operand is INTEGER, REAL or NUMERIC
+  and the other is not, well-formed numeric TEXT is compared as its number;
+  if one is TEXT and the other has no affinity, numbers are compared as
+  text. This applies to `=`, `<>`, `<`, `<=`, `>`, `>=`,
+  `IS [NOT] DISTINCT FROM`, `IN (list)` (left operand's affinity),
+  `IN (SELECT ...)`, `BETWEEN` (each bound), `CASE x WHEN`, join
+  conditions, UPDATE/DELETE WHERE, HAVING, trigger bodies and partial-index
+  predicates. `WHERE x = '5'` on an INTEGER column now finds 5 (it found
+  nothing), `WHERE y = 5` on a TEXT column finds '5', and a column without
+  a type still does not match across types, as in SQLite.
+- Index probes convert the constant by the indexed column's affinity, so an
+  index and a scan give the same rows. A join probe uses the other table's
+  index only when the comparison converts the probe the way the index does
+  (`sqlite3IndexAffinityOk`); otherwise it compares row by row.
+- `WHERE rowid = '5'` (and `id = '5'` on an INTEGER PRIMARY KEY, or a bound
+  TEXT parameter) finds rowid 5. It used to fail with `comparing a rowid
+  with numeric text needs comparison affinity`.
+- As in SQLite, a trigger's `NEW.col`/`OLD.col` has no affinity (only the
+  rowid is INTEGER), and `+x` has none.
+- The constant folder keeps a `CAST` node around its folded value, so
+  `CAST(5 AS INTEGER) = '5'` is 1 as in SQLite (it folded to `5 = '5'`,
+  which is 0).
+- Not yet: columns of views, CTEs and FROM-subqueries have no comparison
+  affinity (SQLite gives them their defining expression's), so
+  `WHERE x = '5'` over a view of an INTEGER column still finds nothing, as
+  before. CHECK constraints are evaluated by the kernel without comparison
+  affinity (`CHECK (x = '5')` rejects INTEGER 5, as before). The general
+  `x IS y` form does not parse; `IS [NOT] DISTINCT FROM` does.
+- Upgrade note: a partial index whose WHERE compares a column with a value
+  of another type (`WHERE x = '5'`) was built without comparison affinity.
+  A 4.x database rebuilds every index at its first open (index-format
+  epoch 3), which rebuilds such an index with the new rule.

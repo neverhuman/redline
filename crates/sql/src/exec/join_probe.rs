@@ -28,12 +28,24 @@ pub(crate) fn probe_inner_equijoin(
     let Some((ordinal, probe_expr)) = split_equijoin(step) else {
         return Ok(None);
     };
-    let value = match eval_scalar(probe_expr, &RowContext::Joined(prefix), bindings) {
+    let prefix_ctx = RowContext::Joined(prefix);
+    let value = match eval_scalar(probe_expr, &prefix_ctx, bindings) {
         Ok(value) => value,
         Err(_) => return Ok(None),
     };
     if matches!(value, SqlValue::Null) {
         return Ok(Some(Vec::new()));
+    }
+    // `left.x = right.y` compares with the affinity of both operands. The
+    // index on `right.y` converts a probe by `y`'s affinity alone, so it
+    // can answer only when that is the comparison's conversion too
+    // (`sqlite3IndexAffinityOk`); otherwise the join compares row by row.
+    let Some(column) = step.right.table.columns.get(ordinal) else {
+        return Ok(None);
+    };
+    let probe_affinity = crate::exec::expr::affinity::expr_affinity(&prefix_ctx, probe_expr);
+    if !crate::exec::expr::affinity::index_usable(column.affinity, probe_affinity) {
+        return Ok(None);
     }
     let Some(predicate) = equality_expr(&step.right.table, ordinal, &value) else {
         return Ok(None);

@@ -27,8 +27,16 @@ impl<'row, 'bindings> CaseEvaluator for ScalarCaseEvaluator<'row, 'bindings> {
     fn eval_case_expr(&mut self, expr: &Expr) -> Result<SqlValue> {
         eval_scalar(expr, self.row, self.bindings)
     }
+
+    fn comparison_affinity(&self, operand: &Expr, value: &Expr) -> affinity::CmpAffinity {
+        affinity::CmpAffinity::between(
+            affinity::expr_affinity(self.row, operand),
+            affinity::expr_affinity(self.row, value),
+        )
+    }
 }
 
+pub(crate) mod affinity;
 pub(crate) mod coerce;
 pub(crate) mod json_dispatch;
 mod predicate;
@@ -399,20 +407,35 @@ pub(crate) fn eval_scalar(
         Expr::Between {
             expr,
             negated,
-            low,
-            high,
+            low: low_expr,
+            high: high_expr,
         } => {
             let value = eval_scalar(expr, row, bindings)?;
-            let low = eval_scalar(low, row, bindings)?;
-            let high = eval_scalar(high, row, bindings)?;
+            let low = eval_scalar(low_expr, row, bindings)?;
+            let high = eval_scalar(high_expr, row, bindings)?;
             if matches!(value, SqlValue::Null)
                 || matches!(low, SqlValue::Null)
                 || matches!(high, SqlValue::Null)
             {
                 SqlValue::Null
             } else {
-                let mut ok = compare_values(&value, &low) != Ordering::Less
-                    && compare_values(&value, &high) != Ordering::Greater;
+                // `x BETWEEN a AND b` is `x >= a AND x <= b`, each with its
+                // own comparison affinity.
+                let bound = |bound_expr: &Expr, bound_value: SqlValue| {
+                    if affinity::may_convert(&value, &bound_value) {
+                        let cmp = affinity::CmpAffinity::between(
+                            affinity::expr_affinity(row, expr),
+                            affinity::expr_affinity(row, bound_expr),
+                        );
+                        affinity::apply_pair(value.clone(), bound_value, cmp)
+                    } else {
+                        (value.clone(), bound_value)
+                    }
+                };
+                let (v_low, low) = bound(low_expr, low);
+                let (v_high, high) = bound(high_expr, high);
+                let mut ok = compare_values(&v_low, &low) != Ordering::Less
+                    && compare_values(&v_high, &high) != Ordering::Greater;
                 if *negated {
                     ok = !ok;
                 }
@@ -460,13 +483,11 @@ pub(crate) fn eval_scalar(
             },
         ),
         Expr::IsDistinctFrom(left, right) => {
-            let left = eval_scalar(left, row, bindings)?;
-            let right = eval_scalar(right, row, bindings)?;
+            let (left, right) = eval_compared_pair(left, right, row, bindings)?;
             SqlValue::Integer(if is_distinct(&left, &right) { 1 } else { 0 })
         }
         Expr::IsNotDistinctFrom(left, right) => {
-            let left = eval_scalar(left, row, bindings)?;
-            let right = eval_scalar(right, row, bindings)?;
+            let (left, right) = eval_compared_pair(left, right, row, bindings)?;
             SqlValue::Integer(if !is_distinct(&left, &right) { 1 } else { 0 })
         }
         Expr::Case {

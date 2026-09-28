@@ -96,8 +96,11 @@ fn redline_rows(
     }
 }
 
+/// The rowid has INTEGER affinity, so `id = '5'` compares numerically and
+/// finds rowid 5, as in SQLite. (Before comparison affinity existed, this
+/// query was refused rather than answered with no rows.)
 #[test]
-fn rowid_equality_with_numeric_text_is_refused_not_answered_wrongly() {
+fn rowid_equality_with_numeric_text_matches_sqlite() {
     let (_dir, conn) = redline_db();
     let sqlite = rusqlite::Connection::open_in_memory().unwrap();
     sqlite
@@ -119,16 +122,30 @@ fn rowid_equality_with_numeric_text_is_refused_not_answered_wrongly() {
         for sql in [
             select.clone(),
             format!("SELECT v FROM t WHERE {probe} = id"),
-            format!("UPDATE t SET v = 'u' WHERE id = {probe}"),
-            format!("DELETE FROM t WHERE id = {probe}"),
         ] {
-            let err = redline_rows(&conn, &sql).expect_err(&sql);
-            assert!(err.contains("comparison affinity"), "`{sql}`: {err}");
+            assert_eq!(
+                redline_rows(&conn, &sql).unwrap(),
+                [r#"Text("a")"#],
+                "`{sql}`"
+            );
         }
     }
+    let probe = NUMERIC_TEXT_PROBES[0];
+    redline_rows(&conn, &format!("UPDATE t SET v = 'u' WHERE id = {probe}")).unwrap();
     assert_eq!(
         redline_rows(&conn, "SELECT v FROM t ORDER BY id").unwrap(),
-        [r#"Text("a")"#, r#"Text("b")"#]
+        [r#"Text("u")"#, r#"Text("b")"#]
+    );
+    redline_rows(&conn, "DELETE FROM t WHERE id = '6.0'").unwrap();
+    assert_eq!(
+        redline_rows(&conn, "SELECT v FROM t ORDER BY id").unwrap(),
+        [r#"Text("u")"#]
+    );
+    // Text that is not a number names no rowid.
+    assert!(
+        redline_rows(&conn, "SELECT v FROM t WHERE id = '5x'")
+            .unwrap()
+            .is_empty()
     );
 }
 
@@ -154,8 +171,10 @@ fn rowid_equality_with_a_bound_parameter_takes_the_literal_path() {
     assert_eq!(found(&|stmt| stmt.bind_f64(1, 5.5)), Ok(vec![]));
     assert_eq!(found(&|stmt| stmt.bind_i64(1, -1)), Ok(vec![]));
     assert_eq!(found(&|stmt| stmt.bind_text(1, "x")), Ok(vec![]));
-    let err = found(&|stmt| stmt.bind_text(1, "5")).unwrap_err();
-    assert!(err.contains("comparison affinity"), "{err}");
+    assert_eq!(
+        found(&|stmt| stmt.bind_text(1, "5")),
+        Ok(vec!["a".to_owned()])
+    );
 }
 
 // -- foreign keys: a parent key update between INTEGER and REAL --------------

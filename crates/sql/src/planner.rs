@@ -11,7 +11,7 @@ use sqlparser::ast::{
 };
 
 use crate::connection::{Connection, OptimizerConfig};
-use crate::error::{Error, Result};
+use crate::error::Result;
 use crate::statement::{BoundTable, ExplainFormat, PreparedKind, SelectPlan, SelectSource};
 use crate::value::SqlValue;
 

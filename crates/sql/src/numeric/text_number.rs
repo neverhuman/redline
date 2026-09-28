@@ -3,19 +3,21 @@
 //! Each function ports one SQLite routine, because they disagree on
 //! purpose:
 //!
-//! | input    | [`arith_operand`] | [`numerify`] |
-//! |----------|-------------------|--------------|
-//! | `'1'`    | INTEGER 1         | INTEGER 1    |
-//! | `'1.0'`  | REAL 1.0          | INTEGER 1    |
-//! | `'1e2'`  | REAL 100.0        | INTEGER 100  |
-//! | `'12abc'`| INTEGER 12        | INTEGER 12   |
-//! | `'abc'`  | INTEGER 0         | INTEGER 0    |
-//! | `'inf'`  | INTEGER 0         | INTEGER 0    |
+//! | input    | [`arith_operand`] | [`numerify`] | [`comparison_number`] |
+//! |----------|-------------------|--------------|-----------------------|
+//! | `'1'`    | INTEGER 1         | INTEGER 1    | INTEGER 1             |
+//! | `'1.0'`  | REAL 1.0          | INTEGER 1    | REAL 1.0              |
+//! | `'1e2'`  | REAL 100.0        | INTEGER 100  | REAL 100.0            |
+//! | `'12abc'`| INTEGER 12        | INTEGER 12   | stays TEXT            |
+//! | `'abc'`  | INTEGER 0         | INTEGER 0    | stays TEXT            |
+//! | `'inf'`  | INTEGER 0         | INTEGER 0    | stays TEXT            |
 //!
 //! * [`arith_operand`] is `computeNumericType` (vdbe.c): an operand of
 //!   `+ - * / %` and of unary minus.
 //! * [`numerify`] is `sqlite3VdbeMemNumerify`: `CAST(x AS NUMERIC)` and every
 //!   cast whose type name has NUMERIC affinity (`DATE`, `BOOLEAN`, ...).
+//! * [`comparison_number`] is `applyNumericAffinity(p, 0)`: comparison
+//!   affinity converts only a text that is a well-formed number.
 //!
 //! Rust's `str::parse::<f64>` also reads `inf`, `NaN` and `infinity`, and
 //! `str::trim` strips Unicode spaces; SQLite reads none of those, so nothing
@@ -222,6 +224,28 @@ pub(crate) fn numerify(bytes: &[u8]) -> SqlValue {
     }
 }
 
+/// `applyNumericAffinity(p, 0)`: the number a TEXT stands for when the
+/// whole text (spaces aside) is a well-formed number, else `None` and the
+/// value stays TEXT.
+pub(crate) fn comparison_number(text: &str) -> Option<SqlValue> {
+    let bytes = text.as_bytes();
+    let parsed = atof(bytes);
+    if parsed.rc <= 0 {
+        return None;
+    }
+    if parsed.rc == 1 {
+        let ix = real_to_i64(parsed.value);
+        if real_same_as_int(parsed.value, ix) {
+            return Some(SqlValue::Integer(ix));
+        }
+        let (rc, ix) = atoi64(bytes);
+        if rc == 0 {
+            return Some(SqlValue::Integer(ix));
+        }
+    }
+    Some(SqlValue::Real(parsed.value))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -293,6 +317,28 @@ mod tests {
         ];
         for (input, want) in cases {
             assert_eq!(numerify(input.as_bytes()), *want, "{input:?}");
+        }
+    }
+
+    #[test]
+    fn comparison_number_converts_only_well_formed_numbers() {
+        assert_eq!(comparison_number("5"), Some(int(5)));
+        assert_eq!(comparison_number(" 5 "), Some(int(5)));
+        assert_eq!(comparison_number("5.0"), Some(real(5.0)));
+        assert_eq!(comparison_number("1e2"), Some(real(100.0)));
+        assert_eq!(comparison_number("+.5"), Some(real(0.5)));
+        assert_eq!(
+            comparison_number("9223372036854775807"),
+            Some(int(i64::MAX))
+        );
+        assert_eq!(
+            comparison_number("9223372036854775808"),
+            Some(real(9_223_372_036_854_775_808.0))
+        );
+        for text in [
+            "5x", "abc", "", " ", "1e", "0x10", "inf", "nan", "\u{a0}5", "1.5e",
+        ] {
+            assert_eq!(comparison_number(text), None, "{text:?}");
         }
     }
 }

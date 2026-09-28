@@ -56,6 +56,19 @@ pub(crate) fn eval_binary(
     };
     let left_value = eval_scalar(left, row, bindings)?;
     let right_value = eval_scalar(right, row, bindings)?;
+    let (left_value, right_value) = if matches!(
+        op,
+        BinaryOperator::Eq
+            | BinaryOperator::NotEq
+            | BinaryOperator::Lt
+            | BinaryOperator::LtEq
+            | BinaryOperator::Gt
+            | BinaryOperator::GtEq
+    ) {
+        with_comparison_affinity(left, right, row, left_value, right_value)
+    } else {
+        (left_value, right_value)
+    };
     let compare_with_collation = |a: SqlValue, b: SqlValue, accept: fn(Ordering) -> bool| {
         compare_binary_with(a, b, accept, collation)
     };
@@ -216,6 +229,42 @@ pub(crate) fn eval_binary(
             )));
         }
     })
+}
+
+/// Apply SQLite comparison affinity to two evaluated operands of a
+/// comparison (see `expr::affinity`). The affinity lookup runs only when a
+/// conversion could change the answer.
+pub(crate) fn with_comparison_affinity(
+    left: &Expr,
+    right: &Expr,
+    row: &RowContext<'_>,
+    left_value: SqlValue,
+    right_value: SqlValue,
+) -> (SqlValue, SqlValue) {
+    use crate::exec::expr::affinity::{CmpAffinity, apply_pair, expr_affinity, may_convert};
+    if !may_convert(&left_value, &right_value) {
+        return (left_value, right_value);
+    }
+    let affinity = CmpAffinity::between(expr_affinity(row, left), expr_affinity(row, right));
+    apply_pair(left_value, right_value, affinity)
+}
+
+/// Evaluate both operands of a comparison with comparison affinity.
+pub(crate) fn eval_compared_pair(
+    left: &Expr,
+    right: &Expr,
+    row: &RowContext<'_>,
+    bindings: &[Option<SqlValue>],
+) -> Result<(SqlValue, SqlValue)> {
+    let left_value = eval_scalar(left, row, bindings)?;
+    let right_value = eval_scalar(right, row, bindings)?;
+    Ok(with_comparison_affinity(
+        left,
+        right,
+        row,
+        left_value,
+        right_value,
+    ))
 }
 
 fn both_text(left: &SqlValue, right: &SqlValue) -> bool {

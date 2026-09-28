@@ -605,27 +605,14 @@ where
         SqlValue::Integer(v) if v >= 0 => Ok(Some(RowId::new(v as u64))),
         SqlValue::Real(v) => Ok(rowid_from_real(v)),
         SqlValue::Text(text) => {
-            // The rowid has INTEGER affinity, so SQLite compares numeric text
-            // with it as the number. RedlineDB's WHERE evaluation does not
-            // apply comparison affinity yet, so a scan would silently find no
-            // row where SQLite finds one. Refuse the query instead of giving
-            // that answer. Text that names no rowid equals no row either way.
-            let numeric = crate::value::apply_affinity(
-                SqlValue::Text(text.clone()),
-                crate::value::Affinity::Numeric,
-            )
-            .unwrap_or(SqlValue::Text(text));
-            let names_a_rowid = match numeric {
-                SqlValue::Integer(v) => v >= 0,
-                SqlValue::Real(v) => rowid_from_real(v).is_some(),
-                _ => false,
-            };
-            if names_a_rowid {
-                return Err(Error::UnsupportedSql(
-                    "comparing a rowid with numeric text needs comparison affinity".to_owned(),
-                ));
+            // The rowid has INTEGER affinity, so every comparison with it is
+            // NUMERIC: numeric text is compared as its number ('5' finds
+            // rowid 5, '5.0' too), other text equals no rowid.
+            match crate::numeric::text_number::comparison_number(&text) {
+                Some(SqlValue::Integer(v)) if v >= 0 => Ok(Some(RowId::new(v as u64))),
+                Some(SqlValue::Real(v)) => Ok(rowid_from_real(v)),
+                _ => Ok(None),
             }
-            Ok(None)
         }
         // A negative integer, a REAL that is not a whole rowid, NULL and a
         // blob equal no rowid. The scan's WHERE evaluation then returns no

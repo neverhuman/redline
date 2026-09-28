@@ -5,6 +5,8 @@
 //! regressions add a module under `launch_wrong_answer/` so no file grows
 //! past the 2,000-line cap.
 
+#[path = "launch_wrong_answer/comparison_affinity.rs"]
+mod comparison_affinity;
 #[path = "launch_wrong_answer/index_epoch_upgrade.rs"]
 mod index_epoch_upgrade;
 #[path = "launch_wrong_answer/index_numeric_keys.rs"]

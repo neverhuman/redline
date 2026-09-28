@@ -261,6 +261,12 @@ pub(crate) fn try_match_index_access_hinted(
             if let Some((value, consumed_idx)) =
                 expression_index_equality_match(&conjuncts, expr_sql, bindings)
             {
+                let value = crate::exec::expr::affinity::apply_one(
+                    value,
+                    crate::exec::expr::affinity::CmpAffinity::of_optional(expression_key_affinity(
+                        table, expr_sql,
+                    )),
+                );
                 let key = encode_single_value_key(first_key.sort_dir, &value);
                 let predicates = vec![format!("{} = {}", expr_sql, sql_value_to_explain(&value))];
                 let residual_conjuncts = residuals_from_consumed(&conjuncts, &[consumed_idx]);
@@ -743,12 +749,26 @@ fn constant_eq_for_column(
     let left_col = expr_column_ordinal(left, table);
     let right_col = expr_column_ordinal(right, table);
     if left_col == Some(column) {
-        return eval_constant(right, bindings);
+        return eval_constant(right, bindings).map(|value| probe_for_column(table, column, value));
     }
     if right_col == Some(column) {
-        return eval_constant(left, bindings);
+        return eval_constant(left, bindings).map(|value| probe_for_column(table, column, value));
     }
     None
+}
+
+/// A constant probe as the comparison `column <op> constant` sees it: a
+/// literal or parameter has no affinity, so SQLite converts it by the
+/// column's affinity (`x = '5'` probes INTEGER 5, `y = 5` probes TEXT '5')
+/// and the index, whose keys have that affinity, always serves it.
+fn probe_for_column(table: &TableDef, column: usize, value: SqlValue) -> SqlValue {
+    match table.columns.get(column) {
+        Some(def) => crate::exec::expr::affinity::apply_one(
+            value,
+            crate::exec::expr::affinity::CmpAffinity::of(def.affinity),
+        ),
+        None => value,
+    }
 }
 
 #[derive(Debug, Default)]
@@ -836,8 +856,8 @@ fn leading_range_bounds(
         } = stripped
             && expr_column_ordinal(ident, table) == Some(column)
         {
-            let lo = eval_constant(low, bindings)?;
-            let hi = eval_constant(high, bindings)?;
+            let lo = probe_for_column(table, column, eval_constant(low, bindings)?);
+            let hi = probe_for_column(table, column, eval_constant(high, bindings)?);
             if matches!(lo, SqlValue::Null) || matches!(hi, SqlValue::Null) {
                 continue;
             }
@@ -894,13 +914,13 @@ fn comparison_constant_for_column(
     if expr_column_ordinal(left, table) == Some(column) {
         return eval_constant(right, bindings).map(|value| ColumnSideValue {
             side: ColumnSide::Left,
-            value,
+            value: probe_for_column(table, column, value),
         });
     }
     if expr_column_ordinal(right, table) == Some(column) {
         return eval_constant(left, bindings).map(|value| ColumnSideValue {
             side: ColumnSide::Right,
-            value,
+            value: probe_for_column(table, column, value),
         });
     }
     None
@@ -978,6 +998,24 @@ fn expression_index_equality_match(
         }
     }
     None
+}
+
+/// The affinity of an expression-index key (`sqlite3ExprAffinity`): a
+/// `CAST` has its type's, a bare column its own, anything else none.
+fn expression_key_affinity(
+    table: &TableDef,
+    expr_sql: &str,
+) -> Option<redlinedb_kernel::catalog::Affinity> {
+    let expr = crate::exec::index_predicate::parse_expr_fragment(expr_sql).ok()?;
+    match strip_nested(&expr) {
+        Expr::Cast { data_type, .. } => Some(crate::exec::expr::affinity::cast_affinity(
+            &data_type.to_string(),
+        )),
+        Expr::Identifier(ident) => {
+            crate::exec::expr::affinity::table_column_affinity(table, &ident.value)
+        }
+        _ => None,
+    }
 }
 
 fn expr_text_eq_normalized(expr: &Expr, index_norm: &str) -> bool {

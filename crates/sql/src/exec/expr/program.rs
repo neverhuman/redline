@@ -218,6 +218,13 @@ impl ProgramCache {
         let key = ExprFingerprint::of(expr, ctx).0;
         self.entries.contains_key(&key)
     }
+
+    /// Record that `(expr, ctx)` must not run on the VM, as if Tier-0 had
+    /// rejected it, so later rows fall back without another check.
+    pub(crate) fn reject(&mut self, expr: &Expr, ctx: &CompileCtx<'_>) {
+        let key = ExprFingerprint::of(expr, ctx).0;
+        self.entries.insert(key, None);
+    }
 }
 
 /// Snapshot of the running count of cache hits across the process.
