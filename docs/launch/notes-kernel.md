@@ -493,8 +493,8 @@ Draft lines for the v5.0.0 CHANGELOG. The integrator owns `CHANGELOG.md`.
 - New manual page `docs/manual/durability.md` (workplan R10): a table of
   Strict, Normal and UnsafeDev against process kill, OS crash or power
   loss, and media corruption. Strict surviving a process kill is the only
-  claim, and it carries the tag `<!-- claim:durability.strict.process-kill
-  -->`. Power loss is not claimed: no LazyFS or VM-reset receipt exists.
+  claim, and it carries the release gate's claim tag for
+  `durability.strict.process-kill`. Power loss is not claimed: no LazyFS or VM-reset receipt exists.
   Media corruption is detected (page and record checksums), not repaired.
   The page also covers uncertain commits, visibility, the owner lock and
   read-only opens, checkpoint and WAL retention, torn-tail salvage, and the
