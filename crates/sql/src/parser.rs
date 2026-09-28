@@ -48,6 +48,7 @@ mod pragma_compile;
 #[allow(unused_imports)]
 pub(crate) use pragma_compile::*;
 mod pragma_recovery;
+pub(crate) mod code_scan;
 mod prepare;
 pub(crate) mod savepoint;
 mod select;
@@ -331,7 +332,6 @@ fn parse_prepared_template_impl(conn: &Connection, sql: &str) -> Result<Prepared
             }
         }
     };
-    prepare::apply_cte_materialized_hints(&mut statements, sql);
     if statements.len() != 1 {
         return Err(Error::UnsupportedSql(
             "only single-statement prepares are supported".to_owned(),

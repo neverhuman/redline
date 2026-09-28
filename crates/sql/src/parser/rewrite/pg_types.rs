@@ -2,6 +2,7 @@
 #![allow(dead_code)]
 
 use super::*;
+use crate::parser::code_scan::{Lexer, code_lowercase, code_ranges, copy_char, is_word_byte};
 
 pub(crate) fn has_pg_array_literal(sql: &str) -> bool {
     // Substring match is good enough because `array[` is distinct from any
@@ -22,16 +23,16 @@ pub(crate) fn rewrite_pg_array_literal(sql: &str) -> String {
     while i < bytes.len() {
         let b = bytes[i];
         if let Some(quote) = in_string {
-            out.push(b as char);
             if b == quote {
                 if i + 1 < bytes.len() && bytes[i + 1] == quote {
+                    out.push(quote as char);
                     out.push(quote as char);
                     i += 2;
                     continue;
                 }
                 in_string = None;
             }
-            i += 1;
+            copy_char(&mut out, sql, &mut i);
             continue;
         }
         match b {
@@ -55,10 +56,7 @@ pub(crate) fn rewrite_pg_array_literal(sql: &str) -> String {
                 out.push(b as char);
                 i += 1;
             }
-            _ => {
-                out.push(b as char);
-                i += 1;
-            }
+            _ => copy_char(&mut out, sql, &mut i),
         }
     }
     out
@@ -198,8 +196,7 @@ pub(crate) fn rewrite_pg_bytea_literal(sql: &str) -> String {
                 }
             }
         }
-        out.push(bytes[i] as char);
-        i += 1;
+        copy_char(&mut out, sql, &mut i);
     }
     out
 }
@@ -211,28 +208,17 @@ pub(crate) fn rewrite_pg_bytea_literal(sql: &str) -> String {
 /// all, so the rewrite is unambiguous.
 pub(crate) fn rewrite_pg_array_overlap(sql: &str) -> String {
     let bytes = sql.as_bytes();
+    // Only an operator in code counts; `&&` in a literal or comment stays.
     let mut ops: Vec<usize> = Vec::new();
-    let mut i = 0usize;
-    let mut in_string: Option<u8> = None;
-    while i < bytes.len() {
-        let b = bytes[i];
-        if let Some(quote) = in_string {
-            if b == quote {
-                in_string = None;
-            }
-            i += 1;
-            continue;
-        }
-        match b {
-            b'\'' | b'"' => {
-                in_string = Some(b);
-                i += 1;
-            }
-            b'&' if i + 1 < bytes.len() && bytes[i + 1] == b'&' => {
+    for range in code_ranges(sql, Lexer::current()) {
+        let mut i = range.start;
+        while i + 1 < range.end {
+            if bytes[i] == b'&' && bytes[i + 1] == b'&' {
                 ops.push(i);
                 i += 2;
+            } else {
+                i += 1;
             }
-            _ => i += 1,
         }
     }
     if ops.is_empty() {
@@ -362,11 +348,10 @@ pub(crate) fn rewrite_postfix_index(sql: &str) -> String {
     while i < bytes.len() {
         let b = bytes[i];
         if let Some(q) = in_string {
-            out.push(b as char);
             if b == q {
                 in_string = None;
             }
-            i += 1;
+            copy_char(&mut out, sql, &mut i);
             continue;
         }
         if matches!(b, b'\'' | b'"' | b'`') {
@@ -409,8 +394,7 @@ pub(crate) fn rewrite_postfix_index(sql: &str) -> String {
                 }
             }
         }
-        out.push(b as char);
-        i += 1;
+        copy_char(&mut out, sql, &mut i);
     }
     out
 }
@@ -569,12 +553,13 @@ pub(crate) fn expr_to_right(bytes: &[u8], start: usize) -> Option<(usize, usize)
 /// Identifier boundary is enforced on the LEFT (so `json_array_length(` is
 /// not rewritten as `json_` + `array_length(`).
 pub(crate) fn rewrite_array_length_function(sql: &str) -> String {
-    let lower = sql.to_ascii_lowercase();
+    // Literals and comments are blanked: only a code call is rewritten.
+    let lower = code_lowercase(sql);
     let mut out = String::with_capacity(sql.len());
     let mut i = 0usize;
     let bytes = sql.as_bytes();
     while i < sql.len() {
-        if lower[i..].starts_with("array_length(") {
+        if lower.as_bytes()[i..].starts_with(b"array_length(") {
             let prev_is_ident =
                 i > 0 && (bytes[i - 1].is_ascii_alphanumeric() || bytes[i - 1] == b'_');
             if !prev_is_ident {
@@ -594,8 +579,7 @@ pub(crate) fn rewrite_array_length_function(sql: &str) -> String {
                 }
             }
         }
-        out.push(bytes[i] as char);
-        i += 1;
+        copy_char(&mut out, sql, &mut i);
     }
     out
 }
@@ -633,12 +617,13 @@ pub(crate) fn split_top_level_comma(s: &str) -> Option<usize> {
 /// enforced on the LEFT so qualified names with `array_agg` as a suffix
 /// aren't rewritten.
 pub(crate) fn rewrite_array_agg_function(sql: &str) -> String {
-    let lower = sql.to_ascii_lowercase();
+    // Literals and comments are blanked: only a code call is rewritten.
+    let lower = code_lowercase(sql);
     let mut out = String::with_capacity(sql.len());
     let mut i = 0usize;
     let bytes = sql.as_bytes();
     while i < sql.len() {
-        if lower[i..].starts_with("array_agg(") {
+        if lower.as_bytes()[i..].starts_with(b"array_agg(") {
             let prev_is_ident =
                 i > 0 && (bytes[i - 1].is_ascii_alphanumeric() || bytes[i - 1] == b'_');
             if !prev_is_ident {
@@ -653,8 +638,7 @@ pub(crate) fn rewrite_array_agg_function(sql: &str) -> String {
                 }
             }
         }
-        out.push(bytes[i] as char);
-        i += 1;
+        copy_char(&mut out, sql, &mut i);
     }
     out
 }
@@ -666,45 +650,38 @@ pub(crate) fn rewrite_array_agg_function(sql: &str) -> String {
 /// signed forms (`'-3 days'`) flow through unchanged after the `+` prefix.
 pub(crate) fn rewrite_pg_interval_literal(sql: &str) -> String {
     let bytes = sql.as_bytes();
-    let lower = sql.to_ascii_lowercase();
+    let lower = code_lowercase(sql);
     let mut out = String::with_capacity(sql.len());
+    let mut copied = 0usize;
     let mut i = 0usize;
-    while i < bytes.len() {
-        if lower[i..].starts_with("interval ") {
-            // Word boundary before.
-            let prev_ok = i == 0 || !bytes[i - 1].is_ascii_alphanumeric() && bytes[i - 1] != b'_';
-            if prev_ok {
-                // Find the literal — skip whitespace then expect `'`.
-                let mut j = i + "interval ".len();
-                while j < bytes.len() && bytes[j].is_ascii_whitespace() {
-                    j += 1;
-                }
-                if j < bytes.len() && bytes[j] == b'\'' {
-                    let start = j;
-                    j += 1;
-                    while j < bytes.len() && bytes[j] != b'\'' {
-                        j += 1;
-                    }
-                    if j < bytes.len() {
-                        let body = std::str::from_utf8(&bytes[start + 1..j])
-                            .unwrap_or("")
-                            .trim();
-                        // Prefix `+` if not already signed.
-                        let prefixed = if body.starts_with('-') || body.starts_with('+') {
-                            body.to_owned()
-                        } else {
-                            format!("+{body}")
-                        };
-                        out.push_str(&format!("'{prefixed}'"));
-                        i = j + 1;
-                        continue;
-                    }
-                }
-            }
+    while let Some(rel) = lower[i..].find("interval ") {
+        let at = i + rel;
+        i = at + "interval ".len();
+        if at > 0 && is_word_byte(bytes[at - 1]) {
+            continue;
         }
-        out.push(bytes[i] as char);
-        i += 1;
+        // Find the literal — skip whitespace then expect `'`.
+        let start = skip_ascii_ws(bytes, i);
+        if bytes.get(start) != Some(&b'\'') {
+            continue;
+        }
+        let Some(close) = bytes[start + 1..].iter().position(|&b| b == b'\'') else {
+            continue;
+        };
+        let close = start + 1 + close;
+        let body = sql[start + 1..close].trim();
+        // Prefix `+` if not already signed.
+        let sign = if body.starts_with('-') || body.starts_with('+') {
+            ""
+        } else {
+            "+"
+        };
+        out.push_str(&sql[copied..at]);
+        out.push_str(&format!("'{sign}{body}'"));
+        i = close + 1;
+        copied = i;
     }
+    out.push_str(&sql[copied..]);
     out
 }
 
@@ -720,11 +697,10 @@ pub(crate) fn rewrite_date_arith_with_modifier(sql: &str) -> String {
     while i < bytes.len() {
         let b = bytes[i];
         if let Some(q) = in_string {
-            out.push(b as char);
             if b == q {
                 in_string = None;
             }
-            i += 1;
+            copy_char(&mut out, sql, &mut i);
             continue;
         }
         if matches!(b, b'\'' | b'"' | b'`') {
@@ -763,8 +739,7 @@ pub(crate) fn rewrite_date_arith_with_modifier(sql: &str) -> String {
                 }
             }
         }
-        out.push(b as char);
-        i += 1;
+        copy_char(&mut out, sql, &mut i);
     }
     out
 }
@@ -944,42 +919,32 @@ pub(crate) fn forward_string_mask(out: &[u8]) -> Vec<bool> {
 /// stripped one layer deeper, by `datetime::parse::strip_tz_suffix`.
 pub(crate) fn rewrite_at_time_zone(sql: &str) -> String {
     let bytes = sql.as_bytes();
-    let lower = sql.to_ascii_lowercase();
+    let lower = code_lowercase(sql);
     let mut out = String::with_capacity(sql.len());
+    let mut copied = 0usize;
     let mut i = 0usize;
-    while i < bytes.len() {
-        if lower[i..].starts_with("at time zone") {
-            // Word boundary before.
-            let prev_ok = i == 0 || !bytes[i - 1].is_ascii_alphanumeric() && bytes[i - 1] != b'_';
-            if prev_ok {
-                let mut j = i + "at time zone".len();
-                // Skip whitespace.
-                while j < bytes.len() && bytes[j].is_ascii_whitespace() {
-                    j += 1;
-                }
-                // The TZ argument is a single-quoted string literal — find
-                // and skip past the closing quote.
-                if j < bytes.len() && bytes[j] == b'\'' {
-                    j += 1;
-                    while j < bytes.len() && bytes[j] != b'\'' {
-                        j += 1;
-                    }
-                    if j < bytes.len() {
-                        j += 1; // closing quote
-                    }
-                    // Drop everything between `i` and `j`. The expression's
-                    // preceding whitespace stays so the surrounding SQL
-                    // parses cleanly.
-                    while out.ends_with(' ') {
-                        out.pop();
-                    }
-                    i = j;
-                    continue;
-                }
-            }
+    while let Some(rel) = lower[i..].find("at time zone") {
+        let at = i + rel;
+        i = at + "at time zone".len();
+        if at > 0 && is_word_byte(bytes[at - 1]) {
+            continue;
         }
-        out.push(bytes[i] as char);
-        i += 1;
+        // The TZ argument is a single-quoted string literal — find and skip
+        // past the closing quote.
+        let open = skip_ascii_ws(bytes, i);
+        if bytes.get(open) != Some(&b'\'') {
+            continue;
+        }
+        let end = bytes[open + 1..]
+            .iter()
+            .position(|&b| b == b'\'')
+            .map_or(bytes.len(), |rel| open + 1 + rel + 1);
+        // Drop everything between `at` and `end`. The expression's
+        // preceding whitespace stays so the surrounding SQL parses cleanly.
+        out.push_str(sql[copied..at].trim_end_matches(' '));
+        i = end;
+        copied = end;
     }
+    out.push_str(&sql[copied..]);
     out
 }

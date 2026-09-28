@@ -3,10 +3,11 @@
 //! so the existing sequence-option parser can read both.
 
 pub(crate) fn rewrite_identity_sequence_options(sql: &str) -> String {
-    let lower = sql.to_ascii_lowercase();
-    if !lower.contains("as identity") {
+    if !super::contains_ignore_ascii_case(sql, b"as identity") {
         return sql.to_owned();
     }
+    // Literals and comments are blanked: only a code `AS IDENTITY` counts.
+    let lower = crate::parser::code_scan::code_lowercase(sql);
     let bytes = sql.as_bytes();
     let lower_bytes = lower.as_bytes();
     let needle = b"as identity";

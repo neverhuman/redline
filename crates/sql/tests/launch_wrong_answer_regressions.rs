@@ -15,6 +15,8 @@ mod index_numeric_keys;
 mod lab;
 #[path = "launch_wrong_answer/numeric.rs"]
 mod numeric;
+#[path = "launch_wrong_answer/q5_01_literals.rs"]
+mod q5_01_literals;
 #[path = "launch_wrong_answer/q5_05_text_ops.rs"]
 mod q5_05_text_ops;
 #[path = "launch_wrong_answer/reindex.rs"]

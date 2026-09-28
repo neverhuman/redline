@@ -3,6 +3,7 @@
 
 use super::*;
 use crate::connection::Connection;
+use crate::parser::code_scan::{code_lowercase, copy_char};
 
 pub(crate) fn strip_registered_pg_schema_prefixes(conn: &Connection, sql: &str) -> Option<String> {
     // A20: fast-reject without allocating the lowercase clone. `.` is
@@ -106,11 +107,15 @@ pub(crate) fn strip_registered_pg_schema_prefixes(conn: &Connection, sql: &str) 
 /// which is enough to satisfy the beyond-Postgres parity probes (which
 /// only check existence of a name).
 pub(crate) fn rewrite_pg_catalog_query(conn: &Connection, sql: &str) -> Option<String> {
-    let lower = sql.to_ascii_lowercase();
     let names = ["pg_namespace", "pg_class", "pg_constraint"];
-    if !names.iter().any(|n| lower.contains(n)) {
+    if !names
+        .iter()
+        .any(|n| contains_ignore_ascii_case(sql, n.as_bytes()))
+    {
         return None;
     }
+    // Only a catalog name in code is a catalog read.
+    let lower = code_lowercase(sql);
     if !names.iter().any(|n| lower.contains(&format!(" from {n}"))) {
         return None;
     }
@@ -283,7 +288,7 @@ pub(crate) fn strip_pg_cast_suffixes(sql: &str) -> Option<String> {
     let mut out = sql.to_owned();
     for suffix in suffixes {
         loop {
-            let lower = out.to_ascii_lowercase();
+            let lower = code_lowercase(&out);
             let Some(pos) = lower.find(suffix) else {
                 break;
             };
@@ -313,7 +318,9 @@ pub(crate) fn contains_token_ci_bytes(haystack: &[u8], needle: &[u8]) -> bool {
 /// non-identifier bytes). Used by the pg_catalog rewriter so it only swaps
 /// the FROM target, not other occurrences of the name (column refs, etc).
 pub(crate) fn replace_table_ident(sql: &str, ident: &str, replacement: &str) -> String {
-    let lower = sql.to_ascii_lowercase();
+    // Literals, quoted names and comments are blanked: a name there is
+    // data, not the table reference.
+    let lower = code_lowercase(sql);
     let target = ident.to_ascii_lowercase();
     let mut out = String::with_capacity(sql.len() + replacement.len());
     let mut last = 0usize;
@@ -349,7 +356,7 @@ pub(crate) fn is_pg_ident_char(b: u8) -> bool {
 /// enforce the Postgres "ALWAYS GENERATED" restriction today, so dropping
 /// the override clause is a benign no-op.
 pub(crate) fn rewrite_overriding_system_value(sql: &str) -> String {
-    let lower = sql.to_ascii_lowercase();
+    let lower = code_lowercase(sql);
     if !lower.contains("overriding") {
         return sql.to_owned();
     }
@@ -391,7 +398,7 @@ pub(crate) fn rewrite_overriding_system_value(sql: &str) -> String {
 /// executor's `DropColumnNotNull` arm clears the identity marker (Postgres
 /// identity columns are implicitly NOT NULL).
 pub(crate) fn rewrite_alter_column_drop_identity(sql: &str) -> String {
-    let lower = sql.to_ascii_lowercase();
+    let lower = code_lowercase(sql);
     if !lower.contains("drop identity") {
         return sql.to_owned();
     }
@@ -425,7 +432,10 @@ pub(crate) fn rewrite_alter_column_drop_identity(sql: &str) -> String {
 /// shape. Detect a CREATE SEQUENCE statement and reorder its options into
 /// the parser's expected canonical order before handing the SQL off.
 pub(crate) fn rewrite_create_sequence_options_order(sql: &str) -> String {
-    let lower = sql.to_ascii_lowercase();
+    if !contains_ignore_ascii_case(sql, b"create sequence") {
+        return sql.to_owned();
+    }
+    let lower = code_lowercase(sql);
     let kw_plain = "create sequence";
     if !lower.contains(kw_plain) {
         return sql.to_owned();
@@ -439,7 +449,11 @@ pub(crate) fn rewrite_create_sequence_options_order(sql: &str) -> String {
     while i < bytes.len() && bytes[i].is_ascii_whitespace() {
         i += 1;
     }
-    if i + 14 <= lower.len() && &lower[i..i + 14] == "if not exists " {
+    if lower
+        .as_bytes()
+        .get(i..)
+        .is_some_and(|rest| rest.starts_with(b"if not exists "))
+    {
         i += 14;
     }
     while i < bytes.len() && bytes[i].is_ascii_whitespace() {
@@ -477,7 +491,11 @@ pub(crate) fn rewrite_create_sequence_options_order(sql: &str) -> String {
             b';' => break,
             _ => {}
         }
-        if end + 9 <= lower.len() && &lower[end..end + 9] == " owned by" {
+        if lower
+            .as_bytes()
+            .get(end..)
+            .is_some_and(|rest| rest.starts_with(b" owned by"))
+        {
             break;
         }
         end += 1;
@@ -578,7 +596,7 @@ pub(crate) fn rewrite_create_sequence_options_order(sql: &str) -> String {
 pub(crate) fn rewrite_rollup_cube_to_grouping_sets(sql: &str) -> String {
     let mut out = sql.to_owned();
     loop {
-        let lower = out.to_ascii_lowercase();
+        let lower = code_lowercase(&out);
         let bytes = out.as_bytes();
         let Some(rollup_pos) = lower.find(" group by rollup ") else {
             break;
@@ -604,7 +622,7 @@ pub(crate) fn rewrite_rollup_cube_to_grouping_sets(sql: &str) -> String {
         out.replace_range(start_replace..close + 1, &replacement);
     }
     loop {
-        let lower = out.to_ascii_lowercase();
+        let lower = code_lowercase(&out);
         let bytes = out.as_bytes();
         let Some(cube_pos) = lower.find(" group by cube ") else {
             break;
@@ -735,7 +753,7 @@ pub(crate) fn find_top_level_select_after_with(upper: &str, bytes: &[u8]) -> Opt
         if depth == 0
             && i > 0
             && bytes[i - 1].is_ascii_whitespace()
-            && &upper[i..i + 6] == "SELECT"
+            && upper.as_bytes()[i..].starts_with(b"SELECT")
             && (i + 6 == bytes.len() || bytes[i + 6].is_ascii_whitespace())
         {
             return Some(i);
@@ -772,7 +790,7 @@ pub(crate) fn rewrite_grouping_sets_to_union_all(sql: &str) -> String {
 }
 
 pub(crate) fn rewrite_grouping_sets_in_statement(stmt: &str) -> String {
-    let lower = stmt.to_ascii_lowercase();
+    let lower = code_lowercase(stmt);
     let Some(gs_pos) = lower.find(" group by grouping sets ") else {
         return stmt.to_owned();
     };
@@ -1110,7 +1128,11 @@ pub(crate) fn rewrite_lateral_in_statement(stmt: &str) -> String {
         }
         let upper = out.to_ascii_uppercase();
         let mut alias_name: Option<String> = None;
-        if k + 3 <= upper.len() && &upper[k..k + 3] == "AS " {
+        if upper
+            .as_bytes()
+            .get(k..)
+            .is_some_and(|rest| rest.starts_with(b"AS "))
+        {
             k += 3;
             while k < bytes.len() && bytes[k].is_ascii_whitespace() {
                 k += 1;
@@ -1338,8 +1360,7 @@ where
                 }
             }
         }
-        out.push(bytes[i] as char);
-        i += 1;
+        copy_char(&mut out, text, &mut i);
     }
     out
 }
@@ -1368,7 +1389,7 @@ pub(crate) fn rewrite_grouping_calls(item: &str, set_lower: &[String]) -> String
     while i < bytes.len() {
         // Look for "GROUPING(" at this position, with a left word boundary.
         if i + 9 <= bytes.len()
-            && &upper[i..i + 9] == "GROUPING("
+            && upper.as_bytes()[i..].starts_with(b"GROUPING(")
             && (i == 0 || !is_identifier_char(bytes[i - 1]))
         {
             let open = i + 8; // index of '('
@@ -1395,8 +1416,7 @@ pub(crate) fn rewrite_grouping_calls(item: &str, set_lower: &[String]) -> String
                 continue;
             }
         }
-        out.push(bytes[i] as char);
-        i += 1;
+        copy_char(&mut out, item, &mut i);
     }
     out
 }
@@ -1415,7 +1435,7 @@ pub(crate) fn rewrite_grouping_calls_to_alias(text: &str) -> String {
     let mut i = 0usize;
     while i < bytes.len() {
         if i + 9 <= bytes.len()
-            && &upper[i..i + 9] == "GROUPING("
+            && upper.as_bytes()[i..].starts_with(b"GROUPING(")
             && (i == 0 || !is_identifier_char(bytes[i - 1]))
         {
             let open = i + 8;
@@ -1426,8 +1446,7 @@ pub(crate) fn rewrite_grouping_calls_to_alias(text: &str) -> String {
                 continue;
             }
         }
-        out.push(bytes[i] as char);
-        i += 1;
+        copy_char(&mut out, text, &mut i);
     }
     out
 }

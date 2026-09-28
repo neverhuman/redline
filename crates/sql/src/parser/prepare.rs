@@ -4,8 +4,8 @@ use std::collections::HashMap;
 use crate::error::Result;
 use crate::statement::TableAccessHint;
 
-use sqlparser::ast::{Query, Statement as SqlStatement};
-
+use super::code_scan::{Lexer, is_word_byte, non_code_end, skip_trivia};
+use super::find_ignore_ascii_case;
 use super::split::is_ident_byte;
 
 thread_local! {
@@ -71,30 +71,69 @@ pub(crate) fn take_single_table_hint() -> Option<TableAccessHint> {
     SINGLE_TABLE_HINT.with(|cell| cell.borrow_mut().take())
 }
 
-fn replace_case_insensitive_once(input: &str, needle: &str, replacement: &str) -> Option<String> {
-    let lower_input = input.to_ascii_lowercase();
-    let lower_needle = needle.to_ascii_lowercase();
-    let idx = lower_input.find(&lower_needle)?;
-    let mut out = String::with_capacity(input.len() - needle.len() + replacement.len());
-    out.push_str(&input[..idx]);
-    out.push_str(replacement);
-    out.push_str(&input[idx + needle.len()..]);
-    Some(out)
+/// Drop the Postgres CTE hint in `name AS [NOT] MATERIALIZED (query)`, which
+/// the SQLite parser does not accept. Only code is rewritten: the words
+/// inside a literal, quoted identifier or comment are left as written, and
+/// an alias spelled `materialized` (`SELECT 1 AS materialized`) is not a
+/// hint because no `(` follows it. Nothing reads the hint, so dropping it
+/// changes no plan.
+pub(crate) fn strip_cte_materialized_hints(sql: &str) -> String {
+    if find_ignore_ascii_case(sql, b"materialized").is_none() {
+        return sql.to_owned();
+    }
+    let lexer = Lexer::current();
+    let bytes = sql.as_bytes();
+    let mut out = String::with_capacity(sql.len());
+    let mut copied = 0usize;
+    let mut i = 0usize;
+    while i < bytes.len() {
+        if let Some(end) = non_code_end(bytes, i, lexer) {
+            i = end;
+            continue;
+        }
+        if !is_word_byte(bytes[i]) {
+            i += 1;
+            continue;
+        }
+        let end = code_word_end(bytes, i);
+        if sql[i..end].eq_ignore_ascii_case("as")
+            && let Some(hint_end) = cte_materialized_hint_end(bytes, end, lexer)
+        {
+            out.push_str(&sql[copied..end]);
+            copied = hint_end;
+            i = hint_end;
+            continue;
+        }
+        i = end;
+    }
+    if copied == 0 {
+        return sql.to_owned();
+    }
+    out.push_str(&sql[copied..]);
+    out
 }
 
-pub(crate) fn strip_cte_materialized_hints(sql: &str) -> String {
-    let mut out = sql.to_owned();
-    loop {
-        if let Some(next) = replace_case_insensitive_once(&out, "AS NOT MATERIALIZED", "AS") {
-            out = next;
-            continue;
-        }
-        if let Some(next) = replace_case_insensitive_once(&out, "AS MATERIALIZED", "AS") {
-            out = next;
-            continue;
-        }
-        break out;
+/// After `AS` at `after_as`: the end of `[NOT] MATERIALIZED` when the next
+/// significant byte is the `(` of a CTE body.
+fn cte_materialized_hint_end(bytes: &[u8], after_as: usize, lexer: Lexer) -> Option<usize> {
+    let mut start = skip_trivia(bytes, after_as, lexer);
+    let mut end = code_word_end(bytes, start);
+    let word = |start: usize, end: usize| std::str::from_utf8(&bytes[start..end]).ok();
+    if word(start, end).is_some_and(|w| w.eq_ignore_ascii_case("not")) {
+        start = skip_trivia(bytes, end, lexer);
+        end = code_word_end(bytes, start);
     }
+    if !word(start, end).is_some_and(|w| w.eq_ignore_ascii_case("materialized")) {
+        return None;
+    }
+    (bytes.get(skip_trivia(bytes, end, lexer)) == Some(&b'(')).then_some(end)
+}
+
+fn code_word_end(bytes: &[u8], mut i: usize) -> usize {
+    while i < bytes.len() && is_word_byte(bytes[i]) {
+        i += 1;
+    }
+    i
 }
 
 pub(crate) fn strip_alter_add_column_if_not_exists_hint(sql: &str) -> String {
@@ -393,59 +432,4 @@ fn word_end(bytes: &[u8], mut i: usize) -> usize {
 
 fn is_ident_start(b: u8) -> bool {
     b.is_ascii_alphabetic() || b == b'_'
-}
-
-pub(crate) fn apply_cte_materialized_hints(statements: &mut [SqlStatement], sql: &str) {
-    // A38: byte-wise case-insensitive scan. The previous implementation
-    // called `sql.to_ascii_lowercase()` on every prepare to substring-
-    // check two fixed phrases — that allocates a fresh String of the
-    // entire SQL length per call. ~99% of statements don't use CTE
-    // materialization hints, so the allocation was wasted on the
-    // common path. Same shape as A31 (`is_pragma_sql`).
-    let hint = if contains_ci(sql, "as not materialized") {
-        Some(sqlparser::ast::CteAsMaterialized::NotMaterialized)
-    } else if contains_ci(sql, "as materialized") {
-        Some(sqlparser::ast::CteAsMaterialized::Materialized)
-    } else {
-        None
-    };
-    let Some(hint) = hint else {
-        return;
-    };
-    for statement in statements {
-        if let SqlStatement::Query(query) = statement {
-            apply_cte_materialized_hints_to_query(query.as_mut(), hint);
-        }
-    }
-}
-
-/// A38: allocation-free case-insensitive substring scan. Walks the
-/// haystack once and compares each window byte-by-byte via
-/// `eq_ignore_ascii_case`. For the haystack of an entire SQL
-/// statement that doesn't contain the needle, this is O(N) without
-/// any heap allocation; the previous `to_ascii_lowercase().contains(_)`
-/// path was O(N) plus a full-string heap allocation.
-fn contains_ci(haystack: &str, needle: &str) -> bool {
-    let h = haystack.as_bytes();
-    let n = needle.as_bytes();
-    if n.is_empty() || n.len() > h.len() {
-        return false;
-    }
-    h.windows(n.len()).any(|window| {
-        window
-            .iter()
-            .zip(n.iter())
-            .all(|(a, b)| a.eq_ignore_ascii_case(b))
-    })
-}
-
-fn apply_cte_materialized_hints_to_query(
-    query: &mut Query,
-    hint: sqlparser::ast::CteAsMaterialized,
-) {
-    if let Some(with) = &mut query.with {
-        for cte in &mut with.cte_tables {
-            cte.materialized = Some(hint);
-        }
-    }
 }

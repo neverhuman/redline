@@ -2,6 +2,9 @@
 #![allow(dead_code)]
 
 use super::*;
+use crate::parser::code_scan::{
+    Lexer, code_lowercase, comment_end, copy_char, find_code_ci, is_word_byte, sql_code_contains_ci,
+};
 
 /// Track K — Rewrite `SELECT projection INTO table_name [FROM ...]` into
 /// `CREATE TABLE table_name AS SELECT projection [FROM ...]`. Conservative:
@@ -62,9 +65,10 @@ pub(crate) fn rewrite_select_into_in_statement(stmt: &str) -> String {
         return stmt.to_owned();
     }
     let leading_ws = &stmt[..stmt.len() - trimmed.len()];
-    let upper = trimmed.to_ascii_uppercase();
+    // Literals and comments are blanked, so only a code `INTO` counts.
+    let upper = code_lowercase(trimmed).to_ascii_uppercase();
     // Find top-level " INTO " (not inside parens/strings).
-    let into_at = find_top_level_keyword(&upper, trimmed.as_bytes(), 0, " INTO ");
+    let into_at = find_top_level_keyword(&upper, upper.as_bytes(), 0, " INTO ");
     let Some(into_pos) = into_at else {
         return stmt.to_owned();
     };
@@ -142,7 +146,7 @@ pub(crate) fn find_top_level_keyword(
             b')' => depth -= 1,
             _ => {}
         }
-        if depth == 0 && &upper[i..i + kw.len()] == kw {
+        if depth == 0 && upper.as_bytes()[i..].starts_with(kw.as_bytes()) {
             return Some(i);
         }
         i += 1;
@@ -358,7 +362,11 @@ pub(crate) fn collect_on_conflict_segments(sql: &str) -> Vec<OnConflictSegment> 
                     continue;
                 }
             };
-        } else if j + 13 <= lower.len() && &lower[j..j + 13] == "on constraint" {
+        } else if lower
+            .as_bytes()
+            .get(j..)
+            .is_some_and(|rest| rest.starts_with(b"on constraint"))
+        {
             // ON CONFLICT ON CONSTRAINT name - skip "on constraint" and a name token.
             j += 13;
             while j < bytes.len() && bytes[j].is_ascii_whitespace() {
@@ -384,7 +392,11 @@ pub(crate) fn collect_on_conflict_segments(sql: &str) -> Vec<OnConflictSegment> 
         while j < bytes.len() && bytes[j].is_ascii_whitespace() {
             j += 1;
         }
-        if j + 6 <= lower.len() && &lower[j..j + 6] == "where " {
+        if lower
+            .as_bytes()
+            .get(j..)
+            .is_some_and(|rest| rest.starts_with(b"where "))
+        {
             j += 6;
             j = skip_until_keyword(&lower, bytes, j, " do ");
         }
@@ -392,13 +404,20 @@ pub(crate) fn collect_on_conflict_segments(sql: &str) -> Vec<OnConflictSegment> 
         while j < bytes.len() && bytes[j].is_ascii_whitespace() {
             j += 1;
         }
-        if j + 3 > lower.len() || &lower[j..j + 3] != "do " {
+        if !lower
+            .as_bytes()
+            .get(j..)
+            .is_some_and(|rest| rest.starts_with(b"do "))
+        {
             // Not a valid ON CONFLICT — advance and continue.
             i = j;
             continue;
         }
         j += 3;
-        let is_update = j + 6 <= lower.len() && &lower[j..j + 6] == "update";
+        let is_update = lower
+            .as_bytes()
+            .get(j..)
+            .is_some_and(|rest| rest.starts_with(b"update"));
         // End of segment = end of the action body. For DO NOTHING it's
         // just past "nothing". For DO UPDATE SET ... [WHERE ...] we need
         // to scan to the next clause boundary (another ON CONFLICT, RETURNING, ;, or end).
@@ -408,7 +427,11 @@ pub(crate) fn collect_on_conflict_segments(sql: &str) -> Vec<OnConflictSegment> 
             scan_to_clause_boundary(&lower, bytes, j)
         } else {
             // DO NOTHING
-            if j + 7 <= lower.len() && &lower[j..j + 7] == "nothing" {
+            if lower
+                .as_bytes()
+                .get(j..)
+                .is_some_and(|rest| rest.starts_with(b"nothing"))
+            {
                 j + 7
             } else {
                 j
@@ -499,7 +522,11 @@ pub(crate) fn on_conflict_keyword_at(lower: &str, bytes: &[u8], at: usize) -> Op
 pub(crate) fn skip_until_keyword(lower: &str, bytes: &[u8], from: usize, kw: &str) -> usize {
     let mut j = from;
     while j < bytes.len() {
-        if j + kw.len() <= lower.len() && &lower[j..j + kw.len()] == kw {
+        if lower
+            .as_bytes()
+            .get(j..)
+            .is_some_and(|rest| rest.starts_with(kw.as_bytes()))
+        {
             return j;
         }
         j += 1;
@@ -619,7 +646,7 @@ pub(crate) fn strip_collate_clauses(inner: &str) -> String {
     let mut out = String::with_capacity(inner.len());
     let mut i = 0usize;
     while i < bytes.len() {
-        if i + 9 <= lower.len() && &lower[i..i + 9] == " collate " {
+        if lower.as_bytes()[i..].starts_with(b" collate ") {
             // Skip " collate "
             let mut j = i + 9;
             // Skip the collation name
@@ -629,8 +656,7 @@ pub(crate) fn strip_collate_clauses(inner: &str) -> String {
             i = j;
             continue;
         }
-        out.push(bytes[i] as char);
-        i += 1;
+        copy_char(&mut out, inner, &mut i);
     }
     out
 }
@@ -638,11 +664,14 @@ pub(crate) fn strip_collate_clauses(inner: &str) -> String {
 /// Cheap check: does `sql` contain any `EXCLUDE <mode>` token sequence in
 /// a context that could be a window-frame `EXCLUDE` clause?
 pub(crate) fn has_window_exclude(sql: &str) -> bool {
-    let lower = sql.to_ascii_lowercase();
-    lower.contains(" exclude current row")
-        || lower.contains(" exclude group")
-        || lower.contains(" exclude ties")
-        || lower.contains(" exclude no others")
+    [
+        " exclude current row",
+        " exclude group",
+        " exclude ties",
+        " exclude no others",
+    ]
+    .iter()
+    .any(|needle| sql_code_contains_ci(sql, needle.as_bytes()))
 }
 
 /// Window-frame `EXCLUDE` is not handled by sqlparser-rs 0.61, so we
@@ -655,39 +684,35 @@ pub(crate) fn has_window_exclude(sql: &str) -> bool {
 pub(crate) fn rewrite_window_exclude(sql: &str) -> String {
     let mut out = String::with_capacity(sql.len());
     let bytes = sql.as_bytes();
-    let lower = sql.to_ascii_lowercase();
+    // Literals and comments are blanked: only a code `OVER (` counts.
+    let lower = code_lowercase(sql);
     let lower_bytes = lower.as_bytes();
+    let mut copied = 0usize;
     let mut i = 0usize;
     while i < bytes.len() {
         if !is_over_open(lower_bytes, i) {
-            out.push(bytes[i] as char);
             i += 1;
             continue;
         }
         // Find matching close paren for this OVER (
         let open = i + 5; // position of '(' (after "OVER ")
-        let close = match find_matching_paren(bytes, open) {
-            Some(c) => c,
-            None => {
-                out.push(bytes[i] as char);
-                i += 1;
-                continue;
-            }
+        let Some(close) = find_matching_paren(bytes, open) else {
+            i += 1;
+            continue;
         };
         // Inspect contents between [open+1, close)
         let body = &sql[open + 1..close];
         let body_lower = &lower[open + 1..close];
         if let Some((stripped_body, mode)) = strip_exclude_from_body(body, body_lower) {
-            let new_body = inject_partition_marker(&stripped_body, mode);
+            out.push_str(&sql[copied..i]);
             out.push_str("OVER (");
-            out.push_str(&new_body);
+            out.push_str(&inject_partition_marker(&stripped_body, mode));
             out.push(')');
-            i = close + 1;
-        } else {
-            out.push_str(&sql[i..=close]);
-            i = close + 1;
+            copied = close + 1;
         }
+        i = close + 1;
     }
+    out.push_str(&sql[copied..]);
     out
 }
 
@@ -800,54 +825,26 @@ pub(crate) fn inject_partition_marker(body: &str, marker: &str) -> String {
     format!("{leading}PARTITION BY {marker_lit} {trimmed}")
 }
 
-pub(crate) fn extract_named_window_spec(sql: &str, name: &str) -> Option<String> {
+/// `(clause start, open paren, close paren)` of `WINDOW <name> AS (spec)`
+/// in code; the same words in a literal or comment do not count.
+fn named_window_clause(sql: &str, name: &str) -> Option<(usize, usize, usize)> {
     let needle = format!(" window {} as (", name.to_ascii_lowercase());
-    let start = find_ignore_ascii_case(sql, needle.as_bytes())? + needle.len();
-    let bytes = sql.as_bytes();
-    let mut depth = 1i32;
-    let mut end = start;
-    while end < bytes.len() {
-        match bytes[end] {
-            b'(' => depth += 1,
-            b')' => {
-                depth -= 1;
-                if depth == 0 {
-                    return Some(sql[start..end].to_owned());
-                }
-            }
-            _ => {}
-        }
-        end += 1;
-    }
-    None
+    let start = find_code_ci(sql, needle.as_bytes(), 0)?;
+    let open = start + needle.len() - 1;
+    let close = find_matching_paren(sql.as_bytes(), open)?;
+    Some((start, open, close))
+}
+
+pub(crate) fn extract_named_window_spec(sql: &str, name: &str) -> Option<String> {
+    let (_, open, close) = named_window_clause(sql, name)?;
+    Some(sql[open + 1..close].to_owned())
 }
 
 pub(crate) fn strip_window_clause(sql: &str, name: &str) -> String {
-    let needle = format!(" window {} as (", name.to_ascii_lowercase());
-    let Some(start) = find_ignore_ascii_case(sql, needle.as_bytes()) else {
+    let Some((start, _, close)) = named_window_clause(sql, name) else {
         return sql.to_owned();
     };
-    let mut end = start + needle.len();
-    let bytes = sql.as_bytes();
-    let mut depth = 1i32;
-    while end < bytes.len() {
-        match bytes[end] {
-            b'(' => depth += 1,
-            b')' => {
-                depth -= 1;
-                if depth == 0 {
-                    end += 1;
-                    break;
-                }
-            }
-            _ => {}
-        }
-        end += 1;
-    }
-    let mut out = String::with_capacity(sql.len());
-    out.push_str(&sql[..start]);
-    out.push_str(&sql[end..]);
-    out
+    format!("{}{}", &sql[..start], &sql[close + 1..])
 }
 
 pub(crate) fn rewrite_glob_to_function(input: &str) -> String {
@@ -978,8 +975,7 @@ pub(crate) fn rewrite_glob_to_function(input: &str) -> String {
             i = rhs_end;
             continue;
         }
-        out.push(c as char);
-        i += 1;
+        copy_char(&mut out, input, &mut i);
     }
     out
 }
@@ -1190,93 +1186,62 @@ pub(crate) fn trim_trailing_keyword_ci<'a>(text: &'a str, keyword: &str) -> Opti
 /// (`jsonb_path_ops`, `jsonb_ops`) are also dropped — they only affect
 /// physical layout, not query semantics.
 pub(crate) fn strip_create_index_using_clause(sql: &str) -> String {
-    let bytes = sql.as_bytes();
-    let lower: Vec<u8> = bytes.iter().map(|b| b.to_ascii_lowercase()).collect();
-    if !lower.windows(b"create".len()).any(|w| w == b"create") {
+    if !sql_code_contains_ci(sql, b"create") {
         return sql.to_owned();
     }
+    let bytes = sql.as_bytes();
+    // Literals, quoted names and comments are blanked: only code matches,
+    // and the text between matches is copied as is.
+    let lower = code_lowercase(sql);
+    let lower = lower.as_bytes();
     let mut out = String::with_capacity(sql.len());
+    let mut copied = 0usize;
     let mut i = 0usize;
-    let mut in_string: Option<u8> = None;
     while i < bytes.len() {
-        let b = bytes[i];
-        if let Some(quote) = in_string {
-            out.push(b as char);
-            if b == quote {
-                if i + 1 < bytes.len() && bytes[i + 1] == quote {
-                    out.push(quote as char);
-                    i += 2;
-                    continue;
-                }
-                in_string = None;
+        let word_start = (i == 0 || !is_word_byte(bytes[i - 1])) && lower[i] != b' ';
+        // Match `USING <ident>` in code — strip both tokens.
+        if word_start
+            && matches_word_ci(lower, i, b"using")
+            && !bytes.get(i + 5).is_some_and(|&b| is_word_byte(b))
+        {
+            let mut j = skip_ascii_ws(bytes, i + 5);
+            let name_start = j;
+            while j < bytes.len() && (bytes[j].is_ascii_alphanumeric() || bytes[j] == b'_') {
+                j += 1;
             }
-            i += 1;
+            if j > name_start {
+                // Drop "USING <name>" entirely; eat the trailing
+                // whitespace too so we don't leave a double space.
+                while j < bytes.len() && bytes[j] == b' ' {
+                    j += 1;
+                }
+                out.push_str(&sql[copied..i]);
+                if !out.ends_with(' ') {
+                    out.push(' ');
+                }
+                i = j;
+                copied = j;
+                continue;
+            }
+        }
+        // Match `<col> jsonb_path_ops` / `jsonb_ops` opclass marker.
+        if word_start
+            && let Some(marker) = ["jsonb_path_ops", "jsonb_ops"]
+                .into_iter()
+                .find(|marker| matches_word_ci(lower, i, marker.as_bytes()))
+        {
+            out.push_str(&sql[copied..i]);
+            // Eat a single leading space we may have just emitted.
+            if out.ends_with(' ') {
+                out.pop();
+            }
+            i += marker.len();
+            copied = i;
             continue;
         }
-        match b {
-            b'\'' | b'"' | b'`' => {
-                in_string = Some(b);
-                out.push(b as char);
-                i += 1;
-            }
-            _ => {
-                // Match `USING <ident>` outside strings — strip both tokens.
-                if (i == 0 || !bytes[i - 1].is_ascii_alphanumeric())
-                    && matches_word_ci(&lower, i, b"using")
-                {
-                    let mut j = i + 5;
-                    // Skip whitespace.
-                    while j < bytes.len() && bytes[j].is_ascii_whitespace() {
-                        j += 1;
-                    }
-                    // Capture the method-name identifier.
-                    let name_start = j;
-                    while j < bytes.len() && (bytes[j].is_ascii_alphanumeric() || bytes[j] == b'_')
-                    {
-                        j += 1;
-                    }
-                    if j > name_start {
-                        // Drop "USING <name>" entirely; eat the trailing
-                        // whitespace too so we don't leave a double space.
-                        while j < bytes.len() && bytes[j] == b' ' {
-                            j += 1;
-                        }
-                        if !out.ends_with(' ') {
-                            out.push(' ');
-                        }
-                        i = j;
-                        continue;
-                    }
-                }
-                // Match `<col> jsonb_path_ops` / `jsonb_ops` opclass marker.
-                let mut stripped_marker = false;
-                for marker in ["jsonb_path_ops", "jsonb_ops"] {
-                    let mlen = marker.len();
-                    if (i == 0 || !bytes[i - 1].is_ascii_alphanumeric())
-                        && matches_word_ci(&lower, i, marker.as_bytes())
-                    {
-                        // Trailing must be punctuation/whitespace/end.
-                        let after = i + mlen;
-                        let ok = after >= bytes.len() || !bytes[after].is_ascii_alphanumeric();
-                        if ok {
-                            i += mlen;
-                            // Eat a single leading space we may have just emitted.
-                            if out.ends_with(' ') {
-                                out.pop();
-                            }
-                            stripped_marker = true;
-                            break;
-                        }
-                    }
-                }
-                if stripped_marker {
-                    continue;
-                }
-                out.push(b as char);
-                i += 1;
-            }
-        }
+        i += 1;
     }
+    out.push_str(&sql[copied..]);
     out
 }
 
@@ -1401,16 +1366,16 @@ pub(crate) fn rewrite_jsonb_question_ops(sql: &str) -> String {
     while i < bytes.len() {
         let b = bytes[i];
         if let Some(quote) = in_string {
-            out.push(b as char);
             if b == quote {
                 if i + 1 < bytes.len() && bytes[i + 1] == quote {
+                    out.push(quote as char);
                     out.push(quote as char);
                     i += 2;
                     continue;
                 }
                 in_string = None;
             }
-            i += 1;
+            copy_char(&mut out, sql, &mut i);
             continue;
         }
         match b {
@@ -1419,21 +1384,10 @@ pub(crate) fn rewrite_jsonb_question_ops(sql: &str) -> String {
                 out.push(b as char);
                 i += 1;
             }
-            b'-' if i + 1 < bytes.len() && bytes[i + 1] == b'-' => {
-                while i < bytes.len() && bytes[i] != b'\n' {
-                    out.push(bytes[i] as char);
-                    i += 1;
-                }
-            }
-            b'/' if i + 1 < bytes.len() && bytes[i + 1] == b'*' => {
-                while i < bytes.len() {
-                    out.push(bytes[i] as char);
-                    if bytes[i] == b'/' && i > 0 && bytes[i - 1] == b'*' {
-                        i += 1;
-                        break;
-                    }
-                    i += 1;
-                }
+            b'-' | b'/' if comment_end(bytes, i, Lexer::current()).is_some() => {
+                let end = comment_end(bytes, i, Lexer::current()).unwrap_or(bytes.len());
+                out.push_str(&sql[i..end]);
+                i = end;
             }
             b'?' => {
                 // Skip `?<digit>` placeholders.
@@ -1493,10 +1447,7 @@ pub(crate) fn rewrite_jsonb_question_ops(sql: &str) -> String {
                 out.push_str(&format!("{func_name}({lhs}, {rhs_text})"));
                 i = after_rhs;
             }
-            _ => {
-                out.push(b as char);
-                i += 1;
-            }
+            _ => copy_char(&mut out, sql, &mut i),
         }
     }
     out

@@ -19,12 +19,19 @@ pub(crate) use scan::*;
 pub(crate) use sqlite_shape::*;
 pub(crate) use virtual_table::*;
 
+use super::code_scan::{replace_code, sql_code_contains_ci};
+use crate::value::postgres_result_dialect;
+
+/// Lower SQLite and Postgres surface syntax the parser lacks. A pass that
+/// searches for its trigger words gates on [`sql_code_contains_ci`] and
+/// matches code only, so the same words in a literal, quoted identifier or
+/// comment are never rewritten (Q5-01).
 pub(crate) fn rewrite_sqlite_compat_syntax(sql: &str) -> String {
     let mut out = sql.to_owned();
-    if contains_ignore_ascii_case(&out, b" window win as ")
+    if sql_code_contains_ci(&out, b" window win as ")
         && let Some(spec) = extract_named_window_spec(&out, "win")
     {
-        out = out.replace("OVER win", &format!("OVER ({spec})"));
+        out = replace_code(&out, "OVER win", &format!("OVER ({spec})"));
         out = strip_window_clause(&out, "win");
     }
     if has_window_exclude(&out) {
@@ -35,22 +42,29 @@ pub(crate) fn rewrite_sqlite_compat_syntax(sql: &str) -> String {
         out = rewrite_on_conflict_clauses(&out);
     }
     out = rewrite_glob_to_function(&out);
-    out = out.replace("NULL IS NOT 1", "NULL IS DISTINCT FROM 1");
+    if out.contains("NULL IS NOT 1") {
+        out = replace_code(&out, "NULL IS NOT 1", "NULL IS DISTINCT FROM 1");
+    }
     if has_jsonb_question_op(&out) {
         out = rewrite_jsonb_question_ops(&out);
     }
-    if contains_ignore_ascii_case(&out, b"using ") {
+    if sql_code_contains_ci(&out, b"using ") {
         out = strip_create_index_using_clause(&out);
     }
     out = rewrite_strict_without_rowid_combo(&out);
     out = rewrite_create_sequence_options_order(&out);
     out = rewrite_identity_sequence_options(&out);
-    out = rewrite_alter_column_drop_identity(&out);
-    out = rewrite_overriding_system_value(&out);
+    if sql_code_contains_ci(&out, b"drop identity") {
+        out = rewrite_alter_column_drop_identity(&out);
+    }
+    if sql_code_contains_ci(&out, b"overriding") {
+        out = rewrite_overriding_system_value(&out);
+    }
     if has_pg_array_literal(&out) {
         out = rewrite_pg_array_literal(&out);
     }
-    if has_pg_bytea_literal(&out) {
+    // `'\x41'` is the text `\x41` in SQLite; only Postgres reads hex bytea.
+    if postgres_result_dialect() && has_pg_bytea_literal(&out) {
         out = rewrite_pg_bytea_literal(&out);
     }
     if contains_ignore_ascii_case(&out, b"array_length(") {
@@ -65,24 +79,24 @@ pub(crate) fn rewrite_sqlite_compat_syntax(sql: &str) -> String {
     if has_postfix_index(&out) {
         out = rewrite_postfix_index(&out);
     }
-    if contains_ignore_ascii_case(&out, b"at time zone") {
+    if sql_code_contains_ci(&out, b"at time zone") {
         out = rewrite_at_time_zone(&out);
     }
-    if contains_ignore_ascii_case(&out, b"interval ") {
+    if sql_code_contains_ci(&out, b"interval ") {
         out = rewrite_pg_interval_literal(&out);
     }
     if out.contains("'+") || out.contains("'-") {
         out = rewrite_date_arith_with_modifier(&out);
     }
-    if contains_ignore_ascii_case(&out, b" into ") {
+    if sql_code_contains_ci(&out, b" into ") {
         out = rewrite_select_into_to_ctas(&out);
     }
-    if contains_ignore_ascii_case(&out, b" group by rollup ")
-        || contains_ignore_ascii_case(&out, b" group by cube ")
+    if sql_code_contains_ci(&out, b" group by rollup ")
+        || sql_code_contains_ci(&out, b" group by cube ")
     {
         out = rewrite_rollup_cube_to_grouping_sets(&out);
     }
-    if contains_ignore_ascii_case(&out, b" group by grouping sets ") {
+    if sql_code_contains_ci(&out, b" group by grouping sets ") {
         out = rewrite_grouping_sets_to_union_all(&out);
     }
     if contains_ignore_ascii_case(&out, b" join lateral ")

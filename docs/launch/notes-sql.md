@@ -208,3 +208,31 @@ index-format epoch below), so such an index is rebuilt at the first open.
   the heap-scan conflict check. Every NaN payload takes one lock; the record
   encoder already folded NaN payloads and -0.0, and the lock key now does it
   explicitly.
+
+## Compatibility rewrites leave literals, names and comments alone (Q5-01)
+
+- The pre-parse rewrites that lower Postgres and SQLite surface syntax now
+  change only SQL code. The same words inside a string literal, a quoted
+  identifier or a comment are kept as written. `SELECT 'AS MATERIALIZED'`
+  answered `AS` and INSERT stored the corrupted value; `NULL IS NOT 1`,
+  `a window win as (b)`, `overriding system value`, `group by rollup (a)`,
+  `create sequence ... start with`, `as identity (...)`, `drop identity`,
+  `from pg_class`, `::regclass`, `array_length(`, `array_agg(`, `&&`,
+  `interval '...'` and `at time zone` inside a literal were rewritten or broke
+  the parse.
+- `SELECT 1 AS materialized` and `SELECT c AS materialized FROM t` parse, and
+  `SELECT 'a' AS materialized_col` keeps its column name. The CTE hint
+  `AS [NOT] MATERIALIZED` is dropped only when a `(` follows it, including
+  with a comment between the words.
+- Non-ASCII text survives every rewrite. A statement that woke a byte-wise
+  pass re-encoded each byte of a multi-byte character (`'café'` became
+  `'cafÃ©'`). Any statement with `'-` or `'+` did this, so
+  `INSERT INTO t VALUES('café', '-')` stored the corrupted text, and the GLOB
+  pass ran on every statement, so an unquoted non-ASCII table name was
+  renamed. `VACUUM INTO` with a non-ASCII path wrote to a mangled path.
+- A multi-byte character next to `interval `, `at time zone`,
+  `array_length(`, `array_agg(` or `GROUPING(` made a pass slice the SQL
+  inside that character. Under `panic = "abort"` the release CLI aborted
+  (`SELECT 'é interval '`).
+- In the SQLite dialect `'\x41'` is the four-character text `\x41`, as in
+  SQLite. Only the Postgres dialect reads it as a hex bytea literal.

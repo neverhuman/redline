@@ -708,8 +708,9 @@ pub(crate) fn parse_vacuum_into_template(
                     }
                     break;
                 }
-                out.push(bytes[i] as char);
-                i += 1;
+                // Copy whole characters: a non-ASCII path must not be
+                // re-encoded byte by byte.
+                super::code_scan::copy_char(&mut out, value, &mut i);
             }
             out
         }
