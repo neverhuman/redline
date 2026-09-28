@@ -29,10 +29,10 @@ use crate::txn::Isolation;
 use crate::wal::{WalConfig, flushed_all_through, reset_flushed_all_through};
 use crate::{Error, Result};
 
-const SMALL_POOL: usize = 16;
+pub(super) const SMALL_POOL: usize = 16;
 const PAGE_SIZE: usize = 4096;
 /// 1 KiB rows fill about 40 heap pages of 4 KiB, well past `SMALL_POOL`.
-const ROWS: usize = 120;
+pub(super) const ROWS: usize = 120;
 /// 200-byte keys fill about 40 index leaves.
 const KEYS: usize = 600;
 
@@ -42,7 +42,7 @@ const EVERY_DURABILITY: [CommitDurability; 3] = [
     CommitDurability::UnsafeDev,
 ];
 
-fn config(durability: CommitDurability, pool_pages: usize) -> EngineConfig {
+pub(super) fn config(durability: CommitDurability, pool_pages: usize) -> EngineConfig {
     EngineConfig {
         rel_id: RelId(1),
         commit_durability: durability,
@@ -58,7 +58,7 @@ fn config(durability: CommitDurability, pool_pages: usize) -> EngineConfig {
     }
 }
 
-fn payload(i: usize) -> Vec<u8> {
+pub(super) fn payload(i: usize) -> Vec<u8> {
     let mut bytes = vec![(i % 251) as u8; 1024];
     bytes[..8].copy_from_slice(&(i as u64).to_le_bytes());
     bytes
@@ -83,7 +83,7 @@ fn watch_page_writes(engine: &Engine) -> EarlyWrites {
 }
 
 /// Insert each row in its own committed transaction.
-fn insert_rows(engine: &Engine, range: Range<usize>) -> Result<Vec<(RowId, usize)>> {
+pub(super) fn insert_rows(engine: &Engine, range: Range<usize>) -> Result<Vec<(RowId, usize)>> {
     let mut rows = Vec::with_capacity(range.len());
     for i in range {
         let mut tx = engine.begin(Isolation::Snapshot)?;
@@ -94,7 +94,7 @@ fn insert_rows(engine: &Engine, range: Range<usize>) -> Result<Vec<(RowId, usize
     Ok(rows)
 }
 
-fn assert_rows(engine: &Engine, rows: &[(RowId, usize)]) {
+pub(super) fn assert_rows(engine: &Engine, rows: &[(RowId, usize)]) {
     let mut tx = engine.begin(Isolation::Snapshot).unwrap();
     for (row, i) in rows {
         assert_eq!(
@@ -543,7 +543,7 @@ fn buffer_eviction_during_replay_leaves_one_copy_after_another_reopen() {
 /// The payload tag of every committed row a page scan returns, sorted. The
 /// scan covers every page in the file and every page a row's head is on,
 /// which may not have reached the file yet.
-fn scanned_row_tags(engine: &Engine) -> Vec<usize> {
+pub(super) fn scanned_row_tags(engine: &Engine) -> Vec<usize> {
     let tx = engine.begin(Isolation::Snapshot).unwrap();
     let pages = engine
         .relation_entries(RelId(1))

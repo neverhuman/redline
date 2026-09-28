@@ -225,3 +225,23 @@ Draft lines for the v5.0.0 CHANGELOG. The integrator owns `CHANGELOG.md`.
   through the row directory see one version; a page scan can see both.
   Closing this needs heap WAL records that name their page, or a
   double-write area for checkpoint pages.
+
+## Recovery writes each replayed heap row once
+
+- Heap redo puts each replayed row into a new version on a page it
+  allocates past the end of the page file, stamped LSN zero, and eviction
+  may write that page before recovery takes its closing checkpoint. A
+  process that died during recovery after such a write, or after a
+  recovery small enough to take no checkpoint once eviction had written a
+  replayed page, left those rows in the page file, and the next recovery
+  replayed them onto new pages again: a page scan returned each row two or
+  three times.
+- Recovery now empties every heap and undo page past the checkpoint's page
+  count (all of them when there is no checkpoint) before heap redo, and
+  queues them for reuse. A checkpoint writes every page that exists when
+  it writes its heap pages, so a heap page past its page count holds only
+  replay output or rows whose records recovery replays anyway. Index pages
+  are left alone; their redo already skips what a page holds. A torn page
+  there is left as it was, because its kind cannot be read.
+- Builds with the `failpoints` feature can stop recovery once heap redo is
+  done through `engine::recovery::after_heap_replay`.

@@ -231,7 +231,7 @@ impl Engine {
         }
         let wal_open_summary = resume.summary;
         let buffer = Arc::new(
-            BufferPool::new(page_file, config.buffer_pool_pages)
+            BufferPool::new(Arc::clone(&page_file), config.buffer_pool_pages)
                 .map_err(|_| Error::CorruptPage("create buffer pool failed"))?,
         );
         let wal = Arc::new(
@@ -308,9 +308,23 @@ impl Engine {
         let heap_replay_from = checkpoint.map_or(replay_from_lsn, |checkpoint| {
             checkpoint.heap_redo_lsn.max(replay_from_lsn)
         });
+        // Heap redo writes each row once; the page file must not already
+        // hold a copy that an earlier, interrupted recovery wrote.
+        replayed_pages::clear_heap_pages_past_checkpoint(
+            &page_file,
+            &buffer,
+            &heap,
+            config.rel_id,
+            checkpoint.map_or(0, |checkpoint| checkpoint.page_count),
+        )?;
         reserve_ids_named_in_wal(&scan_report.records, &txs, &heap)?;
         recover_index_page_images(&scan_report.records, replay_from_lsn, target, &buffer)?;
         let metrics = recover_heap(&scan_report.records, heap_replay_from, target, &txs, &heap)?;
+        // A crash here leaves in the page file whatever replayed heap pages
+        // eviction wrote, with no checkpoint that covers them.
+        crate::fail_point!("engine::recovery::after_heap_replay");
+        #[cfg(test)]
+        replayed_pages::run_after_heap_replay_hook()?;
         let recovered_catalog = recover_catalog_snapshot(&scan_report.records, target)?;
         let catalog = CatalogManager::new(recovered_catalog.unwrap_or(initial_catalog));
         let phase11_counters = Arc::new(Phase11Counters::default());
@@ -733,6 +747,13 @@ fn sync_page_file_directory(path: &Path) -> Result<()> {
 
 #[path = "recovery_wal_floor.rs"]
 mod wal_floor;
+
+#[path = "recovery_replayed_pages.rs"]
+mod replayed_pages;
+
+#[cfg(test)]
+#[path = "recovery_replay_crash_tests.rs"]
+mod replay_crash_tests;
 
 #[cfg(test)]
 #[path = "recovery_dir_sync_tests.rs"]
