@@ -535,16 +535,20 @@ Draft lines for the v5.0.0 CHANGELOG. The integrator owns `CHANGELOG.md`.
   `cargo nextest run -p redlinedb-kernel --locked`, and the new stage
   `kernel-failpoints` runs the lib and the four failpoint-gated test files
   with `--features failpoints`, which the plain kernel stage compiled to
-  nothing.
+  nothing, then the uncertain-commit tests of `redlinedb-sql`
+  (`smoke_misc`) and `redlinedb` (`commit_outcome`), which are gated on
+  their own crate's `failpoints` feature and ran in no CI stage.
 
 ### For the integrator (R10)
 
 - `.github/workflows/ci.yml` belongs to another lane, so this lane did not
   touch it. Add `kernel-failpoints` to the `tests` job's `stage` matrix.
   Measured on this host with a warm target directory: `kernel` 53 s
-  (557 tests, 2 skipped), `kernel-failpoints` 32 s (247 tests). Twice
-  that is under the 15-minute floor, so give each 15 minutes if the
-  matrix gets per-stage timeouts; the shared 45 minutes also covers them.
+  (557 tests, 2 skipped), `kernel-failpoints` 32 s for the kernel part
+  (247 tests) plus 42 s for the `redlinedb-sql` and `redlinedb` failpoint
+  tests (15 tests, building those crates with the feature). Twice that is
+  under the 15-minute floor, so give each 15 minutes if the matrix gets
+  per-stage timeouts; the shared 45 minutes also covers them.
 - The release is now blocked until a Strict process-kill receipt for the
   release commit sits in `benchmark-results/durability/` (Phase 7), because
   `docs/manual/durability.md` carries that claim tag. Remove the tag
@@ -622,3 +626,7 @@ Draft lines for the v5.0.0 CHANGELOG. The integrator owns `CHANGELOG.md`.
   the oracle disqualifies such a run. Rows were collected into a map by
   key and index results into sets, so the second copy a non-idempotent
   replay leaves was dropped before the oracle saw it.
+- Chapter 09 no longer says a failed open leaves `wal/` as it was: a torn
+  segment below the one the log resumes in is salvaged and emptied before
+  replay, and a targeted recovery records its timeline fork before the
+  checkpoint that ends it, so the fork stays when that checkpoint fails.

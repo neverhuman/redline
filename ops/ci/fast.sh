@@ -78,6 +78,10 @@ run_test_stage() {
                 --test hnsw_failpoints \
                 --test commit_outcome \
                 --test recovery_failpoints
+            # The uncertain-commit tests above the kernel (workplan R7) are
+            # gated on their own crate's `failpoints` feature.
+            cargo nextest run -p redlinedb-sql --features failpoints --locked --test smoke_misc
+            cargo nextest run -p redlinedb --features failpoints --locked --test commit_outcome
             ;;
         sql-unit)
             cargo test -p redlinedb-sql --lib --quiet --locked
