@@ -27,7 +27,7 @@ fn error(message: impl Into<String>) -> Box<dyn std::error::Error> {
 
 fn main() {
     let result = monorepo::root()
-        .ok_or_else(|| error("run from the complete https://github.com/neverhuman/RedlineDB checkout, or set REDLINE_REPO_ROOT"))
+        .ok_or_else(|| error("run from the complete https://github.com/neverhuman/redline checkout, or set REDLINE_REPO_ROOT"))
         .and_then(|root| monorepo::run(&root));
     if let Err(error) = result {
         eprintln!("redline-proof: {error}");

@@ -113,9 +113,9 @@ against the v5 headers. There is no v4 compatibility alias.
 - The `redlinedb-tokio` and `redlinedb-sqlx` manifests point `repository` at
   `https://github.com/neverhuman/redline`.
 - For the integrator (not a release-note line): `README.md` still says
-  "Existing crates.io versions remain available" (there are none) and uses
-  the legacy `neverhuman/RedlineDB` URL with tag `v4.1.0` in its Rust
-  dependency snippet. The README rewrite should use the snippet above and
+  "Existing crates.io versions remain available" (there are none) and its
+  Rust dependency snippet still pins tag `v4.1.0`. The README rewrite should
+  use the snippet above and
   link `docs/api-stability.md`. Its "Database files" section states that
   v5.0.0 writes index-format epoch 3 and that 4.x refuses such a database;
   that is the sql lane's commit 4c5141381 (`INDEX_VERSION` 2 to 3), so the
@@ -223,3 +223,27 @@ against the v5 headers. There is no v4 compatibility alias.
   wipe the shared caches once, and run the canary in
   `docs/ci-trust-boundary.md`. The release `publish` job still runs on the
   self-hosted runners without `environment: release`; Phase 6 moves it.
+
+## Release authority (DX-01)
+
+- `https://github.com/neverhuman/redline` is the one source, review and
+  release authority in every active file: install commands, clone commands,
+  the Rust git-dependency snippets, `subrepos.toml`, `PUBLIC_MONOREPO.toml`,
+  the runner installer default, the release smoke URL and every included
+  component's README, AGENTS and release notes. The old repository name
+  (`RedlineDB` under the same owner) now resolves to a different owner's
+  repository. Historical records (`CHANGELOG.md`, `docs/migration/`,
+  `subrepos/redline/`, `tips/`, release evidence, score history) keep it.
+- `redline-proof validate` (the release-tools CI lane) requires the
+  canonical fetch and push remotes, and it fails when any active shell,
+  TOML, YAML, Rust, AGENTS.md, README.md or `docs/` page names the old
+  repository in any letter case. This fixes the `components (release-tools)`
+  CI failure, where validate demanded the old repository as `origin`.
+- The release smoke (`just release-binary-smoke`) now labels its local
+  package `v5.0.0` instead of the legacy `v2.0.6`, and downloads from the
+  canonical repository when told not to build locally.
+- Maintainer step (not a release-note line): a checkout that still has a
+  remote pointing at the old repository (the integrator checkout's
+  `origin-disabled`) fails `redline-proof validate` until that remote is
+  removed. Runners registered against the old repository must be
+  re-registered against `neverhuman/redline`.

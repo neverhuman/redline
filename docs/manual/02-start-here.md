@@ -7,7 +7,7 @@ You need a `redlinedb` binary that matches the manual you are reading, then one 
 Linux x86_64, Linux ARM64, macOS Intel, and macOS Apple Silicon packages ship the CLI, the server, the native library, and the C headers. Rust is not required to run them. Linux packages expect glibc 2.35 or newer. macOS packages expect macOS 15 or newer.
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/neverhuman/RedlineDB/main/install.sh | bash
+curl -fsSL https://raw.githubusercontent.com/neverhuman/redline/main/install.sh | bash
 ```
 
 The installer checks the release checksum and defaults to `~/.local`. It installs `redlinedb` and `redlinedb-server`. It leaves the system `sqlite3` in place.
@@ -17,13 +17,13 @@ The git tag `v4.1.0` is an ancestor of commit `8ae3a8b79`, not that commit. A pa
 To pin the tagged release and a prefix:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/neverhuman/RedlineDB/main/install.sh | \
+curl -fsSL https://raw.githubusercontent.com/neverhuman/redline/main/install.sh | \
   VERSION=v4.1.0 PREFIX="$HOME/redline install" bash
 ```
 
 The space in that prefix is intentional. The installer accepts an install directory whose path contains spaces.
 
-Set `REDLINEDB_SHA256` when you want the installer to require one archive digest. Packages and checksums are on the [GitHub Releases](https://github.com/neverhuman/RedlineDB/releases) page. Platform names are `linux-x86_64`, `linux-arm64`, `macos-x86_64`, and `macos-arm64`.
+Set `REDLINEDB_SHA256` when you want the installer to require one archive digest. Packages and checksums are on the [GitHub Releases](https://github.com/neverhuman/redline/releases) page. Platform names are `linux-x86_64`, `linux-arm64`, `macos-x86_64`, and `macos-arm64`.
 
 An older note in `docs/install_redlinedb.md` shows a `v1.0.1` installer and a `sqlite3` symlink. Follow this chapter for 4.1.0. Do not point the system `sqlite3` name at `redlinedb` unless you have decided that every local tool should see this engine.
 
@@ -32,8 +32,8 @@ An older note in `docs/install_redlinedb.md` shows a `v1.0.1` installer and a `s
 The toolchain file in the repository asks for Rust 1.95.0. You also need a C/C++ compiler and pkg-config.
 
 ```bash
-git clone https://github.com/neverhuman/redlineDB
-cd redlineDB
+git clone https://github.com/neverhuman/redline
+cd redline
 git checkout 8ae3a8b791d4edab88cf8513ad0d99ef709a1202
 ./scripts/build-from-source.sh
 ./scripts/install-from-source.sh
@@ -60,7 +60,7 @@ The same statements are in [`examples/first.sql`](examples/first.sql). Dot-comma
 Add the crate by git revision when you want the commit this book describes. Commit `Cargo.lock` in the application so the build stays reproducible.
 
 ```toml
-redlinedb = { git = "https://github.com/neverhuman/RedlineDB", rev = "8ae3a8b791d4edab88cf8513ad0d99ef709a1202" }
+redlinedb = { git = "https://github.com/neverhuman/redline", rev = "8ae3a8b791d4edab88cf8513ad0d99ef709a1202" }
 ```
 
 `tag = "v4.1.0"` is the older release. Use it only when you have decided that the tagged tree is enough.

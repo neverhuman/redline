@@ -3,7 +3,7 @@
 set -euo pipefail
 die() { printf 'redlinedb install: %s\n' "$*" >&2; exit 1; }
 [[ $# == 0 ]] || { printf 'Usage: VERSION=v4.1.0 PREFIX=/installation/path bash install.sh\n' >&2; exit 64; }
-repo=https://github.com/neverhuman/RedlineDB
+repo=https://github.com/neverhuman/redline
 prefix=${PREFIX:-$HOME/.local}
 case "$(uname -s)/$(uname -m)" in
   Linux/x86_64) platform=linux-x86_64 ;;

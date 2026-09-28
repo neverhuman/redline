@@ -7,6 +7,13 @@ use std::{
 
 static NEXT: AtomicUsize = AtomicUsize::new(0);
 
+const CANONICAL: &str = "https://github.com/neverhuman/redline";
+
+// The retired repository, split so this source passes the scan it tests.
+fn legacy_url() -> String {
+    ["https://github.com/neverhuman/", "Redline", "DB.git"].concat()
+}
+
 struct Checkout(PathBuf);
 
 impl Checkout {
@@ -73,28 +80,22 @@ fn complete_source_archive_validates_without_network_or_git() {
         "{}",
         String::from_utf8_lossy(&output.stderr)
     );
-    assert!(
-        String::from_utf8_lossy(&output.stdout).contains("https://github.com/neverhuman/RedlineDB")
-    );
+    let report: serde_json::Value = serde_json::from_slice(&output.stdout).unwrap();
+    assert_eq!(report["repository"], CANONICAL);
 }
 
 #[test]
 fn wrong_owner_fetch_or_push_remote_is_rejected() {
     let checkout = Checkout::new();
     checkout.git(&["init", "--quiet"]);
-    checkout.git(&[
-        "remote",
-        "add",
-        "origin",
-        "https://github.com/neverhuman/RedlineDB.git",
-    ]);
+    checkout.git(&["remote", "add", "origin", &format!("{CANONICAL}.git")]);
     assert!(checkout.run(&["validate"]).status.success());
     checkout.git(&[
         "remote",
         "set-url",
         "--push",
         "origin",
-        "https://github.com/another-owner/RedlineDB.git",
+        "https://github.com/another-owner/redline.git",
     ]);
     let output = checkout.run(&["validate"]);
     assert!(!output.status.success());
@@ -104,15 +105,84 @@ fn wrong_owner_fetch_or_push_remote_is_rejected() {
         "set-url",
         "--push",
         "origin",
-        "https://github.com/neverhuman/RedlineDB.git",
+        &format!("{CANONICAL}.git"),
     ]);
     checkout.git(&[
         "remote",
         "add",
         "alternate",
-        "https://github.com/another-owner/RedlineDB.git",
+        "https://github.com/another-owner/redline.git",
     ]);
     assert!(!checkout.run(&["validate"]).status.success());
+}
+
+#[test]
+fn retired_repository_remote_is_rejected() {
+    let checkout = Checkout::new();
+    checkout.git(&["init", "--quiet"]);
+    checkout.git(&["remote", "add", "origin", &format!("{CANONICAL}.git")]);
+    assert!(checkout.run(&["validate"]).status.success());
+    checkout.git(&["remote", "add", "origin-disabled", &legacy_url()]);
+    let output = checkout.run(&["validate"]);
+    assert!(!output.status.success());
+    assert!(String::from_utf8_lossy(&output.stderr)
+        .contains(&format!("remote origin-disabled must use {CANONICAL};")));
+}
+
+#[test]
+fn active_files_cannot_reintroduce_the_retired_repository() {
+    let checkout = Checkout::new();
+    for (relative, text) in [
+        (
+            "subrepos/redline/AGENTS.md",
+            format!("Historical hub of {}\n", legacy_url()),
+        ),
+        (
+            "tips/phases/plan.toml",
+            format!("repository = \"{}\"\n", legacy_url()),
+        ),
+        (
+            "docs/migration/README.md",
+            format!("Imported from {}\n", legacy_url()),
+        ),
+        (
+            "PLANNING.md",
+            format!("Planning note that quotes {}\n", legacy_url()),
+        ),
+    ] {
+        let path = checkout.0.join(relative);
+        fs::create_dir_all(path.parent().unwrap()).unwrap();
+        fs::write(path, text).unwrap();
+    }
+    let output = checkout.run(&["validate"]);
+    assert!(
+        output.status.success(),
+        "{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    for relative in [
+        "subrepos/redline-testing/AGENTS.md",
+        "ops/ci/lib.sh",
+        "subrepos.toml",
+        "README.md",
+        "docs/manual/02-start-here.md",
+        "subrepos/redline-web/docs/release.md",
+        "subrepos/redline-central/README.md",
+    ] {
+        let checkout = Checkout::new();
+        let path = checkout.0.join(relative);
+        fs::create_dir_all(path.parent().unwrap()).unwrap();
+        let mut text = fs::read_to_string(&path).unwrap_or_default();
+        text.push_str(&format!("# {}\n", legacy_url().to_lowercase()));
+        fs::write(&path, text).unwrap();
+        let output = checkout.run(&["validate"]);
+        assert!(!output.status.success(), "{relative}");
+        assert!(
+            String::from_utf8_lossy(&output.stderr).contains(relative),
+            "{relative}: {}",
+            String::from_utf8_lossy(&output.stderr)
+        );
+    }
 }
 
 #[test]
@@ -161,6 +231,7 @@ fn incomplete_installed_context_cannot_select_legacy_transport() {
     fs::remove_file(checkout.0.join("subrepos.toml")).unwrap();
     let output = checkout.run(&["doctor"]);
     assert!(!output.status.success());
-    assert!(String::from_utf8_lossy(&output.stderr)
-        .contains("complete https://github.com/neverhuman/RedlineDB checkout"));
+    assert!(
+        String::from_utf8_lossy(&output.stderr).contains(&format!("complete {CANONICAL} checkout"))
+    );
 }

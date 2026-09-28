@@ -1,5 +1,5 @@
 <!-- GitHub authority -->
-This is an included component of [neverhuman/RedlineDB](https://github.com/neverhuman/RedlineDB).
+This is an included component of [neverhuman/redline](https://github.com/neverhuman/redline).
 Use the canonical checkout, root GitHub workflows, and `scripts/ci-family.sh`.
 Keep this component's Cargo workspace independent. Root `AGENTS.md` governs source and releases.
 
@@ -13,7 +13,7 @@ RedlineDB service. Its independent Cargo workspace is included in the canonical 
 Rules:
 
 - Never create a Git worktree. Work only in this canonical primary checkout.
-- Land changes through a protected GitHub pull request in `neverhuman/RedlineDB`. Never push `main`.
+- Land changes through a protected GitHub pull request in `neverhuman/redline`. Never push `main`.
 - Keep the native Redline release identity (`4.1.0-jain.N`); Jain binds the
   accepted immutable Redline identity into its own release authority.
 - Select Jankurai only from the root-controlled release PATH, then freeze and

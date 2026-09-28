@@ -1,5 +1,5 @@
 <!-- GitHub authority -->
-This is an included component of [neverhuman/RedlineDB](https://github.com/neverhuman/RedlineDB).
+This is an included component of [neverhuman/redline](https://github.com/neverhuman/redline).
 Use the canonical checkout, root GitHub workflows, and `scripts/ci-family.sh`.
 Keep this component's Cargo workspace independent. Root `AGENTS.md` governs source and releases.
 
@@ -10,7 +10,7 @@ Keep this component's Cargo workspace independent. Root `AGENTS.md` governs sour
 Mission: keep the external RedlineDB conformance runner deterministic,
 release-packaged, and compatible with RedlineDB's pinned artifact consumer.
 
-Access contract: use `gh pr ... --repo neverhuman/RedlineDB` and GitHub authentication.
+Access contract: use `gh pr ... --repo neverhuman/redline` and GitHub authentication.
 
 Start here:
 - `docs/architecture.md` — layers, data-access boundary, output contract

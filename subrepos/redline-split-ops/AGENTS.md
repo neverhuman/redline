@@ -1,6 +1,6 @@
 # Release tooling
 
-This component belongs to [neverhuman/RedlineDB](https://github.com/neverhuman/RedlineDB).
+This component belongs to [neverhuman/redline](https://github.com/neverhuman/redline).
 Root `AGENTS.md` and GitHub workflows govern all development and publication.
 Keep the independent Cargo workspace and edit only in the canonical checkout.
 

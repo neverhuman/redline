@@ -1,4 +1,4 @@
-> Source, reviews, CI and releases: [neverhuman/RedlineDB](https://github.com/neverhuman/RedlineDB).
+> Source, reviews, CI and releases: [neverhuman/redline](https://github.com/neverhuman/redline).
 > This component lives at `subrepos/redline-testing` in the canonical checkout.
 > Follow the [root release process](../../docs/release.md); historical component release examples below are archival.
 

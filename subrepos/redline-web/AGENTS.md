@@ -1,5 +1,5 @@
 <!-- GitHub authority -->
-This is an included component of [neverhuman/RedlineDB](https://github.com/neverhuman/RedlineDB).
+This is an included component of [neverhuman/redline](https://github.com/neverhuman/redline).
 Use the canonical checkout, root GitHub workflows, and `scripts/ci-family.sh`.
 Keep this component's Cargo workspace independent. Root `AGENTS.md` governs source and releases.
 
@@ -30,7 +30,7 @@ operations, release).
 - **Offline advisory authority.** Release security consumes only the fresh
   root-staged Cargo registry and authenticated Grype v6 database. npm is
   lock/install integrity only; `npm audit --offline` is not advisory evidence.
-- **PR-only.** Land through a reviewed GitHub PR in `neverhuman/RedlineDB`.
+- **PR-only.** Land through a reviewed GitHub PR in `neverhuman/redline`.
 
 ## Layout
 

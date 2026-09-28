@@ -2,14 +2,14 @@
 use crate::{error, Result};
 use std::{fs, path::Path, process::Command};
 
-pub const REPOSITORY: &str = "https://github.com/neverhuman/RedlineDB";
+pub const REPOSITORY: &str = "https://github.com/neverhuman/redline";
 
 fn canonical_remote(url: &str) -> bool {
     let url = url.trim_end_matches('/').trim_end_matches(".git");
     [
         REPOSITORY,
-        "git@github.com:neverhuman/RedlineDB",
-        "ssh://git@github.com/neverhuman/RedlineDB",
+        "git@github.com:neverhuman/redline",
+        "ssh://git@github.com/neverhuman/redline",
     ]
     .iter()
     .any(|expected| url.eq_ignore_ascii_case(expected))
@@ -17,12 +17,16 @@ fn canonical_remote(url: &str) -> bool {
 
 // These records describe past executions. Rewriting them would invalidate their
 // hashes. They are never read as operational configuration by this controller.
+// `subrepos/redline/` is the imported historical hub and `tips/` holds planning
+// records; both quote the retired repository name as history.
 fn historical(path: &Path) -> bool {
     let text = path.to_string_lossy();
     text.contains("/release-evidence/")
         || text.starts_with("docs/archive/")
         || text.contains("/docs/archive/")
         || text.starts_with("docs/migration/")
+        || text.starts_with("subrepos/redline/")
+        || text.starts_with("tips/")
         || path.file_name().is_some_and(|name| name == "CHANGELOG.md")
         || (text.contains(".jankurai/")
             && matches!(
@@ -44,9 +48,22 @@ fn retired_route(text: &str) -> bool {
         ["jeryu ", "access"].concat(),
         ["jeryu", "-signrail"].concat(),
         ["jeryu_install", "_dir"].concat(),
+        // The retired repository; GitHub names are case-insensitive and the
+        // old name now resolves to a different owner's repository.
+        ["neverhuman/", "redlinedb"].concat(),
+        ["neverhumanbot/", "redlinedb"].concat(),
     ]
     .iter()
     .any(|route| text.contains(route))
+}
+
+// Readers copy install, clone and dependency commands from these pages.
+fn user_doc(path: &Path) -> bool {
+    let text = path.to_string_lossy();
+    path.extension().and_then(|x| x.to_str()) == Some("md")
+        && (path.file_name().is_some_and(|name| name == "README.md")
+            || text.starts_with("docs/")
+            || text.contains("/docs/"))
 }
 
 fn files(root: &Path, dir: &Path) -> Result<()> {
@@ -82,6 +99,7 @@ fn files(root: &Path, dir: &Path) -> Result<()> {
             path.extension().and_then(|x| x.to_str()),
             Some("sh" | "toml" | "yaml" | "yml" | "rs")
         ) || matches!(name.to_str(), Some("AGENTS.md" | "Justfile" | "justfile"))
+            || user_doc(relative)
         {
             let text = fs::read_to_string(&path)?;
             if retired_route(&text) {
@@ -138,23 +156,35 @@ pub fn validate(root: &Path, manifest: &toml::Value) -> Result<()> {
 mod tests {
     use super::*;
 
+    // The retired repository name, split so this source passes its own scan.
+    fn legacy(owner: &str) -> String {
+        [owner, "/", "Redline", "DB"].concat()
+    }
+
     #[test]
     fn canonical_https_and_ssh_remotes_only() {
         for url in [
             REPOSITORY,
-            "https://github.com/neverhuman/redlineDB.git",
-            "git@github.com:neverhuman/RedlineDB.git",
-            "ssh://git@github.com/neverhuman/RedlineDB.git",
+            "https://github.com/neverhuman/redline.git",
+            "https://github.com/neverhuman/redline/",
+            "git@github.com:neverhuman/redline.git",
+            "ssh://git@github.com/neverhuman/redline.git",
         ] {
             assert!(canonical_remote(url), "{url}");
         }
         for url in [
-            "https://github.com/another-owner/RedlineDB.git",
-            "https://github.com/neverhuman/other.git",
-            "https://github.com.evil.test/neverhuman/RedlineDB",
-            "/local/clone",
+            format!("https://github.com/{}.git", legacy("neverhuman")),
+            format!("https://github.com/{}", legacy("neverhuman").to_lowercase()),
+            format!("git@github.com:{}.git", legacy("neverhuman")),
+            format!("ssh://git@github.com/{}.git", legacy("neverhuman")),
+            format!("https://github.com/{}.git", legacy("neverhumanbot")),
+            "https://github.com/another-owner/redline.git".into(),
+            "https://github.com/neverhuman/redline-core.git".into(),
+            "https://github.com/neverhuman/other.git".into(),
+            "https://github.com.evil.test/neverhuman/redline".into(),
+            "/local/clone".into(),
         ] {
-            assert!(!canonical_remote(url), "{url}");
+            assert!(!canonical_remote(&url), "{url}");
         }
     }
 
@@ -174,6 +204,33 @@ mod tests {
     }
 
     #[test]
+    fn retired_repository_name_is_an_old_route_in_any_case() {
+        for text in [
+            format!(
+                "repository = \"https://github.com/{}\"",
+                legacy("neverhuman")
+            ),
+            format!(
+                "git clone https://github.com/{}",
+                legacy("neverhuman").to_lowercase()
+            ),
+            format!("gh pr list --repo {}", legacy("NEVERHUMAN")),
+            format!("https://github.com/{}/releases", legacy("neverhumanbot")),
+        ] {
+            assert!(retired_route(&text), "{text}");
+        }
+        for text in [
+            REPOSITORY,
+            "https://github.com/neverhuman/redline.git",
+            "https://github.com/neverhuman/redline-core.git",
+            "https://github.com/neverhuman/redline/releases/download/v5.0.0/redlinedb.tar.gz",
+            "redlinedb = { git = \"https://github.com/neverhuman/redline\" }",
+        ] {
+            assert!(!retired_route(text), "{text}");
+        }
+    }
+
+    #[test]
     fn receipts_are_historical_but_live_configuration_is_checked() {
         assert!(historical(Path::new(
             "subrepos/redline-split-ops/release-evidence/8.0.0/receipt.json"
@@ -183,5 +240,38 @@ mod tests {
         )));
         assert!(!historical(Path::new("subrepos/redline-testing/AGENTS.md")));
         assert!(!historical(Path::new(".github/workflows/ci.yml")));
+    }
+
+    #[test]
+    fn readme_and_docs_pages_are_scanned() {
+        for page in [
+            "README.md",
+            "docs/install.md",
+            "docs/manual/02-start-here.md",
+            "subrepos/redline-web/README.md",
+            "subrepos/redline-testing/docs/release.md",
+        ] {
+            assert!(user_doc(Path::new(page)), "{page}");
+        }
+        for page in [
+            "GROK_GAPS.md",
+            "docs/manual/example.sql",
+            "subrepos/x/NOTES.md",
+        ] {
+            assert!(!user_doc(Path::new(page)), "{page}");
+        }
+    }
+
+    #[test]
+    fn historical_hub_and_planning_tips_are_records() {
+        assert!(historical(Path::new("subrepos/redline/AGENTS.md")));
+        assert!(historical(Path::new("subrepos/redline/ops/ci/lib.sh")));
+        assert!(historical(Path::new("tips/phases/00-phase-index.md")));
+        assert!(historical(Path::new("tips/release/plan.toml")));
+        assert!(!historical(Path::new("subrepos/redline-web/install.sh")));
+        assert!(!historical(Path::new(
+            "subrepos/redline-testing/ops/deploy/telemetry.sh"
+        )));
+        assert!(!historical(Path::new("scripts/tips/run.sh")));
     }
 }

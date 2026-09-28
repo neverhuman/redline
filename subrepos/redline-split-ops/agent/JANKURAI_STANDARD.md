@@ -2,7 +2,7 @@
 
 Use the governed Jankurai binary and root GitHub `RedlineDB/required` check.
 Root `subrepos.toml` describes the six included component workspaces. Source,
-review and release authority is `neverhuman/RedlineDB`.
+review and release authority is `neverhuman/redline`.
 
 Rust implementation lives below `tools/redline-proof/`; process tests live in
 `tests/`. Shell files launch that controller or root CI lanes. Validation rejects

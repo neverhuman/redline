@@ -8,14 +8,14 @@ For Linux and macOS, use the release installer. Pin `VERSION` for CI or any
 reproducible environment:
 
 ```bash
-curl -LsSf https://raw.githubusercontent.com/neverhuman/RedlineDB/main/scripts/install.sh | VERSION=v1.0.1 bash
+curl -LsSf https://raw.githubusercontent.com/neverhuman/redline/main/scripts/install.sh | VERSION=v1.0.1 bash
 ```
 
 For a fully locked install, also pin the tarball digest from the matching
 release `.sha256` file:
 
 ```bash
-curl -LsSf https://raw.githubusercontent.com/neverhuman/RedlineDB/main/scripts/install.sh | \
+curl -LsSf https://raw.githubusercontent.com/neverhuman/redline/main/scripts/install.sh | \
   VERSION=v1.0.1 REDLINEDB_SHA256=<sha256> bash
 ```
 

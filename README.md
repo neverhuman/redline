@@ -237,7 +237,7 @@ Use the engine library from the same source release:
 
 ```toml
 [dependencies]
-redlinedb = { git = "https://github.com/neverhuman/RedlineDB", tag = "v4.1.0" }
+redlinedb = { git = "https://github.com/neverhuman/redline", tag = "v4.1.0" }
 ```
 
 Commit `Cargo.lock` for reproducible application builds. Existing crates.io
@@ -251,14 +251,14 @@ server, native libraries and C headers. Rust and Node are not needed to run them
 Linux packages require glibc 2.35 or newer; macOS packages require macOS 15 or newer.
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/neverhuman/RedlineDB/main/install.sh | bash
+curl -fsSL https://raw.githubusercontent.com/neverhuman/redline/main/install.sh | bash
 ```
 
 The installer verifies the release checksum and defaults to `~/.local`. To select
 a release and an installation directory:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/neverhuman/RedlineDB/main/install.sh | \
+curl -fsSL https://raw.githubusercontent.com/neverhuman/redline/main/install.sh | \
   VERSION=v4.1.0 PREFIX="$HOME/redline install" bash
 ```
 
@@ -270,8 +270,8 @@ Set `REDLINEDB_SHA256` to additionally require a particular archive digest.
 Install Rust 1.95, a C/C++ compiler and pkg-config, then run:
 
 ```bash
-git clone https://github.com/neverhuman/redlineDB
-cd redlineDB
+git clone https://github.com/neverhuman/redline
+cd redline
 ./scripts/build-from-source.sh
 ./scripts/install-from-source.sh
 ```
@@ -293,7 +293,7 @@ Use `PREFIX` for the installation root and `CARGO_BUILD_JOBS` to limit build job
 | Release tooling | `subrepos/redline-split-ops` | source |
 | Historical public hub | `subrepos/redline` | source |
 
-Download packages and checksums from [GitHub Releases](https://github.com/neverhuman/RedlineDB/releases).
+Download packages and checksums from [GitHub Releases](https://github.com/neverhuman/redline/releases).
 Platform names are `linux-x86_64`, `linux-arm64`, `macos-x86_64`, and `macos-arm64`.
 Optional packages extract alongside the core package. Start the console with
 `redline-web --target-bin /path/to/redlinedb`.

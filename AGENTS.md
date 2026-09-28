@@ -1,6 +1,6 @@
 # RedlineDB Agent Router
 
-`neverhuman/RedlineDB` is the sole source, review and release authority. Everything under
+`neverhuman/redline` is the sole source, review and release authority. Everything under
 `subrepos/` is an ordinary vendored directory in this repository — never a submodule, never a
 separate product repo. Preserve the independent nested Cargo workspaces. `GROK_GAPS.md` carries the
 governing decisions and the dependency roadmap (task ids `EVID-*`, `SQL-*`, `ABI-*`, `PG-*`, …); it is

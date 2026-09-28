@@ -3,14 +3,14 @@
 #
 # Required env:
 #   GITHUB_RUNNER_TOKEN  registration token from
-#     `gh api -X POST repos/neverhuman/RedlineDB/actions/runners/registration-token`
+#     `gh api -X POST repos/neverhuman/redline/actions/runners/registration-token`
 #   RUNNER_NAME          unique name, e.g. xbabe2-1
 #   RUNNER_LABELS        comma-separated, e.g. self-hosted,linux,x64,xbabe2
 #
 # Optional:
 #   RUNNER_DIR           install directory (default ~/actions-runners/$RUNNER_NAME)
 #   RUNNER_VERSION       default 2.337.0
-#   RUNNER_REPO_URL      default https://github.com/neverhuman/RedlineDB
+#   RUNNER_REPO_URL      default https://github.com/neverhuman/redline
 set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
@@ -31,7 +31,7 @@ VERSION="${RUNNER_VERSION:-2.337.0}"
 SHA256="${RUNNER_SHA256:-70920811a4f8ad4328818682bca5c6469c1c942fab52448868071d0063816613}"
 TARBALL="actions-runner-linux-x64-${VERSION}.tar.gz"
 URL="https://github.com/actions/runner/releases/download/v${VERSION}/${TARBALL}"
-REPO_URL="${RUNNER_REPO_URL:-https://github.com/neverhuman/RedlineDB}"
+REPO_URL="${RUNNER_REPO_URL:-https://github.com/neverhuman/redline}"
 DIR="${RUNNER_DIR:-${HOME}/actions-runners/${RUNNER_NAME}}"
 
 mkdir -p "${DIR}"

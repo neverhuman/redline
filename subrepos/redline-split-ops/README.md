@@ -1,11 +1,11 @@
 # RedlineDB release tooling
 
-[![CI](https://github.com/neverhuman/RedlineDB/actions/workflows/ci.yml/badge.svg)](https://github.com/neverhuman/RedlineDB/actions/workflows/ci.yml)
+[![CI](https://github.com/neverhuman/redline/actions/workflows/ci.yml/badge.svg)](https://github.com/neverhuman/redline/actions/workflows/ci.yml)
 
 Agent entrypoint: [AGENTS.md](AGENTS.md).
 
 This independent Rust workspace is included in
-[neverhuman/RedlineDB](https://github.com/neverhuman/RedlineDB).
+[neverhuman/redline](https://github.com/neverhuman/redline).
 Source, reviews, CI and releases use that repository. Root `subrepos.toml`
 defines all six components; no sibling clones or external control plane are needed.
 

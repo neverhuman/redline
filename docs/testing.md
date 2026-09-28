@@ -57,7 +57,7 @@ readable repair receipts.
 | `phase11-sql-contracts`              | Phase-11 SQL contract tests (temp roots, queue, xdoug-compat).                                        |
 | `security`                           | `cargo audit` + `cargo deny check` + `gitleaks detect`.                                               |
 | `security-local`                     | Same as `security`; pinned for local-only invocation.                                                 |
-| `release-binary-smoke`               | Builds and verifies the pinned RedlineDB `v2.0.6` Linux release package, then runs a CLI smoke query. |
+| `release-binary-smoke`               | Builds and verifies the pinned RedlineDB `v5.0.0` Linux release package, then runs a CLI smoke query. |
 | `release`                            | `cargo build --workspace --release --locked`.                                                         |
 | `jankurai-tools`                     | Local mirror for every `.github/workflows/jankurai-tools.yml` matrix job. Run with `scripts/ci-local.sh jankurai-tools`. |
 | `pr-gate`                            | Local mirror for PR branch freshness plus `jankurai staged-gate` against `origin/main`. Run with `scripts/ci-local.sh pr-gate`. |
@@ -177,7 +177,7 @@ still a raw token.
 | `/home/ubuntu/.local/bin/gh-role` | `0700` | Router. Arguments start with `writer` or `reviewer`. |
 | `/home/ubuntu/.config/gh/hosts.yml` | `0600` | GitHub CLI account store. A name in this file is not a working role until `gh-role` shows that login. |
 | `/home/ubuntu/.config/jopedime/secrets/gh.env` | `0600` | Writer token consumed by the git helper. |
-| `/home/ubuntu/.config/jopedime/bin/github-writer-credential.py` | `0700` | Git HTTPS helper for `neverhuman/RedlineDB` and `veox-ai/JopeDime`, as `jepsontaylor`. |
+| `/home/ubuntu/.config/jopedime/bin/github-writer-credential.py` | `0700` | Git HTTPS helper for `neverhuman/redline` and `veox-ai/JopeDime`, as `jepsontaylor`. |
 | `/etc/jope-runner/github-pat` | root-owned, not readable by `ubuntu` | Runner registration. It cannot approve a pull request. Leave it unchanged. |
 
 `hosts.yml` also names `jeryu` and `jepsont`. Neither has a usable token. They are not
@@ -187,7 +187,7 @@ here. Do not copy it onto this host.
 ```sh
 /home/ubuntu/.local/bin/gh-role writer api user --jq .login
 /home/ubuntu/.local/bin/gh-role reviewer api user --jq .login
-/home/ubuntu/.local/bin/gh-role eligible reviewer neverhuman/RedlineDB <PR>
+/home/ubuntu/.local/bin/gh-role eligible reviewer neverhuman/redline <PR>
 ```
 
 The first two logins are `jepsontaylor` and `neverhuman`. `eligible` prints who is
@@ -199,7 +199,7 @@ excluded. Exit 0 means that role may approve. `reviewer pr create` is refused.
 
 ```sh
 /home/ubuntu/.local/bin/gh-role reviewer api --method POST \
-  repos/neverhuman/RedlineDB/pulls/<PR>/reviews \
+  repos/neverhuman/redline/pulls/<PR>/reviews \
   -f commit_id=<full sha> -f event=APPROVE -f body="$(cat <review-file>)"
 ```
 
@@ -212,7 +212,7 @@ Rewriting author or committer so a login becomes eligible is not a review.
 4. The writer merges after `RedlineDB/required` is success on that same SHA:
 
 ```sh
-/home/ubuntu/.local/bin/gh-role writer pr merge <PR> --repo neverhuman/RedlineDB \
+/home/ubuntu/.local/bin/gh-role writer pr merge <PR> --repo neverhuman/redline \
   --rebase --delete-branch --match-head-commit <full sha>
 ```
 
