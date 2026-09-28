@@ -14,15 +14,17 @@ pub(crate) fn sort_groups_by_order_by(
         return Ok(());
     }
     let mut keys: Vec<Vec<SqlValue>> = Vec::with_capacity(groups.len());
-    for group in groups {
+    for (group, row) in groups.iter().zip(projected.iter()) {
         let mut row_keys = Vec::with_capacity(order_by.len());
         for order in order_by {
-            row_keys.push(eval_grouped_order_key(
-                &order.expr,
-                group,
-                projection,
-                bindings,
-            )?);
+            // NEW-01: `ORDER BY 2` sorts by the group's second result
+            // column. Either kind of key sorts under the term's collation
+            // (`ORDER BY g COLLATE NOCASE` compared bytes here before).
+            let key = match super::super::order_position::order_position(&order.expr) {
+                Some(column) => row.get(column).cloned().unwrap_or(SqlValue::Null),
+                None => eval_grouped_order_key(&order.expr, group, projection, bindings)?,
+            };
+            row_keys.push(super::super::order_position::collate_sort_value(order, key));
         }
         keys.push(row_keys);
     }
@@ -86,36 +88,39 @@ pub(crate) fn sort_projected_rows_by_order_by(
         Constant(SqlValue),
     }
 
-    let mut recipes: Vec<(OrderResolution, bool)> = Vec::with_capacity(order_by.len());
+    let mut recipes: Vec<(OrderResolution, bool, &OrderByExpr)> =
+        Vec::with_capacity(order_by.len());
     for order in order_by {
         let desc = matches!(order.options.asc, Some(false));
         let resolved = resolve_order_against_projection(&order.expr, projection)?;
         let resolution = match resolved {
             Some(idx) => OrderResolution::Column(idx),
             None => {
-                if let Expr::Value(v) = &order.expr
-                    && let sqlparser::ast::Value::Number(s, _) = &v.value
-                    && let Ok(pos) = s.parse::<usize>()
-                    && pos > 0
-                    && pos <= projection_output_arity(projection)
+                // NEW-01: a position (`ORDER BY 2`, `2 COLLATE NOCASE`).
+                if let Some(column) = super::super::order_position::order_position(&order.expr)
+                    && column < projection_output_arity(projection)
                 {
-                    OrderResolution::Column(pos - 1)
+                    OrderResolution::Column(column)
                 } else {
                     let ctx = RowContext::Empty;
                     OrderResolution::Constant(eval_scalar(&order.expr, &ctx, bindings)?)
                 }
             }
         };
-        recipes.push((resolution, desc));
+        recipes.push((resolution, desc, order));
     }
 
     projected.sort_by(|a, b| {
-        for (recipe, desc) in &recipes {
+        for (recipe, desc, order) in &recipes {
             let (lv, rv) = match recipe {
                 OrderResolution::Column(idx) => {
                     let lv = a.get(*idx).cloned().unwrap_or(SqlValue::Null);
                     let rv = b.get(*idx).cloned().unwrap_or(SqlValue::Null);
-                    (lv, rv)
+                    // `ORDER BY 1 COLLATE NOCASE` sorts by the collation.
+                    (
+                        super::super::order_position::collate_sort_value(order, lv),
+                        super::super::order_position::collate_sort_value(order, rv),
+                    )
                 }
                 OrderResolution::Constant(value) => (value.clone(), value.clone()),
             };

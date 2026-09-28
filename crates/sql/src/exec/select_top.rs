@@ -923,11 +923,17 @@ pub(super) fn order_and_project_rows_with_distinct_on(
         // Sort first so the per-group winner is deterministic. We use the
         // existing sort plumbing by transferring through a key+row vector.
         let directions = directions_from_order_by(order_by);
+        let positional = super::order_position::has_position(order_by);
         let mut keyed: Vec<(Vec<SqlValue>, SqlRow)> = Vec::with_capacity(filtered.len());
         for row in filtered {
+            let projected = if positional {
+                project_row(projection, &row, bindings)?
+            } else {
+                Vec::new()
+            };
             let mut keys = Vec::with_capacity(order_by.len());
             for order in order_by {
-                keys.push(eval_order_key(order, &row.context(), bindings)?);
+                keys.push(eval_order_key(order, &row.context(), &projected, bindings)?);
             }
             keyed.push((keys, row));
         }
@@ -989,11 +995,16 @@ pub(super) fn order_and_project_rows_with_distinct_on(
         let directions = directions_from_order_by(order_by);
         let mut keyed: Vec<(Vec<SqlValue>, Vec<SqlValue>)> = Vec::with_capacity(filtered.len());
         for row in &filtered {
+            let projected = project_row(projection, row, bindings)?;
             let mut keys = Vec::with_capacity(order_by.len());
             for order in order_by {
-                keys.push(eval_scalar(&order.expr, &row.context(), bindings)?);
+                keys.push(super::order_position::order_value(
+                    order,
+                    &row.context(),
+                    &projected,
+                    bindings,
+                )?);
             }
-            let projected = project_row(projection, row, bindings)?;
             keyed.push((keys, projected));
         }
         keyed.sort_by(|a, b| {
@@ -1036,11 +1047,11 @@ pub(super) fn order_and_project_rows_with_distinct_on(
         let directions = directions_from_order_by(order_by);
         let mut heap = vec::TopKHeap::new(total_take, directions);
         for row in &filtered {
+            let projected = project_row(projection, row, bindings)?;
             let keys = order_by
                 .iter()
-                .map(|order| eval_order_key(order, &row.context(), bindings))
+                .map(|order| eval_order_key(order, &row.context(), &projected, bindings))
                 .collect::<Result<Vec<_>>>()?;
-            let projected = project_row(projection, row, bindings)?;
             heap.push(keys, projected)?;
         }
         let sorted = heap.into_sorted_rows();
@@ -1066,11 +1077,11 @@ pub(super) fn order_and_project_rows_with_distinct_on(
     let mut projected_with_keys: Vec<(Vec<SqlValue>, Vec<SqlValue>)> =
         Vec::with_capacity(filtered.len());
     for row in &filtered {
+        let projected = project_row(projection, row, bindings)?;
         let keys = order_by
             .iter()
-            .map(|order| eval_order_key(order, &row.context(), bindings))
+            .map(|order| eval_order_key(order, &row.context(), &projected, bindings))
             .collect::<Result<Vec<_>>>()?;
-        let projected = project_row(projection, row, bindings)?;
         projected_with_keys.push((keys, projected));
     }
     let work_mem = memory.work_mem_bytes;
@@ -1120,22 +1131,17 @@ pub(super) fn directions_from_order_by(order_by: &[OrderByExpr]) -> Vec<vec::Sor
         .collect()
 }
 
+/// The sort key of `order` for one row: the projected result column for a
+/// position (NEW-01), otherwise the term evaluated on the source row, then
+/// folded by the term's collation.
 fn eval_order_key(
     order: &OrderByExpr,
     row: &RowContext<'_>,
+    projected: &[SqlValue],
     bindings: &[Option<SqlValue>],
 ) -> Result<SqlValue> {
-    normalize_order_key(order, eval_scalar(&order.expr, row, bindings)?)
-}
-
-fn normalize_order_key(order: &OrderByExpr, value: SqlValue) -> Result<SqlValue> {
-    let Some(collation) = collation_from_expr(&order.expr) else {
-        return Ok(value);
-    };
-    Ok(match (&collation, value) {
-        (_, SqlValue::Text(text)) => SqlValue::Text(Arc::from(collation.sort_text(&text))),
-        (_, value) => value,
-    })
+    let value = super::order_position::order_value(order, row, projected, bindings)?;
+    Ok(super::order_position::collate_sort_value(order, value))
 }
 
 pub(super) fn collect_select_rows(

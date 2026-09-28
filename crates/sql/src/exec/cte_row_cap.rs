@@ -176,10 +176,10 @@ fn contains_word_ci(haystack: &str, word: &str) -> bool {
 
 fn literal_u64(expr: &Expr) -> Option<u64> {
     match expr {
-        Expr::Value(ValueWithSpan { value, .. }) => match value {
-            Value::Number(text, _) => text.parse::<u64>().ok(),
-            _ => None,
-        },
+        Expr::Value(ValueWithSpan {
+            value: Value::Number(text, _),
+            ..
+        }) => text.parse::<u64>().ok(),
         _ => None,
     }
 }

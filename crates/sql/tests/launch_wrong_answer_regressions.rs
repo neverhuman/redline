@@ -13,6 +13,8 @@ mod index_epoch_upgrade;
 mod index_numeric_keys;
 #[path = "launch_wrong_answer/lab.rs"]
 mod lab;
+#[path = "launch_wrong_answer/new_01_order_by_ordinal.rs"]
+mod new_01_order_by_ordinal;
 #[path = "launch_wrong_answer/new_02_group_numeric.rs"]
 mod new_02_group_numeric;
 #[path = "launch_wrong_answer/numeric.rs"]

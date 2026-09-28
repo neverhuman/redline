@@ -70,6 +70,7 @@ pub(crate) mod select_parallel;
 // Track K — SQL:2003 MERGE dispatch.
 pub(crate) mod merge;
 pub(crate) mod pragma_tv;
+pub(crate) mod order_position;
 pub(crate) mod set_ops;
 mod show_var;
 pub(crate) mod sql_equiv;

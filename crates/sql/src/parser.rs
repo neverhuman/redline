@@ -49,6 +49,7 @@ mod pragma_compile;
 pub(crate) use pragma_compile::*;
 mod pragma_recovery;
 pub(crate) mod code_scan;
+mod order_by;
 mod prepare;
 pub(crate) mod savepoint;
 mod select;

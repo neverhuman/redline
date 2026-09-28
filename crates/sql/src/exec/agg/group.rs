@@ -245,6 +245,12 @@ fn try_one_pass_grouped(
     // collapse COUNT(*) to 1).
     let mut order_specs: Vec<(ProjectionItem, bool)> = Vec::with_capacity(plan.order_by.len());
     for order in &plan.order_by {
+        // A term under COLLATE (`ORDER BY 1 COLLATE NOCASE`, `g COLLATE
+        // NOCASE`) needs the collation-aware sort of the general grouped
+        // path; this one compares bytes.
+        if collation_from_expr(&order.expr).is_some() {
+            return Ok(None);
+        }
         // ORDER BY <int> position handled via column resolution below.
         if let Expr::Value(v) = &order.expr
             && let sqlparser::ast::Value::Number(s, _) = &v.value

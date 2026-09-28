@@ -190,31 +190,15 @@ fn apply_query_tail(
         }
     };
 
-    let mut order_by = match order_by {
-        Some(order_by) => match order_by.kind {
-            OrderByKind::Expressions(exprs) => exprs
-                .into_iter()
-                .map(|expr| {
-                    let options = expr.options;
-                    let with_fill = expr.with_fill;
-                    let expr = normalize_expr(expr.expr, params)?;
-                    Ok(OrderByExpr {
-                        expr,
-                        options,
-                        with_fill,
-                    })
-                })
-                .collect::<Result<Vec<_>>>()?,
-            OrderByKind::All(_) => {
-                return Err(Error::UnsupportedSql(
-                    "ORDER BY ALL is not supported".to_owned(),
-                ));
-            }
-        },
-        None => Vec::new(),
-    };
-    validate_order_by_positions(&order_by, &template.output_columns)?;
-    resolve_order_by_positions(&mut order_by, &template.output_columns);
+    let order_by = super::order_by::bind_order_by(
+        order_by,
+        &template.output_columns,
+        Some(super::order_by::ResultShape {
+            projection: &plan.projection,
+            distinct: plan.distinct,
+        }),
+        params,
+    )?;
     validate_distinct_on_matches_order_by(&plan.distinct_on, &order_by)?;
 
     let (limit, offset) = match limit_clause {
@@ -361,31 +345,15 @@ pub(crate) fn bind_simple_select_query(
         None => None,
     };
 
-    let mut order_by = match order_by {
-        Some(order_by) => match order_by.kind {
-            OrderByKind::Expressions(exprs) => exprs
-                .into_iter()
-                .map(|expr| {
-                    let options = expr.options;
-                    let with_fill = expr.with_fill;
-                    let expr = normalize_expr(expr.expr, params)?;
-                    Ok(OrderByExpr {
-                        expr,
-                        options,
-                        with_fill,
-                    })
-                })
-                .collect::<Result<Vec<_>>>()?,
-            OrderByKind::All(_) => {
-                return Err(Error::UnsupportedSql(
-                    "ORDER BY ALL is not supported".to_owned(),
-                ));
-            }
-        },
-        None => Vec::new(),
-    };
-    validate_order_by_positions(&order_by, &output_columns)?;
-    resolve_order_by_positions(&mut order_by, &output_columns);
+    let order_by = super::order_by::bind_order_by(
+        order_by,
+        &output_columns,
+        Some(super::order_by::ResultShape {
+            projection: &projection,
+            distinct,
+        }),
+        params,
+    )?;
     validate_distinct_on_matches_order_by(&distinct_on, &order_by)?;
 
     let (limit, offset) = match limit_clause {
@@ -516,31 +484,8 @@ pub(crate) fn bind_union_all_query(
     // the left side's names.
     let left_columns_for_names: Arc<[String]> = left.output_columns.clone();
 
-    let mut order_by = match ctx.order_by {
-        Some(order_by) => match order_by.kind {
-            OrderByKind::Expressions(exprs) => exprs
-                .into_iter()
-                .map(|expr| {
-                    let options = expr.options;
-                    let with_fill = expr.with_fill;
-                    let expr = normalize_expr(expr.expr, ctx.params)?;
-                    Ok(OrderByExpr {
-                        expr,
-                        options,
-                        with_fill,
-                    })
-                })
-                .collect::<Result<Vec<_>>>()?,
-            OrderByKind::All(_) => {
-                return Err(Error::UnsupportedSql(
-                    "ORDER BY ALL is not supported".to_owned(),
-                ));
-            }
-        },
-        None => Vec::new(),
-    };
-    validate_order_by_positions(&order_by, &left_columns_for_names)?;
-    resolve_order_by_positions(&mut order_by, &left_columns_for_names);
+    let order_by =
+        super::order_by::bind_order_by(ctx.order_by, &left_columns_for_names, None, ctx.params)?;
     let (limit, offset) = match ctx.limit_clause {
         Some(LimitClause::LimitOffset {
             limit,
@@ -656,31 +601,7 @@ fn bind_values_query(
         rows: Arc::from(rows),
     };
 
-    let mut order_by = match order_by {
-        Some(order_by) => match order_by.kind {
-            OrderByKind::Expressions(exprs) => exprs
-                .into_iter()
-                .map(|expr| {
-                    let options = expr.options;
-                    let with_fill = expr.with_fill;
-                    let expr = normalize_expr(expr.expr, params)?;
-                    Ok(OrderByExpr {
-                        expr,
-                        options,
-                        with_fill,
-                    })
-                })
-                .collect::<Result<Vec<_>>>()?,
-            OrderByKind::All(_) => {
-                return Err(Error::UnsupportedSql(
-                    "ORDER BY ALL is not supported".to_owned(),
-                ));
-            }
-        },
-        None => Vec::new(),
-    };
-    validate_order_by_positions(&order_by, &output_columns)?;
-    resolve_order_by_positions(&mut order_by, &output_columns);
+    let order_by = super::order_by::bind_order_by(order_by, &output_columns, None, params)?;
 
     let (limit, offset) = match limit_clause {
         Some(LimitClause::LimitOffset {
@@ -1347,30 +1268,6 @@ pub(crate) fn scan_sql_parameters(sql: &str, params: &mut ParamLayout) {
     }
 }
 
-/// SQLite parity: a bare positive integer at the top of an `ORDER BY` term is a
-/// 1-based positional reference to the N-th output column, not the literal
-/// integer value. Rewrites matching terms to `Expr::Identifier(<column-name>)`
-/// so the existing column-lookup path (`crate::exec::expr::lookup_column`)
-/// resolves them. `ORDER BY 1+0`, `ORDER BY 1.5`, and `ORDER BY (1)` are left
-/// alone — only bare integer literals are positional in SQLite.
-fn resolve_order_by_positions(items: &mut [OrderByExpr], output_columns: &[String]) {
-    for item in items {
-        if let Some(idx) = top_level_positive_int(&item.expr)
-            && let Ok(pos) = usize::try_from(idx)
-            && pos >= 1
-            && pos <= output_columns.len()
-        {
-            let name = output_columns[pos - 1].clone();
-            if name.bytes().all(|b| b.is_ascii_alphanumeric() || b == b'_') {
-                item.expr = Expr::Identifier(Ident::new(name));
-            }
-        }
-    }
-}
-
-/// Validate that every bare positional integer in `items` references
-/// a real output column. Returns `Err` with a SQLite-compatible
-/// "Nth ORDER BY term out of range" message for the first offender.
 /// Postgres requires the `DISTINCT ON` expressions to be the leftmost
 /// `ORDER BY` terms. "The first row of each group" is only well defined once
 /// the group's rows are ordered, so an `ORDER BY` that sorts by something
@@ -1398,48 +1295,6 @@ fn validate_distinct_on_matches_order_by(
         ));
     }
     Ok(())
-}
-
-pub(crate) fn validate_order_by_positions(
-    items: &[OrderByExpr],
-    output_columns: &[String],
-) -> Result<()> {
-    let n_cols = output_columns.len();
-    for (idx, item) in items.iter().enumerate() {
-        if let Some(pos) = top_level_positive_int(&item.expr)
-            && (pos < 1 || pos as usize > n_cols)
-        {
-            let ordinal_word = ordinal_word(idx + 1);
-            return Err(Error::Bind(format!(
-                "{ordinal_word} ORDER BY term out of range - should be between 1 and {n_cols}"
-            )));
-        }
-    }
-    Ok(())
-}
-
-fn ordinal_word(n: usize) -> String {
-    let mod100 = n % 100;
-    if (11..=13).contains(&mod100) {
-        return format!("{n}th");
-    }
-    let suffix = match n % 10 {
-        1 => "st",
-        2 => "nd",
-        3 => "rd",
-        _ => "th",
-    };
-    format!("{n}{suffix}")
-}
-
-fn top_level_positive_int(expr: &Expr) -> Option<i64> {
-    match expr {
-        Expr::Value(v) => match &v.value {
-            Value::Number(n, _) => n.parse::<i64>().ok().filter(|n| *n > 0),
-            _ => None,
-        },
-        _ => None,
-    }
 }
 
 /// Track K — Resolve a list of `WINDOW name AS (...)` definitions into a
@@ -1687,76 +1542,6 @@ fn fold_fetch_into_limit_clause(
 }
 
 #[cfg(test)]
-mod order_by_position_tests {
-    use super::*;
-    use sqlparser::dialect::SQLiteDialect;
-    use sqlparser::parser::Parser as SqlParser;
-
-    fn parse_expr(text: &str) -> Expr {
-        let dialect = SQLiteDialect {};
-        SqlParser::new(&dialect)
-            .try_with_sql(text)
-            .expect("parser init")
-            .parse_expr()
-            .expect("parse expr")
-    }
-
-    #[test]
-    fn bare_positive_integer_resolves() {
-        assert_eq!(top_level_positive_int(&parse_expr("1")), Some(1));
-        assert_eq!(top_level_positive_int(&parse_expr("42")), Some(42));
-    }
-
-    #[test]
-    fn zero_and_negative_integers_are_not_positions() {
-        assert_eq!(top_level_positive_int(&parse_expr("0")), None);
-        // `-1` parses as UnaryOp(Minus, 1) — top-level isn't a literal.
-        assert_eq!(top_level_positive_int(&parse_expr("-1")), None);
-    }
-
-    #[test]
-    fn non_integer_literals_are_not_positions() {
-        assert_eq!(top_level_positive_int(&parse_expr("1.5")), None);
-        assert_eq!(top_level_positive_int(&parse_expr("'1'")), None);
-    }
-
-    #[test]
-    fn nested_integer_is_not_a_position() {
-        // The key invariant: the rewrite must not descend into BinaryOp,
-        // Nested, or any other compound shape — only a bare top-level
-        // integer literal counts as a positional reference.
-        assert_eq!(top_level_positive_int(&parse_expr("1 + 1")), None);
-        assert_eq!(top_level_positive_int(&parse_expr("(1)")), None);
-        assert_eq!(top_level_positive_int(&parse_expr("a + 1")), None);
-    }
-
-    #[test]
-    fn resolve_rewrites_matching_position_and_leaves_others() {
-        let cols = vec!["a".to_owned(), "b".to_owned()];
-        let mk = |sql: &str| OrderByExpr {
-            expr: parse_expr(sql),
-            options: sqlparser::ast::OrderByOptions {
-                asc: None,
-                nulls_first: None,
-            },
-            with_fill: None,
-        };
-        let mut items = vec![mk("1"), mk("2"), mk("1 + 1"), mk("3"), mk("a")];
-        resolve_order_by_positions(&mut items, &cols);
-        // [0] 1 -> Identifier("a")
-        assert!(matches!(&items[0].expr, Expr::Identifier(id) if id.value == "a"));
-        // [1] 2 -> Identifier("b")
-        assert!(matches!(&items[1].expr, Expr::Identifier(id) if id.value == "b"));
-        // [2] `1 + 1` left as BinaryOp
-        assert!(matches!(&items[2].expr, Expr::BinaryOp { .. }));
-        // [3] 3 out of range -> left as Value
-        assert!(matches!(&items[3].expr, Expr::Value(_)));
-        // [4] `a` was already an Identifier
-        assert!(matches!(&items[4].expr, Expr::Identifier(id) if id.value == "a"));
-    }
-}
-
-#[cfg(test)]
 mod nested_query_wrapper_tests {
     use super::*;
     use crate::DbOptions;
@@ -1833,7 +1618,9 @@ mod nested_query_wrapper_tests {
             other => panic!("unexpected prepared kind: {other:?}"),
         };
         assert_eq!(plan.order_by.len(), 1);
-        assert!(matches!(&plan.order_by[0].expr, Expr::Identifier(id) if id.value == "v"));
+        // A compound has no SELECT list to name the column from, so the
+        // term stays the position the executor reads (NEW-01).
+        assert_eq!(plan.order_by[0].expr, parse_expr("1"));
         assert!(matches!(plan.limit, Some(Expr::Value(_))));
         assert!(matches!(plan.offset, None));
     }

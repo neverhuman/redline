@@ -373,3 +373,29 @@ one of the rows with 4.x and open again. A database already at epoch 3
   applies to the one-pass hash aggregate, the spilling hash aggregate, the
   morsel aggregator, window `PARTITION BY`, and `count(DISTINCT x)` /
   `sum(DISTINCT x)` (which counted 1 and 1.0 as two values).
+
+## `ORDER BY <n>` sorts by the n-th result column (NEW-01)
+
+- `ORDER BY 2` was rewritten to the second result column's name, and only
+  when that name was `[A-Za-z0-9_]+`. Any other result column (`-x`,
+  `x * 10`, `upper(g)`, an alias with a space) kept the integer as a
+  constant outside the grouped, DISTINCT and window paths, so the rows
+  came back unsorted: `SELECT -x FROM t ORDER BY 1` returned scan order. An aliased
+  column (`SELECT x AS z FROM t ORDER BY 1`) failed with `no such column:
+  z`, and `SELECT y AS x, x AS y FROM t ORDER BY 1` sorted by the source
+  column `x`. A position now sorts by the result column itself in every
+  path: plain, joined, grouped, one-pass grouped, DISTINCT, window,
+  compound (`UNION ... ORDER BY 1`), VALUES and subquery wrappers.
+- Positions follow SQLite's reading (`sqlite3ExprIsInteger`): `+1`, `(1)`,
+  `- -1` and `1 COLLATE NOCASE` are positions; `1 + 0`, `1.0`, `'1'`, a
+  bound parameter and a literal past 2147483647 are constants (`1 + 0`
+  used to fold into a position). `ORDER BY 0`, `-1` or a position past the
+  last column fails with `1st ORDER BY term out of range - should be
+  between 1 and N` (0 and negative positions used to be ignored). A
+  position sorts under the term's COLLATE, or else the result
+  expression's (`SELECT g COLLATE NOCASE ... ORDER BY 1`).
+- The grouped paths sort under an ORDER BY term's COLLATE
+  (`GROUP BY g ORDER BY g COLLATE NOCASE` compared bytes).
+- Not yet: `ORDER BY <alias>` on a query without GROUP BY, DISTINCT or a
+  window function still fails with `no such column` (SQLite sorts by the
+  aliased result column), and a HAVING clause cannot name an alias.
