@@ -157,7 +157,8 @@ rtk scripts/ci-local.sh all
 ## Publication and review
 
 `main` on `neverhuman/redline` (repository id `1390165945`, named in
-`ops/release/authority.env`) carries this protection:
+`ops/release/authority.env`) must carry this protection, which an admin
+applies with `bash ops/release/main-protection.sh apply`:
 
 | Setting | Value |
 | --- | --- |

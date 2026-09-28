@@ -24,9 +24,13 @@ against the v5 headers. There is no v4 compatibility alias.
   as regular files. Archives no longer contain `libredlinedb.so` or
   `libredlinedb.dylib`; the installer creates that development link inside
   the installed version, and `scripts/install-from-source.sh` installs
-  through the same installer. Programs linked against v4
-  (`libredlinedb.so` with no soname) do not load the v5 library by accident.
-  The header defines `RLDB_ABI_MAJOR 5`.
+  through the same installer. The soname protects programs linked against
+  v5 and later from a future incompatible major. It does not protect programs
+  linked against v4: those recorded the unversioned `libredlinedb.so`
+  (`@rpath/libredlinedb.dylib` on macOS), which now resolves to the v5
+  library with its changed `sqlite3_prepare_v3` argument order and
+  `SQLITE_NULL` value, so rebuild them against v5. The header defines
+  `RLDB_ABI_MAJOR 5`.
 
 ## Fixed
 
@@ -449,10 +453,11 @@ against the v5 headers. There is no v4 compatibility alias.
 - `RedlineDB/required` and the light jobs (`lint`, `official-evidence-guard`,
   `typecheck`, `test`, `components` testing/central/web/release-tools,
   `security`, `audit`) now run on GitHub-hosted `ubuntu-24.04` for every
-  event, so the required check reports even when the self-hosted runners are
-  down or cannot reach github.com. The heavy jobs (`preflight`, the `tests`
-  shards, `parity`, `components (integration)`) stay on the self-hosted
-  runners.
+  event, so the aggregate never takes a self-hosted slot and the light jobs
+  do not depend on the self-hosted runners' links to github.com. The
+  required check still waits for the self-hosted jobs it needs. The heavy
+  jobs (`preflight`, the `tests` shards, `parity`, `components
+  (integration)`) stay on the self-hosted runners.
 - Self-hosted jobs no longer fetch the Rust channel manifest in every job:
   `ops/ci/ensure-rust.sh` checks the toolchain `rust-toolchain.toml` pins
   offline and installs only a missing toolchain or component, with retries.
