@@ -1633,7 +1633,7 @@ dependencies = [
 
 [[package]]
 name = "redlinedb"
-version = "4.1.0"
+version = "5.0.0"
 dependencies = [
  "chrono",
  "num_cpus",
@@ -1651,7 +1651,7 @@ dependencies = [
 
 [[package]]
 name = "redlinedb-bench"
-version = "4.1.0"
+version = "5.0.0"
 dependencies = [
  "anyhow",
  "clap",
@@ -1676,7 +1676,7 @@ dependencies = [
 
 [[package]]
 name = "redlinedb-cli"
-version = "4.1.0"
+version = "5.0.0"
 dependencies = [
  "assert_cmd",
  "clap",
@@ -1696,11 +1696,11 @@ dependencies = [
 
 [[package]]
 name = "redlinedb-domain"
-version = "4.1.0"
+version = "5.0.0"
 
 [[package]]
 name = "redlinedb-ffi"
-version = "4.1.0"
+version = "5.0.0"
 dependencies = [
  "libc",
  "redlinedb-kernel",
@@ -1710,7 +1710,7 @@ dependencies = [
 
 [[package]]
 name = "redlinedb-kernel"
-version = "4.1.0"
+version = "5.0.0"
 dependencies = [
  "ahash",
  "arc-swap",
@@ -1733,14 +1733,14 @@ dependencies = [
 
 [[package]]
 name = "redlinedb-lite"
-version = "4.1.0"
+version = "5.0.0"
 dependencies = [
  "assert_cmd",
 ]
 
 [[package]]
 name = "redlinedb-server"
-version = "4.1.0"
+version = "5.0.0"
 dependencies = [
  "redlinedb",
  "serde",
@@ -1750,7 +1750,7 @@ dependencies = [
 
 [[package]]
 name = "redlinedb-sql"
-version = "4.1.0"
+version = "5.0.0"
 dependencies = [
  "ahash",
  "arc-swap",
@@ -1775,7 +1775,7 @@ dependencies = [
 
 [[package]]
 name = "redlinedb-sqlx"
-version = "4.1.0"
+version = "5.0.0"
 dependencies = [
  "futures-core",
  "futures-util",
@@ -1789,7 +1789,7 @@ dependencies = [
 
 [[package]]
 name = "redlinedb-tokio"
-version = "4.1.0"
+version = "5.0.0"
 dependencies = [
  "redlinedb",
  "tempfile",

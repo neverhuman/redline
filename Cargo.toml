@@ -16,6 +16,7 @@ resolver = "3"
 exclude = ["subrepos/redline-testing", "subrepos/redline-web", "subrepos/redline-central", "subrepos/redline-split-ops", "subrepos/redline"]
 
 [workspace.package]
+version = "5.0.0"
 edition = "2024"
 license = "Apache-2.0"
 rust-version = "1.95"
