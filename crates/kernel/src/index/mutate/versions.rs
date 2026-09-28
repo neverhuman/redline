@@ -189,7 +189,7 @@ mod tests {
     }
 
     fn fresh(page_size: usize) -> (tempfile::TempDir, BtreeIndex) {
-        let dir = tempfile::tempdir().expect("temp dir");
+        let dir = tempfile::tempdir().expect("scratch dir");
         let page_file =
             Arc::new(PageFile::create(dir.path().join("data.redline"), page_size).expect("file"));
         let buffer = Arc::new(BufferPool::new(page_file, 256).expect("pool"));

@@ -89,11 +89,11 @@ pub(super) fn convert_rows_to_new_type(
     };
     let column = &table.columns[ordinal];
     for row in collect_table_rows(conn.engine(), tx, &table)? {
-        let Some(old) = row.values.get(ordinal) else {
+        let Some(stored) = row.values.get(ordinal) else {
             continue;
         };
-        let converted = column_affinity_value(&table, column, old.clone())?;
-        if same_stored_value(old, &converted) {
+        let converted = column_affinity_value(&table, column, stored.clone())?;
+        if same_stored_value(stored, &converted) {
             continue;
         }
         let mut values = row.values.clone();
