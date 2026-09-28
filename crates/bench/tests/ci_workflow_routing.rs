@@ -1,0 +1,211 @@
+//! CI-04: `RedlineDB/required` must be reachable while the self-hosted
+//! runners' links to github.com and static.rust-lang.org are flaky.
+//!
+//! - The aggregate and the light jobs run on GitHub-hosted runners, so the
+//!   required check reports even when no self-hosted runner is up.
+//! - Self-hosted jobs check the pinned toolchain offline
+//!   (`ops/ci/ensure-rust.sh`) instead of fetching the channel manifest with
+//!   dtolnay/rust-toolchain in every job; tool downloads retry and cache the
+//!   verified archive outside the workspace.
+//! - A push and a dispatch on one ref no longer cancel each other.
+//! - An upload that runs after a failure only warns about missing files.
+//!
+//! These checks read the workflow text; actionlint (security lane) checks
+//! the YAML. `docs/ci-trust-boundary.md` lists where each job runs.
+
+use std::collections::BTreeSet;
+
+#[path = "support/workflow_text.rs"]
+mod workflow_text;
+use workflow_text::{checkout_steps, job, jobs, read, run_shell_test, steps_using, workflows};
+
+/// Jobs of ci.yml that run on GitHub-hosted runners for every event.
+const HOSTED_JOBS: &[&str] = &[
+    "required",
+    "lint",
+    "official-evidence-guard",
+    "typecheck",
+    "test",
+    "components",
+    "security",
+    "audit",
+];
+
+/// Workflows whose self-hosted jobs build Rust and so must run ensure-rust.sh.
+const RUST_WORKFLOWS: &[&str] = &["ci.yml", "sqlite-parity-report.yml"];
+
+const RETRYING_CURL: &str = "--retry 5 --retry-all-errors --connect-timeout 20";
+
+fn code_lines(body: &str) -> impl Iterator<Item = &str> {
+    body.lines()
+        .filter(|line| !line.trim_start().starts_with('#'))
+}
+
+fn is_self_hosted(body: &str) -> bool {
+    code_lines(body).any(|line| line.contains("self-hosted"))
+}
+
+#[test]
+fn a_push_and_a_dispatch_on_one_ref_do_not_cancel_each_other() {
+    let ci = read(".github/workflows/ci.yml");
+    assert!(
+        ci.contains("  group: ci-${{ github.event_name }}-${{ github.ref }}\n"),
+        "ci.yml's concurrency group must include the event"
+    );
+    assert!(!ci.contains("group: ci-${{ github.ref }}"));
+    let packages = read(".github/workflows/packages.yml");
+    assert!(
+        packages.contains("  group: packages-${{ github.event_name }}-${{ github.ref }}\n"),
+        "packages.yml's concurrency group must include the event"
+    );
+}
+
+#[test]
+fn the_aggregate_and_the_light_jobs_run_on_hosted_runners() {
+    let ci = read(".github/workflows/ci.yml");
+    for id in HOSTED_JOBS {
+        let body = job(&ci, id);
+        assert!(
+            body.lines()
+                .any(|line| line.trim() == "runs-on: ubuntu-24.04"),
+            "ci.yml job {id} must run on ubuntu-24.04"
+        );
+        assert!(
+            !is_self_hosted(&body),
+            "ci.yml job {id} names a self-hosted runner"
+        );
+        assert!(
+            !body.contains("redlinedb-cargo"),
+            "ci.yml job {id} uses the self-hosted cargo cache"
+        );
+    }
+    let required = job(&ci, "required");
+    assert!(required.contains("    name: RedlineDB/required\n"));
+    assert!(
+        job(&ci, "official-evidence-guard").contains("bash ops/ci/apt-install.sh ripgrep"),
+        "scripts/guard-official-evidence.sh needs rg, which the hosted image lacks"
+    );
+}
+
+#[test]
+fn required_waits_for_every_other_job() {
+    let ci = read(".github/workflows/ci.yml");
+    let required = job(&ci, "required");
+    let needs: BTreeSet<String> = required
+        .lines()
+        .find_map(|line| line.trim().strip_prefix("needs: ["))
+        .and_then(|rest| rest.strip_suffix(']'))
+        .expect("required lists its needs on one line")
+        .split(',')
+        .map(|id| id.trim().to_string())
+        .collect();
+    let others: BTreeSet<String> = jobs(&ci)
+        .into_iter()
+        .map(|(id, _)| id)
+        .filter(|id| id != "required")
+        .collect();
+    assert_eq!(
+        needs, others,
+        "RedlineDB/required must need every other ci.yml job"
+    );
+}
+
+#[test]
+fn the_cli_release_build_is_not_run_by_two_extra_jobs() {
+    // packaging (build-from-source.sh --all) builds the release CLI on every
+    // platform; the build and cli jobs both repeated it on Linux.
+    let ci = read(".github/workflows/ci.yml");
+    let ids: Vec<String> = jobs(&ci).into_iter().map(|(id, _)| id).collect();
+    for dropped in ["build", "cli"] {
+        assert!(
+            !ids.iter().any(|id| id == dropped),
+            "ci.yml still has the duplicate {dropped} job"
+        );
+    }
+    assert!(!ci.contains("cargo build --locked --release -p redlinedb-cli"));
+}
+
+#[test]
+fn self_hosted_jobs_check_the_toolchain_offline() {
+    let mut failures = Vec::new();
+    for workflow in workflows() {
+        for (id, body) in jobs(&workflow.text) {
+            if !is_self_hosted(&body) {
+                continue;
+            }
+            if code_lines(&body).any(|line| line.contains("uses: dtolnay/rust-toolchain@")) {
+                failures.push(format!(
+                    "{} job {id}: dtolnay/rust-toolchain on a self-hosted runner",
+                    workflow.file
+                ));
+            }
+            if !RUST_WORKFLOWS.contains(&workflow.file.as_str()) || checkout_steps(&body).is_empty()
+            {
+                continue;
+            }
+            let checkout = body.find("uses: actions/checkout@").expect("checkout");
+            match body.find("run: bash ops/ci/ensure-rust.sh") {
+                Some(ensure) if ensure > checkout => {}
+                _ => failures.push(format!(
+                    "{} job {id}: no `bash ops/ci/ensure-rust.sh` after the checkout",
+                    workflow.file
+                )),
+            }
+        }
+    }
+    assert!(failures.is_empty(), "{}", failures.join("\n"));
+    run_shell_test("ops/ci/tests/ensure-rust.sh");
+}
+
+#[test]
+fn tool_downloads_retry_and_outlive_the_checkout_clean() {
+    for script in [
+        "ops/ci/install-github-tools.sh",
+        "ops/ci/install-nextest.sh",
+    ] {
+        assert!(
+            read(script).contains(RETRYING_CURL),
+            "{script} must download with `{RETRYING_CURL}`"
+        );
+    }
+    let tools = read("ops/ci/install-github-tools.sh");
+    assert!(
+        tools.contains("$RUNNER_TOOL_CACHE/redlinedb-tools"),
+        "the jankurai archive must be cached outside target/, which the checkout cleans"
+    );
+    run_shell_test("ops/ci/tests/install-github-tools.sh");
+}
+
+#[test]
+fn failure_path_uploads_only_warn() {
+    let mut failures = Vec::new();
+    for workflow in workflows() {
+        for (id, body) in jobs(&workflow.text) {
+            for step in steps_using(&body, "actions/upload-artifact@") {
+                if step.contains("if: always()") && !step.contains("if-no-files-found: warn") {
+                    failures.push(format!(
+                        "{} job {id}: an `if: always()` upload without `if-no-files-found: warn`",
+                        workflow.file
+                    ));
+                }
+            }
+        }
+    }
+    assert!(failures.is_empty(), "{}", failures.join("\n"));
+}
+
+#[test]
+fn kernel_failpoint_tests_have_their_own_shard() {
+    let ci = read(".github/workflows/ci.yml");
+    let tests = job(&ci, "tests");
+    assert!(tests.contains("          - kernel-failpoints\n"));
+    assert!(
+        tests.contains(
+            "    timeout-minutes: ${{ matrix.stage == 'kernel-failpoints' && 30 || 45 }}\n"
+        )
+    );
+    let fast = read("ops/ci/fast.sh");
+    assert!(fast.contains("        kernel-failpoints)\n"));
+    assert!(fast.contains("cargo nextest run -p redlinedb-kernel --features failpoints"));
+    assert!(fast.contains("core|kernel|kernel-failpoints|"));
+}

@@ -13,19 +13,31 @@ on:
     branches: [main]
   pull_request:
 
+# The event is part of the group: a push and a workflow_dispatch on the same
+# ref are different runs and used to cancel each other (CI-04).
 concurrency:
-  group: ci-${{ github.ref }}
+  group: ci-${{ github.event_name }}-${{ github.ref }}
   cancel-in-progress: true
 
-# CARGO_HOME is exported in each job's first step (workflow-level runner
-# context is unavailable and rejects the file). Leave CARGO_TARGET_DIR unset
+# Each self-hosted job exports CARGO_HOME in its first step (workflow-level
+# runner context is unavailable and rejects the file); hosted jobs keep the
+# image's ~/.cargo. Leave CARGO_TARGET_DIR unset
 # so cargo and scripts share $PWD/target; artifact uploads and parity look
 # for target/release and target/redline-testing.
 #
+# Runners (CI-04): RedlineDB/required and the light jobs (lint,
+# official-evidence-guard, typecheck, test, components except integration,
+# security, audit) run on GitHub-hosted ubuntu-24.04 for every event, so the
+# required check reports even when the self-hosted runners are down or
+# cannot reach github.com. The heavy jobs (preflight, the test shards,
+# parity, components (integration)) run on the self-hosted runners and check
+# the pinned toolchain offline with ops/ci/ensure-rust.sh instead of
+# downloading it in every job.
+#
 # Trust boundary (docs/ci-trust-boundary.md): a pull request from a fork runs
 # on GitHub-hosted runners with a job-local CARGO_HOME, never on the
-# self-hosted runners or their shared cache. Every job repeats the same fork
-# test, in runs-on and in the first step:
+# self-hosted runners or their shared cache. Every self-hosted job repeats
+# the same fork test, in runs-on and in the first step:
 #   github.event_name == 'pull_request' &&
 #   github.event.pull_request.head.repo.full_name != github.repository
 # The parity lane and the kernel stage run only on the self-hosted runners;
@@ -69,10 +81,10 @@ jobs:
         with:
           ref: ${{ github.ref }}
           persist-credentials: false
-      - uses: dtolnay/rust-toolchain@3c5f7ea28cd621ae0bf5283f0e981fb97b8a7af9
-        with:
-          toolchain: 1.95.0
-          components: rustfmt, clippy
+      # The toolchain rust-toolchain.toml pins, checked offline and installed
+      # only if missing (dtolnay/rust-toolchain fetches the channel manifest
+      # in every job, and the runners' link to it often times out).
+      - run: bash ops/ci/ensure-rust.sh
       - uses: swatinem/rust-cache@42dc69e1aa15d09112580998cf2ef0119e2e91ae
       - name: Install system packages
         run: |
@@ -91,6 +103,7 @@ jobs:
         stage:
           - core
           - kernel
+          - kernel-failpoints
           - sql-unit
           - sql-contracts
           - sql-integration
@@ -100,7 +113,10 @@ jobs:
         exclude:
           - stage: ${{ (github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name != github.repository) && 'kernel' || '' }}
     runs-on: ${{ (github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name != github.repository) && 'ubuntu-24.04' || fromJSON('["self-hosted","Linux","X64"]') }}
-    timeout-minutes: 45
+    # kernel is the sequential `cargo test` of the whole kernel crate;
+    # kernel-failpoints builds it with --features failpoints and runs only the
+    # failpoint-gated tests (ops/ci/fast.sh).
+    timeout-minutes: ${{ matrix.stage == 'kernel-failpoints' && 30 || 45 }}
     permissions:
       contents: read
       attestations: read
@@ -124,10 +140,10 @@ jobs:
         with:
           ref: ${{ github.ref }}
           persist-credentials: false
-      - uses: dtolnay/rust-toolchain@3c5f7ea28cd621ae0bf5283f0e981fb97b8a7af9
-        with:
-          toolchain: 1.95.0
-          components: rustfmt, clippy
+      # The toolchain rust-toolchain.toml pins, checked offline and installed
+      # only if missing (dtolnay/rust-toolchain fetches the channel manifest
+      # in every job, and the runners' link to it often times out).
+      - run: bash ops/ci/ensure-rust.sh
       - uses: swatinem/rust-cache@42dc69e1aa15d09112580998cf2ef0119e2e91ae
       - name: Install system packages
         run: |
@@ -200,10 +216,10 @@ jobs:
         with:
           ref: ${{ github.ref }}
           persist-credentials: false
-      - uses: dtolnay/rust-toolchain@3c5f7ea28cd621ae0bf5283f0e981fb97b8a7af9
-        with:
-          toolchain: 1.95.0
-          components: rustfmt, clippy
+      # The toolchain rust-toolchain.toml pins, checked offline and installed
+      # only if missing (dtolnay/rust-toolchain fetches the channel manifest
+      # in every job, and the runners' link to it often times out).
+      - run: bash ops/ci/ensure-rust.sh
       - uses: swatinem/rust-cache@42dc69e1aa15d09112580998cf2ef0119e2e91ae
       - name: Install system packages
         run: |
@@ -219,62 +235,35 @@ jobs:
         if: always()
         with:
           name: redline-testing-official-evidence
-          if-no-files-found: ignore
+          if-no-files-found: warn
           path: |
             target/redline-testing/**
 
   official-evidence-guard:
-    runs-on: ${{ (github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name != github.repository) && 'ubuntu-24.04' || fromJSON('["self-hosted","Linux","X64"]') }}
+    runs-on: ubuntu-24.04
     timeout-minutes: 10
     permissions:
       contents: read
     steps:
-      - name: Unlock leftover workspace files and choose CARGO_HOME
-        env:
-          UNTRUSTED_PR: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name != github.repository }}
-        run: |
-          if [ -n "${GITHUB_WORKSPACE}" ] && [ -d "${GITHUB_WORKSPACE}" ]; then
-            chmod -R u+rwx "${GITHUB_WORKSPACE}" || true
-          fi
-          if [ "${UNTRUSTED_PR}" = true ]; then
-            cargo_home="${RUNNER_TEMP}/cargo-home"
-          else
-            cargo_home="${RUNNER_TOOL_CACHE}/redlinedb-cargo"
-          fi
-          mkdir -p "${cargo_home}/bin"
-          echo "CARGO_HOME=${cargo_home}" >> "${GITHUB_ENV}"
-          echo "${cargo_home}/bin" >> "${GITHUB_PATH}"
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
         with:
           ref: ${{ github.ref }}
           persist-credentials: false
+      - name: Install ripgrep
+        run: bash ops/ci/apt-install.sh ripgrep
       - name: Guard official evidence boundary
         run: bash scripts/guard-official-evidence.sh
 
-  # Branch ruleset requires these exact job names. They run real engine
-  # work and must not wait on the official parity shard.
+  # Engine unit tests and the CLI's own tests. Packaging builds the release
+  # CLI on every platform (build-from-source.sh --all), so the build and cli
+  # jobs that repeated `cargo build --release -p redlinedb-cli` are gone.
   test:
-    runs-on: ${{ (github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name != github.repository) && 'ubuntu-24.04' || fromJSON('["self-hosted","Linux","X64"]') }}
+    runs-on: ubuntu-24.04
     timeout-minutes: 45
     permissions:
       contents: read
       attestations: read
     steps:
-      - name: Unlock leftover workspace files and choose CARGO_HOME
-        env:
-          UNTRUSTED_PR: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name != github.repository }}
-        run: |
-          if [ -n "${GITHUB_WORKSPACE}" ] && [ -d "${GITHUB_WORKSPACE}" ]; then
-            chmod -R u+rwx "${GITHUB_WORKSPACE}" || true
-          fi
-          if [ "${UNTRUSTED_PR}" = true ]; then
-            cargo_home="${RUNNER_TEMP}/cargo-home"
-          else
-            cargo_home="${RUNNER_TOOL_CACHE}/redlinedb-cargo"
-          fi
-          mkdir -p "${cargo_home}/bin"
-          echo "CARGO_HOME=${cargo_home}" >> "${GITHUB_ENV}"
-          echo "${cargo_home}/bin" >> "${GITHUB_PATH}"
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
         with:
           ref: ${{ github.ref }}
@@ -291,64 +280,13 @@ jobs:
           cargo test --locked --workspace --lib
           cargo test --locked -p redlinedb-cli
 
-  build:
-    runs-on: ${{ (github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name != github.repository) && 'ubuntu-24.04' || fromJSON('["self-hosted","Linux","X64"]') }}
-    timeout-minutes: 45
-    permissions:
-      contents: read
-      attestations: read
-    steps:
-      - name: Unlock leftover workspace files and choose CARGO_HOME
-        env:
-          UNTRUSTED_PR: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name != github.repository }}
-        run: |
-          if [ -n "${GITHUB_WORKSPACE}" ] && [ -d "${GITHUB_WORKSPACE}" ]; then
-            chmod -R u+rwx "${GITHUB_WORKSPACE}" || true
-          fi
-          if [ "${UNTRUSTED_PR}" = true ]; then
-            cargo_home="${RUNNER_TEMP}/cargo-home"
-          else
-            cargo_home="${RUNNER_TOOL_CACHE}/redlinedb-cargo"
-          fi
-          mkdir -p "${cargo_home}/bin"
-          echo "CARGO_HOME=${cargo_home}" >> "${GITHUB_ENV}"
-          echo "${cargo_home}/bin" >> "${GITHUB_PATH}"
-      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
-        with:
-          ref: ${{ github.ref }}
-          persist-credentials: false
-      - uses: dtolnay/rust-toolchain@3c5f7ea28cd621ae0bf5283f0e981fb97b8a7af9
-        with:
-          toolchain: 1.95.0
-      - uses: swatinem/rust-cache@42dc69e1aa15d09112580998cf2ef0119e2e91ae
-      - name: Install system packages
-        run: |
-          bash ops/ci/apt-install.sh build-essential pkg-config openssl sqlite3 zlib1g-dev
-      - name: Release-build redlinedb-cli
-        run: cargo build --locked --release -p redlinedb-cli
-
   lint:
-    runs-on: ${{ (github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name != github.repository) && 'ubuntu-24.04' || fromJSON('["self-hosted","Linux","X64"]') }}
+    runs-on: ubuntu-24.04
     timeout-minutes: 15
     permissions:
       contents: read
       attestations: read
     steps:
-      - name: Unlock leftover workspace files and choose CARGO_HOME
-        env:
-          UNTRUSTED_PR: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name != github.repository }}
-        run: |
-          if [ -n "${GITHUB_WORKSPACE}" ] && [ -d "${GITHUB_WORKSPACE}" ]; then
-            chmod -R u+rwx "${GITHUB_WORKSPACE}" || true
-          fi
-          if [ "${UNTRUSTED_PR}" = true ]; then
-            cargo_home="${RUNNER_TEMP}/cargo-home"
-          else
-            cargo_home="${RUNNER_TOOL_CACHE}/redlinedb-cargo"
-          fi
-          mkdir -p "${cargo_home}/bin"
-          echo "CARGO_HOME=${cargo_home}" >> "${GITHUB_ENV}"
-          echo "${cargo_home}/bin" >> "${GITHUB_PATH}"
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
         with:
           ref: ${{ github.ref }}
@@ -361,27 +299,12 @@ jobs:
         run: cargo fmt --check
 
   typecheck:
-    runs-on: ${{ (github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name != github.repository) && 'ubuntu-24.04' || fromJSON('["self-hosted","Linux","X64"]') }}
+    runs-on: ubuntu-24.04
     timeout-minutes: 30
     permissions:
       contents: read
       attestations: read
     steps:
-      - name: Unlock leftover workspace files and choose CARGO_HOME
-        env:
-          UNTRUSTED_PR: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name != github.repository }}
-        run: |
-          if [ -n "${GITHUB_WORKSPACE}" ] && [ -d "${GITHUB_WORKSPACE}" ]; then
-            chmod -R u+rwx "${GITHUB_WORKSPACE}" || true
-          fi
-          if [ "${UNTRUSTED_PR}" = true ]; then
-            cargo_home="${RUNNER_TEMP}/cargo-home"
-          else
-            cargo_home="${RUNNER_TOOL_CACHE}/redlinedb-cargo"
-          fi
-          mkdir -p "${cargo_home}/bin"
-          echo "CARGO_HOME=${cargo_home}" >> "${GITHUB_ENV}"
-          echo "${cargo_home}/bin" >> "${GITHUB_PATH}"
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
         with:
           ref: ${{ github.ref }}
@@ -396,47 +319,33 @@ jobs:
       - name: Workspace typecheck
         run: cargo check --workspace --locked
 
-  cli:
-    runs-on: ${{ (github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name != github.repository) && 'ubuntu-24.04' || fromJSON('["self-hosted","Linux","X64"]') }}
-    timeout-minutes: 45
-    permissions:
-      contents: read
-      attestations: read
-    steps:
-      - name: Unlock leftover workspace files and choose CARGO_HOME
-        env:
-          UNTRUSTED_PR: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name != github.repository }}
-        run: |
-          if [ -n "${GITHUB_WORKSPACE}" ] && [ -d "${GITHUB_WORKSPACE}" ]; then
-            chmod -R u+rwx "${GITHUB_WORKSPACE}" || true
-          fi
-          if [ "${UNTRUSTED_PR}" = true ]; then
-            cargo_home="${RUNNER_TEMP}/cargo-home"
-          else
-            cargo_home="${RUNNER_TOOL_CACHE}/redlinedb-cargo"
-          fi
-          mkdir -p "${cargo_home}/bin"
-          echo "CARGO_HOME=${cargo_home}" >> "${GITHUB_ENV}"
-          echo "${cargo_home}/bin" >> "${GITHUB_PATH}"
-      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
-        with:
-          ref: ${{ github.ref }}
-          persist-credentials: false
-      - uses: dtolnay/rust-toolchain@3c5f7ea28cd621ae0bf5283f0e981fb97b8a7af9
-        with:
-          toolchain: 1.95.0
-      - uses: swatinem/rust-cache@42dc69e1aa15d09112580998cf2ef0119e2e91ae
-      - name: Install system packages
-        run: |
-          bash ops/ci/apt-install.sh build-essential pkg-config openssl sqlite3 zlib1g-dev
-      - name: Release-build CLI package
-        run: cargo build --locked --release -p redlinedb-cli
-
   components:
     strategy:
       fail-fast: false
       matrix:
-        lane: [testing, central, web, release-tools, integration]
+        lane: [testing, central, web, release-tools]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          persist-credentials: false
+      - uses: dtolnay/rust-toolchain@3c5f7ea28cd621ae0bf5283f0e981fb97b8a7af9
+        with: {toolchain: 1.95.0, components: rustfmt}
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with: {node-version: '22'}
+      - uses: swatinem/rust-cache@42dc69e1aa15d09112580998cf2ef0119e2e91ae
+        with: {key: '${{ matrix.lane }}'}
+      - run: bash ops/ci/apt-install.sh pkg-config sqlite3
+      - run: bash scripts/ci-family.sh "${{ matrix.lane }}"
+
+  # The integration lane release-builds every component and runs the web
+  # console's Playwright suite against it, so it stays on the self-hosted
+  # runners.
+  components-integration:
+    name: components (integration)
     runs-on: ${{ (github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name != github.repository) && 'ubuntu-24.04' || fromJSON('["self-hosted","Linux","X64"]') }}
     timeout-minutes: 60
     permissions:
@@ -460,36 +369,23 @@ jobs:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
         with:
           persist-credentials: false
-      - uses: dtolnay/rust-toolchain@3c5f7ea28cd621ae0bf5283f0e981fb97b8a7af9
-        with: {toolchain: 1.95.0, components: rustfmt}
+      # The toolchain rust-toolchain.toml pins, checked offline and installed
+      # only if missing (dtolnay/rust-toolchain fetches the channel manifest
+      # in every job, and the runners' link to it often times out).
+      - run: bash ops/ci/ensure-rust.sh
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
         with: {node-version: '22'}
       - uses: swatinem/rust-cache@42dc69e1aa15d09112580998cf2ef0119e2e91ae
-        with: {key: '${{ matrix.lane }}'}
+        with: {key: integration}
       - run: bash ops/ci/apt-install.sh pkg-config sqlite3
-      - run: bash scripts/ci-family.sh "${{ matrix.lane }}"
+      - run: bash scripts/ci-family.sh integration
 
   audit:
     needs: security
-    runs-on: ${{ (github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name != github.repository) && 'ubuntu-24.04' || fromJSON('["self-hosted","Linux","X64"]') }}
-    timeout-minutes: 30
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
     permissions: {contents: read}
     steps:
-      - name: Unlock leftover workspace files and choose CARGO_HOME
-        env:
-          UNTRUSTED_PR: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name != github.repository }}
-        run: |
-          if [ -n "${GITHUB_WORKSPACE}" ] && [ -d "${GITHUB_WORKSPACE}" ]; then
-            chmod -R u+rwx "${GITHUB_WORKSPACE}" || true
-          fi
-          if [ "${UNTRUSTED_PR}" = true ]; then
-            cargo_home="${RUNNER_TEMP}/cargo-home"
-          else
-            cargo_home="${RUNNER_TOOL_CACHE}/redlinedb-cargo"
-          fi
-          mkdir -p "${cargo_home}/bin"
-          echo "CARGO_HOME=${cargo_home}" >> "${GITHUB_ENV}"
-          echo "${cargo_home}/bin" >> "${GITHUB_PATH}"
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
         with:
           fetch-depth: 0
@@ -498,6 +394,7 @@ jobs:
         with: {toolchain: 1.95.0}
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
         with: {node-version: '22'}
+      - uses: swatinem/rust-cache@42dc69e1aa15d09112580998cf2ef0119e2e91ae
       - name: Install security tools for this runner
         run: |
           cargo install cargo-audit --locked --version 0.22.1
@@ -512,31 +409,16 @@ jobs:
       - run: bash ops/ci/audit-family.sh
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
         if: always()
-        with: {name: audit-family, path: target/audit-family, if-no-files-found: error}
+        with: {name: audit-family, path: target/audit-family, if-no-files-found: warn}
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
         if: always()
-        with: {name: jankurai-tool-evidence, path: target/jankurai, if-no-files-found: error}
+        with: {name: jankurai-tool-evidence, path: target/jankurai, if-no-files-found: warn}
 
   security:
-    runs-on: ${{ (github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name != github.repository) && 'ubuntu-24.04' || fromJSON('["self-hosted","Linux","X64"]') }}
+    runs-on: ubuntu-24.04
     timeout-minutes: 45
     permissions: {contents: read}
     steps:
-      - name: Unlock leftover workspace files and choose CARGO_HOME
-        env:
-          UNTRUSTED_PR: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name != github.repository }}
-        run: |
-          if [ -n "${GITHUB_WORKSPACE}" ] && [ -d "${GITHUB_WORKSPACE}" ]; then
-            chmod -R u+rwx "${GITHUB_WORKSPACE}" || true
-          fi
-          if [ "${UNTRUSTED_PR}" = true ]; then
-            cargo_home="${RUNNER_TEMP}/cargo-home"
-          else
-            cargo_home="${RUNNER_TOOL_CACHE}/redlinedb-cargo"
-          fi
-          mkdir -p "${cargo_home}/bin"
-          echo "CARGO_HOME=${cargo_home}" >> "${GITHUB_ENV}"
-          echo "${cargo_home}/bin" >> "${GITHUB_PATH}"
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
         with:
           persist-credentials: false
@@ -555,7 +437,7 @@ jobs:
           }
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
         if: always()
-        with: {name: security-evidence, path: target/jankurai/security, if-no-files-found: error}
+        with: {name: security-evidence, path: target/jankurai/security, if-no-files-found: warn}
 
   packaging:
     uses: ./.github/workflows/packages.yml
@@ -567,8 +449,10 @@ jobs:
   required:
     name: RedlineDB/required
     if: always()
-    needs: [preflight, tests, parity, official-evidence-guard, test, build, lint, typecheck, cli, components, audit, security, packaging]
-    runs-on: ${{ (github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name != github.repository) && 'ubuntu-24.04' || fromJSON('["self-hosted","Linux","X64"]') }}
+    needs: [preflight, tests, parity, official-evidence-guard, test, lint, typecheck, components, components-integration, audit, security, packaging]
+    # Hosted and jq only, so the required check reports even when the
+    # self-hosted runners are down.
+    runs-on: ubuntu-24.04
     timeout-minutes: 5
     permissions: {contents: read}
     steps:

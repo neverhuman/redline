@@ -4,11 +4,12 @@
 //! These checks read the workflow text. The security lane runs actionlint on
 //! the same files for syntax. `docs/ci-trust-boundary.md` explains the rules.
 
-use std::{
-    collections::BTreeSet,
-    fs,
-    path::{Path, PathBuf},
-    process::Command,
+use std::collections::BTreeSet;
+
+#[path = "support/workflow_text.rs"]
+mod workflow_text;
+use workflow_text::{
+    Workflow, checkout_steps, jobs, read, run_shell_test, top_level_block, workflows,
 };
 
 /// True for a `pull_request` run whose head branch lives in another repository.
@@ -21,119 +22,10 @@ const CHECKOUTS_THAT_PUSH: &[(&str, &str, &str)] = &[(
     "ops/ci/sqlite-parity-report.sh",
 )];
 
-fn repository_root() -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../..")
-}
-
-fn read(path: &str) -> String {
-    let path = repository_root().join(path);
-    fs::read_to_string(&path).unwrap_or_else(|error| panic!("read {}: {error}", path.display()))
-}
-
 fn routed_runs_on() -> String {
     format!(
         "runs-on: ${{{{ ({UNTRUSTED_PR}) && 'ubuntu-24.04' || fromJSON('[\"self-hosted\",\"Linux\",\"X64\"]') }}}}"
     )
-}
-
-struct Workflow {
-    file: String,
-    text: String,
-}
-
-fn workflows() -> Vec<Workflow> {
-    let directory = repository_root().join(".github/workflows");
-    let mut files: Vec<PathBuf> = fs::read_dir(&directory)
-        .unwrap_or_else(|error| panic!("read {}: {error}", directory.display()))
-        .map(|entry| entry.expect("workflow entry").path())
-        .filter(|path| {
-            path.extension()
-                .is_some_and(|ext| ext == "yml" || ext == "yaml")
-        })
-        .collect();
-    files.sort();
-    assert!(!files.is_empty(), "no workflows found");
-    files
-        .into_iter()
-        .map(|path| Workflow {
-            file: file_name(&path),
-            text: fs::read_to_string(&path).expect("read workflow"),
-        })
-        .collect()
-}
-
-fn file_name(path: &Path) -> String {
-    path.file_name()
-        .expect("file name")
-        .to_string_lossy()
-        .into_owned()
-}
-
-fn indent(line: &str) -> usize {
-    line.len() - line.trim_start().len()
-}
-
-/// The lines of a top-level key (`on:` or `jobs:`), header excluded.
-fn top_level_block<'a>(text: &'a str, key: &str) -> Vec<&'a str> {
-    let mut lines = text.lines().skip_while(|line| *line != key);
-    if lines.next().is_none() {
-        return Vec::new();
-    }
-    lines
-        .take_while(|line| line.is_empty() || line.starts_with(' ') || line.starts_with('#'))
-        .collect()
-}
-
-/// `(job id, job text)` for every job in the workflow.
-fn jobs(text: &str) -> Vec<(String, String)> {
-    let mut jobs: Vec<(String, String)> = Vec::new();
-    for line in top_level_block(text, "jobs:") {
-        let header = line
-            .strip_prefix("  ")
-            .filter(|rest| !rest.starts_with(' ') && !rest.starts_with('#'))
-            .and_then(|rest| rest.trim_end().strip_suffix(':'))
-            .filter(|key| {
-                key.chars()
-                    .all(|c| c.is_ascii_alphanumeric() || c == '-' || c == '_')
-            });
-        if let Some(id) = header {
-            jobs.push((id.to_string(), String::new()));
-        }
-        if let Some((_, body)) = jobs.last_mut() {
-            body.push_str(line);
-            body.push('\n');
-        }
-    }
-    jobs
-}
-
-/// The text of every `actions/checkout` step in a job.
-fn checkout_steps(job: &str) -> Vec<String> {
-    let lines: Vec<&str> = job.lines().collect();
-    let mut steps = Vec::new();
-    for (index, line) in lines.iter().enumerate() {
-        if !line.contains("uses: actions/checkout@") {
-            continue;
-        }
-        let dash = if line.trim_start().starts_with("- ") {
-            indent(line)
-        } else {
-            indent(line).saturating_sub(2)
-        };
-        let mut step = (*line).to_string();
-        for next in &lines[index + 1..] {
-            if next.trim().is_empty() {
-                continue;
-            }
-            if indent(next) <= dash {
-                break;
-            }
-            step.push('\n');
-            step.push_str(next);
-        }
-        steps.push(step);
-    }
-    steps
 }
 
 /// Workflows a pull request can start: those triggered by `pull_request` and
@@ -164,21 +56,6 @@ fn pull_request_reachable(workflows: &[Workflow]) -> BTreeSet<String> {
             return reachable;
         }
     }
-}
-
-fn run_shell_test(script: &str) {
-    let output = Command::new("bash")
-        .arg(repository_root().join(script))
-        .current_dir(repository_root())
-        .output()
-        .unwrap_or_else(|error| panic!("run {script}: {error}"));
-    assert!(
-        output.status.success(),
-        "{script} failed ({})\nstdout:\n{}\nstderr:\n{}",
-        output.status,
-        String::from_utf8_lossy(&output.stdout),
-        String::from_utf8_lossy(&output.stderr)
-    );
 }
 
 #[test]

@@ -443,3 +443,35 @@ against the v5 headers. There is no v4 compatibility alias.
   placeholder that the check refuses on purpose. Until the bump,
   `--build-info` reports version 4.1.0 and dev packages are `v4.1.0-dev`.
   `ci.yml` changed, so the parity-report inputs hash changes.
+
+## CI runners (CI-04)
+
+- `RedlineDB/required` and the light jobs (`lint`, `official-evidence-guard`,
+  `typecheck`, `test`, `components` testing/central/web/release-tools,
+  `security`, `audit`) now run on GitHub-hosted `ubuntu-24.04` for every
+  event, so the required check reports even when the self-hosted runners are
+  down or cannot reach github.com. The heavy jobs (`preflight`, the `tests`
+  shards, `parity`, `components (integration)`) stay on the self-hosted
+  runners.
+- Self-hosted jobs no longer fetch the Rust channel manifest in every job:
+  `ops/ci/ensure-rust.sh` checks the toolchain `rust-toolchain.toml` pins
+  offline and installs only a missing toolchain or component, with retries.
+  The jankurai download retries and its verified archive is cached in
+  `$RUNNER_TOOL_CACHE/redlinedb-tools/<archive sha256>/`; uploads that run
+  after a failure only warn about missing files.
+- A push and a `workflow_dispatch` on the same ref no longer cancel each
+  other (the concurrency group includes the event).
+- The `build` and `cli` jobs, which both ran
+  `cargo build --release -p redlinedb-cli`, are gone; packaging builds the
+  release CLI on every platform.
+- New `tests (kernel-failpoints)` shard: `CI_FAST_STAGE=kernel-failpoints
+  bash ops/ci/fast.sh` builds the kernel with `--features failpoints` and runs
+  only the failpoint-gated tests (the lib's `failpoints::` tests and every
+  `crates/kernel/tests/*.rs` that is `#![cfg(feature = "failpoints")]`) with
+  nextest; 16 tests, about 10 s on a warm build. Timeouts: kernel 45 min,
+  kernel-failpoints 30 min.
+- For the integrator (not a release-note line): the kernel lane may also
+  change `ops/ci/fast.sh`'s kernel stage; keep the `kernel-failpoints` case
+  name, since `ci.yml`'s matrix and `crates/bench/tests/ci_workflow_routing.rs`
+  name it. Maintainer infra (runner egress, more runners) is still needed for
+  the heavy jobs to stop flaking.

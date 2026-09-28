@@ -49,10 +49,9 @@ jobs:
           # The only checkout that keeps its token: sqlite-parity-report.sh
           # pushes the automation/sqlite-parity-report branch.
           persist-credentials: true
-      - uses: dtolnay/rust-toolchain@3c5f7ea28cd621ae0bf5283f0e981fb97b8a7af9
-        with:
-          toolchain: 1.95.0
-          components: rustfmt, clippy
+      # The toolchain rust-toolchain.toml pins, checked offline and installed
+      # only if missing (ops/ci/ensure-rust.sh; CI-04).
+      - run: bash ops/ci/ensure-rust.sh
       - uses: swatinem/rust-cache@42dc69e1aa15d09112580998cf2ef0119e2e91ae
       - name: Install system packages
         run: |

@@ -10,6 +10,7 @@
 # Usage:
 #   CI_FAST_STAGE=preflight bash ops/ci/fast.sh
 #   CI_FAST_STAGE=core bash ops/ci/fast.sh
+#   CI_FAST_STAGE=kernel-failpoints bash ops/ci/fast.sh
 #   bash ops/ci/fast.sh                # run preflight + all test shards
 #
 # Every command in this lane is hard-gated by design.
@@ -94,6 +95,23 @@ run_test_stage() {
             # gated on their own crate's `failpoints` feature.
             cargo nextest run -p redlinedb-sql --features failpoints --locked --test smoke_misc
             cargo nextest run -p redlinedb --features failpoints --locked --test commit_outcome
+            ;;
+        kernel-failpoints)
+            # The failpoint-gated kernel tests, built with --features
+            # failpoints: the lib's failpoints:: tests and every test binary
+            # whose file is `#![cfg(feature = "failpoints")]`. The rest of the
+            # kernel suite runs in the kernel stage, without the feature.
+            local filter="kind(lib) & test(/^failpoints::/)" file
+            for file in crates/kernel/tests/*.rs; do
+                if grep -qx '#!\[cfg(feature = "failpoints")\]' "$file"; then
+                    filter+=" | binary($(basename "$file" .rs))"
+                fi
+            done
+            [[ $filter == *"binary("* ]] || {
+                printf 'kernel-failpoints: no failpoint test binaries under crates/kernel/tests\n' >&2
+                return 1
+            }
+            cargo nextest run -p redlinedb-kernel --features failpoints --locked --no-fail-fast -E "$filter"
             ;;
         sql-unit)
             cargo test -p redlinedb-sql --lib --quiet --locked

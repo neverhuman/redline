@@ -4,9 +4,15 @@ The repository is public, and anyone can open a pull request from a fork. CI
 uses two kinds of runner:
 
 - **GitHub-hosted** (`ubuntu-24.04`, and the `packages.yml` matrix): a fresh
-  virtual machine for every job, discarded afterwards.
+  virtual machine for every job, discarded afterwards. `RedlineDB/required`,
+  `lint`, `official-evidence-guard`, `typecheck`, `test`, `components`
+  (testing, central, web, release-tools), `security` and `audit` run here for
+  every event, so the required check reports even when the self-hosted
+  runners are down or cannot reach github.com (CI-04).
 - **Self-hosted** (`redline-xbabe1`, `redline-xbabe3`, labels
-  `[self-hosted, Linux, X64]`): long-lived hosts. Every job runs as the
+  `[self-hosted, Linux, X64]`): long-lived hosts for the heavy jobs:
+  `preflight`, the `tests` shards, `parity`, `components (integration)` and
+  the parity report bot. Every job runs as the
   runner's host user and shares `$RUNNER_TOOL_CACHE/redlinedb-cargo`
   (registry, git and advisory caches, cargo-installed tools) and the user's
   home directory. `ops/ci/apt-install.sh` calls `sudo` when a package is
@@ -21,8 +27,8 @@ So code from a fork must never run on a self-hosted runner.
 
 | Event | Class | Runs on |
 | --- | --- | --- |
-| `push` to `main`, release tags, `workflow_dispatch`, `schedule` | trusted | self-hosted, plus hosted packaging |
-| `pull_request` from a branch of this repository | trusted | self-hosted, plus hosted packaging |
+| `push` to `main`, release tags, `workflow_dispatch`, `schedule` | trusted | heavy jobs self-hosted, the rest hosted |
+| `pull_request` from a branch of this repository | trusted | heavy jobs self-hosted, the rest hosted |
 | `pull_request` from a fork (head repository is not this one, or was deleted) | untrusted | GitHub-hosted only |
 
 Pushing a branch here needs write access, and write access can already change
@@ -44,19 +50,30 @@ the workflow files; actionlint (security lane) checks their syntax.
 1. **Routing.** Every job in a workflow a pull request can start (`ci.yml` and
    the `packages.yml` it calls) either runs on hosted runners or uses
    `runs-on: ${{ (<fork test>) && 'ubuntu-24.04' || fromJSON('["self-hosted","Linux","X64"]') }}`.
-2. **Cargo home.** Each job's first step picks `CARGO_HOME`: a fork job gets
-   `$RUNNER_TEMP/cargo-home`, which the runner empties for every job; trusted
-   jobs keep the shared `$RUNNER_TOOL_CACHE/redlinedb-cargo`, so they do not
-   download the index again over the runners' unreliable links. Only trusted
-   jobs reach that cache, so its `bin` on `PATH` is not writable by fork code.
+   `crates/bench/tests/ci_workflow_routing.rs` pins which jobs are hosted and
+   that `RedlineDB/required` needs every other job.
+2. **Cargo home.** Each self-hosted job's first step picks `CARGO_HOME`: a
+   fork job gets `$RUNNER_TEMP/cargo-home`, which the runner empties for every
+   job; trusted jobs keep the shared `$RUNNER_TOOL_CACHE/redlinedb-cargo`, so
+   they do not download the index again over the runners' unreliable links.
+   Only trusted jobs reach that cache, so its `bin` on `PATH` is not writable
+   by fork code. Hosted jobs keep the image's own `~/.cargo`.
 3. **Pinned tools.** `ops/ci/install-nextest.sh` downloads one cargo-nextest
    release, checks it against a pinned SHA-256, installs it into
    `$RUNNER_TEMP/nextest-bin` and puts that first on `PATH`. It never uses a
    `cargo-nextest` that is already on `PATH`. Trusted jobs keep the verified
    archive in `$RUNNER_TOOL_CACHE/redlinedb-tools` and check its digest again
    on every use. The jankurai auditor installer (`ops/ci/install-github-tools.sh`)
-   also checks pinned digests; gitleaks is checked only against the checksum
-   file published in its own release.
+   also checks pinned digests and keeps the verified archive in
+   `$RUNNER_TOOL_CACHE/redlinedb-tools/<archive sha256>/` (the checkout clean
+   empties `target/ci/tools`), checked again on every use; gitleaks is checked
+   only against the checksum file published in its own release. Both
+   downloads, and nextest's, retry (`--retry 5 --retry-all-errors
+   --connect-timeout 20`). Self-hosted jobs get Rust from
+   `ops/ci/ensure-rust.sh`, which checks the toolchain `rust-toolchain.toml`
+   pins offline (`rustup run`, `rustup component list --installed`) and
+   downloads only what is missing, with retries; hosted jobs use
+   `dtolnay/rust-toolchain`.
 4. **Tokens.** Every `actions/checkout` sets `persist-credentials: false`,
    except `sqlite-parity-report.yml`'s `publish-pr` job, which pushes the
    report branch and sets `persist-credentials: true`.
@@ -158,15 +175,13 @@ Run this after deploying the hook, and again after any runner change.
 
 ## Known limits
 
-- The hosted path for fork pull requests has not run on real CI yet; the
-  first fork pull request, or the canary, is its first run. Lanes that assume
-  self-hosted speed (for example `components (integration)` with Playwright)
-  may need longer timeouts there.
+- The hosted path of the heavy jobs (preflight, the test shards except
+  kernel, `components (integration)` with Playwright) runs only for fork pull
+  requests and has not run on real CI yet; the first fork pull request, or
+  the canary, is its first run. They may need longer timeouts there.
 - `cargo-audit` and `cargo-deny` are built with
-  `cargo install --locked --version …` into the job's `CARGO_HOME`. In trusted
-  jobs that is the shared cache, where cargo skips the build if the same
-  version is already recorded, so those two tools are only as trustworthy as
-  the cache (trusted jobs only, wiped once as above).
+  `cargo install --locked --version …` on the hosted `security` and `audit`
+  runners, so no shared cache supplies them.
 - Until the host work above is done, a maintainer who approves a fork run
   that edits the workflows, on a host without the hook, lets that code run
   as the runner user with that user's credentials.

@@ -10,8 +10,10 @@ on:
         type: string
         required: false
         default: ''
+# As in ci.yml, the event is part of the group, so a push and a dispatch on
+# one ref do not queue behind or cancel each other.
 concurrency:
-  group: packages-${{ github.ref }}
+  group: packages-${{ github.event_name }}-${{ github.ref }}
   cancel-in-progress: false
 permissions:
   contents: read
