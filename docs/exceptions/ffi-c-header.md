@@ -12,6 +12,14 @@
   `contracts/c-abi/` so the entire C ABI surface is one cell outside the Rust
   runtime scan zone.
 
+- `contracts/c-abi/upstream/sqlite-3.53.1/sqlite3.h` — an unmodified copy of
+  upstream SQLite's header, pinned by `SHA256SUMS`, and
+  `contracts/c-abi/probe/phase2_abi_probe.c`, the C consumer compiled against
+  it by `scripts/compatibility/phase2-abi-probe.sh`. Both are probe-only: no
+  packaging or install script copies them, and `scripts/test-package-ffi.sh`
+  fails if a packaged `sqlite3.h` is not the RedlineDB shim. They live under
+  `contracts/c-abi/` for the same audit reason as the headers above.
+
 ## Why this is allowed (exception, not the optimal stack)
 
 The optimal stack for this repo is Rust core + TypeScript/React/Vite +
@@ -51,7 +59,7 @@ consumers. Nothing in the build, tests, or runtime referenced the old
 ## ABI v5 (the corrected SQLite surface)
 
 The corrections below change the binary contract for callers compiled
-against the v4 header, so they ship as ABI major 5.
+against the v4 header, so they ship as ABI major 5 (see "Library naming").
 There is no v4 compatibility alias.
 
 - `sqlite3_prepare_v3(db, sql, nbytes, unsigned int prepFlags, ppStmt,
@@ -84,6 +92,19 @@ There is no v4 compatibility alias.
   build with URI handling off. Backup into an in-memory destination fails
   with `SQLITE_CANTOPEN`.
 
+## Library naming
+
+`RLDB_ABI_MAJOR` in `contracts/c-abi/redlinedb.h` is the single source of the
+ABI major. `crates/ffi/build.rs` reads it and links the cdylib with soname
+`libredlinedb.so.<major>` (Linux and other ELF targets) or install name
+`@rpath/libredlinedb.<major>.dylib` (macOS). The packaging scripts install the
+library under that name as a regular file (`lib/libredlinedb.so.5`,
+`lib/libredlinedb.5.dylib`); `scripts/install-from-source.sh` also creates the
+unversioned development symlink unless `REDLINEDB_DEV_LINKS=0`, which package
+staging sets because archives hold regular files only. A consumer linked with
+`-lredlinedb` through that symlink records the ABI-major name, so a later
+incompatible major cannot be loaded in its place.
+
 ## Maintenance rules
 
 - Edit `contracts/c-abi/redlinedb.h` directly when adding or removing C ABI
@@ -97,8 +118,9 @@ There is no v4 compatibility alias.
 - Do not move `contracts/c-abi/sqlite3.h` back under `crates/`; the audit cap
   will re-fire. Keep the `sqlite3.h` filename so downstream SQLite consumers
   resolve `#include <sqlite3.h>` against `contracts/c-abi/`.
-- A signature or constant change that alters the binary contract raises the
-  ABI major (the soname) in the same change, with a migration note.
+- A signature or constant change that alters the binary contract raises
+  `RLDB_ABI_MAJOR` (and so the soname) in the same change, with a migration
+  note.
 - The header must compile cleanly with `-Wall -Wextra -Werror` in C and C++.
 
 ## Owner
@@ -111,3 +133,7 @@ There is no v4 compatibility alias.
 invariants and input-boundary tests that backstop the C ABI surface
 declared in the header. `tests/upstream_abi.rs` calls the exported symbols
 through declarations written from upstream `sqlite3.h`, not from this header.
+`bash scripts/compatibility/phase2-abi-probe.sh` builds this checkout and runs
+the independent C probe against the shared and static libraries, with upstream
+`libsqlite3` from `target/sqlite-reference/3.53.1` as the control when present;
+`scripts/test-package-ffi.sh` runs it on the extracted release archive.

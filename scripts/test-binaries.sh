@@ -49,7 +49,23 @@ int main(void) {
 }
 C
   lib=${REDLINE_LIB_DIR:-$bin}
-  cc "$work/ffi.c" -I "$root/contracts/c-abi" -L "$lib" -Wl,-rpath,"$lib" -lredlinedb -o "$work/ffi-smoke"
+  # The library's load identity is its ABI-major name; a Cargo target
+  # directory holds it under the unversioned output name instead.
+  abi_major=$(sed -n 's/^#define RLDB_ABI_MAJOR \([0-9][0-9]*\)$/\1/p' "$root/contracts/c-abi/redlinedb.h")
+  case "$(uname -s)" in
+    Darwin) versioned=libredlinedb.$abi_major.dylib unversioned=libredlinedb.dylib ;;
+    *) versioned=libredlinedb.so.$abi_major unversioned=libredlinedb.so ;;
+  esac
+  mkdir -p "$work/lib"
+  if [[ -f $lib/$versioned ]]; then
+    cp "$lib/$versioned" "$work/lib/$versioned"
+  elif [[ -f $lib/$unversioned ]]; then
+    cp "$lib/$unversioned" "$work/lib/$versioned"
+  else
+    printf 'no %s or %s in %s\n' "$versioned" "$unversioned" "$lib" >&2
+    exit 1
+  fi
+  cc "$work/ffi.c" -I "$root/contracts/c-abi" "$work/lib/$versioned" -Wl,-rpath,"$work/lib" -o "$work/ffi-smoke"
   "$work/ffi-smoke"
   printf 'FFI linking smoke passed.\n'
 fi

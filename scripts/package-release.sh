@@ -22,7 +22,7 @@ for package in redlinedb redline-web redline-testing; do
   cp LICENSE "$stage/$package/share/redlinedb/LICENSE"
   printf '%s\n' "$TAG" > "$stage/$package/share/redlinedb/VERSION"
 done
-PREFIX="$stage/redlinedb" ./scripts/install-from-source.sh
+REDLINEDB_DEV_LINKS=0 PREFIX="$stage/redlinedb" ./scripts/install-from-source.sh
 install -m 644 contracts/c-abi/sqlite3.h "$stage/redlinedb/include/"
 install -m 755 "$CARGO_TARGET_DIR/release/redline-web" "$stage/redline-web/bin/"
 install -m 755 "$CARGO_TARGET_DIR/release/redline-testing" "$CARGO_TARGET_DIR/release/redlinedb-client-smoke" "$stage/redline-testing/bin/"
@@ -51,6 +51,12 @@ for package in redlinedb redline-web redline-testing; do
   jq -n --arg commit "$commit" --arg tag "$TAG" --arg platform "$platform" --arg package "$package" --arg rust "$(rustc --version)" '{schema:"redline.release-build/v1",repository:"https://github.com/neverhuman/RedlineDB",commit:$commit,tag:$tag,platform:$platform,package:$package,rust:$rust}' > "$stage/$package/share/redlinedb/build-provenance.json"
   if [[ $package == redline-web ]]; then
     npm --prefix subrepos/redline-web/apps/web sbom --sbom-format cyclonedx > "$stage/$package/share/redlinedb/frontend-sbom.cdx.json"
+  fi
+  # Archives hold regular files and directories only; no symlinks or devices.
+  if [[ -n $(find "$stage/$package" ! -type f ! -type d -print -quit) ]]; then
+    printf 'refusing to package non-regular files:\n' >&2
+    find "$stage/$package" ! -type f ! -type d >&2
+    exit 1
   fi
   asset=$package-$TAG-$platform.tar.gz
   tar -czf "$output/$asset" -C "$stage/$package" .

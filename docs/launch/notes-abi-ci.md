@@ -18,6 +18,15 @@ against the v5 headers. There is no v4 compatibility alias.
   `rldb_column_type` still returns `RLDB_NULL` (0). REAL columns now report
   REAL (2); v4 reported INTEGER (1).
 
+- The shared library is now versioned by ABI major: Linux archives ship
+  `lib/libredlinedb.so.5` (soname `libredlinedb.so.5`) and macOS archives
+  `lib/libredlinedb.5.dylib` (install name `@rpath/libredlinedb.5.dylib`),
+  as regular files. Archives no longer contain `libredlinedb.so` or
+  `libredlinedb.dylib`; the installer creates that development link, and
+  `scripts/install-from-source.sh` creates it too. Programs linked against v4
+  (`libredlinedb.so` with no soname) do not load the v5 library by accident.
+  The header defines `RLDB_ABI_MAJOR 5`.
+
 ## Fixed
 
 - `sqlite3_column_text` returns the text of INTEGER and REAL values (v4
@@ -39,3 +48,13 @@ against the v5 headers. There is no v4 compatibility alias.
   interpreted.
 - A column whose engine-generated name contains a NUL no longer fails
   `sqlite3_prepare_v2`; the name is truncated at the NUL.
+
+## Verification
+
+- `bash scripts/compatibility/phase2-abi-probe.sh`: a C consumer compiled with
+  `-Wall -Wextra -Werror` against the vendored upstream SQLite 3.53.1
+  `sqlite3.h` (`contracts/c-abi/upstream/`, SHA-256 pinned) runs 15 upstream
+  cases and 3 RedlineDB-only cases against the shared and static libraries;
+  upstream libsqlite3 is the control for the 15 upstream cases.
+- `scripts/test-package-ffi.sh` runs that probe on the extracted archive, and
+  checks regular-files-only entries and the soname / install name.

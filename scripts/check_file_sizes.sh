@@ -31,6 +31,10 @@ while IFS= read -r file; do
     docs/architecture/ENGINEERING_SPEC.md)
       continue
       ;;
+    contracts/c-abi/upstream/*)
+      # Verbatim upstream headers, pinned by SHA256SUMS; never edited here.
+      continue
+      ;;
   esac
   [[ -f "$file" ]] || continue
   if ! grep -Iq . "$file"; then

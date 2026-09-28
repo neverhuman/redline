@@ -69,10 +69,19 @@ commit, tag, platform and compiler. The web archive includes a frontend SBOM;
 the testing SBOM includes the bundled client. GitHub release attestations bind
 the uploaded archive bytes to the workflow identity and source commit.
 
-Native packaging also links C consumers against the extracted static and dynamic
-libraries, relocates their installation tree, and runs both consumers. macOS
-libraries use a relative load identity and are signed again after installation.
-CI stages release archives outside the Cargo cache to keep versions separate.
+The shared library carries the C ABI major (`RLDB_ABI_MAJOR` in
+`contracts/c-abi/redlinedb.h`) in its name and load identity:
+`lib/libredlinedb.so.5` with soname `libredlinedb.so.5` on Linux and
+`lib/libredlinedb.5.dylib` with install name `@rpath/libredlinedb.5.dylib` on
+macOS. Archives hold regular files only; packaging refuses symlinks, and the
+unversioned development link (`libredlinedb.so`/`libredlinedb.dylib`) is left to
+the installer. `scripts/test-package-ffi.sh` checks the entry types and the load
+identity, links C consumers against the extracted static and dynamic libraries,
+relocates their installation tree and runs both consumers, then runs the
+independent ABI probe (`scripts/compatibility/phase2-abi-probe.sh`), which is
+compiled only against upstream SQLite 3.53.1's `sqlite3.h`, against both
+libraries. macOS libraries are signed again after installation. CI stages release
+archives outside the Cargo cache to keep versions separate.
 
 The binary installer defaults to `~/.local`, honors `VERSION` and `PREFIX`,
 and fails if a checksum is absent or incorrect. `REDLINEDB_SHA256` adds an

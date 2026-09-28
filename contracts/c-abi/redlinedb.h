@@ -15,6 +15,12 @@
 extern "C" {
 #endif
 
+/* ABI major version. The shared library carries it in its name and identity:
+ * libredlinedb.so.5 (ELF soname) and @rpath/libredlinedb.5.dylib (Mach-O
+ * install name). crates/ffi/build.rs and the packaging scripts read this
+ * line; change it only together with an incompatible ABI change. */
+#define RLDB_ABI_MAJOR 5
+
 typedef struct rldb rldb;
 typedef struct rldb_stmt rldb_stmt;
 typedef struct rldb_backup rldb_backup;

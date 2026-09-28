@@ -20,8 +20,19 @@ PKG_DIR="${OUTPUT_DIR}/${PKG}"
 mkdir -p "${PKG_DIR}/bin" "${PKG_DIR}/lib" "${PKG_DIR}/include"
 
 cp "${RELEASE_DIR}/redlinedb-cli" "${PKG_DIR}/bin/redlinedb"
+# LIB_NAME is Cargo's output name; ship it under its ABI-major name, which is
+# the soname / install name crates/ffi/build.rs gives it. Regular files only.
+ABI_MAJOR="$(sed -n 's/^#define RLDB_ABI_MAJOR \([0-9][0-9]*\)$/\1/p' contracts/c-abi/redlinedb.h)"
+case "${ABI_MAJOR}" in
+  ''|*[!0-9]*) echo "contracts/c-abi/redlinedb.h lacks RLDB_ABI_MAJOR" >&2; exit 1 ;;
+esac
+case "${LIB_NAME}" in
+  *.so) LIB_FILE="${LIB_NAME}.${ABI_MAJOR}" ;;
+  *.dylib) LIB_FILE="${LIB_NAME%.dylib}.${ABI_MAJOR}.dylib" ;;
+  *) LIB_FILE="${LIB_NAME}" ;;
+esac
 if [ -f "${RELEASE_DIR}/${LIB_NAME}" ]; then
-  cp "${RELEASE_DIR}/${LIB_NAME}" "${PKG_DIR}/lib/"
+  cp "${RELEASE_DIR}/${LIB_NAME}" "${PKG_DIR}/lib/${LIB_FILE}"
 fi
 cp "${RELEASE_DIR}/libredlinedb.a" "${PKG_DIR}/lib/"
 cp "contracts/c-abi/sqlite3.h" "${PKG_DIR}/include/"
