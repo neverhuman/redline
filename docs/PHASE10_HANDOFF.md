@@ -1,5 +1,11 @@
 # Phase 10 Handoff Plan
 
+> **Historical / internal planning.** This is an internal working plan from
+> April 2026, kept as a record of that work. Its status lines, numbers, host paths
+> and goals (including any "full SQLite" or "drop-in" target) are not release
+> evidence and are not maintained. What RedlineDB does today is in
+> `README.md`, `docs/manual/` and `docs/sqlite-parity.md`.
+
 **Status as of this writing:** Phases 10A–10C complete and tagged.
 Phase 10D (xbabe1 cert) running in background. Phases 10E and 10F
 partially landed; remaining work itemized below. Pick up here if the
@@ -43,10 +49,10 @@ already corrected in `.jankurai/proof-lanes.toml` under
 
 ```bash
 # raw artifact count (target ≈1700 child runs across the matrix)
-ssh xbabe1 "ls /home/ubuntu/RedlineDB/target/bench/xbabe1/phase10-cert/raw/ | wc -l"
+ssh xbabe1 "ls RedlineDB/target/bench/xbabe1/phase10-cert/raw/ | wc -l"
 
 # manifest only appears at the END of the run
-ssh xbabe1 "ls /home/ubuntu/RedlineDB/target/bench/xbabe1/phase10-cert/manifest.json && echo DONE"
+ssh xbabe1 "ls RedlineDB/target/bench/xbabe1/phase10-cert/manifest.json && echo DONE"
 
 # what is the cert running right now
 ssh xbabe1 "ps aux | grep redlinedb-bench.run | grep -v grep"

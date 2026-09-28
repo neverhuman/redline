@@ -57,6 +57,10 @@ After an unknown outcome, this process does not show the transaction. The log wr
 
 Do not retry a change that must happen once just because `COMMIT` failed. Reopen, then check whether it happened, for example by looking up a key the transaction wrote.
 
+### Not yet certified
+
+The guarantees on this page are the design rule, and the kernel's crash-recovery tests (failpoint injection and the recovery matrix under `crates/kernel/tests/` and `crates/bench/`) check it by killing a process and recovering. This release has not been certified against power loss or against a storage device that drops or reorders writes it reported as flushed, and recovery defects found by the launch audit are tracked in `GROK_GAPS.md`. Keep backups (chapter [Files and day-to-day operation](09-operate.md)) of any database you cannot recreate.
+
 ## Locks and busy waits
 
 `OpenOptions.busy_timeout` defaults to five seconds. A lock wait that exceeds it returns to the caller. `FOR KEY SHARE`, `FOR NO KEY UPDATE`, and `LOCK TABLE` return the same rows as the statement without a wait. A timeout is how long this process will wait when the engine's own lock manager is busy.
@@ -71,6 +75,6 @@ A reader on one connection does not have to finish before a writer on another co
 
 ## Crash
 
-Recovery replays the write-ahead log. Every commit whose record is whole in the log comes back. That includes a commit whose `COMMIT` had not returned yet, or returned an unknown outcome. On `Strict`, a commit is visible, and `COMMIT` returns, only after its record is fsynced, so recovery finds every commit that another transaction saw or that `COMMIT` reported, as long as the storage keeps what fsync acknowledged. `Normal` and `UnsafeDev` give that up for the cases in the table above. The [durability contract](durability.md) lists the failure models, the receipt behind the process-kill statement, and the known gaps. Recovery runs when you open the file again with the same `Database` API. There is no separate recovery command for the common case.
+Recovery replays the write-ahead log. Every commit whose record is whole in the log comes back. That includes a commit whose `COMMIT` had not returned yet, or returned an unknown outcome. On `Strict`, a commit is visible, and `COMMIT` returns, only after its record is fsynced, so recovery finds every commit that another transaction saw or that `COMMIT` reported, as long as the storage keeps what fsync acknowledged. `Normal` and `UnsafeDev` give that up for the cases in the table above. The [durability contract](durability.md) lists the failure models, the receipt behind the process-kill statement, and the known gaps; [Not yet certified](#not-yet-certified) summarizes them. Recovery runs when you open the file again with the same `Database` API. There is no separate recovery command for the common case.
 
 Take a backup before you experiment with `UnsafeDev` on a file you care about. Chapter [Files and day-to-day operation](09-operate.md) shows the backup commands.

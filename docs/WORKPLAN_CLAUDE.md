@@ -1,5 +1,11 @@
 # WORKPLAN_CLAUDE - Parallel Closure Plan
 
+> **Historical / internal planning.** This is an internal working plan from
+> April–May 2026, kept as a record of that work. Its status lines, numbers, host paths
+> and goals (including any "full SQLite" or "drop-in" target) are not release
+> evidence and are not maintained. What RedlineDB does today is in
+> `README.md`, `docs/manual/` and `docs/sqlite-parity.md`.
+
 This document is a coordination plan for closing the remaining SQLite-compatibility, benchmark, failpoint, and physical-index work. Treat `docs/WORKPLAN_slam.md` as the current proof ledger and update that ledger with raw commands, exit statuses, artifact paths, and SHA-256 hashes whenever new proof is collected.
 
 ## Current Baseline

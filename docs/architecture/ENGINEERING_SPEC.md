@@ -8,7 +8,9 @@
 
 ## Abstract
 
-RedlineDB is a 100% safe-Rust embedded SQL engine that targets the SQLite API contract on the documented compatibility surface — the C ABI shim, the SQL surface, and the embedded deployment model — while replacing SQLite's single-writer WAL storage core with MVCC, a concurrent B-tree, real group-commit WAL, and deterministic crash recovery.
+RedlineDB is a Rust embedded SQL engine that targets the SQLite API contract on the documented compatibility surface — the C ABI shim, the SQL surface, and the embedded deployment model — while replacing SQLite's single-writer WAL storage core with MVCC, a concurrent B-tree, real group-commit WAL, and deterministic crash recovery.
+
+It is not all safe Rust. `unsafe` code sits in the C ABI shim (`crates/ffi`) and in audited kernels outside it (SIMD vector distance, index key comparison, JSONB decoding, process metrics); every site is listed with its invariant and proof in `.jankurai/unsafe-ledger.toml`. The crash-safety claims below are design claims checked by the failpoint and recovery test suites; this release is not certified against power loss (see `docs/manual/07-transactions.md`).
 
 The key design claims:
 

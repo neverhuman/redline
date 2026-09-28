@@ -21,7 +21,8 @@ upstream dependency notes, not active engine defects.
 `target/jeryu/autonomy.sqlite` as the autonomy ledger name.
 
 The user request is that Jeryu autonomy state should be backed by a RedlineDB
-ledger as a 100% parity drop-in, not by an `autonomy.sqlite` file. The current
+ledger rather than an `autonomy.sqlite` file. RedlineDB is not a SQLite drop-in
+(`docs/api-stability.md`); this item tracks only the SQLx driver bootstrap. The current
 blocking gap is that the pinned Jeryu `autonomy` binary rejects
 `JERYU_DATABASE_URL=redline://...` / `redlineDB://...` before profile validation;
 its accepted URL schemes are currently `postgres://`, `postgresql://`, and

@@ -3,7 +3,8 @@
 ## Surface
 
 The B1-B5 FFI workstream (2026-05-17) added the missing 36 `sqlite3_*`
-symbols required for SQLite drop-in parity. Each new file implements a
+symbols toward its SQLite C ABI subset (not a drop-in `libsqlite3`; see
+`docs/api-stability.md`). Each new file implements a
 section of the SQLite C ABI and necessarily contains `unsafe { ... }`
 blocks because the SQLite ABI takes/returns raw C pointers (`*mut sqlite3`,
 `*mut sqlite3_value`, `*const c_char`, etc.) that must be dereferenced or

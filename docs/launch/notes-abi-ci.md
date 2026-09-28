@@ -552,3 +552,34 @@ against the v5 headers. There is no v4 compatibility alias.
     `jankurai audit` / report update), and the hash-chained audit baselines
     under `.jankurai/baselines/` and `subrepos/redline/.jankurai/`.
     `scripts/check-public-hygiene.sh` exempts exactly those files.
+
+## Launch claim lint (WP-0.1)
+
+- `scripts/check-launch-claims.sh` (CI preflight, tested by
+  `scripts/test-launch-claims.sh`) fails on any tracked line of `README.md`
+  or `docs/` (not `docs/archive/` or `docs/migration/`; `docs/releases/`
+  included) that makes one of the five launch claims the script names
+  (a replacement for SQLite, complete SQLite compatibility, all-safe Rust,
+  speed over SQLite), unless that exact line was reviewed as qualified or
+  historical in `scripts/launch-claims-allowlist.tsv`.
+  Numbers in a reviewed line may change (the generated README blocks); its
+  words may not.
+- Corrected claims: `docs/architecture/ENGINEERING_SPEC.md` no longer calls
+  the engine entirely safe Rust (unsafe code outside the FFI shim is listed in
+  `.jankurai/unsafe-ledger.toml`) and says its crash-safety claims are not
+  power-loss certified; `docs/exceptions/ffi-unsafe-blocks.md` and
+  `docs/issues/redline-jansu-issues.md` no longer present the C ABI or the
+  ledger as a SQLite replacement; `docs/architecture.md` calls the Rust
+  facade unstable (`docs/api-stability.md`) instead of "stable".
+- The manual's Strict durability guarantee (chapters 01 and 07) now says it is
+  the design rule checked by the crash-recovery tests, not a power-loss
+  certification (new section "Not yet certified" in chapter 07). Chapters 01
+  and 04 point at the generated README report for latency ratios instead of
+  repeating numbers that go stale when it is regenerated.
+- `docs/PHASE10_HANDOFF.md`, `docs/WORKPLAN_slam.md` and
+  `docs/WORKPLAN_CLAUDE.md` carry a "historical / internal planning" banner.
+- For the integrator (not a release-note line): when Phase 3's durability
+  page lands, link it from `docs/manual/07-transactions.md#not-yet-certified`.
+  After a README rewrite, rerun `bash scripts/check-launch-claims.sh`; moved
+  or reworded claim lines need a new reviewed row (`--print`), and rows for
+  deleted lines must be removed.

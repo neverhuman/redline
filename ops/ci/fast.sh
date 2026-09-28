@@ -49,6 +49,8 @@ run_preflight() {
     bash ops/ci/tests/release-authority.sh
     bash ops/ci/tests/main-protection.sh
     bash scripts/check-public-hygiene.sh
+    bash scripts/test-launch-claims.sh
+    bash scripts/check-launch-claims.sh
     bash scripts/test-release-version.sh
     bash ops/ci/check-workflow-permissions.sh
     bash ops/ci/tests/workflow-permissions.sh

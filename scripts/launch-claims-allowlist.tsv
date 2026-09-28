@@ -1,0 +1,15 @@
+# Reviewed launch-claim lines for scripts/check-launch-claims.sh.
+# fingerprint<TAB>path<TAB>qualified|historical<TAB>why the line may stand
+# Regenerate candidate rows with: bash scripts/check-launch-claims.sh --print
+ea2012f4eee71c4c	README.md	qualified	generated badge alt text says "not full SQLite compatibility"
+bbf4b4b421c2064a	README.md	historical	v4.0.0 latency-bucket table in a section the README marks as that release's measurement
+067c20ad3fdbcc12	docs/PHASE10_HANDOFF.md	historical	the historical/internal-planning banner itself
+0dbfcb2064e7a4f8	docs/WORKPLAN_CLAUDE.md	historical	the historical/internal-planning banner itself
+247db47a0632d40c	docs/WORKPLAN_CLAUDE.md	historical	planning definition in a doc under the historical banner; scoped to "the supported subset"
+cc6570b28c0fcadc	docs/WORKPLAN_slam.md	historical	the historical/internal-planning banner itself
+62be92b1d0f8c478	docs/api-stability.md	qualified	says the sqlite3_* subset is not a drop-in libsqlite3
+58b497309ec47359	docs/exceptions/ffi-unsafe-blocks.md	qualified	says the C ABI subset is not a drop-in libsqlite3
+c16c0fc190bd83df	docs/issues/redline-jansu-issues.md	qualified	open issue: RedlineDB cannot yet be used as a SQLx driver drop-in
+804ed9108d955cd8	docs/issues/redline-jansu-issues.md	qualified	says RedlineDB is not a SQLite drop-in
+3fdae917e0f25c53	docs/issues/redline-jansu-issues.md	qualified	resolved issue: RedlineDB is not a sqlx-API drop-in
+398a71cf7375bd16	docs/manual/10-limits.md	qualified	the limits page warns against promising RedlineDB as a drop-in

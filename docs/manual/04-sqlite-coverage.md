@@ -19,7 +19,7 @@ The official lane builds SQLite 3.53.1 with `scripts/sqlite/build-reference.sh` 
 | Runner | `redline-testing` 1.0.1 |
 | Source file | `benchmark-results/sqlite-parity/latest/summary.json` |
 
-The README badge and the block under `sqlite-parity-report:begin` are generated from this summary and the official evidence behind it. Both name the corpus and the oracle, not SQLite as a whole: the badge reads `SQLite SQL/CLI corpus`, and it is green only for a run with official evidence, no failures and no skips. The same block records latency as per-case RedlineDB/SQLite ratios of CLI process wall time (lower is better): median **5.72x**, p95 **56.85x**, worst **299.21x**, and **43** of 2445 cases faster than SQLite. Those timings come from a 128-worker conformance run, not a tuned benchmark. A later bench moves those figures by regenerating the block. This book does not invent a new one.
+The README badge and the block under `sqlite-parity-report:begin` are generated from this summary and the official evidence behind it. Both name the corpus and the oracle, not SQLite as a whole: the badge reads `SQLite SQL/CLI corpus`, and it is green only for a run with official evidence, no failures and no skips. The same block records latency as per-case RedlineDB/SQLite ratios of CLI process wall time (lower is better): the median, p95 and worst ratio and the count of cases where RedlineDB was quicker are in that generated block, and nowhere else, so they cannot go stale here. Those timings come from a conformance run, not a tuned benchmark; the block names the lane and worker count it was measured with. This book does not copy the numbers.
 
 ## Virtual tables the corpus asks for
 

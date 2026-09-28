@@ -12,7 +12,7 @@ mapping the audit scores.
 | `redlinedb-domain`          | `crates/domain/`      | `storage-and-catalog`         | Policy-free cross-crate types (typed `DomainError`).                 |
 | `redlinedb-kernel`          | `crates/kernel/`      | `storage-and-catalog`         | Pages, WAL, MVCC, catalogs, integrity, vector, JSONB.                |
 | `redlinedb-sql`             | `crates/sql/`         | `sql-parser-planner-executor` | Parser, planner, executor, vectorized exec, dialect surfaces.        |
-| `redlinedb`                 | `crates/redlinedb/`   | `public-rust-facade`          | Stable Rust user-facing API (Database, Connection, backup).          |
+| `redlinedb`                 | `crates/redlinedb/`   | `public-rust-facade`          | Rust facade (Database, Connection, backup); unstable, see `docs/api-stability.md`. |
 | `redlinedb-ffi`             | `crates/ffi/`         | `c-abi`                       | SQLite-shaped C ABI (`sqlite3_api`) plus the public C header.        |
 | `redlinedb-cli`             | `crates/cli/`         | `cli-shell`                   | Command-line shell and admin commands (backup/restore).              |
 | `redlinedb-server`          | `crates/server/`      | `framed-server`               | Network-facing framed server.                                        |

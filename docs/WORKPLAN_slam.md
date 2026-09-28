@@ -1,5 +1,11 @@
 # WORKPLAN_slam
 
+> **Historical / internal planning.** This is an internal working plan from
+> April–May 2026, kept as a record of that work. Its status lines, numbers, host paths
+> and goals (including any "full SQLite" or "drop-in" target) are not release
+> evidence and are not maintained. What RedlineDB does today is in
+> `README.md`, `docs/manual/` and `docs/sqlite-parity.md`.
+
 Status snapshot for the SQLite-compatibility, benchmark, and kernel follow-on work.
 
 ## Phase 9 Baseline
