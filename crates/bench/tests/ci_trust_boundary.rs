@@ -187,8 +187,10 @@ fn heavy_lanes_wait_for_a_maintainer_run_on_fork_pull_requests() {
     let required = job("required");
     assert!(required.contains("name: RedlineDB/required"));
     assert!(required.contains(&format!("FORK_PR: ${{{{ {UNTRUSTED_PR} }}}}")));
+    // Every job must succeed; the one exception, durability-receipt skipped
+    // on a run without a release tag, is checked in ci_durability_receipt.rs.
     assert!(
-        required.contains("all(.value.result == \"success\")"),
+        required.contains("all(.value.result == \"success\" or ($tag == \"\" and .key == \"durability-receipt\" and .value.result == \"skipped\"))"),
         "the aggregate gate must still require every job to succeed"
     );
     let fork_branch: String = required

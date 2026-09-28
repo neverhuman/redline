@@ -498,15 +498,20 @@ against the v5 headers. There is no v4 compatibility alias.
 - The source-inputs recipe behind `.github/parity-report-inputs.sha256` moved
   to `ops/ci/source-inputs-sha256.sh` (same paths, same hash); redline-testing's
   recipe test reads it there.
-- For the integrator (not a release-note line): publishing now requires a
-  `durability-evidence` artifact from the tag's `ci.yml` run, and no job
-  uploads one yet (`ops/release/acceptance-receipts` says so, and
-  `crates/bench/tests/ci_release_acceptance.rs` makes whoever adds the
-  uploader update that line). Until the durability receipt job lands in
-  `ci.yml`, every tag stops at publish with "missing receipt artifact(s):
-  durability-evidence". To release without it, remove its line from
-  `ops/release/acceptance-receipts` and from the download pattern in
-  `release-build.yml`, and narrow the durability claim instead.
+- Release runs of `ci.yml` (called with a tag) have a `durability-receipt`
+  job: it checks the durability receipts committed under
+  `benchmark-results/durability/` with `redlinedb-bench
+  durability-evidence-verify` against `durability.strict.process-kill` at the
+  tag's commit and uploads them as the `durability-evidence` artifact that
+  release acceptance binds. `RedlineDB/required` accepts its skip only on a
+  run without a tag.
+- For the integrator (not a release-note line): a tag still stops at publish
+  until a Strict process-kill receipt, taken on a real disk (not tmpfs) with
+  `redlinedb-bench durability-evidence` from a clean tree whose binary inputs
+  match the tag, is committed under `benchmark-results/durability/`. The job
+  builds `-p redlinedb-bench` and runs the `durability-evidence-verify`
+  subcommand from the kernel lane, which is on `release/v5.0.0-launch` but not
+  on this branch.
 
 ## Parity report bot
 

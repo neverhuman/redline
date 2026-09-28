@@ -7,4 +7,4 @@ security-receipt                    # security: ops/ci/security-receipt.sh, targ
 security-evidence                   # security: jankurai security run, target/jankurai/security
 audit-family                        # audit: every component's jankurai audit, target/audit-family
 redline-testing-official-evidence   # parity: the official redline-testing run, target/redline-testing
-durability-evidence                 # the durability receipt; no ci.yml job uploads it yet, so publish refuses every tag until one does
+durability-evidence                 # durability-receipt (tag runs only): ops/ci/durability-receipt.sh, the committed benchmark-results/durability receipts that durability-evidence-verify accepts for the claim, target/durability-evidence

@@ -462,6 +462,34 @@ jobs:
         if: always()
         with: {name: security-receipt, path: target/security, if-no-files-found: warn}
 
+  durability-receipt:
+    # Release runs only (release-build.yml calls this workflow with the tag).
+    # The durability receipts committed under benchmark-results/durability/
+    # (taken once per release candidate on a real disk with
+    # `redlinedb-bench durability-evidence`, docs/manual/durability.md
+    # "Receipts") must back the durability claim at this commit; the job fails
+    # without a receipt or when durability-evidence-verify refuses them, and
+    # uploads them as durability-evidence, which release acceptance binds
+    # (ops/release/acceptance-receipts). Other runs skip it, and
+    # RedlineDB/required accepts that skip only when there is no tag.
+    if: inputs.tag != ''
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    permissions: {contents: read}
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          # The verifier walks from each receipt's commit to this one.
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: dtolnay/rust-toolchain@3c5f7ea28cd621ae0bf5283f0e981fb97b8a7af9
+        with: {toolchain: 1.95.0}
+      - uses: swatinem/rust-cache@42dc69e1aa15d09112580998cf2ef0119e2e91ae
+      - name: Verify the committed durability receipts
+        run: bash ops/ci/durability-receipt.sh target/durability-evidence
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with: {name: durability-evidence, path: target/durability-evidence, if-no-files-found: error}
+
   packaging:
     uses: ./.github/workflows/packages.yml
     with:
@@ -472,7 +500,7 @@ jobs:
   required:
     name: RedlineDB/required
     if: always()
-    needs: [preflight, tests, parity, official-evidence-guard, test, lint, typecheck, components, components-integration, audit, security, packaging]
+    needs: [preflight, tests, parity, official-evidence-guard, test, lint, typecheck, components, components-integration, audit, security, packaging, durability-receipt]
     # Hosted and jq only, so it never takes a self-hosted slot; it still
     # waits for the self-hosted jobs it needs.
     runs-on: ubuntu-24.04
@@ -483,10 +511,14 @@ jobs:
         env:
           RESULTS: ${{ toJSON(needs) }}
           FORK_PR: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name != github.repository }}
+          RELEASE_TAG: ${{ inputs.tag || '' }}
         run: |
           echo "$RESULTS" | jq -r 'to_entries[] | "\(.key): \(.value.result)"'
           if [ "${FORK_PR}" = true ]; then
             echo "::error title=Maintainer run required::This pull request comes from a fork, so it ran on GitHub-hosted runners without the parity lane or the kernel test stage. A maintainer must review it and run ci on a canonical branch at this commit before it can merge. See docs/ci-trust-boundary.md."
             exit 1
           fi
-          echo "$RESULTS" | jq -e 'to_entries | length > 0 and all(.value.result == "success")'
+          # durability-receipt runs only for a release tag; without one its
+          # skip is expected. Every other job must succeed.
+          echo "$RESULTS" | jq -e --arg tag "$RELEASE_TAG" \
+            'to_entries | length > 0 and all(.value.result == "success" or ($tag == "" and .key == "durability-receipt" and .value.result == "skipped"))'

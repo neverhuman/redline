@@ -7,8 +7,9 @@ uses two kinds of runner:
   virtual machine for every job, discarded afterwards. `RedlineDB/required`,
   `lint`, `official-evidence-guard`, `typecheck`, `test`, `components`
   (testing, central, web, release-tools), `security` and `audit` run here for
-  every event, so the aggregate never takes a self-hosted slot and the light
-  jobs do not depend on the self-hosted runners' links to github.com (CI-04).
+  every event (and `durability-receipt` on a release tag's run), so the
+  aggregate never takes a self-hosted slot and the light jobs do not depend on
+  the self-hosted runners' links to github.com (CI-04).
   `RedlineDB/required` still needs the self-hosted jobs: while no self-hosted
   runner is up they stay queued, and so does the required check.
 - **Self-hosted** (`redline-xbabe1`, `redline-xbabe3`, labels

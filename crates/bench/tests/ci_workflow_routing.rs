@@ -23,6 +23,7 @@ use workflow_text::{checkout_steps, job, jobs, read, run_shell_test, steps_using
 /// Jobs of ci.yml that run on GitHub-hosted runners for every event.
 const HOSTED_JOBS: &[&str] = &[
     "required",
+    "durability-receipt",
     "lint",
     "official-evidence-guard",
     "typecheck",

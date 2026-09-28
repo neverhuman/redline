@@ -217,11 +217,16 @@ receipt artifacts that `ops/release/acceptance-receipts` lists, and
   `sha256  ./path` lines): `security-receipt` (`ops/ci/security-receipt.sh`
   in the `security` job), `security-evidence`, `audit-family`,
   `redline-testing-official-evidence` (the `parity` job) and
-  `durability-evidence`.
+  `durability-evidence` (the `durability-receipt` job).
 
 It refuses when a receipt is missing, so the publish job cannot publish a
-release whose run did not upload all of them. No `ci.yml` job uploads
-`durability-evidence` yet: until one does, every tag stops at publish.
+release whose run did not upload all of them. The `durability-receipt` job
+runs only on the tag's run: `ops/ci/durability-receipt.sh` checks the
+durability receipts committed under `benchmark-results/durability/` with
+`redlinedb-bench durability-evidence-verify --claim
+durability.strict.process-kill --repo . --at HEAD` and uploads them. It fails,
+and the tag stops at publish, until a receipt taken on a real disk for this
+release candidate is committed (see `docs/manual/durability.md`, "Receipts").
 `scripts/release/verify-acceptance.sh` then checks the manifest fail-closed:
 the canonical repository, every job concluded success and a
 `RedlineDB/required` job among them, the exact twelve archives with matching
