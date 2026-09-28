@@ -283,3 +283,17 @@ Draft lines for the v5.0.0 CHANGELOG. The integrator owns `CHANGELOG.md`.
   place of the page it left, so the parent chain a split walks holds one
   page per level. It used to hold both, and a split would take the left
   sibling for the parent.
+
+## In-memory databases grow past their buffer pool
+
+- An in-memory database (`:memory:`, `Database::create_in_memory`,
+  ephemeral sessions) runs on a volatile kernel engine: no WAL, no
+  recovery, nothing to checkpoint. Its pages kept the placeholder LSN a
+  logged change stamps, and eviction writes a dirty page on its own only
+  when that LSN is zero, so once the database outgrew its pool (256 pages
+  by default) every insert failed with "no unpinned frame available for
+  eviction".
+- A volatile engine's buffer pool now treats its page file as scratch
+  space: eviction may write any unpinned dirty page there and read it back
+  later. Memory stays bounded by the pool; the scratch file grows instead.
+  Persistent engines are unchanged.

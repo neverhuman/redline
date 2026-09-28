@@ -74,11 +74,15 @@ impl Engine {
         // OnceLock cache (one cgroup walk total, amortised across all opens).
         let buffer = if volatile {
             let parallelism_hint = (config.lock_shards / 4).max(1);
-            Arc::new(BufferPool::new_with_parallelism(
+            let pool = BufferPool::new_with_parallelism(
                 page_file,
                 config.buffer_pool_pages,
                 parallelism_hint,
-            )?)
+            )?;
+            // Nothing recovers a volatile engine, so its page file is scratch
+            // space and any page may be written there to make room.
+            pool.use_as_scratch();
+            Arc::new(pool)
         } else {
             Arc::new(BufferPool::new(page_file, config.buffer_pool_pages)?)
         };

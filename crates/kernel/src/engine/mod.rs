@@ -19,6 +19,8 @@ mod recovery;
 mod runtime;
 #[cfg(test)]
 mod split_checkpoint_tests;
+#[cfg(test)]
+mod volatile_pool_tests;
 
 use std::collections::HashMap;
 use std::path::PathBuf;

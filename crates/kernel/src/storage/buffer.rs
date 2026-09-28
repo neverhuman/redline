@@ -74,6 +74,9 @@ struct Inner {
     /// Asked for a checkpoint when a clock pass finds no page it may evict.
     /// Weak, so the pool never keeps its engine alive.
     relief: OnceLock<Weak<dyn PagePressureRelief>>,
+    /// The page file is scratch space no recovery reads, as for a volatile
+    /// engine, so eviction may write any unpinned dirty page.
+    scratch: AtomicBool,
     eviction: Mutex<()>,
     stats: BufferPoolStatsInner,
 }
@@ -182,6 +185,7 @@ impl BufferPool {
             clock_hand: AtomicUsize::new(0),
             evicted_unsynced: AtomicBool::new(false),
             relief: OnceLock::new(),
+            scratch: AtomicBool::new(false),
             eviction: Mutex::new(()),
             stats: BufferPoolStatsInner::default(),
         });
@@ -241,6 +245,15 @@ impl BufferPool {
             .relief
             .set(relief)
             .map_err(|_| Error::CorruptPage("buffer pool already has pressure relief"))
+    }
+
+    /// Treat the page file as scratch space no recovery ever reads, as a
+    /// volatile engine's is: eviction may then write any unpinned dirty page
+    /// and read it back later, whatever its LSN. Without this a pool whose
+    /// pages all carry logged changes can only be relieved by a checkpoint,
+    /// which a volatile engine does not take.
+    pub(crate) fn use_as_scratch(&self) {
+        self.inner.scratch.store(true, Ordering::Release);
     }
 
     pub(crate) fn page_size(&self) -> usize {
@@ -762,14 +775,17 @@ impl Inner {
                     .page
                     .as_ref()
                     .ok_or(Error::CorruptPage("resident frame missing page"))?;
-                if !eviction_may_write(page)? {
+                let scratch = self.scratch.load(Ordering::Acquire);
+                if !scratch && !eviction_may_write(page)? {
                     continue;
                 }
                 drop(state);
                 // The flush rechecks the page LSN under the frame lock, so a
-                // page that took a logged change meanwhile stays.
+                // page that took a logged change meanwhile stays. Scratch
+                // pages have no WAL to wait for.
                 self.evicted_unsynced.store(true, Ordering::Release);
-                self.flush_frame_if_durable(frame, Lsn::ZERO)?;
+                let durable = if scratch { Lsn(u64::MAX) } else { Lsn::ZERO };
+                self.flush_frame_if_durable(frame, durable)?;
                 state = frame
                     .state
                     .lock()
