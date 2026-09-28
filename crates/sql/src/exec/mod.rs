@@ -69,8 +69,8 @@ pub(crate) mod json_tv;
 pub(crate) mod select_parallel;
 // Track K — SQL:2003 MERGE dispatch.
 pub(crate) mod merge;
-pub(crate) mod pragma_tv;
 pub(crate) mod order_position;
+pub(crate) mod pragma_tv;
 pub(crate) mod set_ops;
 mod show_var;
 pub(crate) mod sql_equiv;
@@ -584,9 +584,10 @@ pub fn execute_prepared(
             // / table rename. Snapshot the bit, install, run, restore.
             let prev_legacy = redlinedb_kernel::catalog::legacy_alter_table_active_for_tests();
             redlinedb_kernel::catalog::set_legacy_alter_table(conn.legacy_alter_table());
-            let alter_result = with_write_tx(conn, |_session, tx| {
+            let alter_result = with_write_tx(conn, |session, tx| {
                 rewrite_drop_column_rows(conn, tx, spec)?;
                 conn.engine().alter_table(tx, spec.clone())?;
+                convert_rows_to_new_type(conn, session, tx, spec)?;
                 Ok(())
             });
             redlinedb_kernel::catalog::set_legacy_alter_table(prev_legacy);

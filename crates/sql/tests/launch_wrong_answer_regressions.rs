@@ -7,6 +7,8 @@
 
 #[path = "launch_wrong_answer/comparison_affinity.rs"]
 mod comparison_affinity;
+#[path = "launch_wrong_answer/index_covering_class.rs"]
+mod index_covering_class;
 #[path = "launch_wrong_answer/index_epoch_upgrade.rs"]
 mod index_epoch_upgrade;
 #[path = "launch_wrong_answer/index_numeric_keys.rs"]

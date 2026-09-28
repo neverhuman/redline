@@ -263,15 +263,25 @@ pub(crate) fn compute_stored_generated_columns(
         }
         if !matches!(gen_def.kind, GeneratedColumnKind::Stored) {
             // VIRTUAL columns leave the heap slot as NULL; reads
-            // compute on demand.
+            // compute on demand. A STRICT table still checks that the
+            // column can hold the value, as SQLite does on write.
+            if table.is_strict() {
+                let value = crate::exec::index_predicate::eval_generated_expr(
+                    table,
+                    gen_def.expr_sql.as_ref(),
+                    &input_snapshot,
+                )?;
+                column_affinity_value(table, column, value)?;
+            }
             values[idx] = SqlValue::Null;
             continue;
         }
-        values[idx] = crate::exec::index_predicate::eval_generated_expr(
+        let value = crate::exec::index_predicate::eval_generated_expr(
             table,
             gen_def.expr_sql.as_ref(),
             &input_snapshot,
         )?;
+        values[idx] = column_affinity_value(table, column, value)?;
     }
     Ok(values)
 }
@@ -280,32 +290,39 @@ pub(crate) fn apply_row_affinity(table: &TableDef, values: Vec<SqlValue>) -> Res
     let mut out = values;
     for (idx, column) in table.columns.iter().enumerate() {
         // A27: take the value by move instead of `out[idx].clone()`.
-        // The slot is restored at the end of the iteration with the
-        // coerced result; `apply_affinity` needs an owned `SqlValue`,
-        // and `apply_strict_storage` borrows `original` — moving lets
-        // us serve both with a single `Arc::clone`-shaped clone instead
-        // of the previous two (one for `original`, one fed into
-        // `apply_affinity`).
         let original = std::mem::replace(&mut out[idx], SqlValue::Null);
-        // SQLite formats REAL → TEXT through its `%!.*g` printf path.
-        // Pre-format when the destination is TEXT affinity. Also: STRICT
-        // tables declared with the `ANY` pseudo-type preserve the input
-        // storage class as-is (SQLite v3.53 STRICT-ANY behavior).
-        let coerced = if matches!(column.affinity, redlinedb_kernel::catalog::Affinity::Text)
-            && let SqlValue::Real(v) = &original
-        {
-            SqlValue::Text(std::sync::Arc::from(
-                crate::exec::expr::scalar::format_real_sqlite(*v),
-            ))
-        } else if table.is_strict() && strict_declared_any(column) {
-            original.clone()
-        } else {
-            apply_affinity(original.clone(), column.affinity)
-                .map_err(|_| Error::DatatypeMismatch)?
-        };
-        out[idx] = apply_strict_storage(table, column, &original, coerced)?;
+        out[idx] = column_affinity_value(table, column, original)?;
     }
     Ok(out)
+}
+
+/// The value `column` of `table` stores for `original`: the column's
+/// affinity applied, and a STRICT column's type checked. Every stored value
+/// goes through here -- written columns, generated columns, and the rows an
+/// `ALTER COLUMN ... TYPE` converts -- so a column's affinity tells an
+/// index-only scan the storage class of a whole-number key (see
+/// `index_batch::covering_column_source`).
+pub(crate) fn column_affinity_value(
+    table: &TableDef,
+    column: &redlinedb_kernel::catalog::ColumnDef,
+    original: SqlValue,
+) -> Result<SqlValue> {
+    // SQLite formats REAL → TEXT through its `%!.*g` printf path.
+    // Pre-format when the destination is TEXT affinity. Also: STRICT
+    // tables declared with the `ANY` pseudo-type preserve the input
+    // storage class as-is (SQLite v3.53 STRICT-ANY behavior).
+    let coerced = if matches!(column.affinity, redlinedb_kernel::catalog::Affinity::Text)
+        && let SqlValue::Real(v) = &original
+    {
+        SqlValue::Text(std::sync::Arc::from(
+            crate::exec::expr::scalar::format_real_sqlite(*v),
+        ))
+    } else if table.is_strict() && strict_declared_any(column) {
+        original.clone()
+    } else {
+        apply_affinity(original.clone(), column.affinity).map_err(|_| Error::DatatypeMismatch)?
+    };
+    apply_strict_storage(table, column, &original, coerced)
 }
 
 fn apply_strict_storage(
@@ -347,7 +364,7 @@ fn apply_strict_storage(
     }
 }
 
-fn strict_declared_any(column: &redlinedb_kernel::catalog::ColumnDef) -> bool {
+pub(crate) fn strict_declared_any(column: &redlinedb_kernel::catalog::ColumnDef) -> bool {
     column
         .declared_type
         .as_deref()

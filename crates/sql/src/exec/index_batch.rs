@@ -366,12 +366,16 @@ pub(crate) enum WholeNumber {
 /// and the scan must read the heap:
 /// - a column without affinity (BLOB affinity) can hold INTEGER 2 or REAL
 ///   2.0, and both are the same key;
+/// - a STRICT table's ANY column keeps each value's storage class, although
+///   its affinity reads as NUMERIC;
 /// - a NOCASE key stores the text folded to lower case.
 ///
 /// INTEGER and NUMERIC affinity store a whole REAL in the i64 range as
 /// INTEGER, and REAL affinity stores every number as REAL, so for those the
 /// storage class of a whole number follows from the affinity. TEXT affinity
-/// stores no numbers at all.
+/// stores no numbers at all. This holds because every stored value passes
+/// through `column_affinity_value`: written and generated columns, and the
+/// rows `ALTER COLUMN ... TYPE` converts to the new type.
 pub(crate) fn covering_column_source(
     table: &TableDef,
     index: &IndexDef,
@@ -389,7 +393,11 @@ pub(crate) fn covering_column_source(
     {
         return None;
     }
-    let whole = match table.columns.get(attnum as usize)?.affinity {
+    let column = table.columns.get(attnum as usize)?;
+    if table.is_strict() && super::tail::strict_declared_any(column) {
+        return None;
+    }
+    let whole = match column.affinity {
         Affinity::Blob => return None,
         Affinity::Real => WholeNumber::Real,
         Affinity::Integer | Affinity::Numeric | Affinity::Text => WholeNumber::Integer,

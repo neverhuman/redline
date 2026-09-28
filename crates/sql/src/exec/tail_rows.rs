@@ -346,11 +346,19 @@ fn materialize_virtual_generated_columns(
         if !matches!(gen_def.kind, GeneratedColumnKind::Virtual) {
             continue;
         }
-        values[idx] = crate::exec::index_predicate::eval_generated_expr(
+        let value = crate::exec::index_predicate::eval_generated_expr(
             table,
             gen_def.expr_sql.as_ref(),
             &snapshot,
         )?;
+        // A VIRTUAL column reads with its affinity, as in SQLite. A STRICT
+        // table checked the type when the row was written, so a row
+        // written before that check reads unchanged instead of failing.
+        values[idx] = match super::build::column_affinity_value(table, column, value.clone()) {
+            Ok(coerced) => coerced,
+            Err(_) if table.is_strict() => value,
+            Err(err) => return Err(err),
+        };
     }
     Ok(values)
 }

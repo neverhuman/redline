@@ -86,8 +86,21 @@ index-format epoch below), so such an index is rebuilt at the first open.
   bound started at the NULL keys, so `WHERE x < 5 ORDER BY x LIMIT 1` spent
   its row on a NULL and returned nothing.
 - Index-only (covering) scans take the storage class of a whole number from
-  the column affinity, and read the heap for a column without affinity and
-  for a NOCASE key (which returned the text lower-cased).
+  the column affinity, and read the heap for a column without affinity, for
+  a STRICT table's ANY column (which keeps each value's class, so a stored
+  `2.0` came back as INTEGER `2`) and for a NOCASE key (which returned the
+  text lower-cased).
+- The affinity now describes every stored value, which the covering scan
+  relies on. Generated columns, STORED and VIRTUAL, take their declared
+  affinity as in SQLite (`b REAL GENERATED ALWAYS AS (a)` over `a = 2` is
+  REAL `2.0`, and a STRICT table checks their type on write); they kept the
+  expression's class before. `ALTER TABLE ... ALTER COLUMN ... TYPE` converts
+  the stored values to the new type, keeping indexes, generated columns and
+  constraints in step; it used to change only the declared type, so after
+  `TYPE REAL` a stored `3` stayed INTEGER. A value the new type refuses (a
+  STRICT table) or two rows the conversion makes equal under a UNIQUE
+  constraint fail the ALTER, which then changes nothing. Values stored by
+  earlier builds are not rewritten until their row is.
 - `PRAGMA redline_full_check` picks the record layout that matches the most
   index entries; it used to take the first layout that matched any entry and
   then report a neighbouring column's values as mismatches.
