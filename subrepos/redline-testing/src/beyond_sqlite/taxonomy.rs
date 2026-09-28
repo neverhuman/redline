@@ -4,10 +4,11 @@ use std::path::{Path, PathBuf};
 use std::process::Command;
 use std::time::{Duration, Instant};
 
-use anyhow::{Context, Result};
+use anyhow::{Context, Result, ensure};
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 
+use crate::evidence::identity::{SourceIdentity, source_identity};
 use crate::sqlite_parity::RunSummary;
 
 const FEATURES: &str = include_str!("../../metadata/beyond_sqlite/features.json");
@@ -34,8 +35,31 @@ pub struct RunConfig {
     pub target_bin: PathBuf,
     pub output: PathBuf,
     pub command_line: Vec<String>,
+    /// When the suite started; the provenance records when it ended as it
+    /// writes the artifacts.
     pub started_unix_ms: u128,
-    pub ended_unix_ms: u128,
+}
+
+/// Schema of `beyond-sqlite-provenance.json`. v2 records the source tree as
+/// git reports it (commit, tree, inputs hash, dirtiness including untracked
+/// inputs) and how the reference image digest was obtained.
+pub const PROVENANCE_SCHEMA: &str = "redline-beyond-sqlite-provenance-v2";
+
+/// The source identity of the checkout that contains `dir`, as git reports
+/// it. A commit claimed through `REDLINEDB_BENCH_GIT_SHA` must be that HEAD:
+/// the provenance records what was measured, never what a variable says.
+pub(crate) fn checked_source(dir: &Path, claimed: Option<&str>) -> Result<SourceIdentity> {
+    let source = source_identity(dir);
+    if let (Some(claimed), Some(head)) = (
+        claimed.map(str::trim).filter(|claimed| !claimed.is_empty()),
+        source.source_commit.as_deref(),
+    ) {
+        ensure!(
+            claimed == head,
+            "REDLINEDB_BENCH_GIT_SHA is {claimed}, which is not the checkout's HEAD {head}"
+        );
+    }
+    Ok(source)
 }
 
 #[derive(Debug, Serialize)]
@@ -135,8 +159,8 @@ struct BeyondProvenance {
     postgres_reference_status: String,
     reference: Option<super::engine::ReferenceIdentity>,
     corpus_sha256: String,
-    source_commit: Option<String>,
-    source_dirty: bool,
+    #[serde(flatten)]
+    source: SourceIdentity,
     command_line: Vec<String>,
     started_unix_ms: u128,
     ended_unix_ms: u128,
@@ -149,6 +173,12 @@ pub fn all_features() -> Result<Vec<Feature>> {
 
 pub fn run(config: RunConfig) -> Result<RunSummary> {
     let started = Instant::now();
+    // The source is identified before any output exists, so the run's own
+    // artifacts cannot make it look dirty or clean.
+    let source = checked_source(
+        &std::env::current_dir().context("resolve the working directory")?,
+        std::env::var("REDLINEDB_BENCH_GIT_SHA").ok().as_deref(),
+    )?;
     let features = all_features()?;
     if let Some(parent) = config.output.parent()
         && !parent.as_os_str().is_empty()
@@ -326,6 +356,7 @@ pub fn run(config: RunConfig) -> Result<RunSummary> {
         },
         &features,
         oracle_summary.reference,
+        source,
     )?;
 
     Ok(RunSummary {
@@ -354,6 +385,7 @@ fn write_artifacts(
     summary: BeyondSummary,
     features: &[Feature],
     reference: Option<super::engine::ReferenceIdentity>,
+    source: SourceIdentity,
 ) -> Result<()> {
     let output_dir = config
         .output
@@ -383,7 +415,7 @@ fn write_artifacts(
     })? + "\n";
     let redline_testing_bin = std::env::current_exe().context("resolve current executable")?;
     let provenance_json = serde_json::to_string_pretty(&BeyondProvenance {
-        schema_version: "redline-testing-provenance-v1".to_owned(),
+        schema_version: PROVENANCE_SCHEMA.to_owned(),
         suite: "beyond_sqlite".to_owned(),
         redline_testing_binary_path: display_path(&redline_testing_bin),
         redline_testing_binary_sha256: sha256_file(&redline_testing_bin)?,
@@ -393,14 +425,10 @@ fn write_artifacts(
         postgres_reference_status: postgres_status.to_owned(),
         reference,
         corpus_sha256: sha256_hex(super::oracle::MANIFEST),
-        source_commit: std::env::var("REDLINEDB_BENCH_GIT_SHA").ok(),
-        source_dirty: !std::process::Command::new("git")
-            .args(["diff", "--quiet", "HEAD"])
-            .status()
-            .is_ok_and(|status| status.success()),
+        source,
         command_line: config.command_line.clone(),
         started_unix_ms: config.started_unix_ms,
-        ended_unix_ms: config.ended_unix_ms,
+        ended_unix_ms: crate::evidence::now_unix_ms(),
         output_file_hashes: BTreeMap::from([
             ("beyond_sqlite.raw.jsonl".to_owned(), sha256_hex(raw)),
             (
@@ -554,6 +582,23 @@ fn csv(value: &str) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn a_claimed_commit_must_be_the_checkout_head() {
+        let dir = Path::new(env!("CARGO_MANIFEST_DIR"));
+        let head = checked_source(dir, None)
+            .unwrap()
+            .source_commit
+            .expect("the tests run inside a git checkout");
+        assert_eq!(
+            checked_source(dir, Some(&head)).unwrap().source_commit,
+            Some(head.clone())
+        );
+        let other = "0".repeat(40);
+        let err = checked_source(dir, Some(&other)).unwrap_err().to_string();
+        assert!(err.contains("is not the checkout's HEAD"), "{err}");
+        assert!(err.contains(&head), "{err}");
+    }
 
     #[test]
     fn beyond_manifest_is_ranked_and_has_coverage() {

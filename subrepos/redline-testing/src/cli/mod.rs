@@ -14,6 +14,7 @@ pub fn run(cli: Cli) -> Result<()> {
             &args.input,
             args.baseline.as_deref(),
             args.readme.as_deref(),
+            &args.publication.policy(),
         ),
         CommandKind::CheckSqlite(args) => {
             crate::report::check_sqlite(crate::report::CheckSqliteOptions {

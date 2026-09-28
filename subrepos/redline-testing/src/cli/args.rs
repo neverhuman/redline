@@ -49,8 +49,12 @@ pub(crate) struct RunArgs {
     #[arg(long)]
     pub(crate) postgres_regression_baseline: Option<PathBuf>,
     /// Update the marked README block from validated PostgreSQL results.
+    /// Refused unless the evidence is release evidence (a clean source tree
+    /// at a recorded commit and a measured reference identity).
     #[arg(long)]
     pub(crate) postgres_readme: Option<PathBuf>,
+    #[command(flatten)]
+    pub(crate) publication: PublicationArgs,
     /// The sqlite_parity and memory cases known to fail. Listed failures are
     /// published as failures; an unlisted failure, or a listed case that now
     /// passes, fails the run after its evidence is written. Without it, any
@@ -225,6 +229,33 @@ pub(crate) struct CheckPostgresArgs {
     pub(crate) input: PathBuf,
     #[arg(long)]
     pub(crate) baseline: Option<PathBuf>,
+    /// Update the marked README block. Refused unless the evidence is
+    /// release evidence (a clean source tree at a recorded commit and a
+    /// measured reference identity).
     #[arg(long)]
     pub(crate) readme: Option<PathBuf>,
+    #[command(flatten)]
+    pub(crate) publication: PublicationArgs,
+}
+
+/// What the PostgreSQL gate requires before its result may be published.
+#[derive(Debug, Args)]
+pub(crate) struct PublicationArgs {
+    /// The commit the run must have measured; the gate fails when the
+    /// provenance records any other.
+    #[arg(long, value_name = "SHA")]
+    pub(crate) expected_source_commit: Option<String>,
+    /// Fail the PostgreSQL gate unless its evidence is release evidence,
+    /// even when no README is written.
+    #[arg(long)]
+    pub(crate) require_clean: bool,
+}
+
+impl PublicationArgs {
+    pub(crate) fn policy(&self) -> crate::beyond_sqlite::gate::Publication {
+        crate::beyond_sqlite::gate::Publication {
+            expected_source_commit: self.expected_source_commit.clone(),
+            require_clean: self.require_clean,
+        }
+    }
 }

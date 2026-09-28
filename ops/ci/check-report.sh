@@ -15,8 +15,11 @@ target/release/redline-testing report \
   --updated-date "$(date -u +%F)" \
   --expected-repetitions "${REDLINEDB_SQLITE_PARITY_REPETITIONS:-3}" \
   --expected-warmup "${REDLINEDB_SQLITE_PARITY_WARMUP:-1}"
+# Writing even a scratch README needs release evidence: the checked-out
+# commit, a clean source tree when the run started, and a measured reference.
 target/release/redline-testing check-postgres \
   --input target/redline-testing/beyond_sqlite.raw.jsonl \
   --baseline metadata/beyond_sqlite/postgres-regression.json \
-  --readme "$work/README.md"
+  --readme "$work/README.md" \
+  --expected-source-commit "$(git rev-parse HEAD)"
 printf 'Verified SQLite and PostgreSQL corpus report generation passed.\n'

@@ -16,6 +16,59 @@ use cases::outcomes;
 /// What an agreeing case establishes, in the words every report uses.
 pub(crate) const COMPARISON: &str = "normalized SQL-shell transcript agreement";
 
+/// The pinned PostgreSQL 16.15 reference (ci.yml `services.postgres`).
+const REFERENCE_IMAGE: &str =
+    "sha256:efdf07c2f9d4df592783dcc8ea5f6db02efbf5f6452b527225ff5e58364570e9";
+const REFERENCE_SERVER_BINARY: &str =
+    "201d8daff9a5bd9df70b820471b965c39f5a776d677f395232c477d051270722";
+
+/// What a check requires before its result may be published (PG-05).
+#[derive(Debug, Clone, Default)]
+pub struct Publication {
+    /// The commit the run must have measured. A provenance that records any
+    /// other commit fails the check.
+    pub expected_source_commit: Option<String>,
+    /// Fail unless the evidence is release evidence (see `blockers`), even
+    /// when no README is written.
+    pub require_clean: bool,
+}
+
+/// Why this evidence is not release evidence; empty when it is. Writing the
+/// README always requires an empty list.
+fn blockers(provenance: &Value, reference: &Value) -> Vec<String> {
+    let mut blockers = Vec::new();
+    if !provenance["source_commit"]
+        .as_str()
+        .is_some_and(|commit| commit.len() == 40 && commit.bytes().all(|b| b.is_ascii_hexdigit()))
+    {
+        blockers.push("the run recorded no source commit".to_owned());
+    }
+    if provenance["source_dirty"].as_bool() != Some(false) {
+        let paths = provenance["source_dirty_paths"]
+            .as_array()
+            .map(|paths| {
+                paths
+                    .iter()
+                    .filter_map(Value::as_str)
+                    .collect::<Vec<_>>()
+                    .join("; ")
+            })
+            .unwrap_or_default();
+        blockers.push(format!(
+            "the source tree was dirty or unknown when the run started [{paths}]"
+        ));
+    }
+    let measured_image = reference["image_digest"] == REFERENCE_IMAGE
+        && reference["image_digest_source"] == "measured";
+    if !measured_image && reference["server_binary_sha256"] != REFERENCE_SERVER_BINARY {
+        blockers.push(
+            "the PostgreSQL reference image digest was asserted, not measured from the running container"
+                .to_owned(),
+        );
+    }
+    blockers
+}
+
 /// The qualification report (`postgres-qualification.json`). v2 splits
 /// `passed` into row matches and expected rejections, and `failed` into
 /// declared-unsupported refusals and mismatches.
@@ -54,6 +107,13 @@ struct Qualification {
     newly_passing: BTreeSet<String>,
     source_commit: Value,
     source_dirty: bool,
+    /// The commit the check was told to expect, if any.
+    expected_source_commit: Option<String>,
+    /// Release evidence: a recorded commit, a clean source tree and a
+    /// measured reference identity. Only publishable evidence may write the
+    /// README.
+    publishable: bool,
+    publication_blockers: Vec<String>,
     corpus_sha256: String,
     raw_sha256: String,
     provenance_sha256: String,
@@ -67,13 +127,24 @@ fn hash(bytes: &[u8]) -> String {
 
 /// Verify immutable runner artifacts, write an honest qualification report, and
 /// enforce either full qualification or an explicitly reviewed failure baseline.
-pub fn check(raw_path: &Path, baseline_path: Option<&Path>, readme: Option<&Path>) -> Result<()> {
+pub fn check(
+    raw_path: &Path,
+    baseline_path: Option<&Path>,
+    readme: Option<&Path>,
+    publication: &Publication,
+) -> Result<()> {
     let directory = raw_path
         .parent()
         .context("Postgres output directory missing")?;
     let raw = fs::read_to_string(raw_path)?;
     let provenance_bytes = fs::read(directory.join("beyond-sqlite-provenance.json"))?;
     let provenance: Value = serde_json::from_slice(&provenance_bytes)?;
+    ensure!(
+        provenance["schema_version"] == super::taxonomy::PROVENANCE_SCHEMA,
+        "Postgres provenance schema {} is not {}",
+        provenance["schema_version"],
+        super::taxonomy::PROVENANCE_SCHEMA
+    );
     let hashes = provenance["output_file_hashes"]
         .as_object()
         .context("artifact hashes missing")?;
@@ -123,12 +194,11 @@ pub fn check(raw_path: &Path, baseline_path: Option<&Path>, readme: Option<&Path
         "unqualified PostgreSQL reference configuration"
     );
     ensure!(
-        reference["image_digest"]
-            == "sha256:efdf07c2f9d4df592783dcc8ea5f6db02efbf5f6452b527225ff5e58364570e9"
-            || reference["server_binary_sha256"]
-                == "201d8daff9a5bd9df70b820471b965c39f5a776d677f395232c477d051270722",
+        reference["image_digest"] == REFERENCE_IMAGE
+            || reference["server_binary_sha256"] == REFERENCE_SERVER_BINARY,
         "unknown PostgreSQL reference digest"
     );
+    let publication_blockers = blockers(&provenance, reference);
     let baseline_bytes = baseline_path.map(fs::read).transpose()?;
     let baseline: Option<policy::Baseline> = baseline_bytes
         .as_deref()
@@ -175,6 +245,9 @@ pub fn check(raw_path: &Path, baseline_path: Option<&Path>, readme: Option<&Path
         newly_passing: newly_passing.clone(),
         source_commit: provenance["source_commit"].clone(),
         source_dirty: provenance["source_dirty"].as_bool().unwrap_or(true),
+        expected_source_commit: publication.expected_source_commit.clone(),
+        publishable: publication_blockers.is_empty(),
+        publication_blockers: publication_blockers.clone(),
         corpus_sha256: corpus_hash,
         raw_sha256: hash(raw.as_bytes()),
         provenance_sha256: hash(&provenance_bytes),
@@ -193,7 +266,21 @@ pub fn check(raw_path: &Path, baseline_path: Option<&Path>, readme: Option<&Path
         serde_json::to_string_pretty(&report)? + "\n",
     )?;
     let markdown = render::markdown(&report);
-    fs::write(directory.join("postgres-progress.md"), &markdown)?;
+    let mut progress = markdown.clone();
+    if !publication_blockers.is_empty() {
+        progress.push_str(&format!(
+            "\nNot release evidence: {}.\n",
+            publication_blockers.join("; ")
+        ));
+    }
+    fs::write(directory.join("postgres-progress.md"), &progress)?;
+    if let Some(expected) = &publication.expected_source_commit {
+        ensure!(
+            report.source_commit.as_str() == Some(expected.as_str()),
+            "the run measured source commit {}, not the expected {expected}",
+            report.source_commit
+        );
+    }
     ensure!(
         regression,
         "PostgreSQL gate failed: {} of {} cases failed ({} declared unsupported, {} mismatches); \
@@ -210,7 +297,17 @@ pub fn check(raw_path: &Path, baseline_path: Option<&Path>, readme: Option<&Path
         newly_passing.len(),
         newly_passing.iter().cloned().collect::<Vec<_>>().join(", ")
     );
+    ensure!(
+        !publication.require_clean || publication_blockers.is_empty(),
+        "PostgreSQL evidence is not release evidence: {}",
+        publication_blockers.join("; ")
+    );
     if let Some(path) = readme {
+        ensure!(
+            publication_blockers.is_empty(),
+            "refusing to write the README Postgres block from evidence that is not release evidence: {}",
+            publication_blockers.join("; ")
+        );
         let text = fs::read_to_string(path)?;
         let start = "<!-- POSTGRES_PARITY_START -->";
         let end = "<!-- POSTGRES_PARITY_END -->";

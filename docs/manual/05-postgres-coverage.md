@@ -84,6 +84,6 @@ The corpus plpgsql bodies run: assignment, `IF`, loops, `RETURN NEXT`, `RETURN Q
 3. Keep cross-session `NOTIFY`, logical replication, and `vector` on Postgres. Corpus `plpgsql` runs; `RAISE EXCEPTION` aborts.
 4. Move the rest — tables, SQL functions, enums, ranges, citext, and ordinary `SELECT` — when the shell output matches the `psql` output you care about.
 
-The gate command used in CI is the `beyond_sqlite` suite of `redline-testing`, with `REDLINE_TESTING_POSTGRES_URL` pointing at the pinned server and `REDLINE_TESTING_POSTGRES_IMAGE` set to the digest above. `ops/ci/parity.sh` fills the image digest in when it finds that local server.
+The gate command used in CI is the `beyond_sqlite` suite of `redline-testing`, with `REDLINE_TESTING_POSTGRES_URL` pointing at the pinned server. `ops/ci/parity.sh` and the official lane read the image digest from the container that publishes that port (`ci_measure_postgres_reference_image` in `ops/ci/lib.sh`) and record it as `measured`; a digest that cannot be read that way is recorded as `asserted`. The run records the source commit and dirtiness that `git` reports, and fails if `REDLINEDB_BENCH_GIT_SHA` names another commit. The gate writes the README block only from release evidence: a clean source tree at the expected commit (`--expected-source-commit`) and a measured reference image. `--require-clean` makes any other evidence fail the check.
 
 Next: [SQL you will write](06-sql-you-will-write.md) for the statements to type instead, then [Transactions and durability](07-transactions.md).

@@ -13,7 +13,7 @@ use crate::sqlite_parity::{
 };
 use crate::{latency, report};
 
-mod identity;
+pub(crate) mod identity;
 #[cfg(test)]
 mod tests;
 

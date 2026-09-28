@@ -35,13 +35,22 @@ if [ -z "${REDLINEDB_POSTGRES_URL:-}" ]; then
 
     export REDLINEDB_POSTGRES_PORT="${REDLINEDB_POSTGRES_PORT:-55432}"
     export REDLINEDB_POSTGRES_URL="postgres://redlinedb:postgres@127.0.0.1:${REDLINEDB_POSTGRES_PORT}/redlinedb_beyond"
-    postgres_image="${REDLINEDB_POSTGRES_IMAGE:-postgres:16-alpine}"
+    # The same pinned 16.15 image and initdb settings as the CI service
+    # (.github/workflows/ci.yml); ops/ci/lib.sh holds the digest.
+    # shellcheck source=ops/ci/lib.sh
+    . "$repo_root/ops/ci/lib.sh"
+    postgres_image="${REDLINEDB_POSTGRES_IMAGE:-postgres:16.15-bookworm@sha256:efdf07c2f9d4df592783dcc8ea5f6db02efbf5f6452b527225ff5e58364570e9}"
+    if [ "${postgres_image##*@}" != "$ci_postgres_reference_image_pin" ]; then
+        printf 'REDLINEDB_POSTGRES_IMAGE %s is not the pinned reference %s\n' "$postgres_image" "$ci_postgres_reference_image_pin" >&2
+        exit 2
+    fi
 
     container_id="$(
         docker run --rm -d \
             -e POSTGRES_DB=redlinedb_beyond \
             -e POSTGRES_USER=redlinedb \
             -e POSTGRES_PASSWORD=postgres \
+            -e POSTGRES_INITDB_ARGS="--locale=C --encoding=UTF8" \
             -p "127.0.0.1:${REDLINEDB_POSTGRES_PORT}:5432" \
             --health-cmd "pg_isready -U redlinedb -d redlinedb_beyond" \
             --health-interval 2s \

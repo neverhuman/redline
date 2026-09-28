@@ -441,6 +441,51 @@ EOF
     printf '%s\n' "$install_root/bin/redline-testing"
 }
 
+# The pinned PostgreSQL 16.15 reference image: .github/workflows/ci.yml and
+# sqlite-parity-report.yml run it as a service, and
+# ops/ci/beyond-postgres-reference.sh starts it locally.
+ci_postgres_reference_image_pin="sha256:efdf07c2f9d4df592783dcc8ea5f6db02efbf5f6452b527225ff5e58364570e9"
+
+# Measure the image of the container that publishes the reference port of
+# REDLINE_TESTING_POSTGRES_URL and export it as REDLINE_TESTING_POSTGRES_IMAGE
+# with REDLINE_TESTING_POSTGRES_IMAGE_SOURCE=measured. The image counts as the
+# pin when its id or one of its repo digests is the pin; any other image is
+# exported as itself, so the PostgreSQL gate refuses it. When the image cannot
+# be measured (no docker, no local port, no container publishing it) a preset
+# digest stays and is marked asserted: the gate then qualifies the run but
+# refuses to publish it.
+ci_measure_postgres_reference_image() {
+    local pin="$ci_postgres_reference_image_pin"
+    local url="${REDLINE_TESTING_POSTGRES_URL:-}"
+    local port=""
+    local container=""
+    local image=""
+    export REDLINE_TESTING_POSTGRES_IMAGE_SOURCE=asserted
+    if [ -n "$url" ]; then
+        port="$(printf '%s\n' "$url" | sed -nE 's#^postgres(ql)?://([^@/]*@)?(127\.0\.0\.1|localhost):([0-9]+)(/.*)?$#\4#p')"
+    fi
+    if [ -n "$port" ] && command -v docker >/dev/null 2>&1; then
+        container="$(docker ps --quiet --filter "publish=${port}" 2>/dev/null | head -n 1 || true)"
+    fi
+    if [ -n "$container" ]; then
+        image="$(docker inspect --format '{{.Image}}' "$container" 2>/dev/null || true)"
+    fi
+    if [ -z "$image" ]; then
+        printf 'parity: PostgreSQL reference image not measured (port=%s); its digest is asserted\n' "${port:-none}" >&2
+        return 0
+    fi
+    if [ "$image" != "$pin" ]; then
+        local digests
+        digests="$(docker image inspect --format '{{range .RepoDigests}}{{println .}}{{end}}' "$image" 2>/dev/null || true)"
+        case $'\n'"${digests}"$'\n' in
+            *"@${pin}"$'\n'*) image="$pin" ;;
+        esac
+    fi
+    export REDLINE_TESTING_POSTGRES_IMAGE="$image"
+    export REDLINE_TESTING_POSTGRES_IMAGE_SOURCE=measured
+    printf 'parity: measured PostgreSQL reference image %s from container %s\n' "$image" "$container" >&2
+}
+
 # Build the included runner from the same checkout as the engine.
 ci_install_redline_testing() {
     local root

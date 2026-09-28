@@ -281,8 +281,33 @@ pub struct ReferenceIdentity {
     pub version: String,
     pub settings: String,
     pub psql_sha256: String,
+    /// `REDLINE_TESTING_POSTGRES_IMAGE`: the reference server's OCI image.
     pub image_digest: Option<String>,
+    /// How `image_digest` was obtained: `measured` when the CI scripts read
+    /// it from the running container (`ci_measure_postgres_reference_image`
+    /// in ops/ci/lib.sh sets `REDLINE_TESTING_POSTGRES_IMAGE_SOURCE`), and
+    /// `asserted` for any other value -- a digest someone wrote down is not
+    /// evidence of what served the run. `None` without a digest.
+    pub image_digest_source: Option<String>,
     pub server_binary_sha256: Option<String>,
+}
+
+/// The image digest and how it was obtained, from the two environment
+/// values; anything but an explicit `measured` is `asserted`.
+fn image_identity(
+    digest: Option<String>,
+    source: Option<String>,
+) -> (Option<String>, Option<String>) {
+    let digest = digest.filter(|digest| !digest.trim().is_empty());
+    let source = digest.as_ref().map(|_| {
+        if source.as_deref() == Some("measured") {
+            "measured"
+        } else {
+            "asserted"
+        }
+        .to_owned()
+    });
+    (digest, source)
 }
 
 pub fn identity(reference: &PostgresReference) -> Result<ReferenceIdentity> {
@@ -298,6 +323,10 @@ pub fn identity(reference: &PostgresReference) -> Result<ReferenceIdentity> {
     let hash_file = |path: &std::path::Path| -> Result<String> {
         Ok(format!("{:x}", Sha256::digest(std::fs::read(path)?)))
     };
+    let (image_digest, image_digest_source) = image_identity(
+        env::var("REDLINE_TESTING_POSTGRES_IMAGE").ok(),
+        env::var("REDLINE_TESTING_POSTGRES_IMAGE_SOURCE").ok(),
+    );
     Ok(ReferenceIdentity {
         version: reference.version.clone(),
         // Recorded in the `|`-joined form the gate and the policy pin; none
@@ -306,9 +335,42 @@ pub fn identity(reference: &PostgresReference) -> Result<ReferenceIdentity> {
             .collect::<Vec<_>>()
             .join("|"),
         psql_sha256: hash_file(&reference.bin)?,
-        image_digest: env::var("REDLINE_TESTING_POSTGRES_IMAGE").ok(),
+        image_digest,
+        image_digest_source,
         server_binary_sha256: env::var_os("REDLINE_TESTING_POSTGRES_SERVER_BIN")
             .map(|path| hash_file(std::path::Path::new(&path)))
             .transpose()?,
     })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::image_identity;
+
+    #[test]
+    fn only_an_explicitly_measured_digest_is_recorded_as_measured() {
+        let digest = || Some("sha256:pin".to_owned());
+        assert_eq!(
+            image_identity(digest(), Some("measured".to_owned())),
+            (digest(), Some("measured".to_owned()))
+        );
+        for source in [
+            None,
+            Some("asserted".to_owned()),
+            Some("MEASURED".to_owned()),
+        ] {
+            assert_eq!(
+                image_identity(digest(), source),
+                (digest(), Some("asserted".to_owned()))
+            );
+        }
+        assert_eq!(
+            image_identity(None, Some("measured".to_owned())),
+            (None, None)
+        );
+        assert_eq!(
+            image_identity(Some(" ".to_owned()), Some("measured".to_owned())),
+            (None, None)
+        );
+    }
 }

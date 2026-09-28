@@ -11,13 +11,20 @@ set -euo pipefail
 repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 cd "$repo_root"
 
+# shellcheck source=ops/ci/lib.sh
+. "$repo_root/ops/ci/lib.sh"
+
 # GitHub's parity job injects REDLINE_TESTING_POSTGRES_URL from a service
 # container. A local `just pr-ci` does not. Without that URL the beyond suite
 # records no reference, the gate refuses to write postgres-qualification.json,
 # and the official evidence step fails while looking for that file. Reuse a
-# listener that already matches the pinned 16.15 identity; do not start one.
+# listener that already matches the pinned 16.15 settings; do not start one.
+# Matching settings do not identify the image: the digest is measured from
+# the container that publishes the port (ci_measure_postgres_reference_image),
+# and is only an assertion when it cannot be.
 use_local_postgres_oracle() {
     if [ -n "${REDLINE_TESTING_POSTGRES_URL:-}" ]; then
+        ci_measure_postgres_reference_image
         return 0
     fi
     if ! command -v psql >/dev/null 2>&1; then
@@ -37,10 +44,8 @@ use_local_postgres_oracle() {
         return 0
     fi
     export REDLINE_TESTING_POSTGRES_URL="$url"
-    if [ -z "${REDLINE_TESTING_POSTGRES_IMAGE:-}" ]; then
-        export REDLINE_TESTING_POSTGRES_IMAGE="sha256:efdf07c2f9d4df592783dcc8ea5f6db02efbf5f6452b527225ff5e58364570e9"
-    fi
     printf 'parity: using local PostgreSQL 16.15 oracle on 127.0.0.1:%s\n' "$port" >&2
+    ci_measure_postgres_reference_image
 }
 
 if [ -z "${REDLINEDB_BENCH_GIT_SHA:-}" ]; then

@@ -8,6 +8,11 @@ use super::*;
 
 const PIN: &str = "sha256:efdf07c2f9d4df592783dcc8ea5f6db02efbf5f6452b527225ff5e58364570e9";
 
+/// No publication requirement beyond the gate's own.
+fn release() -> Publication {
+    Publication::default()
+}
+
 fn corpus_contracts() -> BTreeMap<String, CaseContract> {
     contracts(&super::super::oracle::load_cases().unwrap())
 }
@@ -36,6 +41,7 @@ fn bundle_with(edit: impl Fn(&str, &mut Value)) -> tempfile::TempDir {
         hashes.insert(name.into(), Value::String(hash(text.as_bytes())));
     }
     let provenance = serde_json::json!({
+        "schema_version": super::super::taxonomy::PROVENANCE_SCHEMA,
         "output_file_hashes": hashes,
         "redline_testing_binary_sha256": "a".repeat(64),
         "target_binary_sha256": "b".repeat(64),
@@ -45,6 +51,7 @@ fn bundle_with(edit: impl Fn(&str, &mut Value)) -> tempfile::TempDir {
         "reference": {
             "settings": "160015|C|C|UTC",
             "image_digest": PIN,
+            "image_digest_source": "measured",
         }
     });
     fs::write(
@@ -115,7 +122,9 @@ fn a_baseline_failure_that_now_passes_fails_the_gate() {
     // is behind the live result. The subset ratchet alone is happy with this -- an empty set
     // is a subset of anything -- which is the hole being closed.
     let behind = baseline(dir.path(), &["BEYOND-CASE-20021"]);
-    let err = check(&raw, Some(&behind), None).unwrap_err().to_string();
+    let err = check(&raw, Some(&behind), None, &release())
+        .unwrap_err()
+        .to_string();
     assert!(
         err.contains("regression baseline lists failures that now pass"),
         "{err}"
@@ -130,7 +139,7 @@ fn a_baseline_failure_that_now_passes_fails_the_gate() {
 
     // An exact baseline still passes, and records nothing newly passing.
     let exact = baseline(dir.path(), &[]);
-    check(&raw, Some(&exact), None).unwrap();
+    check(&raw, Some(&exact), None, &release()).unwrap();
     assert_eq!(report(&dir)["newly_passing"], serde_json::json!([]));
 }
 
@@ -138,12 +147,12 @@ fn a_baseline_failure_that_now_passes_fails_the_gate() {
 fn tampered_artifacts_fail_without_rewriting_the_receipt() {
     let dir = bundle();
     let raw = raw_path(&dir);
-    check(&raw, None, None).unwrap();
+    check(&raw, None, None, &release()).unwrap();
     let provenance = dir.path().join("beyond-sqlite-provenance.json");
     let before = fs::read(&provenance).unwrap();
     fs::write(dir.path().join("beyond-sqlite-summary.json"), "tampered").unwrap();
     assert!(
-        check(&raw, None, None)
+        check(&raw, None, None, &release())
             .unwrap_err()
             .to_string()
             .contains("artifact hash mismatch")
@@ -159,7 +168,7 @@ fn an_unknown_oracle_or_an_unasserted_error_cannot_pass() {
     value["reference"]["image_digest"] = Value::String("unknown".into());
     fs::write(provenance, value.to_string()).unwrap();
     assert!(
-        check(&raw_path(&dir), None, None)
+        check(&raw_path(&dir), None, None, &release())
             .unwrap_err()
             .to_string()
             .contains("unknown PostgreSQL reference digest")
@@ -184,7 +193,7 @@ fn an_unknown_oracle_or_an_unasserted_error_cannot_pass() {
 fn readme_block_reports_positive_and_rejection_split() {
     let dir = bundle();
     let readme = readme_in(&dir);
-    check(&raw_path(&dir), None, Some(&readme)).unwrap();
+    check(&raw_path(&dir), None, Some(&readme), &release()).unwrap();
     let text = fs::read_to_string(&readme).unwrap();
     assert!(
         text.starts_with("top\n<!-- POSTGRES_PARITY_START -->\n"),
@@ -235,7 +244,7 @@ fn a_declared_unsupported_refusal_is_reported_and_ratcheted() {
     // Listed as declared unsupported: the gate passes, and says so.
     let listed = policy_file(dir.path(), &[], &[refused], None);
     let readme = readme_in(&dir);
-    check(&raw, Some(&listed), Some(&readme)).unwrap();
+    check(&raw, Some(&listed), Some(&readme), &release()).unwrap();
     let report = report(&dir);
     assert_eq!(report["qualification"], "failed");
     assert_eq!(report["regression"], "passed");
@@ -257,7 +266,9 @@ fn a_declared_unsupported_refusal_is_reported_and_ratcheted() {
         policy_file(dir.path(), &[refused], &[], None),
         policy_file(dir.path(), &[], &[], None),
     ] {
-        let err = check(&raw, Some(&policy), None).unwrap_err().to_string();
+        let err = check(&raw, Some(&policy), None, &release())
+            .unwrap_err()
+            .to_string();
         assert!(
             err.contains("1 declared unsupported, 0 mismatches"),
             "{err}"
@@ -274,11 +285,11 @@ fn a_policy_whose_declared_rejections_differ_from_the_corpus_fails() {
         .map(|(id, _)| id)
         .collect();
     let exact = policy_file(dir.path(), &[], &[], Some(declared.clone()));
-    check(&raw_path(&dir), Some(&exact), None).unwrap();
+    check(&raw_path(&dir), Some(&exact), None, &release()).unwrap();
     let mut short = declared;
     short.pop();
     let stale = policy_file(dir.path(), &[], &[], Some(short));
-    let err = check(&raw_path(&dir), Some(&stale), None)
+    let err = check(&raw_path(&dir), Some(&stale), None, &release())
         .unwrap_err()
         .to_string();
     assert!(err.contains("but the corpus declares"), "{err}");
@@ -289,5 +300,137 @@ fn the_committed_policy_accepts_an_agreeing_run() {
     let committed = Path::new(env!("CARGO_MANIFEST_DIR"))
         .join("../../metadata/beyond_sqlite/postgres-regression.json");
     let dir = bundle();
-    check(&raw_path(&dir), Some(&committed), None).unwrap();
+    check(&raw_path(&dir), Some(&committed), None, &release()).unwrap();
+}
+
+/// Rewrites one provenance field of a bundle.
+fn set_provenance(dir: &tempfile::TempDir, edit: impl Fn(&mut Value)) {
+    let path = dir.path().join("beyond-sqlite-provenance.json");
+    let mut value: Value = serde_json::from_slice(&fs::read(&path).unwrap()).unwrap();
+    edit(&mut value);
+    fs::write(path, value.to_string()).unwrap();
+}
+
+/// Runs `check` with a README, and returns the error and whether the
+/// README still holds its original text.
+fn refused_readme(dir: &tempfile::TempDir, publication: &Publication) -> (String, bool) {
+    let readme = readme_in(dir);
+    let before = fs::read_to_string(&readme).unwrap();
+    let err = check(&raw_path(dir), None, Some(&readme), publication)
+        .unwrap_err()
+        .to_string();
+    (err, fs::read_to_string(&readme).unwrap() == before)
+}
+
+#[test]
+fn a_dirty_source_cannot_write_the_readme() {
+    for dirty in [Value::from(true), Value::Null] {
+        let dir = bundle();
+        set_provenance(&dir, |value| {
+            value["source_dirty"] = dirty.clone();
+            value["source_dirty_paths"] = serde_json::json!([" M crates/sql/src/lib.rs"]);
+        });
+        let (err, untouched) = refused_readme(&dir, &release());
+        assert!(untouched, "the README was rewritten");
+        assert!(err.contains("refusing to write the README"), "{err}");
+        assert!(err.contains("dirty or unknown"), "{err}");
+        assert!(err.contains("crates/sql/src/lib.rs"), "{err}");
+        // The qualification still records the run, and says why it is not
+        // publishable; without a README or --require-clean the check passes.
+        let report = report(&dir);
+        assert_eq!(report["publishable"], false);
+        check(&raw_path(&dir), None, None, &release()).unwrap();
+        let progress = fs::read_to_string(dir.path().join("postgres-progress.md")).unwrap();
+        assert!(progress.contains("Not release evidence"), "{progress}");
+        // --require-clean refuses it even without a README.
+        let err = check(
+            &raw_path(&dir),
+            None,
+            None,
+            &Publication {
+                require_clean: true,
+                ..release()
+            },
+        )
+        .unwrap_err()
+        .to_string();
+        assert!(err.contains("not release evidence"), "{err}");
+    }
+    // A missing commit blocks publication the same way.
+    let dir = bundle();
+    set_provenance(&dir, |value| value["source_commit"] = Value::Null);
+    let (err, untouched) = refused_readme(&dir, &release());
+    assert!(untouched && err.contains("no source commit"), "{err}");
+}
+
+#[test]
+fn a_wrong_source_commit_is_rejected() {
+    let dir = bundle();
+    let wrong = Publication {
+        expected_source_commit: Some("d".repeat(40)),
+        ..release()
+    };
+    let (err, untouched) = refused_readme(&dir, &wrong);
+    assert!(untouched, "the README was rewritten");
+    assert!(
+        err.contains(&format!("not the expected {}", "d".repeat(40))),
+        "{err}"
+    );
+    let err = check(&raw_path(&dir), None, None, &wrong)
+        .unwrap_err()
+        .to_string();
+    assert!(err.contains("source commit"), "{err}");
+    assert_eq!(report(&dir)["expected_source_commit"], "d".repeat(40));
+    // The commit the run measured passes, and may write the README.
+    let right = Publication {
+        expected_source_commit: Some("c".repeat(40)),
+        require_clean: true,
+    };
+    let readme = readme_in(&dir);
+    check(&raw_path(&dir), None, Some(&readme), &right).unwrap();
+    assert_eq!(report(&dir)["publishable"], true);
+}
+
+#[test]
+fn an_asserted_image_digest_is_not_release_evidence() {
+    for source in [Value::from("asserted"), Value::Null] {
+        let dir = bundle();
+        set_provenance(&dir, |value| {
+            value["reference"]["image_digest_source"] = source.clone()
+        });
+        // It still qualifies: the digest is the pinned one ...
+        check(&raw_path(&dir), None, None, &release()).unwrap();
+        assert_eq!(report(&dir)["qualification"], "passed");
+        assert_eq!(report(&dir)["publishable"], false);
+        // ... but it is not release evidence.
+        let (err, untouched) = refused_readme(&dir, &release());
+        assert!(untouched, "the README was rewritten");
+        assert!(err.contains("asserted, not measured"), "{err}");
+        let strict = Publication {
+            require_clean: true,
+            ..release()
+        };
+        assert!(check(&raw_path(&dir), None, None, &strict).is_err());
+    }
+    // A measured digest other than the pin is not the reference at all.
+    let dir = bundle();
+    set_provenance(&dir, |value| {
+        value["reference"]["image_digest"] = "sha256:other".into()
+    });
+    let err = check(&raw_path(&dir), None, None, &release())
+        .unwrap_err()
+        .to_string();
+    assert!(err.contains("unknown PostgreSQL reference digest"), "{err}");
+}
+
+#[test]
+fn a_provenance_from_another_schema_is_refused() {
+    let dir = bundle();
+    set_provenance(&dir, |value| {
+        value["schema_version"] = "redline-testing-provenance-v1".into()
+    });
+    let err = check(&raw_path(&dir), None, None, &release())
+        .unwrap_err()
+        .to_string();
+    assert!(err.contains("redline-beyond-sqlite-provenance-v2"), "{err}");
 }

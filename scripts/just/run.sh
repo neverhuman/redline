@@ -234,11 +234,15 @@ run_redline_testing_official() {
   # must be exactly the ones the runner's scope policy lists, and any other
   # failure is fatal. --official refuses a narrowed corpus and marks the
   # evidence publishable.
+  # The PostgreSQL reference image is recorded as measured only when it is
+  # read from the running container; the gate publishes nothing else.
+  ci_measure_postgres_reference_image
   rc=0
   REDLINEDB_DEFAULT_DURABILITY=normal \
   REDLINEDB_QUIET_DURABILITY=1 \
   "$redline_testing_bin" run \
     --official \
+    --expected-source-commit "$REDLINEDB_BENCH_GIT_SHA" \
     --target-bin "${CARGO_TARGET_DIR:-target}/release/redlinedb" \
     --sqlite-bin "$sqlite_parity_reference_bin" \
     --suite all \

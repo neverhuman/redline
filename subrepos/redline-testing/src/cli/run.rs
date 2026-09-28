@@ -80,6 +80,7 @@ pub(crate) fn run_suite(args: RunArgs) -> Result<()> {
                 &args.output,
                 args.postgres_regression_baseline.as_deref(),
                 args.postgres_readme.as_deref(),
+                &args.publication.policy(),
             )
         }
     }
@@ -220,6 +221,7 @@ fn run_all_suites(
         &beyond_output,
         args.postgres_regression_baseline.as_deref(),
         args.postgres_readme.as_deref(),
+        &args.publication.policy(),
     );
     // Every suite's failures are judged against the baseline, but only
     // after every suite ran and the official evidence is written, so a
@@ -351,13 +353,11 @@ fn run_sqlite_like_suite(
 }
 
 fn run_beyond_sqlite_suite(args: &RunArgs, output: PathBuf) -> Result<sqlite_parity::RunSummary> {
-    let started_unix_ms = evidence::now_unix_ms();
     beyond_sqlite::run(beyond_sqlite::RunConfig {
         target_bin: args.target_bin.clone(),
         output,
         command_line: std::env::args().collect::<Vec<_>>(),
-        started_unix_ms,
-        ended_unix_ms: evidence::now_unix_ms(),
+        started_unix_ms: evidence::now_unix_ms(),
     })
 }
 

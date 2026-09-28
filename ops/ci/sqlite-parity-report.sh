@@ -64,9 +64,12 @@ run_update() {
   else
     bash scripts/just/run.sh sqlite-parity-report-update
   fi
+  # The README block is published only from release evidence: the commit
+  # being reported, a clean source tree, and a measured reference image.
   target/release/redline-testing check-postgres \
     --input target/redline-testing/beyond_sqlite.raw.jsonl \
-    --baseline metadata/beyond_sqlite/postgres-regression.json --readme README.md
+    --baseline metadata/beyond_sqlite/postgres-regression.json --readme README.md \
+    --expected-source-commit "$(git rev-parse HEAD)" --require-clean
 }
 
 ensure_publish_pr_tools() {
