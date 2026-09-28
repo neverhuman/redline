@@ -32,9 +32,10 @@ pub(super) const RECURSIVE_CTE_ITERATION_LIMIT: usize = 10_000;
 ///
 /// `row_cap` is an optional upper bound on accumulated rows. When the
 /// outer query is a bounded `SELECT ... FROM <cte> LIMIT K [OFFSET M]`
-/// with no filter/join/order/aggregate, the caller passes `Some(K+M)`
-/// so recursion stops once that many rows are produced. See
-/// `derive_cte_row_cap` in `cte.rs`.
+/// that reads the CTE row by row (no filter, join, order, aggregate,
+/// window or subquery), the caller passes `Some(K+M)` so recursion stops
+/// once that many rows are produced. See `derive_cte_row_cap` in
+/// `cte_row_cap.rs`.
 pub(super) fn materialize_cte(
     conn: &Connection,
     schema: Arc<SchemaSnapshot>,

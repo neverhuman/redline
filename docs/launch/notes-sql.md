@@ -320,3 +320,21 @@ one of the rows with 4.x and open again. A database already at epoch 3
   covering-scan dispatch uses it. That dispatch is still not reachable from
   SQL: the covering scan takes only plans without aggregation, and the gate
   dispatches only plans with it.
+
+## An outer LIMIT caps a recursive CTE only for row-by-row reads (Q5-03)
+
+- A recursive CTE read by `SELECT ... FROM c LIMIT n [OFFSET m]` stopped
+  recursing after n + m rows whatever the SELECT list was, so an aggregate,
+  a window function or a subquery over the CTE saw only the first rows:
+  over the five rows 1..5, `SELECT count(*) FROM c LIMIT 1` answered 1,
+  `sum(x) OVER ()` 1, `sum(x), max(x), avg(x)` 1, 1, 1.0,
+  `(SELECT count(*) FROM c)` 1, and a sibling CTE `d AS (SELECT count(*)
+  FROM c)` 1. The recursion now stops early only when every SELECT-list
+  item is `*`, `t.*` or an expression of column names, literals,
+  parameters, operators, `CAST` and `COLLATE`, the query has no `WINDOW`
+  or `QUALIFY`, and no other CTE of the `WITH` mentions the CTE.
+- A function call (even a scalar one such as `abs(x)`) or a `CASE` in the
+  SELECT list now also turns the pushdown off. An unbounded recursion
+  (no terminating `WHERE`) read that way fails with `recursive CTE ...
+  exceeded 10000 iterations` instead of answering from a truncated CTE;
+  `SELECT x FROM c LIMIT 10` still stops after 10 rows.
