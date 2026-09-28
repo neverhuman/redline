@@ -44,7 +44,9 @@ task-ordered, not a numbered PR sequence. Consumer deployment locks and database
   `CHANGELOG.md` are rebase-trivial and never block a claim.
 - **Proof before merge**: `just fast` is the default lane; `just pr-ci` (= `just required`) is the CI
   mirror. It does not run `scripts/guard-official-evidence.sh`, and local parity has no Postgres oracle
-  unless `REDLINE_TESTING_POSTGRES_URL` is set. `ops/git-hooks/pre-push` is the enforced gate.
+  unless `REDLINE_TESTING_POSTGRES_URL` is set. `ops/git-hooks/pre-push` is the enforced gate, and it
+  needs a clean checkout: the official reports refuse a run measured from uncommitted or untracked
+  source inputs (see `docs/testing.md`).
 - **Zero stale PRs**, not zero open PRs: anything older than one working day is fixed or merged.
 - **New behavior in a new file.** `crates/sql/src/exec/mod.rs`, `crates/sql/src/parser.rs`,
   `crates/sql/src/planner.rs`, `crates/sql/src/statement.rs`, and `crates/redlinedb/src/lib.rs` take a

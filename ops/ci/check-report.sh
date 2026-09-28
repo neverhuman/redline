@@ -6,6 +6,9 @@ cd "$root"
 work=$(mktemp -d)
 trap 'rm -rf "$work"' EXIT
 cp README.md "$work/README.md"
+# Official mode: the run's own provenance, which must record a clean source
+# tree (the measured binaries are then the checked-out commit). Work in
+# progress under the source inputs fails this check; see docs/testing.md.
 target/release/redline-testing report \
   --suite sqlite_parity \
   --input target/redline-testing/sqlite_parity.raw.jsonl \

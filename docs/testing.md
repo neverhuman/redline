@@ -135,6 +135,17 @@ That command runs the same shared dispatchers used by `.github/workflows/ci.yml`
 and `scripts/guard-official-evidence.sh`. It stops at the first failing local
 job and preserves the underlying command output.
 
+The parity stage ends with `ops/ci/check-report.sh`, which renders the SQLite
+report in official mode (`--run-provenance`) and the PostgreSQL block through
+`check-postgres`, both into scratch copies. Both refuse a run whose source tree
+was dirty when it started: an uncommitted or untracked change under the source
+input paths (`SOURCE_INPUT_PATHS` in
+`subrepos/redline-testing/src/evidence/identity.rs`) means the measured
+binaries are not the commit being pushed. `pr-ci`, and so the pre-push hook,
+therefore need a clean checkout; commit, stash or move work in progress first.
+Generated outputs (README, `benchmark-results/`, `assets/`) and ignored build
+output do not count.
+
 To run local mirrors for the broader PR workflow set, including dependency
 review, branch freshness, staged jankurai gate, and the input-boundary FFI
 cross-check, run:
