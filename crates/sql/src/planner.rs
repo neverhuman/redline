@@ -302,6 +302,7 @@ pub(crate) fn build_plan(
             build_plan(conn, &plan.inner.kind, bindings, metrics.clone())
         }
         PreparedKind::Begin(_) => simple_node(PhysicalKind::Constant, "BEGIN".to_owned()),
+        PreparedKind::Savepoint(_) => simple_node(PhysicalKind::Constant, "SAVEPOINT".to_owned()),
         PreparedKind::Commit => simple_node(PhysicalKind::Constant, "COMMIT".to_owned()),
         PreparedKind::Rollback => simple_node(PhysicalKind::Constant, "ROLLBACK".to_owned()),
         PreparedKind::CreateTable(_)

@@ -32,3 +32,12 @@ them into `CHANGELOG.md`.
 - Postgres corpus: 254/265 agree (242 row matches and 12 expected
   rejections); the 11 cases that call the refused functions are declared
   unsupported in `metadata/beyond_sqlite/postgres-regression.json`.
+
+## Savepoint statements act when stepped (S9-04)
+
+- `SAVEPOINT`, `RELEASE` and `ROLLBACK TO` take effect when their statement
+  is stepped, as in SQLite, not when it is prepared. Preparing `RELEASE s`
+  used to commit the transaction that `SAVEPOINT s` had opened without a
+  step, preparing `ROLLBACK TO s` discarded work, and reset + step of a
+  prepared savepoint statement did nothing. An unknown savepoint name is now
+  reported by the step. `sqlite3_stmt_readonly` is true for these statements.

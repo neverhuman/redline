@@ -394,6 +394,11 @@ pub fn execute_prepared(
                 affected_rows: 0,
             })
         }
+        // `Statement::step` applies savepoint commands before it reaches
+        // the executor (S9-04).
+        PreparedKind::Savepoint(_) => Err(Error::TransactionState(
+            "a savepoint command runs only as a stepped statement",
+        )),
         PreparedKind::Pragma(plan) => {
             // Several SQLite SET-style PRAGMAs echo the freshly assigned
             // value back as a single-row result set rather than returning
@@ -1177,6 +1182,7 @@ fn template_writes(kind: &PreparedKind) -> bool {
         PreparedKind::Begin(_)
         | PreparedKind::Commit
         | PreparedKind::Rollback
+        | PreparedKind::Savepoint(_)
         | PreparedKind::Pragma(_)
         | PreparedKind::Reindex
         | PreparedKind::Vacuum

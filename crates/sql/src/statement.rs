@@ -111,6 +111,10 @@ pub enum PreparedKind {
     Begin(BeginMode),
     Commit,
     Rollback,
+    /// `SAVEPOINT`, `RELEASE` or `ROLLBACK TO`. Built by
+    /// `Connection::prepare_v2` and applied by `Statement::step`, each time
+    /// the statement is stepped; preparing one changes nothing (S9-04).
+    Savepoint(crate::parser::savepoint::SavepointAction),
     Pragma(PragmaPlan),
     /// A statement that runs as a no-op: the dml-order-limit rewrite
     /// PRAGMAs (which act at prepare time) and `VACUUM REINDEX`.
@@ -343,21 +347,7 @@ impl TransactionIsolationLevel {
     }
 }
 
-/// Sentinel SQL prefix used to tag `PreparedTemplate`s built for
-/// SAVEPOINT/RELEASE/ROLLBACK TO commands. The savepoint side-effects fire
-/// during `Connection::prepare_v2`, so the resulting statement is
-/// constructed with `runtime = Done` and never reaches the executor; the
-/// prefix lets `Statement::step` short-circuit even if the caller resets and
-/// re-steps it.
-pub(crate) const SAVEPOINT_MARKER_SQL_PREFIX: &str = "\u{0}__redline_savepoint_marker__:";
 pub(crate) const RQL_MARKER_SQL_PREFIX: &str = "\u{0}__redline_rql__:";
-
-/// True if `template` was produced by `Connection::prepare_v2` for a
-/// savepoint command. We tag it via a SQL prefix because `PreparedKind` is a
-/// closed enum that we cannot extend (lane SQL-A owns `exec.rs`).
-pub(crate) fn is_savepoint_marker_template(template: &PreparedTemplate) -> bool {
-    template.sql.starts_with(SAVEPOINT_MARKER_SQL_PREFIX)
-}
 
 pub(crate) fn is_rql_template(template: &PreparedTemplate) -> bool {
     template.sql.starts_with(RQL_MARKER_SQL_PREFIX)
@@ -903,24 +893,6 @@ impl Statement {
         }
     }
 
-    /// Build a `Statement` whose execution has already completed. Used by
-    /// `Connection::prepare_v2` for SAVEPOINT/RELEASE/ROLLBACK TO commands —
-    /// the savepoint stack is updated synchronously during prepare, so the
-    /// returned statement is a no-op marker that returns `Step::Done` and
-    /// reports zero affected rows / no columns.
-    pub(crate) fn new_completed(conn: Arc<Connection>, template: Arc<PreparedTemplate>) -> Self {
-        let mut bindings = Vec::with_capacity(template.param_layout.count() + 1);
-        bindings.resize(template.param_layout.count() + 1, None);
-        Self {
-            conn,
-            template,
-            bindings,
-            runtime: RuntimeState::Done,
-            current_row: None,
-            affected_rows: 0,
-        }
-    }
-
     /// Internal binding helper used by replay — accepts a raw `SqlValue`
     /// without re-wrapping. Public binders go through the typed setters.
     pub(crate) fn bind_value(&mut self, index: usize, value: SqlValue) -> Result<()> {
@@ -978,6 +950,18 @@ impl Statement {
     }
 
     pub fn step(&mut self) -> Result<Step> {
+        // A savepoint command acts when it is stepped, outside the
+        // executor: ROLLBACK TO re-runs journaled statements, which needs
+        // the owning `Arc<Connection>`.
+        if matches!(self.runtime, RuntimeState::Idle)
+            && let PreparedKind::Savepoint(action) = &self.template.kind
+        {
+            let action = action.clone();
+            let _dialect = crate::value::DialectScope::for_dialect(self.conn.dialect());
+            self.conn.apply_savepoint_action(&action)?;
+            self.runtime = RuntimeState::Done;
+            return Ok(Step::Done);
+        }
         // Hoist `&Connection` out so the closure body retains exclusive
         // access to `self` for runtime mutation.
         let conn_ptr: *const Connection = self.conn.as_ref();
@@ -992,14 +976,6 @@ impl Statement {
         let conn: &Connection = unsafe { &*conn_ptr };
         crate::exec::with_current_connection(conn, || {
             if matches!(self.runtime, RuntimeState::Idle) {
-                // Short-circuit the savepoint marker: its side-effects fired
-                // at prepare-time. Detected via SQL prefix because the
-                // PreparedKind enum is closed (we cannot add a dedicated
-                // variant without modifying exec.rs).
-                if is_savepoint_marker_template(&self.template) {
-                    self.runtime = RuntimeState::Done;
-                    return Ok(Step::Done);
-                }
                 if self.template.schema_epoch != self.conn.schema_epoch()
                     || self.template.stats_epoch != self.conn.stats_epoch().0
                     || self.template.optimizer_hash != self.conn.optimizer_hash()
@@ -1075,11 +1051,11 @@ impl Statement {
         // the savepoint stack itself, not the journal.
         if matches!(
             self.template.kind,
-            PreparedKind::Begin(_) | PreparedKind::Commit | PreparedKind::Rollback
+            PreparedKind::Begin(_)
+                | PreparedKind::Commit
+                | PreparedKind::Rollback
+                | PreparedKind::Savepoint(_)
         ) {
-            return;
-        }
-        if is_savepoint_marker_template(&self.template) {
             return;
         }
         let _ = self
@@ -1155,8 +1131,7 @@ impl Statement {
     }
 
     pub fn sql(&self) -> &str {
-        let raw = self.template.sql.as_ref();
-        raw.strip_prefix(SAVEPOINT_MARKER_SQL_PREFIX).unwrap_or(raw)
+        self.template.sql.as_ref()
     }
 
     pub fn affected_rows(&self) -> usize {

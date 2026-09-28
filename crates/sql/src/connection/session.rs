@@ -181,9 +181,9 @@ impl Connection {
     /// empty — this matches `sqlite3_prepare_v2(db, "  --x", _, &stmt, &tail)`
     /// which sets `stmt = NULL` and returns OK.
     ///
-    /// SAVEPOINT / RELEASE / ROLLBACK TO are handled eagerly here: their
-    /// side-effects fire during preparation and the returned statement is a
-    /// fully-completed no-op (`step` immediately yields `Step::Done`).
+    /// SAVEPOINT / RELEASE / ROLLBACK TO are recognised here and prepared
+    /// as uncached transaction-control statements; like every other
+    /// statement they take effect when they are stepped (S9-04).
     pub fn prepare_v2<'a>(self: &Arc<Self>, sql: &'a str) -> Result<(Option<Statement>, &'a str)> {
         let _dialect = crate::value::DialectScope::for_dialect(self.dialect());
         match catch_unwind(AssertUnwindSafe(|| {
@@ -193,12 +193,8 @@ impl Connection {
                 return Ok((None, tail));
             }
             if let Some(action) = try_parse_savepoint(head)? {
-                self.apply_savepoint_action(&action)?;
-                // Build a no-op completed statement so the FFI still returns a
-                // valid handle that the caller can step() / finalize().
-                let template = self.savepoint_marker_template(head);
-                let stmt = Statement::new_completed(Arc::clone(self), template);
-                return Ok((Some(stmt), tail));
+                let template = self.savepoint_template(head, action);
+                return Ok((Some(Statement::new(Arc::clone(self), template)), tail));
             }
             let template = self.prepare_cached(head)?;
             Ok((Some(Statement::new(Arc::clone(self), template)), tail))
@@ -342,33 +338,26 @@ impl Connection {
         Ok(last)
     }
 
-    /// Build a "marker" template for savepoint statements. The side-effects
-    /// fire during `prepare_v2`; the returned `Statement` is constructed
-    /// with `runtime = Done` so it never invokes the executor. We tag the
-    /// template's `sql` field with a sentinel prefix so any later `reset`/
-    /// `step` cycle is also a no-op.
-    fn savepoint_marker_template(self: &Arc<Self>, sql: &str) -> Arc<PreparedTemplate> {
-        let tagged = format!("{}{}", crate::statement::SAVEPOINT_MARKER_SQL_PREFIX, sql);
+    /// The template of a savepoint command: read-only, as
+    /// `sqlite3_stmt_readonly` reports transaction control, never cached,
+    /// and applied by `Statement::step`.
+    fn savepoint_template(&self, sql: &str, action: SavepointAction) -> Arc<PreparedTemplate> {
         Arc::new(PreparedTemplate {
-            sql: Arc::from(tagged.as_str()),
+            sql: Arc::from(sql.trim()),
             schema_epoch: self.schema_epoch(),
             stats_epoch: self.stats_epoch().0,
             optimizer_hash: self.optimizer_hash(),
             param_layout: crate::statement::ParamLayout::default(),
             output_columns: Arc::from([]),
             readonly: true,
-            // The marker template never reaches `execute_prepared`; we pick
-            // an existing variant with a trivial, idempotent handler so the
-            // exec.rs match stays exhaustive without requiring edits.
-            kind: crate::statement::PreparedKind::Pragma(
-                crate::statement::PragmaPlan::SetForeignKeys(false),
-            ),
+            kind: crate::statement::PreparedKind::Savepoint(action),
         })
     }
 
     /// Push, release, or rewind a savepoint. Implements SQLite's three
-    /// commands; called from both the SQL prepare-time interceptor and the
-    /// programmatic Rust APIs (`Connection::savepoint` etc.).
+    /// commands; called when a prepared savepoint statement is stepped. The
+    /// programmatic `Connection::savepoint` / `release` / `rollback_to` act
+    /// immediately.
     pub(crate) fn apply_savepoint_action(self: &Arc<Self>, action: &SavepointAction) -> Result<()> {
         match action {
             SavepointAction::Savepoint(name) => self.savepoint(name),
