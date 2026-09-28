@@ -304,6 +304,51 @@ fn a_report_with_no_ranked_case_prints_no_ratio() {
     assert_eq!(median.matches(">n/a<").count(), 3, "{median}");
 }
 
+/// `report --suite all` over the runner's combined all.jsonl mixes suites
+/// whose records share case ids and include beyond_sqlite feature records
+/// with no timings. One report renders one suite, so it is refused, by
+/// name, before any record is judged.
+#[test]
+fn a_combined_all_suites_report_is_refused() {
+    let root = temp_root("all-suites-report");
+    let input = root.path().join("all.jsonl");
+    let raw = format!(
+        "{}{}",
+        raw_case("00001", "SQL", 2_000_000, 4_000_000),
+        raw_case("BEYOND-001", "FEATURE", 0, 0)
+    );
+    fs::write(&input, raw).expect("raw");
+    let readme = root.path().join("README.md");
+    fs::write(
+        &readme,
+        "<!-- sqlite-parity-report:begin -->\n<!-- sqlite-parity-report:end -->\n",
+    )
+    .expect("readme");
+    let error = generate(ReportOptions {
+        suite: "all".to_owned(),
+        input,
+        official_evidence: None,
+        run_provenance: None,
+        historical_run: false,
+        local_diagnostics: true,
+        out_dir: root.path().join("out"),
+        readme,
+        plot: None,
+        performance_histogram_plot: None,
+        median_test_performance_plot: None,
+        jankurai_score: None,
+        updated_date: "2026-09-24".to_owned(),
+        expected_repetitions: None,
+        expected_warmup: None,
+        check: false,
+        case_manifest: None,
+    })
+    .expect_err("a combined all-suites report must be refused");
+    let message = format!("{error:#}");
+    assert!(message.contains("--suite all"), "{message}");
+    assert!(message.contains("one suite"), "{message}");
+}
+
 #[test]
 fn zero_reference_median_fails_the_report() {
     let err = try_generate("sqlite_parity", &raw_case("00009", "ZERO", 0, 5_000_000))

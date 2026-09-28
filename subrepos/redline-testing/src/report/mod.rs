@@ -71,6 +71,16 @@ const RETIRED_BLOCKS: [(&str, &str); 2] = [
 ];
 
 pub fn generate(options: ReportOptions) -> Result<()> {
+    // The runner's all.jsonl concatenates every suite: sqlite_parity and
+    // memory records share case ids, and beyond_sqlite records are feature
+    // metadata with no timings. No verdict, ranking or badge of that mix
+    // means anything.
+    if options.suite == "all" {
+        bail!(
+            "report renders one suite, not --suite all: pass --suite sqlite_parity, memory, \
+             rql_phase1 or beyond_sqlite with that suite's own raw file"
+        );
+    }
     let raw_text = fs::read_to_string(&options.input)
         .with_context(|| format!("read raw input {}", options.input.display()))?;
     if let Some(official_evidence) = &options.official_evidence {

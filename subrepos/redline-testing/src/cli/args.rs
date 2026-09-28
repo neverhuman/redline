@@ -120,7 +120,8 @@ pub(crate) struct SelectArgs {
 
 #[derive(Debug, Args)]
 pub(crate) struct ReportArgs {
-    #[arg(long, value_enum, default_value = "all")]
+    /// The one suite to render; `all` is refused (see `report::generate`).
+    #[arg(long, value_enum)]
     pub(crate) suite: Suite,
     #[command(flatten)]
     pub(crate) select: SelectArgs,
