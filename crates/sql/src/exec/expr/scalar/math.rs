@@ -128,55 +128,7 @@ pub(crate) fn random_i64() -> i64 {
 pub(crate) use crate::parser::hex_string_to_bytes;
 
 pub(crate) fn negate(value: SqlValue) -> Result<SqlValue> {
-    match value {
-        SqlValue::Integer(v) => Ok(SqlValue::Integer(-v)),
-        SqlValue::Real(v) => Ok(SqlValue::Real(-v)),
-        SqlValue::Null => Ok(SqlValue::Null),
-        _ => Err(Error::DatatypeMismatch),
-    }
-}
-
-pub(crate) fn arithmetic(
-    left: SqlValue,
-    right: SqlValue,
-    int_op: impl FnOnce(i64, i64) -> Option<i64>,
-    real_op: impl FnOnce(f64, f64) -> Option<f64>,
-) -> Result<SqlValue> {
-    if matches!(left, SqlValue::Null) || matches!(right, SqlValue::Null) {
-        return Ok(SqlValue::Null);
-    }
-    // Closures may return None (e.g. divide / modulo by zero) — in that case
-    // SQLite returns NULL rather than raising an error or panicking.
-    fn lift_int(opt: Option<i64>) -> SqlValue {
-        match opt {
-            Some(v) => SqlValue::Integer(v),
-            None => SqlValue::Null,
-        }
-    }
-    fn lift_real(opt: Option<f64>) -> SqlValue {
-        match opt {
-            Some(v) => SqlValue::Real(v),
-            None => SqlValue::Null,
-        }
-    }
-    match (left, right) {
-        (SqlValue::Integer(a), SqlValue::Integer(b)) => Ok(lift_int(int_op(a, b))),
-        (SqlValue::Integer(a), SqlValue::Real(b)) => Ok(lift_real(real_op(a as f64, b))),
-        (SqlValue::Real(a), SqlValue::Integer(b)) => Ok(lift_real(real_op(a, b as f64))),
-        (SqlValue::Real(a), SqlValue::Real(b)) => Ok(lift_real(real_op(a, b))),
-        (SqlValue::Text(a), SqlValue::Text(b)) => {
-            let a = a
-                .trim()
-                .parse::<f64>()
-                .map_err(|_| Error::DatatypeMismatch)?;
-            let b = b
-                .trim()
-                .parse::<f64>()
-                .map_err(|_| Error::DatatypeMismatch)?;
-            Ok(lift_real(real_op(a, b)))
-        }
-        _ => Err(Error::DatatypeMismatch),
-    }
+    crate::numeric::negate(value)
 }
 
 pub(crate) fn parse_number(input: &str) -> Result<SqlValue> {

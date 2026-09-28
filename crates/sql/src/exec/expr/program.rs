@@ -36,6 +36,7 @@ use sqlparser::ast::{
 };
 
 use crate::error::{Error, Result};
+use crate::numeric::ArithOp;
 use crate::value::SqlValue;
 
 // ── Phase 6 R2-A: opt-in dispatch toggle + telemetry ──────────────────────
@@ -846,52 +847,27 @@ pub fn evaluate(
             Op::AddI64 => {
                 let r = stack.pop().unwrap();
                 let l = stack.pop().unwrap();
-                stack.push(arith(
-                    l,
-                    r,
-                    |a, b| Some(a.wrapping_add(b)),
-                    |a, b| Some(a + b),
-                )?);
+                stack.push(crate::numeric::arith(ArithOp::Add, l, r)?);
             }
             Op::SubI64 => {
                 let r = stack.pop().unwrap();
                 let l = stack.pop().unwrap();
-                stack.push(arith(
-                    l,
-                    r,
-                    |a, b| Some(a.wrapping_sub(b)),
-                    |a, b| Some(a - b),
-                )?);
+                stack.push(crate::numeric::arith(ArithOp::Sub, l, r)?);
             }
             Op::MulI64 => {
                 let r = stack.pop().unwrap();
                 let l = stack.pop().unwrap();
-                stack.push(arith(
-                    l,
-                    r,
-                    |a, b| Some(a.wrapping_mul(b)),
-                    |a, b| Some(a * b),
-                )?);
+                stack.push(crate::numeric::arith(ArithOp::Mul, l, r)?);
             }
             Op::DivI64 => {
                 let r = stack.pop().unwrap();
                 let l = stack.pop().unwrap();
-                stack.push(arith(
-                    l,
-                    r,
-                    |a, b| if b == 0 { None } else { a.checked_div(b) },
-                    |a, b| if b == 0.0 { None } else { Some(a / b) },
-                )?);
+                stack.push(crate::numeric::arith(ArithOp::Div, l, r)?);
             }
             Op::ModI64 => {
                 let r = stack.pop().unwrap();
                 let l = stack.pop().unwrap();
-                stack.push(arith(
-                    l,
-                    r,
-                    |a, b| if b == 0 { None } else { a.checked_rem(b) },
-                    |a, b| if b == 0.0 { None } else { Some(a % b) },
-                )?);
+                stack.push(crate::numeric::arith(ArithOp::Rem, l, r)?);
             }
             // Real-typed arithmetic opcodes alias the generic ones — the
             // arith helper already promotes to real on mixed types. They
@@ -1052,61 +1028,15 @@ fn numeric_value(v: &SqlValue) -> Result<f64> {
     }
 }
 
-fn arith(
-    left: SqlValue,
-    right: SqlValue,
-    int_op: impl FnOnce(i64, i64) -> Option<i64>,
-    real_op: impl FnOnce(f64, f64) -> Option<f64>,
-) -> Result<SqlValue> {
-    if matches!(left, SqlValue::Null) || matches!(right, SqlValue::Null) {
-        return Ok(SqlValue::Null);
-    }
-    fn lift_int(opt: Option<i64>) -> SqlValue {
-        match opt {
-            Some(v) => SqlValue::Integer(v),
-            None => SqlValue::Null,
-        }
-    }
-    fn lift_real(opt: Option<f64>) -> SqlValue {
-        match opt {
-            Some(v) => SqlValue::Real(v),
-            None => SqlValue::Null,
-        }
-    }
-    match (left, right) {
-        (SqlValue::Integer(a), SqlValue::Integer(b)) => Ok(lift_int(int_op(a, b))),
-        (SqlValue::Integer(a), SqlValue::Real(b)) => Ok(lift_real(real_op(a as f64, b))),
-        (SqlValue::Real(a), SqlValue::Integer(b)) => Ok(lift_real(real_op(a, b as f64))),
-        (SqlValue::Real(a), SqlValue::Real(b)) => Ok(lift_real(real_op(a, b))),
-        (SqlValue::Text(a), SqlValue::Text(b)) => {
-            let a = a
-                .trim()
-                .parse::<f64>()
-                .map_err(|_| Error::DatatypeMismatch)?;
-            let b = b
-                .trim()
-                .parse::<f64>()
-                .map_err(|_| Error::DatatypeMismatch)?;
-            Ok(lift_real(real_op(a, b)))
-        }
-        _ => Err(Error::DatatypeMismatch),
-    }
-}
-
 fn negate(v: SqlValue) -> Result<SqlValue> {
-    match v {
-        SqlValue::Null => Ok(SqlValue::Null),
-        SqlValue::Integer(n) => Ok(SqlValue::Integer(0i64.wrapping_sub(n))),
-        SqlValue::Real(f) => Ok(SqlValue::Real(-f)),
-        _ => Err(Error::DatatypeMismatch),
-    }
+    crate::numeric::negate(v)
 }
 
 fn call_scalar1(f: ScalarFn, v: SqlValue) -> Result<SqlValue> {
     match f {
         ScalarFn::Abs => match v {
             SqlValue::Null => Ok(SqlValue::Null),
-            SqlValue::Integer(n) => Ok(SqlValue::Integer(n.wrapping_abs())),
+            SqlValue::Integer(n) => crate::numeric::abs_i64(n),
             SqlValue::Real(f) => Ok(SqlValue::Real(f.abs())),
             other => {
                 let n = numeric_value(&other)?;

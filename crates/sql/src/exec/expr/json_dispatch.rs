@@ -302,7 +302,8 @@ pub(crate) fn eval_scalar_function_values(
         "abs" => match values.first() {
             // SQLite: abs(NULL) is NULL, not an error.
             Some(SqlValue::Null) | None => Ok(SqlValue::Null),
-            Some(SqlValue::Integer(v)) => Ok(SqlValue::Integer(v.wrapping_abs())),
+            // SQLite: abs(-9223372036854775808) raises `integer overflow`.
+            Some(SqlValue::Integer(v)) => crate::numeric::abs_i64(*v),
             Some(SqlValue::Real(v)) => Ok(SqlValue::Real(v.abs())),
             // Coerce text / blob to numeric then abs (SQLite implicit-numeric).
             Some(SqlValue::Text(_)) | Some(SqlValue::Blob(_)) => {

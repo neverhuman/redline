@@ -4,19 +4,19 @@
 use std::cmp::Ordering;
 use std::sync::Arc;
 
+use crate::error::Result;
+use crate::numeric::SumAcc;
 use crate::value::{SqlValue, compare_values};
 
 #[derive(Clone)]
 pub(super) struct Accumulator {
     kind: AccumulatorKind,
     count: i64,
-    sum: f64,
+    /// SUM / TOTAL / AVG: SQLite's sumStep accumulator, shared with the
+    /// grouped-aggregate routes.
+    sum: SumAcc,
     min: Option<SqlValue>,
     max: Option<SqlValue>,
-    saw_any: bool,
-    is_real: bool,
-    int_sum: i64,
-    int_sum_overflow: bool,
 }
 
 #[derive(Clone, Copy)]
@@ -49,13 +49,9 @@ impl Accumulator {
         Self {
             kind: AccumulatorKind::from_name(name),
             count: 0,
-            sum: 0.0,
+            sum: SumAcc::new(),
             min: None,
             max: None,
-            saw_any: false,
-            is_real: false,
-            int_sum: 0,
-            int_sum_overflow: false,
         }
     }
 
@@ -63,65 +59,22 @@ impl Accumulator {
         match value {
             SqlValue::Null => {}
             ref v => {
-                self.saw_any = true;
                 self.count += 1;
-                self.accumulate_numeric(v);
+                self.sum.step_value(v);
                 self.update_min_max(v);
             }
         }
     }
 
-    fn accumulate_numeric(&mut self, v: &SqlValue) {
-        match v {
-            SqlValue::Integer(n) => {
-                match self.int_sum.checked_add(*n) {
-                    Some(s) => self.int_sum = s,
-                    None => self.int_sum_overflow = true,
-                }
-                self.sum += *n as f64;
-            }
-            SqlValue::Real(n) => {
-                self.is_real = true;
-                self.sum += *n;
-            }
-            other => {
-                // Best-effort numeric coercion for SUM/AVG.
-                // A43: avoid `String::from_utf8_lossy(b)` allocation.
-                // Replacement chars don't fit the numeric grammar, so
-                // the lossy-parse path returned Err for non-UTF8 blobs
-                // and the `if let Ok(n) = parsed` arm below skipped
-                // the addition. Borrow on valid UTF-8 via from_utf8;
-                // on invalid UTF-8 stay with the same skip semantics
-                // by producing a synthetic ParseFloatError (via
-                // `"".parse::<f64>()` which is guaranteed-Err and
-                // allocation-free). Same shape as A33 / A39 / A41
-                // (Blob lossy → from_utf8 short-circuit).
-                let parsed = match other {
-                    SqlValue::Text(s) => s.parse::<f64>(),
-                    SqlValue::Blob(b) => match std::str::from_utf8(b) {
-                        Ok(s) => s.parse::<f64>(),
-                        Err(_) => "".parse::<f64>(),
-                    },
-                    _ => Ok(0.0),
-                };
-                if let Ok(n) = parsed {
-                    self.is_real = true;
-                    self.sum += n;
-                }
-            }
-        }
-    }
-
     fn avg_value(&self) -> SqlValue {
-        if self.count == 0 {
-            return SqlValue::Null;
-        }
         // Postgres `avg` of integers is numeric, shown with 16 fractional
         // digits (`15.0000000000000000`). SQLite keeps a float.
-        if crate::value::postgres_result_dialect() && !self.is_real && !self.int_sum_overflow {
-            return pg_integer_avg(self.int_sum, self.count);
+        if let Some(int_sum) = self.sum.exact_int()
+            && crate::value::postgres_result_dialect()
+        {
+            return pg_integer_avg(int_sum, self.count);
         }
-        SqlValue::Real(self.sum / self.count as f64)
+        self.sum.avg()
     }
 
     fn update_min_max(&mut self, v: &SqlValue) {
@@ -141,46 +94,23 @@ impl Accumulator {
         }
     }
 
-    pub(super) fn finalize(self) -> SqlValue {
-        match self.kind {
-            AccumulatorKind::Count => SqlValue::Integer(self.count),
-            AccumulatorKind::Sum => {
-                if !self.saw_any {
-                    return SqlValue::Null;
-                }
-                if self.is_real || self.int_sum_overflow {
-                    SqlValue::Real(self.sum)
-                } else {
-                    SqlValue::Integer(self.int_sum)
-                }
-            }
-            AccumulatorKind::Total => SqlValue::Real(self.sum),
-            AccumulatorKind::Avg => self.avg_value(),
-            AccumulatorKind::Min => self.min.unwrap_or(SqlValue::Null),
-            AccumulatorKind::Max => self.max.unwrap_or(SqlValue::Null),
-            AccumulatorKind::Unknown => SqlValue::Null,
-        }
+    /// The aggregate over every pushed value. `sum()` raises `integer
+    /// overflow` like SQLite instead of answering REAL; TOTAL and AVG stay
+    /// REAL.
+    pub(super) fn finalize(self) -> Result<SqlValue> {
+        self.value()
     }
 
-    pub(super) fn value(&self) -> SqlValue {
-        match self.kind {
+    pub(super) fn value(&self) -> Result<SqlValue> {
+        Ok(match self.kind {
             AccumulatorKind::Count => SqlValue::Integer(self.count),
-            AccumulatorKind::Sum => {
-                if !self.saw_any {
-                    return SqlValue::Null;
-                }
-                if self.is_real || self.int_sum_overflow {
-                    SqlValue::Real(self.sum)
-                } else {
-                    SqlValue::Integer(self.int_sum)
-                }
-            }
-            AccumulatorKind::Total => SqlValue::Real(self.sum),
+            AccumulatorKind::Sum => self.sum.sum()?,
+            AccumulatorKind::Total => self.sum.total(),
             AccumulatorKind::Avg => self.avg_value(),
             AccumulatorKind::Min => self.min.clone().unwrap_or(SqlValue::Null),
             AccumulatorKind::Max => self.max.clone().unwrap_or(SqlValue::Null),
             AccumulatorKind::Unknown => SqlValue::Null,
-        }
+        })
     }
 }
 

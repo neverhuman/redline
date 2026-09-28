@@ -356,3 +356,31 @@ fn json_group_object_skips_null_keys() {
     assert!(parsed.get("null").is_none(), "should not have 'null' key");
     assert_eq!(parsed["a"], serde_json::json!(1));
 }
+
+// Launch S9-06: total() and avg() share SQLite's sum accumulator; after the
+// INTEGER sum overflows they keep answering REAL while sum() raises
+// `integer overflow` (no oracle in this file encoded the old saturating or
+// wrapping answers; these pin the SQLite ones).
+#[test]
+fn total_and_avg_after_integer_overflow_match_sqlite() {
+    let (_dir, conn) = open();
+    let setup = [
+        "CREATE TABLE big(g, x)",
+        "INSERT INTO big VALUES (0, 9223372036854775807), (0, 1), (1, 9007199254740992), (1, 1), (1, 1)",
+    ];
+    for statement in setup {
+        conn.execute(statement).expect("setup");
+    }
+    assert_matches_sqlite(&conn, &setup, "SELECT total(x), avg(x) FROM big");
+    assert_matches_sqlite(
+        &conn,
+        &setup,
+        "SELECT g, total(x), avg(x) FROM big GROUP BY g ORDER BY g",
+    );
+    assert_matches_sqlite(&conn, &setup, "SELECT sum(x) FROM big WHERE g = 1");
+    let err = conn
+        .prepare("SELECT sum(x) FROM big")
+        .and_then(|mut stmt| stmt.step().map(|_| ()))
+        .expect_err("sum overflows");
+    assert_eq!(err.to_string(), "integer overflow");
+}

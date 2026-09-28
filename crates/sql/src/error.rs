@@ -50,6 +50,16 @@ pub enum Error {
 
     #[error("trigger ignored row")]
     TriggerIgnore,
+
+    /// SQLite's `integer overflow`: `abs(-9223372036854775808)`, or a
+    /// `sum()` whose all-INTEGER running total left the i64 range.
+    #[error("integer overflow")]
+    IntegerOverflow,
+
+    /// Postgres-dialect INTEGER arithmetic that leaves the i64 range, where
+    /// SQLite would answer REAL.
+    #[error("bigint out of range")]
+    BigintOutOfRange,
 }
 
 pub type Result<T> = std::result::Result<T, Error>;
@@ -73,6 +83,8 @@ impl PartialEq for Error {
             (Self::Config(a), Self::Config(b)) => a == b,
             (Self::NotAuthorized, Self::NotAuthorized) => true,
             (Self::TriggerIgnore, Self::TriggerIgnore) => true,
+            (Self::IntegerOverflow, Self::IntegerOverflow) => true,
+            (Self::BigintOutOfRange, Self::BigintOutOfRange) => true,
             _ => false,
         }
     }

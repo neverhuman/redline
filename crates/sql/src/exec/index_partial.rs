@@ -168,11 +168,7 @@ fn eval_constant(
         Expr::UnaryOp { op, expr } => {
             let value = eval_constant(expr, bindings)?;
             match op {
-                UnaryOperator::Minus => match value {
-                    SqlValue::Integer(v) => Some(SqlValue::Integer(-v)),
-                    SqlValue::Real(v) => Some(SqlValue::Real(-v)),
-                    _ => None,
-                },
+                UnaryOperator::Minus => crate::numeric::negate_constant(value),
                 UnaryOperator::Plus => Some(value),
                 _ => None,
             }

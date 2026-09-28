@@ -16,6 +16,7 @@ use redlinedb_kernel::catalog::{ValueRef, encode_record};
 use super::spill::{SpillFile, SpillWriter};
 use crate::error::{Error, Result};
 use crate::exec::expr::row_width;
+use crate::numeric::SumAcc;
 use crate::value::{SqlValue, canonicalize, compare_values};
 
 /// One aggregate column.
@@ -33,12 +34,11 @@ pub enum AggKind {
 #[derive(Debug, Clone)]
 struct AccState {
     kind: AggKind,
+    /// COUNT / COUNT(*) accumulator.
     count: i64,
-    /// SUM accumulator: tracked as integer until a real shows up.
-    sum_i: i64,
-    sum_r: f64,
-    saw_real: bool,
-    saw_value: bool,
+    /// SUM / AVG accumulator: SQLite's sumStep, shared with every other
+    /// aggregate route so overflow and REAL rounding agree.
+    sum: SumAcc,
     /// MIN/MAX accumulator.
     extremum: Option<SqlValue>,
 }
@@ -48,10 +48,7 @@ impl AccState {
         Self {
             kind,
             count: 0,
-            sum_i: 0,
-            sum_r: 0.0,
-            saw_real: false,
-            saw_value: false,
+            sum: SumAcc::new(),
             extremum: None,
         }
     }
@@ -64,46 +61,7 @@ impl AccState {
                     self.count += 1;
                 }
             }
-            AggKind::Sum | AggKind::Avg => match value {
-                SqlValue::Null => {}
-                SqlValue::Integer(v) if !self.saw_real => {
-                    self.sum_i = self.sum_i.saturating_add(*v);
-                    self.count += 1;
-                    self.saw_value = true;
-                }
-                SqlValue::Integer(v) => {
-                    self.sum_r += *v as f64;
-                    self.count += 1;
-                    self.saw_value = true;
-                }
-                SqlValue::Real(v) => {
-                    if !self.saw_real {
-                        self.sum_r = self.sum_i as f64;
-                        self.saw_real = true;
-                    }
-                    self.sum_r += *v;
-                    self.count += 1;
-                    self.saw_value = true;
-                }
-                _ => {
-                    let coerced = match value {
-                        SqlValue::Text(s) => s.parse::<f64>().ok(),
-                        SqlValue::Blob(b) => std::str::from_utf8(b)
-                            .ok()
-                            .and_then(|s| s.parse::<f64>().ok()),
-                        _ => None,
-                    };
-                    if let Some(real) = coerced {
-                        if !self.saw_real {
-                            self.sum_r = self.sum_i as f64;
-                            self.saw_real = true;
-                        }
-                        self.sum_r += real;
-                        self.count += 1;
-                        self.saw_value = true;
-                    }
-                }
-            },
+            AggKind::Sum | AggKind::Avg => self.sum.step_value(value),
             AggKind::Min => {
                 if matches!(value, SqlValue::Null) {
                     return;
@@ -135,29 +93,7 @@ impl AccState {
         debug_assert_eq!(self.kind, other.kind);
         match self.kind {
             AggKind::CountStar | AggKind::Count => self.count += other.count,
-            AggKind::Sum | AggKind::Avg => {
-                if other.saw_real {
-                    if !self.saw_real {
-                        self.sum_r = self.sum_i as f64;
-                        self.saw_real = true;
-                    }
-                    self.sum_r += other.sum_r;
-                } else {
-                    self.sum_i = self.sum_i.saturating_add(other.sum_i);
-                }
-                if other.saw_real && !self.saw_real {
-                    self.saw_real = true;
-                }
-                if self.saw_real {
-                    if !other.saw_real {
-                        self.sum_r += other.sum_i as f64;
-                    }
-                } else {
-                    // Already added.
-                }
-                self.count += other.count;
-                self.saw_value |= other.saw_value;
-            }
+            AggKind::Sum | AggKind::Avg => self.sum.merge(&other.sum),
             AggKind::Min => {
                 if let Some(v) = other.extremum {
                     self.observe(&v);
@@ -171,34 +107,50 @@ impl AccState {
         }
     }
 
-    fn finalize(self) -> SqlValue {
-        match self.kind {
+    fn finalize(self) -> Result<SqlValue> {
+        Ok(match self.kind {
             AggKind::CountStar | AggKind::Count => SqlValue::Integer(self.count),
-            AggKind::Sum => {
-                if !self.saw_value {
-                    SqlValue::Null
-                } else if self.saw_real {
-                    canonicalize(SqlValue::Real(self.sum_r))
-                } else {
-                    SqlValue::Integer(self.sum_i)
-                }
-            }
-            AggKind::Avg => {
-                if self.count == 0 {
-                    SqlValue::Null
-                } else {
-                    let sum = if self.saw_real {
-                        self.sum_r
-                    } else {
-                        self.sum_i as f64
-                    };
-                    SqlValue::Real(sum / self.count as f64)
-                }
-            }
+            AggKind::Sum => canonicalize(self.sum.sum()?),
+            AggKind::Avg => self.sum.avg(),
             AggKind::Min | AggKind::Max => self.extremum.unwrap_or(SqlValue::Null),
+        })
+    }
+
+    /// Spill encoding: [`STATE_WIDTH`] values per aggregate.
+    fn encode_into(&self, row: &mut Vec<SqlValue>) {
+        let (cnt, i_sum, r_sum, r_err, flags) = self.sum.to_parts();
+        row.push(SqlValue::Integer(self.count));
+        row.push(SqlValue::Integer(cnt));
+        row.push(SqlValue::Integer(i_sum));
+        row.push(SqlValue::Real(r_sum));
+        row.push(SqlValue::Real(r_err));
+        row.push(SqlValue::Integer(flags));
+        row.push(self.extremum.clone().unwrap_or(SqlValue::Null));
+    }
+
+    fn decode(kind: AggKind, state: &[SqlValue]) -> Self {
+        let int_at = |i: usize| match state[i] {
+            SqlValue::Integer(v) => v,
+            _ => 0,
+        };
+        let real_at = |i: usize| match state[i] {
+            SqlValue::Real(v) => v,
+            _ => 0.0,
+        };
+        Self {
+            kind,
+            count: int_at(0),
+            sum: SumAcc::from_parts(int_at(1), int_at(2), real_at(3), real_at(4), int_at(5)),
+            extremum: match &state[6] {
+                SqlValue::Null => None,
+                other => Some(other.clone()),
+            },
         }
     }
 }
+
+/// Values one spilled aggregate state occupies in a spill row.
+const STATE_WIDTH: usize = 7;
 
 /// Hash group-by aggregator. Spills partial groups when the hash table
 /// exceeds the budget; the spill format is one (key, partial-state) record
@@ -296,19 +248,10 @@ impl HashAggregator {
             // Pack group as: <ngroup_keys> | keys... | ngrops aggs words...
             // We re-encode using the spill writer's row format: each "row" is
             // [k0, k1, ..., COUNTSTAR_count, COUNT_count, ... per agg state].
-            let mut row: Vec<SqlValue> = Vec::with_capacity(key.len() + states.len() * 4);
+            let mut row: Vec<SqlValue> = Vec::with_capacity(key.len() + states.len() * STATE_WIDTH);
             row.extend(key);
             for state in &states {
-                // Encode AccState as 4 SqlValues so we can rehydrate after
-                // merge: count, sum_i, sum_r (or NULL), extremum-or-NULL.
-                row.push(SqlValue::Integer(state.count));
-                row.push(SqlValue::Integer(state.sum_i));
-                row.push(if state.saw_real {
-                    SqlValue::Real(state.sum_r)
-                } else {
-                    SqlValue::Null
-                });
-                row.push(state.extremum.clone().unwrap_or(SqlValue::Null));
+                state.encode_into(&mut row);
             }
             writer.write_row(&row)?;
         }
@@ -333,7 +276,10 @@ impl HashAggregator {
         }
         let mut out: Vec<(Vec<SqlValue>, Vec<SqlValue>)> = Vec::with_capacity(self.table.len());
         for (_bytes, (key, states)) in self.table.into_iter() {
-            let finalized: Vec<SqlValue> = states.into_iter().map(|s| s.finalize()).collect();
+            let finalized = states
+                .into_iter()
+                .map(AccState::finalize)
+                .collect::<Result<Vec<SqlValue>>>()?;
             out.push((key, finalized));
         }
         Ok(out)
@@ -353,11 +299,11 @@ impl HashAggregator {
         // Need a proper key-arity: read first row to derive it if the table
         // was empty when we started merging.
         let key_count = if key_count == 0 {
-            // Inspect the first spilled row: total cols = key_count + 4*aggs.
+            // Inspect the first spilled row: cols = key_count + STATE_WIDTH*aggs.
             let Some(first) = reader.read_row()? else {
                 return Ok(());
             };
-            let derived_key_count = first.len().saturating_sub(4 * self.aggs.len());
+            let derived_key_count = first.len().saturating_sub(STATE_WIDTH * self.aggs.len());
             self.merge_one_row(derived_key_count, &first)?;
             derived_key_count
         } else {
@@ -377,30 +323,8 @@ impl HashAggregator {
             (key.clone(), states)
         });
         for (i, kind) in self.aggs.iter().enumerate() {
-            let base = key_count + 4 * i;
-            let count = match row[base] {
-                SqlValue::Integer(v) => v,
-                _ => 0,
-            };
-            let sum_i = match row[base + 1] {
-                SqlValue::Integer(v) => v,
-                _ => 0,
-            };
-            let (sum_r, saw_real) = match row[base + 2] {
-                SqlValue::Real(v) => (v, true),
-                _ => (0.0, false),
-            };
-            let extremum = match &row[base + 3] {
-                SqlValue::Null => None,
-                other => Some(other.clone()),
-            };
-            let mut other = AccState::new(*kind);
-            other.count = count;
-            other.sum_i = sum_i;
-            other.sum_r = sum_r;
-            other.saw_real = saw_real;
-            other.saw_value = count > 0;
-            other.extremum = extremum;
+            let base = key_count + STATE_WIDTH * i;
+            let other = AccState::decode(*kind, &row[base..base + STATE_WIDTH]);
             entry.1[i].merge(other);
         }
         Ok(())
@@ -570,6 +494,47 @@ mod tests {
         for (i, expected_g) in [0i64, 1, 2, 3].iter().enumerate() {
             let want = 50 * *expected_g + 4 * (49 * 50 / 2);
             assert_eq!(rows[i].1[0], SqlValue::Integer(want));
+        }
+    }
+
+    #[test]
+    fn sum_overflow_is_an_error_with_and_without_spill() {
+        // SQLite raises `integer overflow`; the old accumulator saturated.
+        for work_mem in [16 * 1024, 8] {
+            let root = tempdir().expect("tempdir");
+            let mut agg = HashAggregator::new(
+                vec![AggKind::Sum, AggKind::Avg],
+                work_mem,
+                1024 * 1024,
+                root.path().to_path_buf(),
+            );
+            for v in [i64::MAX, 1, -3] {
+                agg.observe(key1(0), &[SqlValue::Integer(v), SqlValue::Integer(v)])
+                    .expect("observe");
+                // Other groups force the tiny budget to spill between rows.
+                agg.observe(key1(1), &[SqlValue::Integer(1), SqlValue::Integer(1)])
+                    .expect("observe");
+            }
+            assert_eq!(agg.finalize().err(), Some(Error::IntegerOverflow));
+        }
+        // AVG alone never overflows.
+        let root = tempdir().expect("tempdir");
+        let mut agg = HashAggregator::new(
+            vec![AggKind::Avg],
+            8,
+            1024 * 1024,
+            root.path().to_path_buf(),
+        );
+        for v in [i64::MAX, 1] {
+            agg.observe(key1(0), &[SqlValue::Integer(v)])
+                .expect("observe");
+            agg.observe(key1(1), &[SqlValue::Integer(v)])
+                .expect("observe");
+        }
+        assert!(agg.spilled_bytes() > 0, "expected spill");
+        let rows = agg.finalize().expect("finalize");
+        for (_, values) in rows {
+            assert_eq!(values[0], SqlValue::Real(4_611_686_018_427_387_904.0));
         }
     }
 }

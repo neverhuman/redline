@@ -77,12 +77,14 @@ pub mod error {
     use redlinedb_kernel::Error as KernelError;
     use thiserror::Error;
 
-    #[derive(Debug, Error)]
+    #[derive(Debug, Error, PartialEq)]
     pub enum Error {
         #[error("kernel error: {0}")]
         Kernel(#[from] KernelError),
         #[error("datatype mismatch")]
         DatatypeMismatch,
+        #[error("integer overflow")]
+        IntegerOverflow,
     }
 
     pub type Result<T> = std::result::Result<T, Error>;
@@ -121,6 +123,14 @@ pub mod value {
             (Blob(_), Text(_)) => Ordering::Greater,
         }
     }
+}
+
+// The aggregator's SUM/AVG state is the shared SQLite accumulator.
+#[path = "../src/numeric/sum_acc.rs"]
+mod sum_acc;
+
+pub mod numeric {
+    pub use super::sum_acc::SumAcc;
 }
 
 #[path = "../src/exec/morsel/hash_agg.rs"]
@@ -182,15 +192,17 @@ fn ref_count_star(morsel: &Morsel<'_>) -> i64 {
     morsel.live_rows() as i64
 }
 
-/// Reference SUM(i64) over the live rows of column `col`.
-fn ref_sum_i64(morsel: &Morsel<'_>, col: usize) -> i64 {
-    let mut s = 0i64;
+/// Reference SUM(i64) over the live rows of column `col`: `None` when the
+/// running total leaves i64. SQLite raises `integer overflow` there; the
+/// old saturating reference encoded a wrong answer (launch S9-06).
+fn ref_sum_i64(morsel: &Morsel<'_>, col: usize) -> Option<i64> {
+    let mut s = Some(0i64);
     let ColumnBatch::I64(buf) = &morsel.columns[col] else {
         panic!("expected I64 column")
     };
     for (i, v) in buf.iter().enumerate() {
         if morsel.validity.is_set(i) {
-            s = s.saturating_add(*v);
+            s = s.and_then(|s| s.checked_add(*v));
         }
     }
     s
@@ -207,7 +219,7 @@ fn single_group_count_matches_vec_hash_agg() {
 
     let mut agg = MorselHashAggregator::new(&[], &[AggSpec::count_star()], &bump);
     agg.observe_morsel(&m).expect("observe");
-    let groups: Vec<_> = agg.finalize().collect();
+    let groups: Vec<_> = agg.finalize().expect("finalize");
     assert_eq!(groups.len(), 1);
     let (key, vals) = &groups[0];
     assert!(key.is_empty(), "ungrouped key must be empty");
@@ -226,14 +238,14 @@ fn single_group_sum_i64_matches_simd_vs_scalar() {
 
     let mut agg = MorselHashAggregator::new(&[], &[AggSpec::sum(0)], &bump);
     agg.observe_morsel(&m).expect("observe");
-    let groups: Vec<_> = agg.finalize().collect();
+    let groups: Vec<_> = agg.finalize().expect("finalize");
     assert_eq!(groups.len(), 1);
     let want: i64 = data.iter().sum();
     assert_eq!(groups[0].1[0], SqlValue::Integer(want));
 
     // Differential SIMD-vs-scalar reduction at the kernel level.
     let (s_scalar, n_scalar) = sum_i64_scalar(&data);
-    assert_eq!(s_scalar, want);
+    assert_eq!(s_scalar, Some(want));
     assert_eq!(n_scalar, data.len() as i64);
 }
 
@@ -262,7 +274,7 @@ fn multi_group_count_with_validity_mask() {
         MorselHashAggregator::new(&[GroupSpec { col: 0 }], &[AggSpec::count_star()], &bump);
     agg.observe_morsel(&m_masked).expect("observe");
 
-    let mut groups: Vec<_> = agg.finalize().collect();
+    let mut groups: Vec<_> = agg.finalize().expect("finalize");
     assert_eq!(groups.len(), 4);
     // Sort by group key for stable assertions.
     groups.sort_by(|a, b| {
@@ -315,7 +327,7 @@ fn min_max_correctness_with_null() {
 
     let mut agg = MorselHashAggregator::new(&[], &[AggSpec::min(0), AggSpec::max(0)], &bump);
     agg.observe_morsel(&m).expect("observe");
-    let groups: Vec<_> = agg.finalize().collect();
+    let groups: Vec<_> = agg.finalize().expect("finalize");
     assert_eq!(groups.len(), 1);
     assert_eq!(groups[0].1[0], SqlValue::Integer(1));
     assert_eq!(groups[0].1[1], SqlValue::Integer(9));
@@ -328,7 +340,7 @@ fn avg_returns_correct_sum_count_split() {
     let m = build_morsel_single_i64(&bump, &[10, 20, 30]);
     let mut agg = MorselHashAggregator::new(&[], &[AggSpec::avg(0)], &bump);
     agg.observe_morsel(&m).expect("observe");
-    let groups: Vec<_> = agg.finalize().collect();
+    let groups: Vec<_> = agg.finalize().expect("finalize");
     assert_eq!(groups.len(), 1);
     match groups[0].1[0] {
         SqlValue::Real(v) => assert!((v - 20.0).abs() < 1e-9, "got {v}"),
@@ -339,7 +351,7 @@ fn avg_returns_correct_sum_count_split() {
     let m2 = build_morsel_with_nulls_i64(&bump, &[Some(10), None, Some(30)]);
     let mut agg2 = MorselHashAggregator::new(&[], &[AggSpec::avg(0)], &bump);
     agg2.observe_morsel(&m2).expect("observe");
-    let g2: Vec<_> = agg2.finalize().collect();
+    let g2: Vec<_> = agg2.finalize().expect("finalize");
     match g2[0].1[0] {
         SqlValue::Real(v) => assert!((v - 20.0).abs() < 1e-9, "got {v}"),
         ref other => panic!("expected SqlValue::Real, got {other:?}"),
@@ -361,13 +373,13 @@ fn morsel_chunk_boundary_doesnt_double_count() {
     let mut agg_one =
         MorselHashAggregator::new(&[], &[AggSpec::count_star(), AggSpec::sum(0)], &bump);
     agg_one.observe_morsel(&m_single).expect("observe one");
-    let g_one: Vec<_> = agg_one.finalize().collect();
+    let g_one: Vec<_> = agg_one.finalize().expect("finalize");
 
     let mut agg_split =
         MorselHashAggregator::new(&[], &[AggSpec::count_star(), AggSpec::sum(0)], &bump_split);
     agg_split.observe_morsel(&m_a).expect("observe a");
     agg_split.observe_morsel(&m_b).expect("observe b");
-    let g_split: Vec<_> = agg_split.finalize().collect();
+    let g_split: Vec<_> = agg_split.finalize().expect("finalize");
 
     assert_eq!(g_one.len(), 1);
     assert_eq!(g_split.len(), 1);
@@ -385,7 +397,7 @@ fn empty_morsel_emits_no_groups() {
     let mut agg =
         MorselHashAggregator::new(&[GroupSpec { col: 0 }], &[AggSpec::count_star()], &bump);
     agg.observe_morsel(&m).expect("observe");
-    let groups: Vec<_> = agg.finalize().collect();
+    let groups: Vec<_> = agg.finalize().expect("finalize");
     assert!(groups.is_empty(), "no live rows → no groups");
 
     // Ungrouped over empty input also emits no groups (no key was inserted).
@@ -393,7 +405,7 @@ fn empty_morsel_emits_no_groups() {
     let m2 = build_morsel_single_i64(&bump2, &[]);
     let mut agg2 = MorselHashAggregator::new(&[], &[AggSpec::count_star()], &bump2);
     agg2.observe_morsel(&m2).expect("observe");
-    let g2: Vec<_> = agg2.finalize().collect();
+    let g2: Vec<_> = agg2.finalize().expect("finalize");
     assert!(
         g2.is_empty(),
         "morsel-aware variant: ungrouped empty input emits no groups (the planner injects a zero-row for empty COUNT(*) at finalize time)"
@@ -411,14 +423,17 @@ fn large_morsel_1024_rows_simd_eq_scalar() {
 
     let mut agg = MorselHashAggregator::new(&[], &[AggSpec::sum(0)], &bump);
     agg.observe_morsel(&m).expect("observe");
-    let g: Vec<_> = agg.finalize().collect();
+    let g: Vec<_> = agg.finalize().expect("finalize");
 
     let (want_sum, want_n) = sum_i64_scalar(&data);
     assert_eq!(want_n, 1024);
-    assert_eq!(g[0].1[0], SqlValue::Integer(want_sum));
+    assert_eq!(g[0].1[0], SqlValue::Integer(want_sum.expect("in range")));
 
     // Reference cross-check.
-    assert_eq!(g[0].1[0], SqlValue::Integer(ref_sum_i64(&m, 0)));
+    assert_eq!(
+        g[0].1[0],
+        SqlValue::Integer(ref_sum_i64(&m, 0).expect("in range"))
+    );
 }
 
 // -------- bonus differential coverage --------
@@ -446,7 +461,7 @@ fn count_distinct_groups_matches_hashmap_reference() {
         e.1 += v;
     }
 
-    let groups: Vec<_> = agg.finalize().collect();
+    let groups: Vec<_> = agg.finalize().expect("finalize");
     assert_eq!(groups.len(), want.len());
     for (key, vals) in groups {
         let g = match key[0] {
@@ -457,4 +472,51 @@ fn count_distinct_groups_matches_hashmap_reference() {
         assert_eq!(vals[0], SqlValue::Integer(c), "count for group {g}");
         assert_eq!(vals[1], SqlValue::Integer(s), "sum for group {g}");
     }
+}
+
+// -------- S9-06: SUM overflow is SQLite's `integer overflow` --------
+
+#[test]
+fn sum_overflow_is_an_error_on_the_packed_fast_path() {
+    // Ungrouped fully valid I64 column: the fast path folds the running
+    // total. MAX + 1 overflows even though the later -1 would cancel it.
+    let bump = Bump::new();
+    let m = build_morsel_single_i64(&bump, &[i64::MAX, 1, -1]);
+    let mut agg = MorselHashAggregator::new(&[], &[AggSpec::sum(0)], &bump);
+    agg.observe_morsel(&m).expect("observe");
+    assert_eq!(agg.finalize(), Err(error::Error::IntegerOverflow));
+
+    // A second morsel continues from the first one's running total.
+    let m1 = build_morsel_single_i64(&bump, &[i64::MAX]);
+    let m2 = build_morsel_single_i64(&bump, &[1, -1]);
+    let mut agg = MorselHashAggregator::new(&[], &[AggSpec::sum(0)], &bump);
+    agg.observe_morsel(&m1).expect("observe");
+    agg.observe_morsel(&m2).expect("observe");
+    assert_eq!(agg.finalize(), Err(error::Error::IntegerOverflow));
+
+    // The order that never overflows stays INTEGER.
+    let m = build_morsel_single_i64(&bump, &[-1, i64::MAX, 1]);
+    let mut agg = MorselHashAggregator::new(&[], &[AggSpec::sum(0)], &bump);
+    agg.observe_morsel(&m).expect("observe");
+    let groups = agg.finalize().expect("finalize");
+    assert_eq!(groups[0].1[0], SqlValue::Integer(i64::MAX));
+}
+
+#[test]
+fn sum_overflow_is_an_error_on_the_grouped_path_and_avg_stays_real() {
+    let bump = Bump::new();
+    let m = build_morsel_i64_pairs(&bump, &[(0, i64::MAX), (0, 1), (1, 5)]);
+    let mut agg = MorselHashAggregator::new(&[GroupSpec { col: 0 }], &[AggSpec::sum(1)], &bump);
+    agg.observe_morsel(&m).expect("observe");
+    assert_eq!(agg.finalize(), Err(error::Error::IntegerOverflow));
+
+    let mut agg = MorselHashAggregator::new(&[GroupSpec { col: 0 }], &[AggSpec::avg(1)], &bump);
+    agg.observe_morsel(&m).expect("observe");
+    let mut groups = agg.finalize().expect("avg never overflows");
+    groups.sort_by_key(|(key, _)| match key[0] {
+        SqlValue::Integer(g) => g,
+        _ => i64::MIN,
+    });
+    assert_eq!(groups[0].1[0], SqlValue::Real(4_611_686_018_427_387_904.0));
+    assert_eq!(groups[1].1[0], SqlValue::Real(5.0));
 }

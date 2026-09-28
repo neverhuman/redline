@@ -3,6 +3,7 @@
 use std::cmp::Ordering;
 use std::sync::Arc;
 
+use super::numeric::{int_real_cmp, sqlite_text_is_true};
 use super::value::OwnedValue;
 
 #[derive(Debug, Clone, PartialEq)]
@@ -366,8 +367,8 @@ fn compare_values(left: &OwnedValue, right: &OwnedValue) -> Ordering {
         (_, Null) => Ordering::Greater,
         (Integer(a), Integer(b)) => a.cmp(b),
         (Real(a), Real(b)) => a.partial_cmp(b).unwrap_or(Ordering::Equal),
-        (Integer(a), Real(b)) => (*a as f64).partial_cmp(b).unwrap_or(Ordering::Equal),
-        (Real(a), Integer(b)) => a.partial_cmp(&(*b as f64)).unwrap_or(Ordering::Equal),
+        (Integer(a), Real(b)) => int_real_cmp(*a, *b),
+        (Real(a), Integer(b)) => int_real_cmp(*b, *a).reverse(),
         (Text(a), Text(b)) => a.as_ref().cmp(b.as_ref()),
         (Blob(a), Blob(b)) => a.as_ref().cmp(b.as_ref()),
         (Integer(_) | Real(_), Text(_) | Blob(_)) => Ordering::Less,
@@ -382,8 +383,10 @@ fn truthy(value: &OwnedValue) -> bool {
         OwnedValue::Null => false,
         OwnedValue::Integer(v) => *v != 0,
         OwnedValue::Real(v) => *v != 0.0,
-        OwnedValue::Text(v) => !v.is_empty(),
-        OwnedValue::Blob(v) => !v.is_empty(),
+        // SQLite reads TEXT and BLOB through their numeric prefix, so
+        // `'1abc'` is true and `'abc'` is false (`sqlite3VdbeBooleanValue`).
+        OwnedValue::Text(v) => sqlite_text_is_true(v.as_bytes()),
+        OwnedValue::Blob(v) => sqlite_text_is_true(v),
     }
 }
 

@@ -29,6 +29,7 @@ use redlinedb_kernel::catalog::ValueRef;
 
 use super::Morsel;
 use super::column::ColumnBatch;
+use crate::numeric::SumAcc;
 use crate::value::{SqlValue, canonicalize, compare_values};
 
 /// A single GROUP BY column reference. `col` indexes into
@@ -113,11 +114,11 @@ impl AggSpec {
 #[derive(Debug, Clone)]
 struct AccState {
     kind: AggKind,
+    /// COUNT / COUNT(*) accumulator.
     count: i64,
-    sum_i: i64,
-    sum_r: f64,
-    saw_real: bool,
-    saw_value: bool,
+    /// SUM / AVG accumulator: SQLite's sumStep, shared with the row-at-a-
+    /// time aggregator so an overflow is `integer overflow` on every route.
+    sum: SumAcc,
     extremum: Option<SqlValue>,
 }
 
@@ -126,10 +127,7 @@ impl AccState {
         Self {
             kind,
             count: 0,
-            sum_i: 0,
-            sum_r: 0.0,
-            saw_real: false,
-            saw_value: false,
+            sum: SumAcc::new(),
             extremum: None,
         }
     }
@@ -144,56 +142,9 @@ impl AccState {
                     self.count += 1;
                 }
             }
-            AggKind::Sum | AggKind::Avg => match value {
-                ValueRef::Null => {}
-                ValueRef::Integer(v) if !self.saw_real => {
-                    self.sum_i = self.sum_i.saturating_add(v);
-                    self.count += 1;
-                    self.saw_value = true;
-                }
-                ValueRef::Integer(v) => {
-                    self.sum_r += v as f64;
-                    self.count += 1;
-                    self.saw_value = true;
-                }
-                ValueRef::Real(v) => {
-                    if !self.saw_real {
-                        self.sum_r = self.sum_i as f64;
-                        self.saw_real = true;
-                    }
-                    self.sum_r += v;
-                    self.count += 1;
-                    self.saw_value = true;
-                }
-                // Text/Blob coercion mirrors the row-at-a-time aggregator
-                // (`vec::hash_agg::AccState::observe`) so parity is preserved
-                // when the planner routes through the morsel path.
-                ValueRef::Text(s) => {
-                    if let Ok(real) = s.parse::<f64>() {
-                        if !self.saw_real {
-                            self.sum_r = self.sum_i as f64;
-                            self.saw_real = true;
-                        }
-                        self.sum_r += real;
-                        self.count += 1;
-                        self.saw_value = true;
-                    }
-                }
-                ValueRef::Blob(b) => {
-                    if let Some(real) = std::str::from_utf8(b)
-                        .ok()
-                        .and_then(|s| s.parse::<f64>().ok())
-                    {
-                        if !self.saw_real {
-                            self.sum_r = self.sum_i as f64;
-                            self.saw_real = true;
-                        }
-                        self.sum_r += real;
-                        self.count += 1;
-                        self.saw_value = true;
-                    }
-                }
-            },
+            // Text/Blob coercion is SumAcc's, the same as the row-at-a-time
+            // aggregator (`vec::hash_agg::AccState::observe`).
+            AggKind::Sum | AggKind::Avg => self.sum.step_ref(value),
             AggKind::Min => {
                 if matches!(value, ValueRef::Null) {
                     return;
@@ -223,49 +174,24 @@ impl AccState {
         }
     }
 
-    /// Fast path: bulk-fold a pre-summed (delta_sum, delta_count) pair
-    /// produced by the SIMD `SUM(i64)` kernel into this accumulator.
-    /// Promotes to real if we have already seen a real value.
-    fn add_bulk_int(&mut self, delta_sum: i64, delta_count: i64) {
+    /// Fast path for a fully valid packed `i64` column: fold every value
+    /// into the running total in order. Summing the slice from zero and
+    /// adding that partial afterwards would detect an overflow at a
+    /// different point than one pass over the same values.
+    fn fold_i64(&mut self, values: &[i64]) {
         debug_assert!(matches!(self.kind, AggKind::Sum | AggKind::Avg));
-        if delta_count == 0 {
-            return;
+        for &v in values {
+            self.sum.step_int(v);
         }
-        if self.saw_real {
-            self.sum_r += delta_sum as f64;
-        } else {
-            self.sum_i = self.sum_i.saturating_add(delta_sum);
-        }
-        self.count += delta_count;
-        self.saw_value = true;
     }
 
-    fn finalize(self) -> SqlValue {
-        match self.kind {
+    fn finalize(self) -> crate::Result<SqlValue> {
+        Ok(match self.kind {
             AggKind::CountStar | AggKind::Count => SqlValue::Integer(self.count),
-            AggKind::Sum => {
-                if !self.saw_value {
-                    SqlValue::Null
-                } else if self.saw_real {
-                    canonicalize(SqlValue::Real(self.sum_r))
-                } else {
-                    SqlValue::Integer(self.sum_i)
-                }
-            }
-            AggKind::Avg => {
-                if self.count == 0 {
-                    SqlValue::Null
-                } else {
-                    let sum = if self.saw_real {
-                        self.sum_r
-                    } else {
-                        self.sum_i as f64
-                    };
-                    SqlValue::Real(sum / self.count as f64)
-                }
-            }
+            AggKind::Sum => canonicalize(self.sum.sum()?),
+            AggKind::Avg => self.sum.avg(),
             AggKind::Min | AggKind::Max => self.extremum.unwrap_or(SqlValue::Null),
-        }
+        })
     }
 }
 
@@ -334,9 +260,8 @@ impl<'arena> MorselHashAggregator<'arena> {
             if let Some(col_idx) = self.agg_specs[0].col {
                 if let Some(ColumnBatch::I64(buf)) = morsel.columns.get(col_idx) {
                     if morsel.validity.count_ones() == n {
-                        // All-valid: SIMD reduction.
+                        // All-valid: fold the packed column in one pass.
                         let slice = &buf[..n];
-                        let (delta_sum, delta_count) = sum_i64_dispatch(slice);
                         let entry = self.table.entry(Vec::new()).or_insert_with(|| {
                             let states = self
                                 .agg_specs
@@ -345,7 +270,7 @@ impl<'arena> MorselHashAggregator<'arena> {
                                 .collect();
                             (Vec::new(), states)
                         });
-                        entry.1[0].add_bulk_int(delta_sum, delta_count);
+                        entry.1[0].fold_i64(slice);
                         return Ok(());
                     }
                 }
@@ -407,10 +332,19 @@ impl<'arena> MorselHashAggregator<'arena> {
     /// distinct group. Order is unspecified — callers that need a stable
     /// order must sort downstream (the planner already does this for
     /// `ORDER BY`).
-    pub fn finalize(self) -> impl Iterator<Item = (Vec<SqlValue>, Vec<SqlValue>)> {
-        self.table.into_iter().map(|(_bytes, (key, states))| {
-            (key, states.into_iter().map(|s| s.finalize()).collect())
-        })
+    /// A `sum()` whose all-INTEGER total overflowed fails the whole
+    /// aggregate with `integer overflow`, as in SQLite.
+    pub fn finalize(self) -> crate::Result<Vec<(Vec<SqlValue>, Vec<SqlValue>)>> {
+        self.table
+            .into_iter()
+            .map(|(_bytes, (key, states))| {
+                let values = states
+                    .into_iter()
+                    .map(AccState::finalize)
+                    .collect::<crate::Result<Vec<SqlValue>>>()?;
+                Ok((key, values))
+            })
+            .collect()
     }
 }
 
@@ -427,24 +361,12 @@ fn encode_key_into(values: &[SqlValue], buf: &mut Vec<u8>) -> crate::Result<()> 
 
 // ---------------------- SUM(i64) reduction kernels ----------------------
 
-/// Runtime-dispatched `SUM(i64)` reduction. Returns `(sum, count)` for the
-/// caller to fold into an [`AccState`]. AVX2 path runs when the CPU
-/// reports support and the slice has enough rows to amortise the dispatch;
-/// otherwise we run the scalar reference.
-#[inline]
-fn sum_i64_dispatch(col: &[i64]) -> (i64, i64) {
-    // The AVX2 kernel adds with wrapping lanes. `sum_i64_scalar` saturates.
-    // A morsel of large i64 values makes those answers disagree, so the
-    // dispatched SUM stays on the saturating scalar path.
-    sum_i64_scalar(col)
-}
-
-/// Scalar reference. Uses `saturating_add` to mirror the per-row
-/// accumulator semantics in [`AccState::observe`].
-pub(crate) fn sum_i64_scalar(col: &[i64]) -> (i64, i64) {
-    let mut sum: i64 = 0;
+/// Scalar reference `SUM(i64)`: `(Some(sum), count)`, or `(None, count)`
+/// when the running total leaves i64 (SQLite's `integer overflow`).
+pub(crate) fn sum_i64_scalar(col: &[i64]) -> (Option<i64>, i64) {
+    let mut sum: Option<i64> = Some(0);
     for &v in col {
-        sum = sum.saturating_add(v);
+        sum = sum.and_then(|s| s.checked_add(v));
     }
     (sum, col.len() as i64)
 }
@@ -452,9 +374,10 @@ pub(crate) fn sum_i64_scalar(col: &[i64]) -> (i64, i64) {
 #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
 #[allow(dead_code)]
 #[target_feature(enable = "avx2")]
-/// AVX2 `SUM(i64)` reduction. Not used: `_mm256_add_epi64` wraps, and
-/// `sum_i64_scalar` saturates. Kept so a saturating lane kernel can
-/// replace the dispatcher without rediscovering the load/store shape.
+/// AVX2 `SUM(i64)` reduction. Not used: `_mm256_add_epi64` wraps, while
+/// SQL `sum()` must detect the first overflow of the running total
+/// (`AccState::fold_i64`). Kept so a checked lane kernel can reuse the
+/// load/store shape.
 /// Accumulates four 64-bit lanes via
 /// `_mm256_add_epi64` (wrapping) and folds the tail with the scalar
 /// reference. The wrapping accumulation matches `i64::wrapping_add`, NOT
@@ -516,43 +439,40 @@ mod tests {
     #[test]
     fn scalar_sum_i64_zero_len_is_zero() {
         let (s, n) = sum_i64_scalar(&[]);
-        assert_eq!(s, 0);
+        assert_eq!(s, Some(0));
         assert_eq!(n, 0);
     }
 
     #[test]
     fn scalar_sum_i64_small_slice() {
         let (s, n) = sum_i64_scalar(&[1, 2, 3, 4, 5]);
-        assert_eq!(s, 15);
+        assert_eq!(s, Some(15));
         assert_eq!(n, 5);
     }
 
     #[test]
-    fn dispatch_sum_matches_scalar_on_random_inputs() {
-        // Internal smoke; deeper differential is in the integration test.
-        let mut col: Vec<i64> = Vec::with_capacity(257);
-        let mut x: u64 = 0xDEADBEEFCAFEBABE;
-        for _ in 0..257 {
-            x = x
-                .wrapping_mul(6364136223846793005)
-                .wrapping_add(1442695040888963407);
-            col.push((x as i64) >> 8); // shrink to keep sums in-range
-        }
-        let (s_disp, n_disp) = sum_i64_dispatch(&col);
-        let (s_scal, n_scal) = sum_i64_scalar(&col);
-        // SIMD uses wrapping; scalar uses saturating — for shrunken inputs
-        // these agree exactly.
-        assert_eq!(s_disp, s_scal);
-        assert_eq!(n_disp, n_scal);
+    fn scalar_sum_i64_reports_overflow() {
+        // The saturating reference answered i64::MAX here; SQLite raises
+        // `integer overflow`, so the reference reports None.
+        let (s, n) = sum_i64_scalar(&[i64::MAX, i64::MAX, 1, 1]);
+        assert_eq!(s, None);
+        assert_eq!(n, 4);
     }
 
     #[test]
-    fn dispatch_sum_saturates_like_scalar() {
-        let col = [i64::MAX, i64::MAX, 1, 1];
-        let (s_disp, n_disp) = sum_i64_dispatch(&col);
-        let (s_scal, n_scal) = sum_i64_scalar(&col);
-        assert_eq!(s_disp, i64::MAX);
-        assert_eq!(s_disp, s_scal);
-        assert_eq!(n_disp, n_scal);
+    fn split_batches_match_one_pass() {
+        // Continue-from-running-total: MAX then [1, -1] overflows at the
+        // `1` exactly as one pass over [MAX, 1, -1] does.
+        let mut split = AccState::new(AggKind::Sum);
+        split.fold_i64(&[i64::MAX]);
+        split.fold_i64(&[1, -1]);
+        let mut whole = AccState::new(AggKind::Sum);
+        whole.fold_i64(&[i64::MAX, 1, -1]);
+        assert_eq!(whole.finalize(), Err(crate::error::Error::IntegerOverflow));
+        assert_eq!(split.finalize(), Err(crate::error::Error::IntegerOverflow));
+        let mut fine = AccState::new(AggKind::Sum);
+        fine.fold_i64(&[-1]);
+        fine.fold_i64(&[i64::MAX, 1]);
+        assert_eq!(fine.finalize(), Ok(SqlValue::Integer(i64::MAX)));
     }
 }

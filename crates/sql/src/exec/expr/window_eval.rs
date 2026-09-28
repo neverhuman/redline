@@ -24,6 +24,7 @@ mod accumulator;
 mod frame;
 #[path = "window_eval/partition.rs"]
 mod partition;
+mod sliding;
 
 use sqlparser::ast::{
     Expr, FunctionArg, FunctionArgExpr, FunctionArguments, SelectItem, WindowFrameUnits,
@@ -325,6 +326,17 @@ fn eval_window_call(
     )? {
         return Ok(results);
     }
+    if sliding::sliding_sum_window(
+        func_name,
+        &args,
+        rows,
+        layouts,
+        &frame,
+        bindings,
+        &mut results,
+    )? {
+        return Ok(results);
+    }
     if ranking_window(&func_name, &args, layouts, &mut results)? {
         return Ok(results);
     }
@@ -373,7 +385,7 @@ fn whole_partition_aggregate_window(
             };
             accumulator.push(value);
         }
-        let value = accumulator.finalize();
+        let value = accumulator.finalize()?;
         for row_idx in &layout.order_index_map {
             results[*row_idx] = value.clone();
         }
@@ -406,7 +418,7 @@ fn prefix_aggregate_window(
                 None => SqlValue::Integer(1),
             };
             accumulator.push(value);
-            results[*row_idx] = accumulator.value();
+            results[*row_idx] = accumulator.value()?;
         }
     }
     Ok(true)
@@ -776,7 +788,7 @@ fn compute_function_for_row(
             }
             // Reserved hook for future window-spec aware behavior.
             let _ = window;
-            Ok(accumulator.finalize())
+            accumulator.finalize()
         }
         other => Err(Error::UnsupportedSql(format!(
             "window function not supported: {other}"

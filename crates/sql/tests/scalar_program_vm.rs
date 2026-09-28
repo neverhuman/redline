@@ -35,6 +35,11 @@ mod parser {
 
 pub use redlinedb_sql::format_real_sqlite;
 
+// The VM's arithmetic is the shared SQLite numeric module (launch Q5-06).
+#[allow(unused_imports)]
+#[path = "../src/numeric.rs"]
+mod numeric;
+
 #[path = "../src/exec/expr/program.rs"]
 mod program;
 
@@ -510,9 +515,14 @@ fn ast_eval(
             let v = ast_eval(expr, cols, row, bindings);
             match op {
                 UnaryOperator::Plus => v,
+                // SQLite: -MIN does not fit in i64 and becomes REAL. The
+                // oracle used to wrap, which encoded the Q5-06 wrong answer.
                 UnaryOperator::Minus => match v {
                     SqlValue::Null => SqlValue::Null,
-                    SqlValue::Integer(n) => SqlValue::Integer(0i64.wrapping_sub(n)),
+                    SqlValue::Integer(n) => match n.checked_neg() {
+                        Some(m) => SqlValue::Integer(m),
+                        None => SqlValue::Real(-(n as f64)),
+                    },
                     SqlValue::Real(f) => SqlValue::Real(-f),
                     other => panic!("oracle: cannot negate {other:?}"),
                 },
@@ -602,27 +612,57 @@ fn ast_eval_ident(name: &str, cols: &[(String, usize)], row: &[SqlValue]) -> Sql
 }
 
 fn ast_eval_binary(op: &BinaryOperator, l: SqlValue, r: SqlValue) -> SqlValue {
+    // Integer overflow follows SQLite (launch Q5-06): `+ - *` and MIN / -1
+    // are recomputed in REAL, MIN % -1 is 0, and x / 0 or x % 0 is NULL.
+    // The oracle used to wrap, which encoded the wrong answer.
     match op {
-        BinaryOperator::Plus => {
-            oracle_arith(l, r, |a, b| Some(a.wrapping_add(b)), |a, b| Some(a + b))
-        }
-        BinaryOperator::Minus => {
-            oracle_arith(l, r, |a, b| Some(a.wrapping_sub(b)), |a, b| Some(a - b))
-        }
-        BinaryOperator::Multiply => {
-            oracle_arith(l, r, |a, b| Some(a.wrapping_mul(b)), |a, b| Some(a * b))
-        }
+        BinaryOperator::Plus => oracle_arith(
+            l,
+            r,
+            |a, b| Some(a.checked_add(b).map_or(OracleInt::Real, OracleInt::Int)),
+            |a, b| Some(a + b),
+        ),
+        BinaryOperator::Minus => oracle_arith(
+            l,
+            r,
+            |a, b| Some(a.checked_sub(b).map_or(OracleInt::Real, OracleInt::Int)),
+            |a, b| Some(a - b),
+        ),
+        BinaryOperator::Multiply => oracle_arith(
+            l,
+            r,
+            |a, b| Some(a.checked_mul(b).map_or(OracleInt::Real, OracleInt::Int)),
+            |a, b| Some(a * b),
+        ),
         BinaryOperator::Divide => oracle_arith(
             l,
             r,
-            |a, b| if b == 0 { None } else { a.checked_div(b) },
+            |a, b| {
+                if b == 0 {
+                    None
+                } else {
+                    Some(a.checked_div(b).map_or(OracleInt::Real, OracleInt::Int))
+                }
+            },
             |a, b| if b == 0.0 { None } else { Some(a / b) },
         ),
         BinaryOperator::Modulo => oracle_arith(
             l,
             r,
-            |a, b| if b == 0 { None } else { a.checked_rem(b) },
-            |a, b| if b == 0.0 { None } else { Some(a % b) },
+            |a, b| match b {
+                0 => None,
+                -1 => Some(OracleInt::Int(0)),
+                _ => Some(OracleInt::Int(a % b)),
+            },
+            // SQLite casts REAL operands of `%` to INTEGER first.
+            |a, b| {
+                let (a, b) = (a as i64, b as i64);
+                match b {
+                    0 => None,
+                    -1 => Some(0.0),
+                    _ => Some((a % b) as f64),
+                }
+            },
         ),
         BinaryOperator::Eq => oracle_cmp(l, r, |o| o == std::cmp::Ordering::Equal),
         BinaryOperator::NotEq => oracle_cmp(l, r, |o| o != std::cmp::Ordering::Equal),
@@ -664,23 +704,33 @@ fn oracle_cmp(l: SqlValue, r: SqlValue, accept: fn(std::cmp::Ordering) -> bool) 
     }
 }
 
+/// Integer result of the oracle: exact, or "recompute in REAL".
+enum OracleInt {
+    Int(i64),
+    Real,
+}
+
 fn oracle_arith(
     l: SqlValue,
     r: SqlValue,
-    int_op: impl FnOnce(i64, i64) -> Option<i64>,
+    int_op: impl FnOnce(i64, i64) -> Option<OracleInt>,
     real_op: impl FnOnce(f64, f64) -> Option<f64>,
 ) -> SqlValue {
     if matches!(l, SqlValue::Null) || matches!(r, SqlValue::Null) {
         return SqlValue::Null;
     }
-    fn lift_int(opt: Option<i64>) -> SqlValue {
-        opt.map(SqlValue::Integer).unwrap_or(SqlValue::Null)
-    }
     fn lift_real(opt: Option<f64>) -> SqlValue {
-        opt.map(SqlValue::Real).unwrap_or(SqlValue::Null)
+        match opt {
+            Some(v) if !v.is_nan() => SqlValue::Real(v),
+            _ => SqlValue::Null,
+        }
     }
     match (l, r) {
-        (SqlValue::Integer(a), SqlValue::Integer(b)) => lift_int(int_op(a, b)),
+        (SqlValue::Integer(a), SqlValue::Integer(b)) => match int_op(a, b) {
+            Some(OracleInt::Int(v)) => SqlValue::Integer(v),
+            Some(OracleInt::Real) => lift_real(real_op(a as f64, b as f64)),
+            None => SqlValue::Null,
+        },
         (SqlValue::Integer(a), SqlValue::Real(b)) => lift_real(real_op(a as f64, b)),
         (SqlValue::Real(a), SqlValue::Integer(b)) => lift_real(real_op(a, b as f64)),
         (SqlValue::Real(a), SqlValue::Real(b)) => lift_real(real_op(a, b)),
@@ -716,7 +766,12 @@ fn oracle_fn(name: &str, v: SqlValue) -> SqlValue {
     match name {
         "abs" => match v {
             SqlValue::Null => SqlValue::Null,
-            SqlValue::Integer(n) => SqlValue::Integer(n.wrapping_abs()),
+            // abs(MIN) is SQLite's `integer overflow` error; the VM returns
+            // Err and the differential skips it, so the oracle panics too.
+            SqlValue::Integer(n) => SqlValue::Integer(
+                n.checked_abs()
+                    .expect("oracle: abs(MIN) is an integer overflow error"),
+            ),
             SqlValue::Real(f) => SqlValue::Real(f.abs()),
             other => panic!("oracle: abs of {other:?}"),
         },
@@ -1234,4 +1289,49 @@ fn microbench_ast_oracle_million() {
     }
     let elapsed = start.elapsed();
     eprintln!("ast oracle 1M iters: {:?} acc={acc}", elapsed);
+}
+
+// ── Launch Q5-06: SQLite integer overflow semantics in the VM ─────────────
+
+#[test]
+fn vm_integer_overflow_promotes_to_real() {
+    let two_pow_63 = SqlValue::Real(9_223_372_036_854_775_808.0);
+    let max = SqlValue::Integer(i64::MAX);
+    let min = SqlValue::Integer(i64::MIN);
+    assert_eq!(run("c0 + 1", std::slice::from_ref(&max), &[]), two_pow_63);
+    assert_eq!(run("c0 - -1", std::slice::from_ref(&max), &[]), two_pow_63);
+    assert_eq!(
+        run("c0 * 2", std::slice::from_ref(&max), &[]),
+        SqlValue::Real(i64::MAX as f64 * 2.0)
+    );
+    assert_eq!(run("c0 / -1", std::slice::from_ref(&min), &[]), two_pow_63);
+    assert_eq!(
+        run("c0 % -1", std::slice::from_ref(&min), &[]),
+        SqlValue::Integer(0)
+    );
+    assert_eq!(run("-c0", std::slice::from_ref(&min), &[]), two_pow_63);
+    assert_eq!(
+        run("c0 / 0", std::slice::from_ref(&max), &[]),
+        SqlValue::Null
+    );
+    assert_eq!(
+        run("c0 % 0", std::slice::from_ref(&max), &[]),
+        SqlValue::Null
+    );
+    // SQLite casts REAL operands of `%` to INTEGER: 5.5 % 2 is 1.0.
+    assert_eq!(
+        run("c0 % 2", &[SqlValue::Real(5.5)], &[]),
+        SqlValue::Real(1.0)
+    );
+}
+
+#[test]
+fn vm_abs_of_min_is_an_integer_overflow_error() {
+    let cols: Vec<(String, usize)> = vec![("c0".to_owned(), 0)];
+    let ctx = CompileCtx {
+        columns: cols.as_slice(),
+    };
+    let prog = compile_one("abs(c0)", &ctx);
+    let err = evaluate(&prog, &[SqlValue::Integer(i64::MIN)], &[]).expect_err("abs(MIN)");
+    assert_eq!(err.to_string(), "integer overflow");
 }

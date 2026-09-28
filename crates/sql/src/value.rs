@@ -36,8 +36,9 @@ pub fn compare_values(left: &SqlValue, right: &SqlValue) -> Ordering {
         (_, Null) => Ordering::Greater,
         (Integer(a), Integer(b)) => a.cmp(b),
         (Real(a), Real(b)) => a.partial_cmp(b).unwrap_or(Ordering::Equal),
-        (Integer(a), Real(b)) => (*a as f64).partial_cmp(b).unwrap_or(Ordering::Equal),
-        (Real(a), Integer(b)) => a.partial_cmp(&(*b as f64)).unwrap_or(Ordering::Equal),
+        // Exact, as SQLite's sqlite3IntFloatCompare: `as f64` is lossy above 2^53.
+        (Integer(a), Real(b)) => crate::numeric::int_real_cmp(*a, *b),
+        (Real(a), Integer(b)) => crate::numeric::int_real_cmp(*b, *a).reverse(),
         (Integer(_) | Real(_), Text(_) | Blob(_)) => Ordering::Less,
         (Text(_) | Blob(_), Integer(_) | Real(_)) => Ordering::Greater,
         (Text(a), Text(b)) => compare_text_maybe_citext(a, b),
@@ -63,8 +64,8 @@ pub fn postgres_bool(yes: bool) -> SqlValue {
 }
 
 pub fn is_truthy(value: &SqlValue) -> bool {
-    if postgres_result_dialect()
-        && let OwnedValue::Text(text) = value
+    if let OwnedValue::Text(text) = value
+        && postgres_result_dialect()
     {
         let trimmed = text.as_ref().trim();
         if trimmed.eq_ignore_ascii_case("t") || trimmed.eq_ignore_ascii_case("true") {
@@ -78,34 +79,12 @@ pub fn is_truthy(value: &SqlValue) -> bool {
         OwnedValue::Null => false,
         OwnedValue::Integer(v) => *v != 0,
         OwnedValue::Real(v) => *v != 0.0,
-        OwnedValue::Text(v) => sqlite_truthy_str(v.as_ref()),
-        // A33: avoid the `String::from_utf8_lossy` allocation. The
-        // previous code allocated a fresh String for every Blob truthy
-        // check that contained non-UTF8 bytes. `sqlite_truthy_str` only
-        // checks for parseable i64 / f64 patterns, neither of which can
-        // include replacement chars (U+FFFD) — so any non-UTF8 byte
-        // sequence in the blob must yield `false` anyway. Short-circuit
-        // it directly; for valid-UTF8 blobs we borrow the slice without
-        // allocating.
-        OwnedValue::Blob(v) => match std::str::from_utf8(v) {
-            Ok(s) => sqlite_truthy_str(s),
-            Err(_) => false,
-        },
+        // SQLite reads TEXT and BLOB through their longest numeric prefix
+        // (`sqlite3VdbeBooleanValue` -> `sqlite3AtoF`): `'1abc'`, `x'31ff'`,
+        // `'1e'` and `'.5x'` are true; `'abc'`, `'inf'` and `'nan'` are false.
+        OwnedValue::Text(v) => crate::numeric::sqlite_text_is_true(v.as_bytes()),
+        OwnedValue::Blob(v) => crate::numeric::sqlite_text_is_true(v),
     }
-}
-
-fn sqlite_truthy_str(value: &str) -> bool {
-    let trimmed = value.trim();
-    if trimmed.is_empty() {
-        return false;
-    }
-    if let Ok(v) = trimmed.parse::<i64>() {
-        return v != 0;
-    }
-    if let Ok(v) = trimmed.parse::<f64>() {
-        return v != 0.0;
-    }
-    false
 }
 
 pub fn canonicalize(value: SqlValue) -> SqlValue {

@@ -170,7 +170,11 @@ pub(super) fn frame_bounds(
         ResolvedBound::UnboundedFollowing => total as i64 - 1,
     };
     let s = s.max(0) as usize;
-    let e = if e < 0 { 0 } else { e as usize };
-    let e = e.min(total.saturating_sub(1));
+    if e < 0 {
+        // The frame ends before the partition starts (`1 PRECEDING AND
+        // 1 PRECEDING` on the first row): empty, not row 0.
+        return (s.max(1), 0);
+    }
+    let e = (e as usize).min(total.saturating_sub(1));
     (s, e)
 }

@@ -8,6 +8,7 @@ mod identity;
 mod json;
 mod listen;
 mod matview;
+mod numeric;
 mod parser;
 mod pg_alter;
 mod pg_fn;

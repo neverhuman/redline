@@ -48,6 +48,11 @@ mod parser {
 
 pub use redlinedb_sql::format_real_sqlite;
 
+// The VM's arithmetic is the shared SQLite numeric module (launch Q5-06).
+#[allow(unused_imports)]
+#[path = "../src/numeric.rs"]
+mod numeric;
+
 #[path = "../src/exec/expr/program.rs"]
 mod program;
 

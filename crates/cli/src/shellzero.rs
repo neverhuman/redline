@@ -663,29 +663,33 @@ fn eval_bin(op: BinOp, l: Value, r: Value) -> Option<Value> {
     match op {
         BinOp::Add => match both_int {
             Some((a, b)) => Some(Value::Int(a.checked_add(b)?)),
-            None => Some(Value::Real(lf + rf)),
+            None => real_or_engine(lf + rf),
         },
         BinOp::Sub => match both_int {
             Some((a, b)) => Some(Value::Int(a.checked_sub(b)?)),
-            None => Some(Value::Real(lf - rf)),
+            None => real_or_engine(lf - rf),
         },
         BinOp::Mul => match both_int {
             Some((a, b)) => Some(Value::Int(a.checked_mul(b)?)),
-            None => Some(Value::Real(lf * rf)),
+            None => real_or_engine(lf * rf),
         },
+        // `checked_div` / `checked_rem` return None for MIN / -1 and
+        // MIN % -1 (a plain `/` or `%` there aborts the process under
+        // panic=abort); None falls through to the engine, which answers
+        // them the SQLite way (REAL 9.2e18 and 0).
         BinOp::Div => match both_int {
             Some((a, b)) => {
                 if b == 0 {
                     Some(Value::Null)
                 } else {
-                    Some(Value::Int(a / b))
+                    Some(Value::Int(a.checked_div(b)?))
                 }
             }
             None => {
                 if rf == 0.0 {
                     Some(Value::Null)
                 } else {
-                    Some(Value::Real(lf / rf))
+                    real_or_engine(lf / rf)
                 }
             }
         },
@@ -694,19 +698,21 @@ fn eval_bin(op: BinOp, l: Value, r: Value) -> Option<Value> {
                 if b == 0 {
                     Some(Value::Null)
                 } else {
-                    Some(Value::Int(a % b))
+                    Some(Value::Int(a.checked_rem(b)?))
                 }
             }
-            None => {
-                if rf == 0.0 {
-                    Some(Value::Null)
-                } else {
-                    Some(Value::Real(lf % rf))
-                }
-            }
+            // SQLite casts REAL operands of `%` to INTEGER; leave that to
+            // the engine rather than answering with a float remainder.
+            None => None,
         },
         BinOp::Concat => unreachable!(),
     }
+}
+
+/// A REAL result ShellZero may print itself. NaN (`inf - inf`) is NULL in
+/// SQLite; the engine answers it.
+fn real_or_engine(value: f64) -> Option<Value> {
+    (!value.is_nan()).then_some(Value::Real(value))
 }
 
 fn eval_func(name: &str, vals: &[Value]) -> Option<Value> {

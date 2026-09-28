@@ -1,4 +1,5 @@
 use super::super::*;
+use crate::numeric::ArithOp;
 
 pub(crate) fn eval_binary(
     left: &Expr,
@@ -26,12 +27,7 @@ pub(crate) fn eval_binary(
         if let Some(flag) = crate::pg_search::text_similarity_match(&left_value, &right_value) {
             return Ok(flag);
         }
-        return Ok(arithmetic(
-            left_value,
-            right_value,
-            |a, b| if b == 0 { None } else { a.checked_rem(b) },
-            |a, b| if b == 0.0 { None } else { Some(a % b) },
-        )?);
+        return crate::numeric::arith(ArithOp::Rem, left_value, right_value);
     }
     if matches!(op, BinaryOperator::Match) {
         if let Some(flag) = crate::virtual_module::fts_match(left, right, row, bindings)? {
@@ -76,12 +72,7 @@ pub(crate) fn eval_binary(
                     if let Some(v) = try_float4_add(&left_value, &right_value) {
                         v
                     } else {
-                        arithmetic(
-                            left_value,
-                            right_value,
-                            |a, b| Some(a.wrapping_add(b)),
-                            |a, b| Some(a + b),
-                        )?
+                        crate::numeric::arith(ArithOp::Add, left_value, right_value)?
                     }
                 }
             }
@@ -94,12 +85,7 @@ pub(crate) fn eval_binary(
                 } else {
                     match try_pg_decimal_arith(&left_value, &right_value, PgDecimalOp::Sub) {
                         Some(v) => v,
-                        None => arithmetic(
-                            left_value,
-                            right_value,
-                            |a, b| Some(a.wrapping_sub(b)),
-                            |a, b| Some(a - b),
-                        )?,
+                        None => crate::numeric::arith(ArithOp::Sub, left_value, right_value)?,
                     }
                 }
             }
@@ -107,23 +93,13 @@ pub(crate) fn eval_binary(
         BinaryOperator::Multiply => {
             match try_pg_decimal_arith(&left_value, &right_value, PgDecimalOp::Mul) {
                 Some(v) => v,
-                None => arithmetic(
-                    left_value,
-                    right_value,
-                    |a, b| Some(a.wrapping_mul(b)),
-                    |a, b| Some(a * b),
-                )?,
+                None => crate::numeric::arith(ArithOp::Mul, left_value, right_value)?,
             }
         }
         BinaryOperator::Divide => {
             match try_pg_decimal_arith(&left_value, &right_value, PgDecimalOp::Div) {
                 Some(v) => v,
-                None => arithmetic(
-                    left_value,
-                    right_value,
-                    |a, b| if b == 0 { None } else { a.checked_div(b) },
-                    |a, b| if b == 0.0 { None } else { Some(a / b) },
-                )?,
+                None => crate::numeric::arith(ArithOp::Div, left_value, right_value)?,
             }
         }
         BinaryOperator::Modulo => unreachable!("text and numeric modulo are handled above"),

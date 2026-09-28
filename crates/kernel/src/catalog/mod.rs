@@ -7,6 +7,7 @@ mod ids;
 mod key;
 mod manager;
 mod names;
+mod numeric;
 mod ops;
 mod record;
 mod schema;
@@ -35,6 +36,7 @@ pub use key::{
 };
 pub use manager::CatalogManager;
 pub use names::{DbName, QualifiedName};
+pub use numeric::{int_real_cmp, sqlite_numeric_prefix, sqlite_text_is_true};
 pub use ops::{
     apply_alter_table, apply_create_index, apply_create_table, apply_drop_index, apply_drop_table,
     apply_rename_index, apply_set_index_meta_page_id, legacy_alter_table_active_for_tests,

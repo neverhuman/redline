@@ -1,4 +1,5 @@
 use super::*;
+use crate::numeric::{ArithOp, SumAcc};
 use std::cell::RefCell;
 use std::collections::HashSet;
 
@@ -140,36 +141,21 @@ pub(super) fn eval_group_scalar_with_ctx(
                         (Some(false), Some(false)) => SqlValue::Integer(0),
                         _ => SqlValue::Null,
                     },
-                    BinaryOperator::Plus => arithmetic(
-                        left_value,
-                        right_value,
-                        |a, b| Some(a.wrapping_add(b)),
-                        |a, b| Some(a + b),
-                    )?,
-                    BinaryOperator::Minus => arithmetic(
-                        left_value,
-                        right_value,
-                        |a, b| Some(a.wrapping_sub(b)),
-                        |a, b| Some(a - b),
-                    )?,
-                    BinaryOperator::Multiply => arithmetic(
-                        left_value,
-                        right_value,
-                        |a, b| Some(a.wrapping_mul(b)),
-                        |a, b| Some(a * b),
-                    )?,
-                    BinaryOperator::Divide => arithmetic(
-                        left_value,
-                        right_value,
-                        |a, b| if b == 0 { None } else { a.checked_div(b) },
-                        |a, b| if b == 0.0 { None } else { Some(a / b) },
-                    )?,
-                    BinaryOperator::Modulo => arithmetic(
-                        left_value,
-                        right_value,
-                        |a, b| if b == 0 { None } else { a.checked_rem(b) },
-                        |a, b| if b == 0.0 { None } else { Some(a % b) },
-                    )?,
+                    BinaryOperator::Plus => {
+                        crate::numeric::arith(ArithOp::Add, left_value, right_value)?
+                    }
+                    BinaryOperator::Minus => {
+                        crate::numeric::arith(ArithOp::Sub, left_value, right_value)?
+                    }
+                    BinaryOperator::Multiply => {
+                        crate::numeric::arith(ArithOp::Mul, left_value, right_value)?
+                    }
+                    BinaryOperator::Divide => {
+                        crate::numeric::arith(ArithOp::Div, left_value, right_value)?
+                    }
+                    BinaryOperator::Modulo => {
+                        crate::numeric::arith(ArithOp::Rem, left_value, right_value)?
+                    }
                     BinaryOperator::Eq => {
                         compare_binary(left_value, right_value, |o| o == Ordering::Equal)?
                     }
@@ -709,10 +695,9 @@ fn eval_group_function(
             }
         }
         "sum" => {
-            let mut total_i: i64 = 0;
-            let mut total_r: f64 = 0.0;
-            let mut saw_real = false;
-            let mut saw_value = false;
+            // SQLite sumStep/sumFinalize: exact INTEGER sum, `integer
+            // overflow` once it leaves i64 with only INTEGER inputs.
+            let mut acc = SumAcc::new();
             let distinct = is_distinct_call(func);
             let mut seen: HashSet<Vec<u8>> = HashSet::new();
             let collation = if let FunctionArguments::List(list) = &func.args {
@@ -743,50 +728,14 @@ fn eval_group_function(
                             }
                         }
                     }
-                    match value {
-                        SqlValue::Null => {}
-                        SqlValue::Integer(v) if !saw_real => {
-                            total_i += v;
-                            saw_value = true;
-                        }
-                        SqlValue::Integer(v) => {
-                            total_r += v as f64;
-                            saw_value = true;
-                        }
-                        SqlValue::Real(v) => {
-                            if !saw_real {
-                                total_r = total_i as f64;
-                                saw_real = true;
-                            }
-                            total_r += v;
-                            saw_value = true;
-                        }
-                        other => {
-                            let real = value_to_string(&other)
-                                .trim()
-                                .parse::<f64>()
-                                .map_err(|_| Error::DatatypeMismatch)?;
-                            if !saw_real {
-                                total_r = total_i as f64;
-                                saw_real = true;
-                            }
-                            total_r += real;
-                            saw_value = true;
-                        }
-                    }
+                    acc.step_value(&value);
                 }
             }
-            if !saw_value {
-                Ok(SqlValue::Null)
-            } else if saw_real {
-                Ok(canonicalize(SqlValue::Real(total_r)))
-            } else {
-                Ok(SqlValue::Integer(total_i))
-            }
+            Ok(canonicalize(acc.sum()?))
         }
         "avg" => {
-            let mut count = 0i64;
-            let mut sum = 0.0f64;
+            // SQLite avgFinalize over the shared sum accumulator.
+            let mut acc = SumAcc::new();
             let distinct = is_distinct_call(func);
             let mut seen: HashSet<Vec<u8>> = HashSet::new();
             let collation = if let FunctionArguments::List(list) = &func.args {
@@ -817,31 +766,10 @@ fn eval_group_function(
                             }
                         }
                     }
-                    match value {
-                        SqlValue::Null => {}
-                        SqlValue::Integer(v) => {
-                            sum += v as f64;
-                            count += 1;
-                        }
-                        SqlValue::Real(v) => {
-                            sum += v;
-                            count += 1;
-                        }
-                        other => {
-                            sum += value_to_string(&other)
-                                .trim()
-                                .parse::<f64>()
-                                .map_err(|_| Error::DatatypeMismatch)?;
-                            count += 1;
-                        }
-                    }
+                    acc.step_value(&value);
                 }
             }
-            if count == 0 {
-                Ok(SqlValue::Null)
-            } else {
-                Ok(SqlValue::Real(sum / count as f64))
-            }
+            Ok(acc.avg())
         }
         "median" | "percentile_cont" => {
             let percentile = if name == "median" {
@@ -919,7 +847,7 @@ fn eval_group_function(
         // SQLite total(X) — NULL-safe sum: returns 0.0 when all values are NULL
         // (unlike sum() which returns NULL). Always returns a real.
         "total" => {
-            let mut acc = 0.0f64;
+            let mut acc = SumAcc::new();
             for row in group {
                 if !row_passes_aggregate_filter(func, row, bindings)? {
                     continue;
@@ -929,17 +857,10 @@ fn eval_group_function(
                     && let Some(FunctionArg::Unnamed(FunctionArgExpr::Expr(expr))) =
                         list.args.first()
                 {
-                    match eval_scalar(expr, &ctx, bindings)? {
-                        SqlValue::Null => {}
-                        SqlValue::Integer(v) => acc += v as f64,
-                        SqlValue::Real(v) => acc += v,
-                        other => {
-                            acc += value_to_string(&other).trim().parse::<f64>().unwrap_or(0.0);
-                        }
-                    }
+                    acc.step_value(&eval_scalar(expr, &ctx, bindings)?);
                 }
             }
-            Ok(SqlValue::Real(acc))
+            Ok(acc.total())
         }
         // SQLite group_concat(X) / group_concat(X, sep) — concatenates
         // non-NULL values with sep (default ','). string_agg(X, sep) is an alias.

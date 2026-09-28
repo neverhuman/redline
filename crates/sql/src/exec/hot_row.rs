@@ -291,7 +291,17 @@ pub(crate) fn apply_plans(plans: &[AssignmentPlan], values: &mut [SqlValue]) -> 
             }
             AssignmentPlan::IntegerDelta { col, delta } => {
                 let new_val = match &values[*col] {
-                    SqlValue::Integer(n) => SqlValue::Integer(n.wrapping_add(*delta)),
+                    // An overflowing delta becomes REAL in SQLite; the
+                    // error sends this row back to the slow path, which
+                    // applies that promotion and the column affinity.
+                    SqlValue::Integer(n) => match n.checked_add(*delta) {
+                        Some(sum) => SqlValue::Integer(sum),
+                        None => {
+                            return Err(crate::error::Error::UnsupportedSql(
+                                "hot_row delta overflows i64".to_string(),
+                            ));
+                        }
+                    },
                     SqlValue::Null => SqlValue::Null,
                     SqlValue::Real(r) => SqlValue::Real(*r + (*delta as f64)),
                     // Text/Blob: SQLite would coerce to a number then add. For

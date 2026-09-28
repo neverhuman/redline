@@ -212,11 +212,7 @@ pub(crate) fn eval_constant(expr: &Expr, bindings: &[Option<SqlValue>]) -> Optio
         Expr::UnaryOp { op, expr } => {
             let value = eval_constant(expr, bindings)?;
             match op {
-                sqlparser::ast::UnaryOperator::Minus => match value {
-                    SqlValue::Integer(v) => Some(SqlValue::Integer(-v)),
-                    SqlValue::Real(v) => Some(SqlValue::Real(-v)),
-                    _ => None,
-                },
+                sqlparser::ast::UnaryOperator::Minus => crate::numeric::negate_constant(value),
                 sqlparser::ast::UnaryOperator::Plus => Some(value),
                 _ => None,
             }
