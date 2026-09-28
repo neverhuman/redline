@@ -23,6 +23,8 @@ mod numeric;
 mod q5_01_literals;
 #[path = "launch_wrong_answer/q5_02_partial_update.rs"]
 mod q5_02_partial_update;
+#[path = "launch_wrong_answer/q5_02_reentry.rs"]
+mod q5_02_reentry;
 #[path = "launch_wrong_answer/q5_02_unique_point.rs"]
 mod q5_02_unique_point;
 #[path = "launch_wrong_answer/q5_03_recursive_limit.rs"]

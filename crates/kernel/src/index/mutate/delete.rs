@@ -4,6 +4,7 @@ use crate::{Error, Result};
 
 use super::super::cells::delete_marker_visible;
 use super::super::{BtreeIndex, IndexRowRef, KeyBuf, NON_TRANSACTIONAL_DELETE_TX, PAGE_LEAF_KIND};
+use super::versions::{deletable_version, same_entry};
 use crate::engine::ConcurrentTxStatus;
 use crate::wal::WalPayload;
 
@@ -98,30 +99,47 @@ impl BtreeIndex {
                 continue;
             }
             let mut entries = self.read_entries(page_ref)?;
-            let mut changed = false;
+            let mut marked_row = None;
             let mut last_key_matches_search = false;
             for entry in &mut entries {
                 if let crate::index::cells::Entry::Leaf {
                     logical_key: key,
                     row: entry_row,
+                    create_tx,
                     delete_tx,
                     ..
                 } = entry
                 {
-                    if key.as_slice() == logical_key {
-                        last_key_matches_search = true;
+                    if key.as_slice() != logical_key {
+                        continue;
                     }
-                    if key.as_slice() == logical_key && *entry_row == row {
-                        if delete_marker_visible(*delete_tx, visibility) {
-                            return Ok(());
+                    last_key_matches_search = true;
+                    match visibility {
+                        // A versioned entry (see `mutate/versions.rs`): mark
+                        // the version the latest state holds, whichever
+                        // tuple generation it carries.
+                        Some((tx_status, _, _)) => {
+                            if !same_entry(*entry_row, row)
+                                || !deletable_version(tx_status, tx_id, *create_tx, *delete_tx)
+                            {
+                                continue;
+                            }
                         }
-                        *delete_tx = tx_id;
-                        changed = true;
-                        break;
+                        None => {
+                            if *entry_row != row {
+                                continue;
+                            }
+                            if delete_marker_visible(*delete_tx, None) {
+                                return Ok(());
+                            }
+                        }
                     }
+                    *delete_tx = tx_id;
+                    marked_row = Some(*entry_row);
+                    break;
                 }
             }
-            if changed {
+            if let Some(row) = marked_row {
                 let unlogged_lsn = if recovered {
                     super::recovered_leaf_lsn(&page)?
                 } else {

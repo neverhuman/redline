@@ -272,6 +272,16 @@ index-format epoch below), so such an index is rebuilt at the first open.
   check only pages, the WAL and B-tree structure, and answered `ok` for the
   damaged indexes above. `PRAGMA quick_check` still skips index contents, as
   in SQLite.
+- A row that leaves an index and comes back under the same key and rowid is
+  in the index again. Its entry has the bytes of the tombstone it left, and
+  the kernel insert took that tombstone for the entry: after `flag` 1 -> 0
+  -> 1 the row was missing from its partial index, and a partial UNIQUE
+  index admitted a second row with the key. Plain indexes lost the entry the
+  same way on a key round trip (`k` 10 -> 11 -> 10) and on DELETE followed
+  by an INSERT of the same rowid and key. The insert now restamps the
+  tombstone when no snapshot can still read it (the same transaction removed
+  it, or its insert rolled back), and otherwise keeps it for older snapshots
+  and adds the entry's next version beside it.
 - A point lookup on a unique partial index no longer skips the routed table
   scan; a partial index holds only the rows its WHERE clause admits.
 - An index with a `COLLATE NOCASE` (or RTRIM or custom) key is no longer

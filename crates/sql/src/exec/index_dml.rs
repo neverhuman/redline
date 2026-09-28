@@ -199,7 +199,7 @@ pub(crate) fn maintain_indexes_on_insert(
         let row_ref = synthetic_row_ref(rowid);
         // SQLite NULL parity for unique indexes: NULL key parts are not
         // duplicates, so we still insert them but never block on conflict.
-        handle.insert_tx(tx.id(), &key.bytes, row_ref)?;
+        handle.insert_tx_versioned(engine.tx_status(), tx.id(), &key.bytes, row_ref)?;
     }
     Ok(())
 }
@@ -293,7 +293,12 @@ pub(crate) fn maintain_indexes_on_update(
             )?;
         }
         if let Some(new_key) = new_key {
-            handle.insert_tx(tx.id(), &new_key.bytes, synthetic_row_ref(new_rowid))?;
+            handle.insert_tx_versioned(
+                engine.tx_status(),
+                tx.id(),
+                &new_key.bytes,
+                synthetic_row_ref(new_rowid),
+            )?;
         }
     }
     Ok(())

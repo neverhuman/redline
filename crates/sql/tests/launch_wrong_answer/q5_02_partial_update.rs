@@ -27,11 +27,11 @@ use redlinedb_sql::{Connection, Database, DbOptions, SqlValue};
 use crate::lab::{Lab, Outcome, int, text};
 
 /// `t`: a partial index over a rowid-alias table.
-const T: &str = "CREATE TABLE t(id INTEGER PRIMARY KEY, k INTEGER, flag INTEGER); \
+pub(crate) const T: &str = "CREATE TABLE t(id INTEGER PRIMARY KEY, k INTEGER, flag INTEGER); \
     CREATE INDEX ix_k ON t(k) WHERE flag = 1;";
 
 /// `u`: a partial UNIQUE index.
-const U: &str = "CREATE TABLE u(id INTEGER PRIMARY KEY, k INTEGER, flag INTEGER); \
+pub(crate) const U: &str = "CREATE TABLE u(id INTEGER PRIMARY KEY, k INTEGER, flag INTEGER); \
     CREATE UNIQUE INDEX ux ON u(k) WHERE flag = 1;";
 
 /// Reads of a table with a partial index on `k` whose predicate is `pred`.
@@ -62,7 +62,7 @@ fn reads(pred: &str, keys: &[i64]) -> Vec<(String, bool)> {
 
 /// Each read must agree with SQLite through `index`, through a scan and
 /// through the planner's own choice.
-fn check_reads(lab: &Lab, table: &str, index: &str, pred: &str, keys: &[i64]) {
+pub(crate) fn check_reads(lab: &Lab, table: &str, index: &str, pred: &str, keys: &[i64]) {
     for (query, ordered) in reads(pred, keys) {
         for access in [
             format!("{table} INDEXED BY {index}"),
@@ -76,7 +76,7 @@ fn check_reads(lab: &Lab, table: &str, index: &str, pred: &str, keys: &[i64]) {
 
 /// The rowids index `index` holds, sorted, read from its B-tree at the
 /// latest committed snapshot.
-fn index_rowids(conn: &Connection, index: &str) -> Vec<i64> {
+pub(crate) fn index_rowids(conn: &Connection, index: &str) -> Vec<i64> {
     let engine = conn.engine_for_tests();
     let schema = engine.schema_snapshot();
     let def = schema
@@ -103,7 +103,7 @@ fn index_rowids(conn: &Connection, index: &str) -> Vec<i64> {
 /// the rowids of a scan of the heap, whose rows in turn agree with SQLite.
 /// (RedlineDB numbers the rows of a table without a rowid alias from one
 /// counter shared by all tables, so rowids are compared on this side only.)
-fn assert_members(lab: &Lab, index: &str, table: &str, pred: &str) {
+pub(crate) fn assert_members(lab: &Lab, index: &str, table: &str, pred: &str) {
     lab.assert_same(
         &format!("SELECT id FROM {table} NOT INDEXED WHERE {pred} ORDER BY id"),
         true,
@@ -141,7 +141,7 @@ fn rowids(conn: &Arc<Connection>, table: &str) -> Vec<u64> {
     out
 }
 
-fn integrity_rows(conn: &Arc<Connection>) -> Vec<String> {
+pub(crate) fn integrity_rows(conn: &Arc<Connection>) -> Vec<String> {
     let mut stmt = conn.prepare("PRAGMA integrity_check").expect("prepare");
     let mut out = Vec::new();
     while stmt.step().expect("step") == redlinedb_sql::Step::Row {
@@ -153,17 +153,17 @@ fn integrity_rows(conn: &Arc<Connection>) -> Vec<String> {
     out
 }
 
-fn assert_integrity_ok(lab: &Lab) {
+pub(crate) fn assert_integrity_ok(lab: &Lab) {
     assert_eq!(integrity_rows(&lab.redline), vec!["ok".to_owned()]);
 }
 
-fn check_t(lab: &Lab, keys: &[i64]) {
+pub(crate) fn check_t(lab: &Lab, keys: &[i64]) {
     check_reads(lab, "t", "ix_k", "flag = 1", keys);
     assert_members(lab, "ix_k", "t", "flag = 1");
     assert_integrity_ok(lab);
 }
 
-fn check_u(lab: &Lab, keys: &[i64]) {
+pub(crate) fn check_u(lab: &Lab, keys: &[i64]) {
     check_reads(lab, "u", "ux", "flag = 1", keys);
     assert_members(lab, "ux", "u", "flag = 1");
     assert_integrity_ok(lab);

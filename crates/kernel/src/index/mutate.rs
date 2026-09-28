@@ -6,6 +6,8 @@ mod insert;
 mod insert_leaf;
 #[path = "mutate/maintenance.rs"]
 mod maintenance;
+#[path = "mutate/versions.rs"]
+mod versions;
 
 use crate::format::Lsn;
 use crate::storage::buffer::FrameState;
