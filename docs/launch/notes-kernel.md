@@ -617,3 +617,8 @@ Draft lines for the v5.0.0 CHANGELOG. The integrator owns `CHANGELOG.md`.
   fail with `Busy`; closing this needs one engine per directory per
   process across the facade, the SQL crate and the FFI. Chapter 09 now
   lists these paths.
+- The recover observer and the durability receipt now report a key that a
+  table read, a full scan or an index probe returns more than once, and
+  the oracle disqualifies such a run. Rows were collected into a map by
+  key and index results into sets, so the second copy a non-idempotent
+  replay leaves was dropped before the oracle saw it.

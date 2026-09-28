@@ -218,7 +218,9 @@ fn index_check(sections: &BTreeMap<String, Vec<String>>, errors: &mut Vec<String
     for line in sections.get("scan").map(Vec::as_slice).unwrap_or(&[]) {
         match typed_row(line, 2).and_then(|row| Ok((key(&row)?, label(&row[1])))) {
             Ok((key, probe)) => {
-                check.via_scan.entry(probe).or_default().insert(key);
+                if !check.via_scan.entry(probe.clone()).or_default().insert(key) {
+                    errors.push(format!("scan for tenant {probe}: key {key} appears twice"));
+                }
             }
             Err(err) => errors.push(format!("scan row {line:?}: {err:#}")),
         }
@@ -232,7 +234,9 @@ fn index_check(sections: &BTreeMap<String, Vec<String>>, errors: &mut Vec<String
         for line in lines {
             match typed_row(line, 1).and_then(|row| key(&row)) {
                 Ok(key) => {
-                    keys.insert(key);
+                    if !keys.insert(key) {
+                        errors.push(format!("probe {label}: key {key} appears twice"));
+                    }
                 }
                 Err(err) => errors.push(format!("probe {label} row {line:?}: {err:#}")),
             }

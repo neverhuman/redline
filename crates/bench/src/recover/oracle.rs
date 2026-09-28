@@ -311,6 +311,10 @@ pub struct RecoveredState {
     pub index_checks: Vec<IndexCheck>,
     /// Rows of `PRAGMA integrity_check`; healthy is exactly `["ok"]`.
     pub integrity_check: Vec<String>,
+    /// A key a table read or an index probe returned more than once, such
+    /// as the second copy a non-idempotent replay leaves. Any entry
+    /// disqualifies; the maps above keep only one copy.
+    pub duplicates: Vec<String>,
     /// Failures of the harness itself (open failed, ack log missing after
     /// READY, recovery passes disagree, ...). Any entry disqualifies.
     pub harness_errors: Vec<String>,
@@ -410,6 +414,12 @@ impl RecoveredState {
         }
         if self.index_checks != other.index_checks {
             out.push("index checks differ between recovery passes".to_owned());
+        }
+        if self.duplicates != other.duplicates {
+            out.push(format!(
+                "duplicate keys differ between recovery passes: {:?} vs {:?}",
+                self.duplicates, other.duplicates
+            ));
         }
         if self.integrity_check != other.integrity_check {
             out.push(format!(
@@ -622,6 +632,14 @@ pub fn evaluate(expected: &AckLedger, observed: &RecoveredState) -> RecoveryVerd
             &mut verdict.integrity_errors,
             &mut integrity_overflow,
             format!("schema object {name} is missing although committed transactions require it"),
+        );
+    }
+
+    for duplicate in &observed.duplicates {
+        push_capped(
+            &mut verdict.integrity_errors,
+            &mut integrity_overflow,
+            format!("returned more than once: {duplicate}"),
         );
     }
 

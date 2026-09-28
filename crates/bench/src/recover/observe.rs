@@ -16,6 +16,10 @@ use crate::engine::{self, BenchConn, CellValue};
 
 use super::oracle::{self, IndexCheck, RecoveredState};
 
+#[cfg(test)]
+#[path = "observe_tests.rs"]
+mod tests;
+
 /// Where each engine keeps its database inside a child's `db_dir`.
 pub(crate) fn database_path(engine: EngineKind, db_dir: &Path) -> PathBuf {
     match engine {
@@ -89,7 +93,10 @@ fn read_state(conn: &mut dyn BenchConn) -> Result<RecoveredState> {
         };
         let mut rows = BTreeMap::new();
         for row in conn.query_all(&format!("SELECT {columns} FROM {table} ORDER BY 1"), &[])? {
-            rows.insert(key(&row)?, oracle::row_digest(&row));
+            let key = key(&row)?;
+            if rows.insert(key, oracle::row_digest(&row)).is_some() {
+                state.duplicates.push(format!("table {table}: key {key}"));
+            }
         }
         state.tables.insert(table, rows);
     }
@@ -105,22 +112,30 @@ fn read_state(conn: &mut dyn BenchConn) -> Result<RecoveredState> {
             "k",
             "tenant",
             tenants,
+            &mut state.duplicates,
         )?);
     }
     for slot in 0..oracle::CATALOG_SLOTS {
         let table = oracle::scratch_table(slot);
         let index = oracle::scratch_index(slot);
         if state.schema.contains(&table) && state.schema.contains(&index) {
-            state
-                .index_checks
-                .push(check_index(conn, &table, &index, "id", "note", Vec::new())?);
+            state.index_checks.push(check_index(
+                conn,
+                &table,
+                &index,
+                "id",
+                "note",
+                Vec::new(),
+                &mut state.duplicates,
+            )?);
         }
     }
     Ok(state)
 }
 
 /// Compare `index` point lookups with a NOT INDEXED scan of `table`, for
-/// every value in `extra_probes` and every value the scan finds.
+/// every value in `extra_probes` and every value the scan finds. A key
+/// either read returns twice goes to `duplicates`.
 fn check_index(
     conn: &mut dyn BenchConn,
     table: &str,
@@ -128,6 +143,7 @@ fn check_index(
     pk: &str,
     column: &str,
     extra_probes: Vec<CellValue>,
+    duplicates: &mut Vec<String>,
 ) -> Result<IndexCheck> {
     let scan_sql = format!("SELECT {pk}, {column} FROM {table} NOT INDEXED");
     let probe_sql = format!("SELECT {pk} FROM {table} INDEXED BY {index} WHERE {column} = ?1");
@@ -146,17 +162,19 @@ fn check_index(
     for row in conn.query_all(&scan_sql, &[])? {
         let value = row.get(1).cloned().unwrap_or(CellValue::Null);
         let probe = label(&value);
-        check
-            .via_scan
-            .entry(probe.clone())
-            .or_default()
-            .insert(key(&row)?);
+        let key = key(&row)?;
+        if !check.via_scan.entry(probe.clone()).or_default().insert(key) {
+            duplicates.push(format!("scan of {table} for {column} = {probe}: key {key}"));
+        }
         probes.entry(probe).or_insert(value);
     }
     for (probe, value) in &probes {
         let mut keys = BTreeSet::new();
         for row in conn.query_all(&probe_sql, std::slice::from_ref(value))? {
-            keys.insert(key(&row)?);
+            let key = key(&row)?;
+            if !keys.insert(key) {
+                duplicates.push(format!("index {index} probe {column} = {probe}: key {key}"));
+            }
         }
         check.via_index.insert(probe.clone(), keys);
     }
