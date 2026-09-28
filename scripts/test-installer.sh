@@ -5,10 +5,13 @@
 #
 # Checked: the asset each platform requests; every refusal happens before
 # anything under PREFIX changes (the prefix fingerprint is compared); a
-# candidate that fails validation, a cp/mv/ln failure at any point, and two
-# concurrent installers leave one complete version active, never a mix;
-# rollback; the legacy flat layout is refused unless migrated; prefixes with
-# spaces. INSTALLER selects another script (default: install.sh).
+# candidate that fails validation, a cp/mv/ln failure at any point (also
+# through BSD mv's -h, simulated on a GNU host), and two concurrent installers
+# leave one complete version active, never a mix, and the rollback target
+# unchanged; rollback; the legacy flat layout is refused unless migrated, and
+# a migration that fails at any cp/mv/ln call leaves the legacy files
+# answering at their paths; prefixes with spaces. INSTALLER selects another
+# script (default: install.sh).
 set -euo pipefail
 root=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
 installer=${INSTALLER:-$root/install.sh}
@@ -349,37 +352,107 @@ run_installer "$work/roll-forward.log" "$prefix" REDLINEDB_ROLLBACK=1 || fail "r
 assert_active roll-forward "$prefix" "$new"
 
 # --- A cp, mv or ln failure at any step leaves one complete version. ----------
-# Each shim fails its Nth call. Every failed run must leave $old wholly
-# active; once N passes the number of calls the installer makes, it succeeds.
-for tool in cp mv ln; do
-  real=$(command -v "$tool")
-  mkdir -p "$work/inject-$tool"
-  cat > "$work/inject-$tool/$tool" <<BIN
+# Each shim fails its Nth call and records that call's arguments; every other
+# call goes to the real tool. A failed run must leave the earlier state whole.
+# A run can also succeed although call N failed, when the installer has a
+# fallback for that call: the probe for mv's replace-a-link flag (GNU -T,
+# else BSD -h) and the hard link that keeps a legacy file (else a copy). Any
+# other absorbed failure is an error. Once N passes the number of calls the
+# installer makes, it succeeds and the loop ends; each loop must see at least
+# two failed runs, so a shim that never fires fails the test.
+real_mv=$(command -v mv)
+# make_shim <tool> <directory> [real tool]
+make_shim() {
+  local tool=$1 dir=$2 real=${3:-$(command -v "$1")}
+  mkdir -p "$dir"
+  cat > "$dir/$tool" <<BIN
 #!/bin/sh
-count=\$((\$(cat "$work/inject-$tool/count" 2>/dev/null || echo 0) + 1))
-echo "\$count" > "$work/inject-$tool/count"
-[ "\$count" != "\$INJECT_AT" ] || { echo "injected $tool failure" >&2; exit 1; }
+count=\$((\$(cat "$dir/count" 2>/dev/null || echo 0) + 1))
+echo "\$count" > "$dir/count"
+if [ "\$count" = "\$INJECT_AT" ]; then
+  printf '%s\\n' "\$*" > "$dir/injected"
+  echo "injected $tool failure" >&2
+  exit 1
+fi
 exec "$real" "\$@"
 BIN
-  chmod +x "$work/inject-$tool/$tool"
-  succeeded=false
-  for at in $(seq 1 60); do
+  chmod +x "$dir/$tool"
+}
+# inject_loop <label> <tool> <shim directory> <baseline prefix> <failure check> <success check> [VAR=value...]
+inject_loop() {
+  local label=$1 tool=$2 shims=$3 baseline=$4 on_failure=$5 on_success=$6 at count failed=0 absorbed=0 finished=false
+  shift 6
+  for at in $(seq 1 90); do
     prefix="$work/inject prefix"
-    rm -rf "$prefix" "$work/inject-$tool/count"
-    cp -pR "$work/old prefix" "$prefix"
-    if run_installer "$work/inject.log" "$prefix" VERSION="$new" INJECT_AT="$at" PATH="$work/inject-$tool:$PATH"; then
-      assert_active "$tool success" "$prefix" "$new"
-      assert_layout "$tool success" "$prefix" "$new"
-      succeeded=true
-      break
+    rm -rf "$prefix" "$shims/count" "$shims/injected"
+    cp -pR "$baseline" "$prefix"
+    if run_installer "$work/inject.log" "$prefix" INJECT_AT="$at" PATH="$shims:$PATH" "$@"; then
+      "$on_success" "$label success after call $at"
+      count=$(cat "$shims/count" 2>/dev/null || echo 0)
+      if ((count < at)); then
+        finished=true
+        break
+      fi
+      case $(cat "$shims/injected" 2>/dev/null) in
+        *-T\ */probe/* | *-h\ */probe/* | -P\ *) absorbed=$((absorbed + 1)) ;;
+        *) fail "$label call $at: the installer succeeded although this call failed: $(cat "$shims/injected" 2>/dev/null)" ;;
+      esac
+      continue
     fi
-    grep -qF "injected $tool failure" "$work/inject.log" || fail "$tool call $at: failed without the injected failure: $(tail -n 1 "$work/inject.log")"
-    assert_active "$tool failure at call $at" "$prefix" "$old"
-    assert_layout "$tool failure at call $at" "$prefix" "$old"
+    grep -qF "injected $tool failure" "$work/inject.log" ||
+      fail "$label call $at: failed without the injected failure: $(tail -n 1 "$work/inject.log")"
+    "$on_failure" "$label failure at call $at" "$@"
+    failed=$((failed + 1))
   done
-  "$succeeded" || fail "$tool: the installer never succeeded"
-  printf '%s: each of %d injected failures left %s active\n' "$tool" $((at - 1)) "$old"
+  "$finished" || fail "$label: the installer never succeeded"
+  ((failed >= 2)) || fail "$label: only $failed injected failure(s) stopped the installer"
+  printf '%s: each of %d injected failures left the earlier state whole (%d absorbed by a fallback)\n' \
+    "$label" "$failed" "$absorbed"
+}
+
+# The upgrade baseline has a rollback target: $prev, then $old active.
+prev=v5.0.0-rc.0
+package "$prev" linux-x86_64
+publish "$prev" linux-x86_64
+package "$new" linux-x86_64
+publish "$new" linux-x86_64
+fresh with-previous "$prev"
+run_installer "$work/with-previous-old.log" "$prefix" VERSION="$old" ||
+  fail "with-previous: installing $old failed: $(tail -n 1 "$work/with-previous-old.log")"
+[[ $(readlink "$prefix/lib/redlinedb/previous" 2>/dev/null) == "versions/$prev" ]] || fail "with-previous: previous is not $prev"
+upgrade_baseline=$prefix
+upgrade_kept() {
+  assert_active "$1" "$prefix" "$old"
+  assert_layout "$1" "$prefix" "$old"
+  local got
+  got=$(readlink "$prefix/lib/redlinedb/previous" 2>/dev/null || true)
+  [[ $got == "versions/$prev" ]] || fail "$1: previous -> '$got', expected the untouched versions/$prev"
+}
+upgrade_done() {
+  assert_active "$1" "$prefix" "$new"
+  assert_layout "$1" "$prefix" "$new"
+}
+for tool in cp mv ln; do
+  make_shim "$tool" "$work/inject-$tool"
+  inject_loop "$tool" "$tool" "$work/inject-$tool" "$upgrade_baseline" upgrade_kept upgrade_done VERSION="$new"
 done
+# BSD mv (macOS) has no -T; its -h replaces a link instead of following it,
+# which GNU mv spells -T. On a GNU host a stand-in takes BSD's arguments, so
+# the installer's -h path runs under failure injection here too.
+if "$real_mv" --version 2>/dev/null | grep -q GNU; then
+  mkdir -p "$work/bsd-mv"
+  cat > "$work/bsd-mv/mv" <<BIN
+#!/bin/sh
+case "\$1" in
+  -T) echo "mv: illegal option -- T" >&2; exit 64 ;;
+  -h) shift; exec "$real_mv" -T "\$@" ;;
+esac
+exec "$real_mv" "\$@"
+BIN
+  chmod +x "$work/bsd-mv/mv"
+  make_shim mv "$work/inject-bsd-mv" "$work/bsd-mv/mv"
+  inject_loop 'mv (BSD -h)' mv "$work/inject-bsd-mv" "$upgrade_baseline" upgrade_kept upgrade_done VERSION="$new"
+fi
 
 # --- Two concurrent installers leave one complete version active. -----------
 package "$new" linux-x86_64 slow
@@ -435,6 +508,7 @@ cp -pR "$tree/share/redlinedb" "$prefix/share/"
 ln -s libredlinedb.so.5 "$prefix/lib/libredlinedb.so"
 printf '#!/bin/sh\necho unrelated\n' > "$prefix/bin/unrelated-tool"
 chmod +x "$prefix/bin/unrelated-tool"
+cp -pR "$prefix" "$work/legacy baseline"
 before=$(fingerprint "$prefix")
 if run_installer "$work/legacy.log" "$prefix" VERSION="$new"; then
   fail 'legacy: installer replaced a flat installation without REDLINEDB_MIGRATE_LEGACY=1'
@@ -453,6 +527,38 @@ kept=$(readlink "$prefix/lib/redlinedb/previous" 2>/dev/null || true)
 run_installer "$work/legacy-rollback.log" "$prefix" REDLINEDB_ROLLBACK=1 || fail "legacy rollback: $(tail -n 1 "$work/legacy-rollback.log")"
 assert_active legacy-rollback "$prefix" legacy
 [[ $(cat "$prefix/lib/libredlinedb.so") == 'lib legacy' ]] || fail 'legacy rollback: the development link does not reach the legacy library'
+
+# Migration under failure injection: after any failed cp, mv or ln the legacy
+# files still answer at their old paths (the CLI stays on PATH), and a plain
+# rerun completes the migration with a legacy version that rolls back whole.
+legacy_kept() {
+  local label=$1
+  shift
+  assert_active "$label" "$prefix" legacy
+  [[ $(cat "$prefix/lib/libredlinedb.so" 2>&1) == 'lib legacy' ]] || fail "$label: lib/libredlinedb.so does not reach the legacy library"
+  [[ $("$prefix/bin/unrelated-tool" 2>&1) == unrelated ]] || fail "$label: an unrelated file changed"
+  run_installer "$work/inject-rerun.log" "$prefix" "$@" || fail "$label: the rerun failed: $(tail -n 1 "$work/inject-rerun.log")"
+  assert_active "$label, rerun" "$prefix" "$new"
+  assert_layout "$label, rerun" "$prefix" "$new"
+  run_installer "$work/inject-rollback.log" "$prefix" REDLINEDB_ROLLBACK=1 ||
+    fail "$label: rolling back to the legacy version failed: $(tail -n 1 "$work/inject-rollback.log")"
+  assert_active "$label, rollback" "$prefix" legacy
+  [[ $(cat "$prefix/lib/libredlinedb.so" 2>&1) == 'lib legacy' ]] || fail "$label, rollback: lib/libredlinedb.so does not reach the legacy library"
+}
+legacy_done() {
+  local kept
+  assert_active "$1" "$prefix" "$new"
+  assert_layout "$1" "$prefix" "$new"
+  # Also when a hard link failed and the file was copied instead.
+  kept=$(readlink "$prefix/lib/redlinedb/previous" 2>/dev/null || true)
+  [[ $kept == versions/legacy-* && $("$prefix/lib/redlinedb/$kept/bin/redlinedb" --version 2>&1) == 'redlinedb legacy fixture' &&
+    $(cat "$prefix/lib/redlinedb/$kept/lib/libredlinedb.so" 2>&1) == 'lib legacy' ]] ||
+    fail "$1: the legacy files were not kept whole as the previous version ($kept)"
+}
+for tool in cp mv ln; do
+  inject_loop "migrate $tool" "$tool" "$work/inject-$tool" "$work/legacy baseline" legacy_kept legacy_done \
+    VERSION="$new" REDLINEDB_MIGRATE_LEGACY=1
+done
 
 # --- scripts/install-from-source.sh activates through the same installer. ------
 # A stand-in Cargo target directory: the fixture CLI and libraries under the

@@ -15,7 +15,7 @@
 #   REDLINEDB_SHA256             require this archive digest
 #   REDLINEDB_VERIFY_ATTESTATION 1: also run gh attestation verify
 #   REDLINEDB_ROLLBACK           1: make the previous version active again
-#   REDLINEDB_MIGRATE_LEGACY     1: move files of an earlier flat install into
+#   REDLINEDB_MIGRATE_LEGACY     1: keep files of an earlier flat install in
 #                                versions/legacy-<time>/ instead of refusing
 #   REDLINEDB_LOCK_TIMEOUT       seconds to wait for another installer (300)
 # scripts/install-from-source.sh sets REDLINEDB_LOCAL_PACKAGE (a package tree)
@@ -44,7 +44,7 @@ migrate=${REDLINEDB_MIGRATE_LEGACY:-0}
 lock_timeout=${REDLINEDB_LOCK_TIMEOUT:-300}
 [[ $lock_timeout =~ ^[0-9]+$ ]] || die 'REDLINEDB_LOCK_TIMEOUT must be a number of seconds'
 local_package=${REDLINEDB_LOCAL_PACKAGE:-}
-for tool in mktemp grep mkdir mv ln cp readlink; do command -v "$tool" >/dev/null || die "missing prerequisite: $tool"; done
+for tool in mktemp grep mkdir mv ln cp readlink cmp; do command -v "$tool" >/dev/null || die "missing prerequisite: $tool"; done
 
 tmp='' stage='' pending='' locked=0
 cleanup() {
@@ -93,17 +93,26 @@ foreign() {
   fi
   [[ -e $path ]]
 }
+# active_copy <entry>: PREFIX/<entry> is the active version's own file (the
+# same file, or a copy with the same bytes): what a migration that stopped
+# part-way leaves at the paths it had not linked yet.
+active_copy() {
+  local path=$prefix/$1 active=$base/current/$1
+  [[ -e $active ]] || return 1
+  [[ $path -ef $active ]] && return 0
+  [[ -f $path && ! -L $path && -f $active && ! -L $active ]] && cmp -s "$path" "$active"
+}
 # conflicts <version dir>: the foreign files that version's links would replace.
 conflicts() {
   local entry found=''
   while IFS= read -r entry; do
-    if foreign "$entry"; then found="$found $entry"; fi
+    if foreign "$entry" && ! active_copy "$entry"; then found="$found $entry"; fi
   done < <(entries "$1")
   printf '%s' "$found"
 }
 refuse_conflicts() {
   [[ -n $1 && $migrate == 0 ]] || return 0
-  die "these paths under $prefix were not made by this installer:$1. They look like an earlier flat installation. Rerun with REDLINEDB_MIGRATE_LEGACY=1 to move them into $base/versions/legacy-<time>/ (kept as the previous version), or choose another PREFIX."
+  die "these paths under $prefix were not made by this installer:$1. They look like an earlier flat installation. Rerun with REDLINEDB_MIGRATE_LEGACY=1 to keep them in $base/versions/legacy-<time>/ (the previous version) and replace them with links, or choose another PREFIX."
 }
 # validate <version dir>: the CLI and server exist and the CLI runs a query.
 validated=''
@@ -227,7 +236,12 @@ refuse_conflicts "$(conflicts "$candidate")"
 mkdir -p "$base/versions" || die "cannot create $base"
 waited=0
 until mkdir "$base/.lock" 2>/dev/null; do
-  [[ -d $base/.lock ]] || die "cannot create $base/.lock"
+  if [[ ! -d $base/.lock ]]; then
+    # The holder may have released the lock between the two checks: try
+    # again once before calling it an error.
+    mkdir "$base/.lock" 2>/dev/null && break
+    [[ -d $base/.lock ]] || die "cannot create $base/.lock"
+  fi
   if [[ $waited == 0 ]]; then
     note "waiting for another installer ($(cat "$base/.lock/owner" 2>/dev/null || echo 'owner not recorded yet')) to release $base/.lock"
   fi
@@ -308,34 +322,61 @@ else
   candidate=$base/$target
 fi
 
-# Files of an earlier flat installation move aside, keeping their paths, and
-# become the active version until the switch below.
+# Files of an earlier flat installation are kept, with their paths, in a
+# legacy version, which becomes the active one until the switch below. They
+# are hard-linked (or copied) there and the originals stay in place; each is
+# then replaced by its stable link in one rename, and that link reaches the
+# same bytes through current. So at every step, and after a failure or an
+# interrupt at any step, every legacy path still answers with the legacy file.
 found=$(conflicts "$candidate")
+migrated=' '
 if [[ -n $found ]]; then
   refuse_conflicts "$found"
   legacy=versions/legacy-$(date -u +%Y%m%dT%H%M%SZ)
   [[ ! -e $base/$legacy ]] || legacy=$legacy-$$
   for entry in $found; do
-    mkdir -p "$base/$legacy/${entry%/*}" && mv "$prefix/$entry" "$base/$legacy/$entry" ||
-      die "cannot move $prefix/$entry into $base/$legacy"
-    note "moved $prefix/$entry to $base/$legacy/$entry"
+    if ! { mkdir -p "$base/$legacy/${entry%/*}" &&
+      { ln -P "$prefix/$entry" "$base/$legacy/$entry" 2>/dev/null || cp -pP "$prefix/$entry" "$base/$legacy/$entry"; }; }; then
+      rm -rf "${base:?}/$legacy"
+      die "cannot keep $prefix/$entry in $base/$legacy; nothing changed"
+    fi
   done
   if [[ -z $previous_active ]]; then
-    put_link "$legacy" "$base/current" || die "cannot activate $base/$legacy"
+    if ! put_link "$legacy" "$base/current"; then
+      rm -rf "${base:?}/$legacy"
+      die "cannot activate $base/$legacy; nothing changed"
+    fi
     previous_active=$legacy
   fi
+  note "kept$found in $base/$legacy"
+  migrated="$found "
 fi
 while IFS= read -r entry; do
   want=$(stable_target "$entry")
   if [[ -L $prefix/$entry && $(readlink "$prefix/$entry") == "$want" ]]; then continue; fi
-  if foreign "$entry"; then die "$prefix/$entry appeared during the install; nothing was activated"; fi
+  if [[ $migrated != *" $entry "* ]] && foreign "$entry" && ! active_copy "$entry"; then
+    die "$prefix/$entry appeared during the install; nothing was activated"
+  fi
   mkdir -p "$prefix/${entry%/*}" && put_link "$want" "$prefix/$entry" || die "cannot link $prefix/$entry; nothing was activated"
 done < <(entries "$candidate")
+# Record the rollback target, then switch. If the switch fails, put the
+# rollback target back, so a failed install changes neither link.
+earlier_previous=$(readlink "$base/previous" 2>/dev/null || true)
 if [[ -n $previous_active && $previous_active != "$target" ]]; then
   put_link "$previous_active" "$base/previous" || die "cannot record the previous version; nothing was activated"
 fi
 # The switch: one rename makes every stable link reach the new version.
-put_link "$target" "$base/current" || die "cannot activate $target; nothing was activated"
+if ! put_link "$target" "$base/current"; then
+  [[ -z $pending ]] || rm -f "$pending"
+  pending=''
+  if [[ -n $earlier_previous ]]; then
+    put_link "$earlier_previous" "$base/previous" ||
+      note "could not restore $base/previous to $earlier_previous; it names ${previous_active:-nothing}"
+  else
+    rm -f "$base/previous"
+  fi
+  die "cannot activate $target; nothing was activated"
+fi
 
 # Links of files the active version does not have dangle now; remove them.
 for sub in bin lib include; do

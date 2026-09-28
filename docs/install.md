@@ -152,11 +152,17 @@ slow installer on another host that shares the prefix.
 Installers before v5.0.0 copied files straight into `PREFIX/bin`,
 `PREFIX/lib` and `PREFIX/include`. The installer does not overwrite a file it
 did not create: it lists them and stops before writing anything. With
-`REDLINEDB_MIGRATE_LEGACY=1` it moves exactly those files into
-`PREFIX/lib/redlinedb/versions/legacy-<time>/`, keeping their relative paths,
-records that directory as the previous version, and then activates the new
-one. `REDLINEDB_ROLLBACK=1` brings the old files back into use. Other files in
-the prefix, including an old `PREFIX/share/redlinedb`, are left alone.
+`REDLINEDB_MIGRATE_LEGACY=1` it keeps exactly those files in
+`PREFIX/lib/redlinedb/versions/legacy-<time>/`, keeping their relative paths
+(as hard links, or copies where a hard link is not possible), makes that
+directory the active version, replaces each flat file with its stable link in
+one rename, records the directory as the previous version, and then activates
+the new one. A failure or an interrupt at any step leaves every old path
+answering with the old file, and rerunning the installer finishes the
+migration. `REDLINEDB_ROLLBACK=1` brings the old files back into use. If a
+version was already active, it stays the previous version and the legacy
+directory is only kept. Other files in the prefix, including an old
+`PREFIX/share/redlinedb`, are left alone.
 
 ### Removing RedlineDB
 
