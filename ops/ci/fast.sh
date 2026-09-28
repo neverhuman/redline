@@ -101,22 +101,6 @@ run_test_stage() {
             cargo nextest run -p redlinedb-kernel --locked
             ;;
         kernel-failpoints)
-            # The kernel built with `failpoints`: the lib's own tests plus the
-            # test files gated on that feature, which the `kernel` stage
-            # compiles to nothing. .config/nextest.toml runs the gated files
-            # one test at a time (test group `kernel-failpoints`).
-            cargo nextest run -p redlinedb-kernel --features failpoints --locked \
-                --lib \
-                --test failpoint_smoke \
-                --test hnsw_failpoints \
-                --test commit_outcome \
-                --test recovery_failpoints
-            # The uncertain-commit tests above the kernel (workplan R7) are
-            # gated on their own crate's `failpoints` feature.
-            cargo nextest run -p redlinedb-sql --features failpoints --locked --test smoke_misc
-            cargo nextest run -p redlinedb --features failpoints --locked --test commit_outcome
-            ;;
-        kernel-failpoints)
             # The failpoint-gated kernel tests, whole files and single tests,
             # each built with the features it needs (ops/ci/kernel-failpoint-plan.sh
             # lists the runs). The rest of the kernel suite runs in the kernel
@@ -127,6 +111,10 @@ run_test_stage() {
                 cargo nextest run -p redlinedb-kernel --features "$features" \
                     --locked --no-fail-fast -E "$filter" < /dev/null || return 1
             done <<< "$plan"
+            # The uncertain-commit tests above the kernel (workplan R7) are
+            # gated on their own crate's `failpoints` feature.
+            cargo nextest run -p redlinedb-sql --features failpoints --locked --test smoke_misc
+            cargo nextest run -p redlinedb --features failpoints --locked --test commit_outcome
             ;;
         sql-unit)
             cargo test -p redlinedb-sql --lib --quiet --locked
