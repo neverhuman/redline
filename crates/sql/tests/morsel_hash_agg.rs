@@ -71,7 +71,7 @@ mod builder;
 // test binary's crate root, so we provide the same aliases that
 // `redlinedb-sql` exposes publicly. This keeps the aggregator's source
 // untouched while letting the differential test still exercise the *real*
-// SqlValue / encode_record pipeline.
+// SqlValue / group-key pipeline.
 
 pub mod error {
     use redlinedb_kernel::Error as KernelError;
@@ -131,6 +131,14 @@ mod sum_acc;
 
 pub mod numeric {
     pub use super::sum_acc::SumAcc;
+}
+
+// The aggregator keys groups with the shared SQL equivalence key.
+#[path = "../src/exec/sql_equiv.rs"]
+mod sql_equiv;
+
+mod exec {
+    pub(crate) use super::sql_equiv;
 }
 
 #[path = "../src/exec/morsel/hash_agg.rs"]

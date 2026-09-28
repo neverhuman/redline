@@ -13,6 +13,8 @@ mod index_epoch_upgrade;
 mod index_numeric_keys;
 #[path = "launch_wrong_answer/lab.rs"]
 mod lab;
+#[path = "launch_wrong_answer/new_02_group_numeric.rs"]
+mod new_02_group_numeric;
 #[path = "launch_wrong_answer/numeric.rs"]
 mod numeric;
 #[path = "launch_wrong_answer/q5_01_literals.rs"]

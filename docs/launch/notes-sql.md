@@ -360,3 +360,16 @@ one of the rows with 4.x and open again. A database already at epoch 3
   it now has one (INTEGER 1, the first seen, as in SQLite).
 - Not yet: set operations ignore collations (`'a' COLLATE NOCASE UNION
   'A'` is still two rows).
+
+## GROUP BY puts 1 and 1.0 in one group (NEW-02)
+
+- GROUP BY keys were stored-record bytes, which keep the storage class, so
+  `SELECT x FROM (SELECT 1 x UNION ALL SELECT 1.0) GROUP BY x` answered two
+  groups (SQLite one), and a column holding both `2` and `2.0` split its
+  count and sum across two rows. Group keys are now the Q5-04 equivalence
+  key: INTEGER 1, REAL 1.0 and REAL -0.0 are one group, TEXT '1' is
+  another, and 9007199254740993 and 9007199254740992.0 stay two. The group
+  shows its first row, as SQLite does (`1.0, 1` shows REAL 1.0). This
+  applies to the one-pass hash aggregate, the spilling hash aggregate, the
+  morsel aggregator, window `PARTITION BY`, and `count(DISTINCT x)` /
+  `sum(DISTINCT x)` (which counted 1 and 1.0 as two values).

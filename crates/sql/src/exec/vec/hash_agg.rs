@@ -1,7 +1,8 @@
 //! Lane VE: hash-based grouped aggregation.
 //!
 //! Replaces the O(n^2) "linear scan + find" group-build pass with a real
-//! hash table keyed by the canonical encoding of the GROUP BY tuple.
+//! hash table keyed by the canonical encoding of the GROUP BY tuple (the
+//! `sql_equiv` key, so INTEGER 1 and REAL 1.0 fall in one group).
 //! Supports COUNT/SUM/AVG/MIN/MAX. When the group table grows past
 //! `work_mem_bytes` the partial state is spilled to disk and the consumer
 //! finalises after a second merge pass.
@@ -10,8 +11,6 @@ use std::cmp::Ordering;
 use std::collections::hash_map::Entry;
 use std::path::PathBuf;
 use std::sync::Arc;
-
-use redlinedb_kernel::catalog::{ValueRef, encode_record};
 
 use super::spill::{SpillFile, SpillWriter};
 use crate::error::{Error, Result};
@@ -195,12 +194,11 @@ impl HashAggregator {
         self.table.len()
     }
 
-    /// Encode a group key tuple to a stable byte form for hashing.
+    /// Encode a group key tuple to a stable byte form for hashing. Equal
+    /// keys are equal SQL values (`crate::exec::sql_equiv`); the bytes are
+    /// never decoded, the table keeps the group's key values beside them.
     fn encode_key(values: &[SqlValue]) -> Result<Vec<u8>> {
-        let mut buf = Vec::with_capacity(16);
-        let refs: Vec<ValueRef<'_>> = values.iter().map(|v| v.as_ref()).collect();
-        encode_record(&refs, &mut buf).map_err(|_| Error::DatatypeMismatch)?;
-        Ok(buf)
+        Ok(crate::exec::sql_equiv::equiv_key(values))
     }
 
     /// Observe a row: `key` is the GROUP BY tuple, `arg_values` aligns with
@@ -353,9 +351,7 @@ pub fn encode_group_key_bytes(values: &[SqlValue]) -> Result<Vec<u8>> {
 /// existing `encode_group_key_bytes` is preserved (and now delegates
 /// to this helper) so the wider call surface is unchanged.
 pub fn encode_group_key_bytes_into(values: &[SqlValue], buf: &mut Vec<u8>) -> Result<()> {
-    buf.clear();
-    let refs: Vec<ValueRef<'_>> = values.iter().map(|v| v.as_ref()).collect();
-    encode_record(&refs, buf).map_err(|_| Error::DatatypeMismatch)?;
+    crate::exec::sql_equiv::equiv_key_into(values, buf);
     Ok(())
 }
 

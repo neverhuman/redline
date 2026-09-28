@@ -348,14 +348,11 @@ impl<'arena> MorselHashAggregator<'arena> {
     }
 }
 
-/// Encode a group-key tuple into stable hashable bytes. Mirrors
-/// [`vec::hash_agg::HashAggregator::encode_key`] without re-exporting the
-/// row-at-a-time aggregator's internals.
+/// Encode a group-key tuple into stable hashable bytes: the same
+/// `sql_equiv` key as [`vec::hash_agg::HashAggregator::encode_key`], so
+/// INTEGER 1 and REAL 1.0 fall in one group.
 fn encode_key_into(values: &[SqlValue], buf: &mut Vec<u8>) -> crate::Result<()> {
-    use redlinedb_kernel::catalog::encode_record;
-    buf.clear();
-    let refs: Vec<ValueRef<'_>> = values.iter().map(|v| v.as_ref()).collect();
-    encode_record(&refs, buf).map_err(|_| crate::error::Error::DatatypeMismatch)?;
+    crate::exec::sql_equiv::equiv_key_into(values, buf);
     Ok(())
 }
 
