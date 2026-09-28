@@ -12,7 +12,8 @@ uses two kinds of runner:
   home directory. `ops/ci/apt-install.sh` calls `sudo` when a package is
   missing, and the parity Postgres service needs Docker. Anything one job
   leaves there, a later job may run, including the trusted jobs that hold
-  write tokens: release `publish`, `merge-report` and the parity report bot.
+  write tokens: the parity report bot (release `publish` and `report-merge`
+  run on hosted runners).
 
 So code from a fork must never run on a self-hosted runner.
 
@@ -117,10 +118,11 @@ repository settings.
 - **Ephemeral runners.** If fork pull requests ever need self-hosted
   hardware, register those runners with `--ephemeral` on disposable machines
   under their own label, never on a host with trusted caches.
-- **Release host.** Give `publish`, `merge-report` and the parity report job
-  their own runner label on a dedicated host (or hosted runners) and an
-  `environment: release` with required reviewers and tag-only deployments
-  (Phase 6 moves the jobs; the environment is a repository setting).
+- **Release host.** Release `publish` and `verify-published` and
+  `report-merge.yml` run on GitHub-hosted runners. Give the parity report job
+  its own runner label on a dedicated host, and add an `environment: release`
+  with required reviewers and tag-only deployments to `publish` once that
+  environment exists (it is a repository setting).
 - **Keep fork approval on** ("Require approval for all outside
   collaborators"), and branch protection on `main` requiring
   `RedlineDB/required` (see `docs/release.md`).

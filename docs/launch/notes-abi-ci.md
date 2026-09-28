@@ -394,3 +394,52 @@ against the v5 headers. There is no v4 compatibility alias.
   generated blocks. The README-wide rewrite should keep the
   ```` ```bash quickstart ```` and ```` ```rust readme ```` blocks (or move
   them) so the checks keep running.
+
+## Releases: any version, checked before it is built (DX-05, CI-02, CI-05)
+
+- `release-build.yml` now runs for tags `vX.Y.Z` and `vX.Y.Z-rc.N` of any
+  version (it ran only for `v4.1.0*`). Its first job,
+  `ops/ci/release-version.sh check <tag>`, refuses the tag unless every
+  workspace crate has version `X.Y.Z`, `CHANGELOG.md` has a `## [X.Y.Z]`
+  section, `docs/releases/vX.Y.Z.md` exists and is not the placeholder, the
+  tag is annotated and names the built commit, the repository is
+  `neverhuman/redline` by id, the tag has no release yet, and (for a stable
+  tag) the commit is on `main`. It reports every failed rule. Malformed tags
+  (`v5.0`, `v5.0.0-beta`, `v5.0.0-rc.01`, `v5.0.0-rc.0`) are refused.
+  `ops/ci/release-version.sh bump X.Y.Z` gives every workspace crate that
+  version through `[workspace.package]` and updates `Cargo.lock`.
+- The publisher takes its notes from `docs/releases/vX.Y.Z.md` (it used
+  `docs/migration/RELEASE_NOTES.md`, the consolidation notes), marks `-rc.N`
+  tags as prereleases, and uploads exactly one archive and one `.sha256` per
+  package and platform; a missing, extra or crossed checksum file stops it
+  before anything is created. `publish` runs on a GitHub-hosted runner.
+- Fixed: a tag push would have failed at startup. `ci.yml`'s `merge-report`
+  job asked for `contents: write` and `pull-requests: write`, more than
+  `release-build.yml` grants the `ci.yml` it calls, and GitHub checks that
+  before any job runs. The job is now `.github/workflows/report-merge.yml`,
+  run when the dispatched `ci` run on the report branch succeeds, and the CI
+  preflight refuses any `ci.yml` or `packages.yml` permission beyond the
+  acceptance grant (`ops/ci/check-workflow-permissions.sh`).
+- New `redlinedb --build-info [--json]`: the package version, the release tag
+  and source commit the binary was built from, its target, the repository URL
+  and id, and the SQLite version of the parity oracle (JSON schema
+  `redline.build-info/v1`). Development builds report no tag and source
+  `unknown`. Release packaging sets `REDLINEDB_BUILD_TAG` and
+  `REDLINEDB_BUILD_SHA`, and `scripts/test-packages.sh` checks that the
+  packaged CLI names its archive's tag and commit.
+- New `verify-published` job: after publication, on Linux x86_64 and ARM64
+  and macOS Intel and Apple Silicon, it installs the release with
+  `curl -fsSL https://raw.githubusercontent.com/neverhuman/redline/<tag>/install.sh | VERSION=<tag> PREFIX="…/rl x" bash`,
+  runs `SELECT 1`, creates, reopens and reads a database, and checks
+  `--build-info --json` against the tag and commit; a stable tag is also
+  installed as the latest release (`scripts/release/verify-published.sh`).
+  The `packages` workflow runs the same script against each candidate archive
+  through a file-transport `curl` (`scripts/test-verify-published.sh`).
+- CI builds that are not releases package as `v<workspace version>-dev`
+  (`ops/ci/release-version.sh dev-tag`) instead of the fixed `v4.1.0-rc.2`.
+- For the integrator (not a release-note line): the Phase 7 bump must run
+  `bash ops/ci/release-version.sh bump 5.0.0`, add `## [5.0.0]` to
+  `CHANGELOG.md`, and replace `docs/releases/v5.0.0.md`, which is a
+  placeholder that the check refuses on purpose. Until the bump,
+  `--build-info` reports version 4.1.0 and dev packages are `v4.1.0-dev`.
+  `ci.yml` changed, so the parity-report inputs hash changes.

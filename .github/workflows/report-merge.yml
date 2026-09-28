@@ -1,0 +1,64 @@
+name: report-merge
+
+# Merges the automated parity report pull request once ci has passed on its
+# exact head. `ops/ci/sqlite-parity-report.sh publish-pr` pushes the branch
+# automation/sqlite-parity-report and dispatches ci on it; when that run
+# succeeds, this merges the pull request at the commit the run tested, and
+# refuses if the branch has moved since.
+#
+# It is not a ci.yml job because release-build.yml calls ci.yml with
+# read-only permissions, and GitHub refuses to start a run in which a called
+# workflow asks for more, whatever the job's `if:` says. No job of ci.yml or
+# packages.yml may exceed that grant (ops/ci/check-workflow-permissions.sh).
+#
+# workflow_run always runs this file as it is on the default branch, never a
+# pull request's copy. workflow_dispatch is the manual fallback: it merges
+# only a head that has a successful dispatched ci run.
+
+on:
+  workflow_run:
+    workflows: [ci]
+    types: [completed]
+    branches: [automation/sqlite-parity-report]
+  workflow_dispatch:
+
+permissions: {}
+
+concurrency:
+  group: report-merge
+  cancel-in-progress: false
+
+jobs:
+  merge-report:
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      (github.event.workflow_run.conclusion == 'success' &&
+      github.event.workflow_run.event == 'workflow_dispatch' &&
+      github.event.workflow_run.head_branch == 'automation/sqlite-parity-report' &&
+      github.event.workflow_run.head_repository.full_name == github.repository)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    permissions:
+      actions: read
+      contents: write
+      pull-requests: write
+    steps:
+      - name: Merge the report at the head ci passed on
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          TESTED_HEAD: ${{ github.event.workflow_run.head_sha }}
+        run: |
+          set -euo pipefail
+          branch=automation/sqlite-parity-report
+          pr=$(gh pr list --head "$branch" --base main --state open --json number,headRefOid \
+            --jq '.[] | "\(.number) \(.headRefOid)"' | head -n 1)
+          [ -n "$pr" ] || { echo "::error::no open pull request from $branch"; exit 1; }
+          number=${pr% *} head=${pr#* }
+          if [ -z "$TESTED_HEAD" ]; then
+            passed=$(gh api "repos/$GH_REPO/actions/workflows/ci.yml/runs?branch=$branch&event=workflow_dispatch&status=success&head_sha=$head" \
+              --jq '.total_count')
+            [ "$passed" -gt 0 ] || { echo "::error::ci has not passed on $head, the head of #$number"; exit 1; }
+            TESTED_HEAD=$head
+          fi
+          gh pr merge "$number" --squash --delete-branch --match-head-commit "$TESTED_HEAD"

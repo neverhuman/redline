@@ -4,9 +4,11 @@ on:
   workflow_dispatch:
   workflow_call:
     inputs:
+      # The release tag being accepted. Empty (push, pull request, dispatch)
+      # packages as v<workspace version>-dev (ops/ci/release-version.sh dev-tag).
       tag:
         type: string
-        default: v4.1.0-rc.2
+        default: ''
   push:
     branches: [main]
   pull_request:
@@ -30,6 +32,13 @@ concurrency:
 # for a fork, RedlineDB/required fails until a maintainer runs ci on a
 # canonical branch at the same commit. No checkout keeps its token: nothing
 # in this workflow pushes.
+#
+# Permissions: release-build.yml calls this workflow (and through it
+# packages.yml) with contents: read and attestations: read. No job here or in
+# packages.yml may ask for more: GitHub refuses to start the whole tag run,
+# whatever the job's `if:` says. A job that needs more gets its own workflow,
+# as report-merge.yml does. The preflight enforces this with
+# ops/ci/check-workflow-permissions.sh.
 
 jobs:
   preflight:
@@ -551,7 +560,7 @@ jobs:
   packaging:
     uses: ./.github/workflows/packages.yml
     with:
-      tag: ${{ inputs.tag || 'v4.1.0-rc.2' }}
+      tag: ${{ inputs.tag || '' }}
     permissions:
       contents: read
 
@@ -574,23 +583,3 @@ jobs:
             exit 1
           fi
           echo "$RESULTS" | jq -e 'to_entries | length > 0 and all(.value.result == "success")'
-
-  merge-report:
-    if: github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/automation/sqlite-parity-report'
-    needs: required
-    runs-on: ${{ (github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name != github.repository) && 'ubuntu-24.04' || fromJSON('["self-hosted","Linux","X64"]') }}
-    timeout-minutes: 5
-    permissions:
-      contents: write
-      pull-requests: write
-    steps:
-      - name: Merge the report only after all normal checks pass
-        env:
-          GH_TOKEN: ${{ github.token }}
-          GH_REPO: ${{ github.repository }}
-          REPORT_HEAD: ${{ github.sha }}
-        run: |
-          set -euo pipefail
-          number=$(gh pr list --head automation/sqlite-parity-report --base main --state open --json number --jq '.[0].number // empty')
-          test -n "$number"
-          gh pr merge "$number" --squash --delete-branch --match-head-commit "$REPORT_HEAD"

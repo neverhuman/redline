@@ -1,55 +1,106 @@
 name: release-build
+# A release is an annotated tag vX.Y.Z (stable) or vX.Y.Z-rc.N (candidate,
+# published as a prerelease) on neverhuman/redline. validate refuses a tag
+# that must not be released (ops/ci/release-version.sh: the crates' version,
+# CHANGELOG.md, docs/releases/vX.Y.Z.md, an annotated tag at the commit, the
+# repository id, no existing release, stable tags on main); acceptance runs
+# the whole of ci.yml, which may ask for no more than the permissions granted
+# below (ops/ci/check-workflow-permissions.sh); publish creates the release;
+# verify-published installs it from the public URLs on each platform.
 on:
   push:
-    tags: ['v4.1.0*']
+    tags:
+      - 'v[0-9]+.[0-9]+.[0-9]+'
+      - 'v[0-9]+.[0-9]+.[0-9]+-rc.[0-9]+'
 permissions:
   contents: read
 concurrency:
   group: release-${{ github.ref }}
   cancel-in-progress: false
 jobs:
+  validate:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      # actions/checkout re-fetches a pushed tag as <commit>:refs/tags/<tag>,
+      # which turns an annotated tag into a lightweight one; fetch the tag
+      # object itself so the check sees what was pushed.
+      - name: Fetch the tag object
+        env: {TAG: '${{ github.ref_name }}'}
+        run: git fetch --no-tags --force origin "+refs/tags/${TAG}:refs/tags/${TAG}"
+      - uses: dtolnay/rust-toolchain@3c5f7ea28cd621ae0bf5283f0e981fb97b8a7af9
+        with: {toolchain: 1.95.0}
+      - name: Check that the tag names a new, prepared release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ github.ref_name }}
+        run: bash ops/ci/release-version.sh check "$TAG"
   acceptance:
+    needs: validate
     uses: ./.github/workflows/ci.yml
     with: {tag: '${{ github.ref_name }}'}
+    # The ceiling for every job of ci.yml and packages.yml.
     permissions:
       contents: read
       attestations: read
   publish:
-    needs: acceptance
-    # TODO(Phase 6, DX-05/S8-06): publish on a GitHub-hosted runner (or a
-    # dedicated release host) under `environment: release` with required
-    # reviewers and tag-only deployments. Until then it shares the self-hosted
-    # runners, which only trusted jobs reach (docs/ci-trust-boundary.md).
-    runs-on: [self-hosted, Linux, X64]
+    needs: [validate, acceptance]
+    # Hosted, so no self-hosted runner state reaches the write token. Add
+    # `environment: release` (required reviewers, tag-only deployments) once
+    # that environment exists in the repository settings.
+    runs-on: ubuntu-24.04
     timeout-minutes: 20
     permissions:
       contents: write
       id-token: write
       attestations: write
     steps:
-      - name: Unlock leftover workspace files
-        run: |
-          set +e
-          if [ -n "${GITHUB_WORKSPACE}" ] && [ -d "${GITHUB_WORKSPACE}" ]; then
-            chmod -R u+rwx "${GITHUB_WORKSPACE}"
-          fi
-          exit 0
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
         with:
           fetch-depth: 0
           persist-credentials: false
-      - name: Verify stable release ancestry
+      - name: Fetch the tag object
         env: {TAG: '${{ github.ref_name }}'}
-        run: |
-          if [[ "$TAG" != *-rc.* ]]; then
-            git merge-base --is-ancestor HEAD origin/main
-          fi
+        run: git fetch --no-tags --force origin "+refs/tags/${TAG}:refs/tags/${TAG}"
+      - uses: dtolnay/rust-toolchain@3c5f7ea28cd621ae0bf5283f0e981fb97b8a7af9
+        with: {toolchain: 1.95.0}
       - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
         with: {pattern: 'packages-*', path: target/packages, merge-multiple: true}
       - uses: actions/attest-build-provenance@96b4a1ef7235a096b17240c259729fdd70c83d45
         with: {subject-path: 'target/packages/*.tar.gz'}
+      # Runs release-version.sh check again with this job's token, which also
+      # sees draft releases, then checks every asset before creating anything.
       - name: Publish verified archives without replacing existing assets
         env:
           GH_TOKEN: ${{ github.token }}
           TAG: ${{ github.ref_name }}
         run: bash ops/ci/publish-github-release.sh
+  verify-published:
+    needs: publish
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-24.04, ubuntu-24.04-arm, macos-15-intel, macos-15]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 15
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          persist-credentials: false
+      # The installer from the tag's public URL with VERSION pinned (a
+      # prerelease is never releases/latest); a stable tag is also installed
+      # as the latest release.
+      - name: Install the published release and use it
+        env:
+          TAG: ${{ github.ref_name }}
+          SOURCE_SHA: ${{ github.sha }}
+          VERIFY_LATEST: ${{ !contains(github.ref_name, '-rc.') }}
+        run: bash scripts/release/verify-published.sh "$TAG" "$SOURCE_SHA" "$RUNNER_TEMP/rl x"

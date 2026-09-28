@@ -28,39 +28,66 @@ against pinned archive and executable SHA-256 digests.
 
 ## Candidate and stable publication
 
-The engine crates are already versioned at 4.1.0. This consolidation publishes
-GitHub packages; it does not publish a crates.io chain or modify consumer databases.
-Release notes are in `docs/migration/RELEASE_NOTES.md`; the existing engine changelog
-retains the development history.
+Releases are GitHub packages; nothing is published to crates.io, and a release
+never modifies consumer databases. A release is an annotated tag `vX.Y.Z`
+(stable) or `vX.Y.Z-rc.N` (a candidate, published as a prerelease; `N` counts
+from 1). `.github/workflows/release-build.yml`
+runs for exactly those tag shapes. Its first job runs
+`bash ops/ci/release-version.sh check <tag>`, which refuses the tag unless:
 
-1. Merge the migration PR after every required check passes. Verify required CI
-   again on the merged `main` commit, and verify the exact README source commands
-   from an anonymous clone and the GitHub source archive.
-2. Create the immutable annotated tag `v4.1.0-rc.1` at that verified commit and
-   push it. Use a signed tag when a maintainer signing key is configured.
-3. `.github/workflows/release-build.yml` runs the complete acceptance workflow,
-   generates GitHub build-provenance attestations, then creates and publishes
-   the prerelease. It never overwrites an existing release or asset.
-4. Verify the published candidate archives and installer, including SQL,
-   persistence/reopen, server transactions, FFI, embedded web queries, unsupported
-   platforms, checksum rejection and installation paths containing spaces.
-5. Create `v4.1.0` at the accepted candidate commit. The same workflow repeats
-   acceptance and publishes the stable release. Stable commits must belong to
-   `origin/main`. Verify the README's exact installer commands against that release.
+- every crate of the root workspace has version `X.Y.Z`
+  (`bash ops/ci/release-version.sh bump X.Y.Z` sets them, and the Cargo.lock);
+- `CHANGELOG.md` has a `## [X.Y.Z]` section;
+- `docs/releases/vX.Y.Z.md` exists and is not the placeholder; it is the
+  release notes of the stable release and of every candidate;
+- the tag is annotated and names the commit being built;
+- the repository is `neverhuman/redline` by numeric id;
+- the tag has no release yet;
+- a stable tag's commit is on `origin/main`.
+
+Run the same check locally before pushing a tag; it reports every failed rule.
+
+1. Merge after every required check passes. Verify required CI again on the
+   merged `main` commit, and verify the exact README source commands from an
+   anonymous clone and the GitHub source archive.
+2. Bump the crates, write the changelog section and the release notes, and
+   merge that. Create the annotated tag `vX.Y.Z-rc.1` at the verified commit
+   (`git tag -a`; sign it when a maintainer signing key is configured) and push
+   that one tag.
+3. `release-build.yml` runs the complete acceptance workflow (`ci.yml`, which
+   may ask for no more than `contents: read` and `attestations: read`),
+   generates GitHub build-provenance attestations, and publishes the
+   prerelease with those notes from a GitHub-hosted runner. It never
+   overwrites an existing release or asset, and it uploads exactly one archive
+   and one checksum for each package and platform.
+4. `verify-published` then installs the candidate on Linux x86_64 and ARM64
+   and macOS Intel and Apple Silicon from the public installer URL with
+   `VERSION` pinned (a prerelease is never `releases/latest`), runs
+   `SELECT 1` and a database that survives reopening, and checks that
+   `redlinedb --build-info --json` names the tag and the tagged commit
+   (`scripts/release/verify-published.sh`; the `packages` workflow runs the
+   same script against each candidate archive before publication). Verify by
+   hand what it does not cover: server transactions, FFI, embedded web
+   queries, unsupported platforms and checksum rejection.
+5. Create `vX.Y.Z` at the accepted candidate commit. The same workflow repeats
+   acceptance and publishes the stable release; `verify-published` also
+   installs it as the latest release. Verify the README's exact installer
+   commands against that release.
 6. Mark former component repositories superseded and retire their Redline
    publication paths only after stable acceptance. Preserve their existing tags,
    releases, historical proof records and installed consumer authority.
 
 Do not create a release manually while its workflow is running. If a published
 candidate needs a fix, use a new immutable candidate tag and requalify it. Never
-move an existing tag or replace a published archive. The current publisher accepts
-`v4.1.0` and `v4.1.0-rc.N`; extend that policy deliberately for later versions.
+move an existing tag or replace a published archive.
 
 ## Packages and provenance
 
-`bash scripts/package-release.sh` with `TAG=v4.1.0-rc.2` produces three archives
-for the current native platform. The root `packages.yml` matrix covers Linux
-x86_64/ARM64 (glibc 2.35+) and macOS Intel/Apple Silicon (macOS 15+).
+`bash scripts/package-release.sh` with `TAG=<tag>` produces three archives
+for the current native platform; CI builds that are not releases use
+`v<workspace version>-dev` (`bash ops/ci/release-version.sh dev-tag`). The
+root `packages.yml` matrix covers Linux x86_64/ARM64 (glibc 2.35+) and macOS
+Intel/Apple Silicon (macOS 15+).
 
 - `redlinedb-TAG-PLATFORM.tar.gz`: CLI, server, native libraries and C headers.
 - `redline-web-TAG-PLATFORM.tar.gz`: web server with embedded frontend assets.
@@ -69,8 +96,11 @@ x86_64/ARM64 (glibc 2.35+) and macOS Intel/Apple Silicon (macOS 15+).
 Each archive has a `.sha256` sidecar and contains a CycloneDX SBOM and
 `share/redlinedb/build-provenance.json`: one compact JSON line
 (`redline.release-build/v2`) recording the repository URL and numeric id, tag,
-source commit and tree, platform, package and compiler. The web archive
-includes a frontend SBOM; the testing SBOM includes the bundled client. GitHub
+source commit and tree, platform, package and compiler. The CLI reports the
+same tag and commit: `redlinedb --build-info --json` prints one line
+(`redline.build-info/v1`) with the package version, tag, source commit,
+target, repository URL and id, and the SQLite version of the parity oracle.
+The web archive includes a frontend SBOM; the testing SBOM includes the bundled client. GitHub
 release attestations bind the uploaded archive bytes to the workflow identity
 and source commit.
 

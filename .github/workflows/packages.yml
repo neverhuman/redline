@@ -1,10 +1,15 @@
 name: packages
+# Called by ci.yml, including when release-build.yml calls ci.yml: no job may
+# ask for more than contents: read and attestations: read
+# (ops/ci/check-workflow-permissions.sh).
 on:
   workflow_call:
     inputs:
+      # The release tag; empty packages as v<workspace version>-dev.
       tag:
         type: string
-        required: true
+        required: false
+        default: ''
 concurrency:
   group: packages-${{ github.ref }}
   cancel-in-progress: false
@@ -67,3 +72,5 @@ jobs:
         run: bash ops/ci/packages.sh native-install
       - name: Run the documented quick start against the candidate
         run: bash ops/ci/packages.sh quickstart
+      - name: Run the post-publication check against the candidate
+        run: bash ops/ci/packages.sh published-check

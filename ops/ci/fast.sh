@@ -46,6 +46,9 @@ run_preflight() {
     bash scripts/check_file_sizes.sh
     bash scripts/check-publish-policy.sh
     bash ops/ci/tests/release-authority.sh
+    bash scripts/test-release-version.sh
+    bash ops/ci/check-workflow-permissions.sh
+    bash ops/ci/tests/workflow-permissions.sh
     bash scripts/parity/lint-sqlite-parity-ledger.sh
     cargo build --locked -p redlinedb-cli --bin redlinedb
     # README.md's embedding example (test-docs-quickstart.sh keeps them equal).

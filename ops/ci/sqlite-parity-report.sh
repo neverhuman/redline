@@ -163,8 +163,8 @@ BODY
   fi
   pr_number=$(gh pr list --head "$report_branch" --base "$base_branch" --state open --json number --jq '.[0].number')
   # Token-created PRs may not emit pull_request workflows. Dispatch normal CI;
-  # its report-merge job merges this exact head only after every gate passes.
-  # Return immediately so this report job releases its self-hosted runner.
+  # when that run succeeds, .github/workflows/report-merge.yml merges this
+  # exact head. Return immediately so this job releases its self-hosted runner.
   gh workflow run ci.yml --ref "$report_branch"
 }
 
