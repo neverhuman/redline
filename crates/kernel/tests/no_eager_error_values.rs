@@ -1,13 +1,15 @@
-//! Kernel code builds an error value only when it returns it.
+//! Kernel code does not build an error value for `Option::ok_or` before it
+//! knows the value is needed.
 //!
-//! `Option::ok_or(Error::X)` constructs its argument before it knows whether
-//! the option is empty, and throwing away an unused kernel `Error` is not
-//! free: `Error` holds a `Box<Error>` and an `io::Error`, so dropping one is a
-//! real call on the success path. On the secondary-index read path those
-//! drops were about a third of the work: count queries ran 46% faster once
-//! they were gone. `ok_or_else(|| Error::X)` builds the error only on
-//! failure. Clippy's `or_fun_call` does not flag enum constructors, so this
-//! test scans the source instead.
+//! `ok_or(Error::X)` constructs its argument even when the option holds a
+//! value, and throwing away an unused kernel `Error` is not free: `Error`
+//! holds a `Box<Error>` and an `io::Error`, so dropping one is a real call
+//! on the success path. The performance audit's profile of reads had
+//! `drop_in_place<Error>` at 8-11% of self time; with these calls gone, the
+//! engine scoreboard measured secondary-index count queries 1.4x as fast.
+//! `ok_or_else(|| Error::X)` builds the error only on failure. Clippy's
+//! `or_fun_call` does not flag enum constructors, so this test scans the
+//! source instead.
 
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -19,6 +21,17 @@ fn rust_files(dir: &Path, out: &mut Vec<PathBuf>) {
             rust_files(&path, out);
         } else if path.extension().is_some_and(|ext| ext == "rs") {
             out.push(path);
+        }
+    }
+}
+
+/// `text` with leading whitespace and `//` comment lines removed.
+fn skip_space_and_comments(mut text: &str) -> &str {
+    loop {
+        text = text.trim_start();
+        match text.strip_prefix("//") {
+            Some(comment) => text = comment.split_once('\n').map_or("", |(_, rest)| rest),
+            None => return text,
         }
     }
 }
@@ -42,23 +55,12 @@ fn no_kernel_code_builds_an_error_it_may_not_return() {
     let mut eager = Vec::new();
     for file in &files {
         let text = fs::read_to_string(file).expect("read source file");
-        let lines: Vec<&str> = text.lines().collect();
-        for (index, line) in lines.iter().enumerate() {
-            let Some(at) = line.find(".ok_or(") else {
-                continue;
-            };
-            let mut arg = line[at + ".ok_or(".len()..].trim_start();
-            if arg.is_empty() {
-                arg = lines.get(index + 1).map_or("", |next| next.trim_start());
-            }
+        for (at, _) in text.match_indices(".ok_or(") {
+            let arg = skip_space_and_comments(&text[at + ".ok_or(".len()..]);
             if is_error_constructor(arg) {
+                let line = text[..at].matches('\n').count() + 1;
                 let relative = file.strip_prefix(&root).unwrap_or(file);
-                eager.push(format!(
-                    "{}:{}: {}",
-                    relative.display(),
-                    index + 1,
-                    line.trim()
-                ));
+                eager.push(format!("{}:{line}", relative.display()));
             }
         }
     }
@@ -68,4 +70,16 @@ fn no_kernel_code_builds_an_error_it_may_not_return() {
         eager.len(),
         eager.join("\n")
     );
+}
+
+#[test]
+fn the_scan_sees_every_occurrence_and_steps_over_comments() {
+    let arg = skip_space_and_comments("\n    // why\n    Error::CorruptPage(\"x\"))");
+    assert!(is_error_constructor(arg));
+    let text = "a.ok_or(value).b.ok_or(crate::Error::X)";
+    let hits = text
+        .match_indices(".ok_or(")
+        .filter(|(at, _)| is_error_constructor(skip_space_and_comments(&text[at + 7..])))
+        .count();
+    assert_eq!(hits, 1);
 }
