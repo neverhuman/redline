@@ -670,11 +670,13 @@ pub fn apply_alter_table(
             if column.constraints.iter().any(|constraint| {
                 !matches!(
                     constraint,
-                    ColumnConstraintSpec::NotNull { .. } | ColumnConstraintSpec::Default { .. }
+                    ColumnConstraintSpec::NotNull { .. }
+                        | ColumnConstraintSpec::Default { .. }
+                        | ColumnConstraintSpec::Check { .. }
                 )
             }) {
                 return Err(Error::UnsupportedDdl(
-                    "ALTER TABLE ADD COLUMN supports NOT NULL and DEFAULT only",
+                    "ALTER TABLE ADD COLUMN supports NOT NULL, DEFAULT and CHECK only",
                 ));
             }
             if column.autoincrement {
@@ -694,6 +696,19 @@ pub fn apply_alter_table(
             let ordinal = table.columns.len() as u16;
             let column_id = ColumnId(next_object_id.0);
             next_object_id.0 += 1;
+            // A column CHECK becomes a table CHECK, as CREATE TABLE makes it.
+            // The SQL layer tests it against the rows already stored.
+            for constraint in &column.constraints {
+                if let ColumnConstraintSpec::Check { expr, .. } = constraint {
+                    let constraint_id = ConstraintId(next_object_id.0);
+                    next_object_id.0 += 1;
+                    table.checks.push(super::schema::CheckDef {
+                        constraint_id,
+                        name: None,
+                        expr: compile_expr(expr),
+                    });
+                }
+            }
             let declared_type = column.declared_type.clone();
             table.columns.push(ColumnDef {
                 column_id,

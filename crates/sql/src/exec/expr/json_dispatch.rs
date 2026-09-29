@@ -945,6 +945,12 @@ fn eval_scalar_min_max(values: &[SqlValue], is_min: bool) -> Result<SqlValue> {
 }
 
 fn eval_raise_function(func: &sqlparser::ast::Function) -> Result<SqlValue> {
+    // sqlite3 refuses RAISE outside a trigger while preparing; RedlineDB
+    // finds out when the call is evaluated, so a RAISE that never runs
+    // (a SELECT over no rows) is not refused.
+    if !crate::exec::trigger::in_trigger_program() {
+        return Err(crate::sqlite_errors::raise_outside_trigger());
+    }
     let FunctionArguments::List(list) = &func.args else {
         return Err(Error::UnsupportedSql("RAISE requires arguments".to_owned()));
     };

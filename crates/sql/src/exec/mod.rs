@@ -608,6 +608,7 @@ pub fn execute_prepared(
             let alter_result = with_write_tx(conn, |session, tx| {
                 rewrite_drop_column_rows(conn, tx, spec)?;
                 conn.engine().alter_table(tx, spec.clone())?;
+                alter::check_rows_after_add_column(conn, tx, spec)?;
                 convert_rows_to_new_type(conn, session, tx, spec)?;
                 Ok(())
             });

@@ -83,6 +83,11 @@ pub(crate) fn percentile_cont_form(func: &sqlparser::ast::Function) -> Error {
     }
 }
 
+/// `RAISE()` evaluated outside a trigger program.
+pub(crate) fn raise_outside_trigger() -> Error {
+    Error::Sqlite("RAISE() may only be used within a trigger-program".to_owned())
+}
+
 /// A subquery used as a value whose result has the wrong number of columns.
 pub(crate) fn sub_select_columns(returned: usize, expected: usize) -> Error {
     Error::Sqlite(format!(
