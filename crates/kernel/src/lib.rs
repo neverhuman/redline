@@ -5,8 +5,13 @@
 
 // Kernel code writes `ok_or_else(|| Error::X)` even where clippy calls the
 // value cheap: dropping an unused `Error` is a real call on the success
-// path (see tests/no_eager_error_values.rs, which enforces the rule).
-#![allow(clippy::unnecessary_lazy_evaluations)]
+// path (see tests/no_eager_error_values.rs, which enforces the rule). The
+// smaller error types (`ExprError`, `RecordError`, `SectorError`) drop for
+// free, and keep the same form so the rule has no exceptions.
+#![allow(
+    clippy::unnecessary_lazy_evaluations,
+    reason = "a success path must not build and drop an unused kernel Error"
+)]
 
 /// A26: process-wide cached `std::thread::available_parallelism()`.
 ///
