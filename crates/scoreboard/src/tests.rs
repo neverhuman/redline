@@ -143,6 +143,18 @@ struct Synthetic {
     busy_host: bool,
     /// Scale written in the records (the manifest says 100).
     record_rows: u64,
+    /// Seconds v2 takes (v1 takes 1.0).
+    v2_seconds: f64,
+    /// Record that v2's first run started on a busy host.
+    waited_out: bool,
+    /// A workload v2 did not measure.
+    v2_skips: Option<&'static str>,
+    /// The file system host.json names for the normal pair.
+    normal_fs: &'static str,
+    /// The engine version v2's records name in its third run.
+    v2_run3_version: &'static str,
+    /// Repetitions written per run (the manifest asks for 2).
+    reps_written: u32,
 }
 
 impl Default for Synthetic {
@@ -155,6 +167,12 @@ impl Default for Synthetic {
             wrong_digest: false,
             busy_host: false,
             record_rows: 100,
+            v2_seconds: 0.5,
+            waited_out: false,
+            v2_skips: None,
+            normal_fs: "tmpfs",
+            v2_run3_version: "redlinedb 5.1.1",
+            reps_written: 2,
         }
     }
 }
@@ -179,15 +197,19 @@ fn synthetic_bundle(root: &std::path::Path, knobs: Synthetic) -> std::path::Path
             "pairs": ["normal"],
         }),
     );
-    write("host.json", serde_json::json!({ "normal_dir_fs": "tmpfs" }));
+    write(
+        "host.json",
+        serde_json::json!({ "normal_dir_fs": knobs.normal_fs }),
+    );
     let mut runs = String::new();
     for label in ["v1", "v2"] {
         for run in 1..=knobs.runs {
             let busy = u64::from(knobs.busy_host && label == "v2" && run == 1);
+            let waited_out = knobs.waited_out && label == "v2" && run == 1;
             runs.push_str(
                 &serde_json::json!({
-                    "label": label, "run": run, "pair": "normal",
-                    "runner_jobs_before": 0, "runner_jobs_after": busy,
+                    "label": label, "run": run, "pair": "normal", "waited_out": waited_out,
+                    "runner_jobs_before": 0, "runner_jobs_after": 0, "runner_jobs_max": busy,
                 })
                 .to_string(),
             );
@@ -196,19 +218,27 @@ fn synthetic_bundle(root: &std::path::Path, knobs: Synthetic) -> std::path::Path
     }
     std::fs::write(bundle.join("runs.jsonl"), runs).expect("runs.jsonl");
     let workloads = crate::run::selected(&None, Pair::Normal).expect("workloads");
-    for (label, own_s) in [("v1", 1.0f64), ("v2", 0.5)] {
+    for (label, own_s) in [("v1", 1.0f64), ("v2", knobs.v2_seconds)] {
         std::fs::create_dir_all(bundle.join(label)).expect("label dir");
         for run in 1..=knobs.runs {
             let mut lines = String::new();
             for workload in &workloads {
-                for rep in 0..2 {
+                if label == "v2" && knobs.v2_skips == Some(workload.id) {
+                    continue;
+                }
+                for rep in 0..knobs.reps_written {
                     let sqlite_s = if label == "v1" {
                         knobs.sqlite_beside_v1
                     } else {
                         0.25
                     };
+                    let own_version = if label == "v2" && run == 3 {
+                        knobs.v2_run3_version
+                    } else {
+                        "redlinedb 5.1.1"
+                    };
                     for (engine, seconds, version) in [
-                        (label, own_s, "redlinedb 5.1.1"),
+                        (label, own_s, own_version),
                         ("sqlite", sqlite_s, "sqlite 3.50.2"),
                     ] {
                         let odd = engine == "v2" && run == 1 && rep == 0 && workload.id == "top10";
@@ -396,4 +426,98 @@ fn the_after_updates_image_keeps_each_engines_log() {
         wal(&after) > 0,
         "the after-updates image keeps SQLite's log"
     );
+}
+
+#[test]
+fn a_run_started_on_a_busy_host_blocks_publication() {
+    let blockers = blockers_of(Synthetic {
+        waited_out: true,
+        ..Synthetic::default()
+    });
+    assert!(
+        blockers
+            .iter()
+            .any(|b| b.contains("started on a busy host")),
+        "{blockers:?}"
+    );
+}
+
+#[test]
+fn a_version_that_skipped_a_workload_blocks_publication() {
+    let blockers = blockers_of(Synthetic {
+        v2_skips: Some("top10"),
+        ..Synthetic::default()
+    });
+    assert!(
+        blockers
+            .iter()
+            .any(|b| b.contains("v2 normal top10: 0 of 3 runs measured")),
+        "{blockers:?}"
+    );
+}
+
+#[test]
+fn a_normal_pair_off_tmpfs_blocks_publication() {
+    let blockers = blockers_of(Synthetic {
+        normal_fs: "ext4",
+        ..Synthetic::default()
+    });
+    assert!(
+        blockers.iter().any(|b| b.contains("ran on ext4")),
+        "{blockers:?}"
+    );
+}
+
+#[test]
+fn a_series_that_ran_two_engine_versions_blocks_publication() {
+    let blockers = blockers_of(Synthetic {
+        v2_run3_version: "redlinedb 5.1.2",
+        ..Synthetic::default()
+    });
+    assert!(
+        blockers
+            .iter()
+            .any(|b| b.contains("several engine versions")),
+        "{blockers:?}"
+    );
+}
+
+#[test]
+fn too_few_repetitions_block_publication() {
+    let root = tempfile::tempdir().expect("temp dir");
+    let knobs = Synthetic {
+        reps_written: 1,
+        ..Synthetic::default()
+    };
+    let bundle = synthetic_bundle(root.path(), knobs);
+    // The manifest asks for 3 repetitions; the records hold 1.
+    let manifest = bundle.join("bundle.json");
+    let text = std::fs::read_to_string(&manifest).expect("read manifest");
+    std::fs::write(&manifest, text.replace("\"reps\":2", "\"reps\":3")).expect("manifest");
+    let summary = crate::summary::summarize(&bundle).expect("summary");
+    assert!(
+        summary
+            .blockers
+            .iter()
+            .any(|b| b.contains("1 repetitions, fewer than 3")),
+        "{:?}",
+        summary.blockers
+    );
+}
+
+#[test]
+fn a_small_change_is_not_called_beyond_noise() {
+    let root = tempfile::tempdir().expect("temp dir");
+    let bundle = synthetic_bundle(
+        root.path(),
+        Synthetic {
+            v2_seconds: 1.0 / 1.03,
+            ..Synthetic::default()
+        },
+    );
+    let summary = crate::summary::summarize(&bundle).expect("summary");
+    assert!(summary.publishable, "{:?}", summary.blockers);
+    let speedup = &summary.workloads[0].speedup["v2/v1"];
+    assert!((speedup.median.expect("median") - 1.03).abs() < 1e-6);
+    assert!(!speedup.exceeds_noise, "3% is under the 5% floor");
 }

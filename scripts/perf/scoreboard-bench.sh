@@ -10,8 +10,10 @@
 #
 # Every version runs every workload in each run, the versions in a rotated
 # order, pinned to the same CPUs. SQLite runs beside each version as its
-# control group. A version's run waits for a quiet host (no CI job, load
-# below --max-loadavg) and the bundle is refused if the host stays busy.
+# control group. A version's run waits up to --max-wait-s for a quiet host
+# (no CI job, load below --max-loadavg). If it had to start anyway, or a CI
+# job ran at any time during it (sampled every 10 s), runs.jsonl says so and
+# the summary refuses to publish the bundle.
 # The normal pair runs on tmpfs; the strict pair needs a real disk.
 #
 # Usage: scripts/perf/scoreboard-bench.sh --bundle <name> [--runs 3] [--rows 20000]
@@ -49,6 +51,11 @@ while [ $# -gt 0 ]; do
     *) die "unknown argument $1" ;;
   esac
 done
+for number in "$runs" "$rows" "$reps" "$max_wait_s"; do
+  [[ "$number" =~ ^[1-9][0-9]*$|^0$ ]] || die "not a whole number: $number"
+done
+[ "$runs" -ge 1 ] && [ "$rows" -ge 10 ] && [ "$reps" -ge 1 ] || die "--runs, --rows and --reps must be at least 1, 10 and 1"
+[[ "$max_loadavg" =~ ^[0-9]+([.][0-9]+)?$ ]] || die "not a number: --max-loadavg $max_loadavg"
 [ -n "$bundle" ] || die "--bundle is required"
 [[ "$bundle" =~ ^[A-Za-z0-9][A-Za-z0-9._+-]*$ ]] || die "bad bundle name $bundle"
 [ "${#labels[@]}" -gt 0 ] || die "name at least one <label>=<binary>"
@@ -95,8 +102,10 @@ for dir in "$normal_dir/$bundle" "$strict_dir/$bundle"; do
 done
 finish() {
   local status=$?
+  # A host sampler still running when a run failed.
+  kill $(jobs -p) 2>/dev/null || true
   rm -rf "${normal_dir:?}/$bundle" "${strict_dir:?}/$bundle"
-  if [ "$status" -ne 0 ] && [ -d "$out" ]; then
+  if [ "$status" -ne 0 ] && [ -d "$out" ] && [ -z "${measured:-}" ]; then
     rm -rf "$out"
     printf 'scoreboard-bench: failed; removed the partial bundle %s\n' "$out" >&2
   fi
@@ -114,19 +123,34 @@ runner_jobs() {
 }
 loadavg() { cut -d' ' -f1 /proc/loadavg; }
 
-# Wait up to --max-wait-s for no CI job and load below --max-loadavg. A run
-# that starts or ends with a CI job is recorded in runs.jsonl, and the
-# summary then refuses to publish the bundle.
+# Wait up to --max-wait-s for no CI job and load below --max-loadavg. Sets
+# waited_out=true when the host was still busy and the run starts anyway;
+# runs.jsonl records it and the summary refuses to publish the bundle.
 wait_quiet() {
   local waited=0
+  waited_out=false
   while [ "$(runner_jobs)" -gt 0 ] || awk -v l="$(loadavg)" -v m="$max_loadavg" 'BEGIN { exit !(l >= m) }'; do
     if [ "$waited" -ge "$max_wait_s" ]; then
-      printf 'scoreboard-bench: host still busy after %ss (runner jobs %s, load %s); measuring anyway, and the summary will block publication if a CI job overlaps\n' \
+      printf 'scoreboard-bench: host still busy after %ss (runner jobs %s, load %s); measuring anyway, and the bundle will not be publishable\n' \
         "$max_wait_s" "$(runner_jobs)" "$(loadavg)" >&2
+      waited_out=true
       return 0
     fi
     sleep 30
     waited=$((waited + 30))
+  done
+}
+
+# Sample CI jobs and load every 10 s while a run goes on, keeping the
+# highest of each in $1, so a job that starts and ends inside a run counts.
+sample_host() {
+  local most_jobs=0 most_load=0 jobs load
+  while :; do
+    jobs="$(runner_jobs)" load="$(loadavg)"
+    [ "$jobs" -le "$most_jobs" ] || most_jobs="$jobs"
+    most_load="$(awk -v a="$most_load" -v b="$load" 'BEGIN { print (b > a) ? b : a }')"
+    printf '%s %s\n' "$most_jobs" "$most_load" > "$1"
+    sleep 10
   done
 }
 
@@ -157,17 +181,27 @@ for run in $(seq 1 "$runs"); do
       mkdir -p "$out/$label"
       wait_quiet
       before_jobs="$(runner_jobs)" before_load="$(loadavg)" started="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+      host_sample="$base/host-sample"
+      mkdir -p "$base"
+      sample_host "$host_sample" &
+      sampler=$!
       printf '==> run %s pair %s: %s\n' "$run" "$pair" "$label"
       taskset -c "$cpus" "$bin" run --label "$label" --run "$run" --rows "$rows" --pair "$pair" \
         --reps "$reps" --image-store "$base/images" --work-root "$base/work" \
         --out "$out/$label/run-$run-$pair.jsonl"
+      kill "$sampler" 2>/dev/null || true
+      wait "$sampler" 2>/dev/null || true
+      read -r most_jobs most_load < "$host_sample" || { most_jobs=0 most_load=0; }
       jq -n -c --arg label "$label" --argjson run "$run" --arg pair "$pair" --arg started "$started" \
-        --arg finished "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+        --arg finished "$(date -u +%Y-%m-%dT%H:%M:%SZ)" --argjson waited_out "$waited_out" \
         --argjson jobs_before "$before_jobs" --argjson jobs_after "$(runner_jobs)" \
-        --arg load_before "$before_load" --arg load_after "$(loadavg)" \
+        --argjson jobs_max "$most_jobs" --arg load_max "$most_load" \
+        --arg load_before "$before_load" --arg load_after "$(loadavg)" --arg max_load "$max_loadavg" \
         '{label: $label, run: $run, pair: $pair, started_utc: $started, finished_utc: $finished,
-          runner_jobs_before: $jobs_before, runner_jobs_after: $jobs_after,
-          loadavg_before: ($load_before | tonumber), loadavg_after: ($load_after | tonumber)}' \
+          waited_out: $waited_out, runner_jobs_before: $jobs_before, runner_jobs_after: $jobs_after,
+          runner_jobs_max: $jobs_max, loadavg_before: ($load_before | tonumber),
+          loadavg_after: ($load_after | tonumber), loadavg_max: ($load_max | tonumber),
+          max_loadavg: ($max_load | tonumber)}' \
         >> "$out/runs.jsonl"
     done
   done
@@ -185,4 +219,6 @@ jq -n --arg bundle "$bundle" --argjson labels "$(printf '%s\n' "${labels[@]}" | 
     runs: $runs, reps: $reps, pairs: $pairs, pinned_cpus: $cpus, harness_tree: $harness,
     sqlite_source_id: $sqlite, created_utc: $created}' > "$out/bundle.json"
 
+# The measurements are complete: keep the bundle even if summarizing fails.
+measured=1
 "${binaries[$((n - 1))]}" summarize --bundle "$out"

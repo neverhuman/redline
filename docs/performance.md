@@ -128,9 +128,11 @@ through rusqlite, and runs the same fixed work on both in one process.
   - Each case reads the settings back and refuses to run if one differs. For
     an open workload the check comes after the clock stops.
 - **Reopening.** `open_after_updates` starts from an image whose 5,000
-  updates are still in the log for both engines: SQLite's automatic
-  checkpoint is off while it is built, and neither engine checkpoints on
-  close.
+  updates are still in the log for both engines:
+  - RedlineDB does not checkpoint when a database closes.
+  - SQLite's automatic checkpoint is off while the image is built, and the
+    harness leaves its connection unclosed, because SQLite checkpoints when
+    the last connection closes.
 - **Timing.** Resource figures (CPU time, I/O, RedlineDB's work counters)
   cover exactly the timed work, not statement preparation or the digest
   query. Copied images are synced before timing.
@@ -166,13 +168,18 @@ SQLite runs beside each version and serves as the control group.
 - reduced work (`--work-divisor` above 1);
 - a series that ran more than one engine version;
 - a result mismatch;
-- a CI job on the host during a run;
+- a run that started on a busy host, or saw a CI job at any time (sampled
+  every 10 seconds);
 - the normal pair not on tmpfs;
 - SQLite beside different versions differing by more than 10%. Open times,
   a few milliseconds each, are exempt from this last check.
 
-A speedup is marked as within noise when the two versions' run ranges
-overlap. `scoreboard-bench.sh` refuses a binary that carries failpoints or
+A speedup is beyond noise only when both of these hold:
+- the two versions' run ranges do not overlap;
+- it moves by more than 5%, or by more than SQLite's own spread across the
+  newer version's runs, whichever is larger.
+
+Anything smaller is marked as within noise. `scoreboard-bench.sh` refuses a binary that carries failpoints or
 debug assertions, or that is not the one its `build.json` describes under
 the label given. The README block between `<!-- engine-throughput:begin -->` and
 `<!-- engine-throughput:end -->` is generated from `summary.json`. The
