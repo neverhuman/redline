@@ -4,6 +4,7 @@ use std::io::Write;
 
 use redlinedb::ValueRef;
 
+use crate::control_chars::{blob_bytes, blob_text, needs_csv_quote};
 use crate::dot::OutputMode;
 
 #[derive(Clone, Debug)]
@@ -972,6 +973,10 @@ fn write_csv_value_ref<W: Write>(
         ValueRef::Integer(v) => write!(out, "{v}").map_err(|err| err.to_string()),
         ValueRef::Real(v) => write!(out, "{}", format_real(v)).map_err(|err| err.to_string()),
         ValueRef::Text(v) => write_csv_cell(out, v, separator),
+        ValueRef::Blob(v) if !postgres_result_dialect() => {
+            let quote = needs_csv_quote(blob_bytes(v), separator);
+            write_quoted_bytes(out, &blob_text(v), quote)
+        }
         ValueRef::Blob(v) => write_csv_cell(out, &format_blob_text(v), separator),
     }
 }
@@ -995,6 +1000,10 @@ fn write_tabs_value_ref<W: Write>(
             } else {
                 write_tabs_cell(out, v)
             }
+        }
+        ValueRef::Blob(v) if !postgres_result_dialect() => {
+            let quote = needs_csv_quote(blob_bytes(v), "\t");
+            write_quoted_bytes(out, &blob_text(v), quote)
         }
         ValueRef::Blob(v) => write_tabs_cell(out, &format_blob_text(v)),
     }
@@ -1035,10 +1044,33 @@ fn write_text_value_ref<W: Write>(
                 out.write_all(v.as_bytes()).map_err(|err| err.to_string())
             }
         }
+        ValueRef::Blob(v) if !postgres_result_dialect() => {
+            out.write_all(&blob_text(v)).map_err(|err| err.to_string())
+        }
         ValueRef::Blob(v) => out
             .write_all(format_blob_text(v).as_bytes())
             .map_err(|err| err.to_string()),
     }
+}
+
+/// Write `bytes` as a delimited cell, inside double quotes (each `"`
+/// doubled) when `quote` is set. BLOB bytes that are not UTF-8 pass through.
+fn write_quoted_bytes<W: Write>(out: &mut W, bytes: &[u8], quote: bool) -> Result<(), String> {
+    let result = if quote {
+        let mut quoted = Vec::with_capacity(bytes.len() + 2);
+        quoted.push(b'"');
+        for &byte in bytes {
+            if byte == b'"' {
+                quoted.push(b'"');
+            }
+            quoted.push(byte);
+        }
+        quoted.push(b'"');
+        out.write_all(&quoted)
+    } else {
+        out.write_all(bytes)
+    };
+    result.map_err(|err| err.to_string())
 }
 
 fn escape_symbolic(value: &str) -> String {
@@ -1077,23 +1109,9 @@ fn format_blob_text(bytes: &[u8]) -> String {
         }
         return out;
     }
-    if bytes.iter().all(|byte| *byte == 0) {
-        return String::new();
-    }
-    let text = String::from_utf8_lossy(bytes);
-    let mut out = String::with_capacity(text.len());
-    for ch in text.chars() {
-        match ch {
-            '\u{0000}' => out.push_str("^@"),
-            '\u{0001}'..='\u{001A}' => {
-                out.push('^');
-                out.push((b'@' + ch as u8) as char);
-            }
-            '\u{007F}' => out.push_str("^?"),
-            other => out.push(other),
-        }
-    }
-    out
+    // Column-aligned modes lay out text, so a byte that is not UTF-8 shows
+    // as U+FFFD there; the delimited modes write the bytes themselves.
+    String::from_utf8_lossy(&blob_text(bytes)).into_owned()
 }
 
 fn format_blob_literal(bytes: &[u8], lowercase: bool) -> String {
