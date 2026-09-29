@@ -23,6 +23,22 @@ impl Engine {
             .get_for_relation(&self.txs, &snapshot, Some(tx.id()), rel_id, row_id)
     }
 
+    /// Row `row_id` of `rel_id` as the latest committed state and `tx`'s own
+    /// writes show it, whatever `tx`'s snapshot. A uniqueness check reads
+    /// this, so a row another transaction committed after `tx` began counts.
+    pub fn get_for_relation_latest(
+        &self,
+        tx: &Txn,
+        rel_id: RelId,
+        row_id: RowId,
+    ) -> Result<Option<Vec<u8>>> {
+        tx.ensure_open()?;
+        crate::observe::add_relation_get();
+        let latest = self.txs.snapshot();
+        self.heap
+            .get_for_relation(&self.txs, &latest, Some(tx.id()), rel_id, row_id)
+    }
+
     /// Every row of `rel_id` that `tx` sees, read by `workers` threads that
     /// split the relation's heap pages between them. Each row is read as
     /// [`Engine::get_for_relation`] reads it: one version, never a
@@ -74,6 +90,29 @@ impl Engine {
 
     pub fn reserve_row_id(&self) -> RowId {
         self.heap.reserve_row_id()
+    }
+
+    /// Take the next rowid of `rel_id`; each relation numbers its own rows.
+    pub fn reserve_row_id_for(&self, rel_id: RelId) -> Result<RowId> {
+        self.heap.reserve_row_id_for(rel_id)
+    }
+
+    /// The rowid `rel_id` hands out next.
+    pub fn relation_next_row(&self, rel_id: RelId) -> Result<u64> {
+        self.heap.relation_next_row(rel_id)
+    }
+
+    /// Lower the next rowid of `rel_id` from `expected` to `next_row`, as a
+    /// delete of the relation's highest rowid does. Returns `false`, and
+    /// changes nothing, when the counter no longer holds `expected`.
+    pub fn lower_relation_next_row(
+        &self,
+        rel_id: RelId,
+        expected: u64,
+        next_row: u64,
+    ) -> Result<bool> {
+        self.heap
+            .lower_relation_next_row(rel_id, expected, next_row)
     }
 
     pub fn lower_next_row(&self, next_row: u64) {

@@ -42,6 +42,7 @@ impl PageBackedHeap {
                     } else {
                         tuple.rel_id
                     };
+                    self.advance_relation_next_row(rel_id, tuple.row_id)?;
                     let ptr = TuplePtr::new_with_generation(page_id, slot, header.generation);
                     choices.offer(txs, rel_id, &tuple, ptr);
                 }

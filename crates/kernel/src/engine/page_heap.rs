@@ -16,6 +16,8 @@ mod logged_changes;
 mod mutation;
 #[path = "page_heap/policy.rs"]
 mod policy;
+#[path = "page_heap/relation_alloc.rs"]
+mod relation_alloc;
 #[path = "page_heap/scan.rs"]
 mod scan;
 pub use scan::{HeapScanRow, ParallelScanDiagnostics, parallel_scan_diagnostics};
@@ -30,7 +32,10 @@ pub struct PageBackedHeap {
     reusable_undo_pages: Mutex<Vec<PageId>>,
     buffer: Arc<BufferPool>,
     wal: Option<Arc<WalCoordinator>>,
+    /// Engine-wide rowid counter, for callers that name no relation.
     next_row: AtomicU64,
+    /// Each relation's next rowid; see `relation_alloc.rs`.
+    relation_next_row: relation_alloc::RelationNextRow,
     /// Held shared by each logged heap change and exclusively by a
     /// checkpoint writing pages; see `logged_changes.rs`.
     logged_changes: RwLock<()>,
@@ -87,6 +92,7 @@ impl PageBackedHeap {
             buffer,
             wal,
             next_row: AtomicU64::new(1),
+            relation_next_row: relation_alloc::new_relation_next_row(lanes),
             logged_changes: RwLock::new(()),
         })
     }

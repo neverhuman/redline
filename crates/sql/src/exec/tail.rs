@@ -78,6 +78,10 @@ pub(crate) fn restrict_dml_rows(
     Ok(filtered.into_iter().skip(offset_n).take(limit_n).collect())
 }
 
+/// A table with an INTEGER PRIMARY KEY reuses its highest rowid once that
+/// row is deleted, as SQLite's max(rowid)+1 does. Only a delete of the row
+/// just below the table's next rowid can change it, so every other delete
+/// returns at once; that one reads the table for its new maximum.
 fn lower_rowid_allocator_after_delete(
     conn: &Connection,
     tx: &mut Txn,
@@ -87,14 +91,19 @@ fn lower_rowid_allocator_after_delete(
     if table.rowid_alias_column.is_none() {
         return Ok(());
     }
-    let next_row = super::collect_table_rowids(conn.engine(), tx, table)?
+    let engine = conn.engine();
+    let expected = deleted_rowid.0.saturating_add(1);
+    if engine.relation_next_row(table.relation_id)? != expected {
+        return Ok(());
+    }
+    let next_row = super::collect_table_rowids(engine, tx, table)?
         .into_iter()
         .filter(|rowid| *rowid != deleted_rowid)
         .map(|rowid| rowid.0)
         .max()
         .unwrap_or(0)
         .saturating_add(1);
-    conn.engine().lower_next_row(next_row);
+    engine.lower_relation_next_row(table.relation_id, expected, next_row)?;
     Ok(())
 }
 
