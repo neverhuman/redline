@@ -1739,6 +1739,23 @@ dependencies = [
 ]
 
 [[package]]
+name = "redlinedb-scoreboard"
+version = "5.1.0"
+dependencies = [
+ "anyhow",
+ "clap",
+ "libc",
+ "mimalloc",
+ "redlinedb",
+ "redlinedb-kernel",
+ "rusqlite",
+ "serde",
+ "serde_json",
+ "sha2 0.10.9",
+ "tempfile",
+]
+
+[[package]]
 name = "redlinedb-server"
 version = "5.1.0"
 dependencies = [

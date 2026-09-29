@@ -281,6 +281,21 @@
       "purpose": "stub-runner fixtures for the full-corpus perf lane (interrupted, empty, {}, truncated, incomplete, duplicate, tampered, unexplained-exit, unlisted-failure and stale all.jsonl runs are rejected) and for the release bench bundle script",
       "proof_lane": "fast"
     },
+    "crates/scoreboard/": {
+      "command": "rtk cargo test -p redlinedb-scoreboard --lib --locked",
+      "purpose": "both engines run every scoreboard workload on the same image and agree on the result, each opens with its pair's settings, and summarize/render refuse unpublishable bundles and detect a README block or summary.json that no longer matches its raw records",
+      "proof_lane": "fast"
+    },
+    "scripts/perf/build-scoreboard.sh": {
+      "command": "rtk bash -n scripts/perf/build-scoreboard.sh",
+      "purpose": "build the scoreboard harness from one commit against a version's engine in a removed --no-local sandbox, refusing failpoint and debug builds and any Cargo.lock change beyond the harness package",
+      "proof_lane": "fast"
+    },
+    "scripts/perf/scoreboard-bench.sh": {
+      "command": "rtk bash -n scripts/perf/scoreboard-bench.sh",
+      "purpose": "measure scoreboard binaries into a new bundle, refusing mixed harnesses or SQLite libraries, a busy host and a strict pair on tmpfs",
+      "proof_lane": "fast"
+    },
     "scripts/perf/release-bench.sh": {
       "command": "rtk bash -n scripts/perf/release-bench.sh && rtk cargo test -p redlinedb-bench --test perf_release_bench --locked",
       "purpose": "verify the release bench bundle script refuses failpoint and debug builds, mislabelled build records, reused bundles, overloaded hosts, incomplete runs and unexplained runner exits, and writes interleaved, summarized bundles",
