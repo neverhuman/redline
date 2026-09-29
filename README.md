@@ -12,7 +12,7 @@
   <!-- sqlite-parity-badge:begin -->
   <a href="#sqlite-parity-status"><img src="https://img.shields.io/badge/SQLite%20SQL%2FCLI%20corpus-2440%2F2445%20%C2%B7%205%20failed%20%C2%B7%200%20skipped%20%C2%B7%203.53.1-red" alt="SQLite SQL/CLI corpus: 2440/2445 cases passed, 5 failed, 0 skipped against the SQLite 3.53.1 shell; 13 declared deviations; not full SQLite compatibility"></a><!-- sqlite-parity-badge:end -->
   <a href="#postgresql-sql-shell-corpus"><img src="https://img.shields.io/badge/PostgreSQL%2016.15-SQL--shell%20corpus-blue" alt="PostgreSQL 16.15 SQL-shell corpus: counts in the block below; no wire protocol"></a>
-  <a href="docs/releases/v5.0.0.md"><img src="https://img.shields.io/badge/version-5.0.0-blue" alt="version 5.0.0"></a>
+  <a href="docs/releases/v5.1.0.md"><img src="https://img.shields.io/badge/version-5.1.0-blue" alt="version 5.1.0"></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-Apache--2.0-blue" alt="license Apache-2.0"></a>
   <a href="rust-toolchain.toml"><img src="https://img.shields.io/badge/rust-1.95-orange" alt="rust 1.95"></a>
 </p>
@@ -24,10 +24,10 @@ connections in one process can write at the same time. To share a database
 between processes, run `redlinedb-server` in one of them.
 
 > [!IMPORTANT]
-> **v5.0.0 is an experimental release.** Read this before you depend on it.
+> **v5.1.0 is an experimental release.** Read this before you depend on it.
 >
 > - **Not a replacement for SQLite.** The SQL and shell behavior are measured against the sqlite3 3.53.1 shell on a fixed corpus. Failing cases, if any, are listed with reasons in [`known-failures.json`](metadata/sqlite_parity/known-failures.json); the badge has the count.
-> - **Its own file format.** A database is a directory (`data.redline`, `schema.redline`, `wal/`). RedlineDB cannot open SQLite database files, and SQLite cannot open RedlineDB databases. The first time v5.0.0 opens a database written by v4, it rebuilds every index; if a `UNIQUE` index would then hold two rows with one key, the open fails and changes nothing. Do not open the database with v4 afterwards: v4 refuses it when it has an index. Databases written before v4 have not been tested with v5.0.0. Back up before upgrading.
+> - **Its own file format.** A database is a directory (`data.redline`, `schema.redline`, `wal/`). RedlineDB cannot open SQLite database files, and SQLite cannot open RedlineDB databases. The first time v5.1.0 opens a database written by v4, it rebuilds every index; if a `UNIQUE` index would then hold two rows with one key, the open fails and changes nothing. Do not open the database with v4 afterwards: v4 refuses it when it has an index. Databases written before v4 have not been tested with v5.1.0. Back up before upgrading.
 > - **The C ABI is an experimental subset.** `libredlinedb.so.5` exports RedlineDB's native `rldb_*` API and part of the `sqlite3_*` API. It is not a replacement `libsqlite3`.
 > - **PostgreSQL support is a SQL-shell corpus only.** There is no PostgreSQL wire protocol, TLS, roles or SQLSTATE.
 > - **Durability scope.** In the default `Strict` mode, a committed transaction survives a crash of the RedlineDB process on ext4 on a local NVMe SSD (Linux 6.8.0) ([receipt](benchmark-results/durability/v5.0.0-strict-process-kill.json)). Power loss and operating-system crashes are not claimed. See [docs/manual/durability.md](docs/manual/durability.md).
@@ -63,7 +63,7 @@ newer on Intel and Apple Silicon. They contain the `redlinedb` shell, the
 `redlinedb-server` binary, the native library and C headers. Rust is not needed.
 
 ```bash quickstart
-curl -fsSL https://raw.githubusercontent.com/neverhuman/redline/v5.0.0/install.sh | VERSION=v5.0.0 bash
+curl -fsSL https://raw.githubusercontent.com/neverhuman/redline/v5.1.0/install.sh | VERSION=v5.1.0 bash
 export PATH="$HOME/.local/bin:$PATH"
 ```
 
@@ -126,7 +126,7 @@ your `Cargo.lock`; the Rust API may still change between releases
 
 ```toml
 [dependencies]
-redlinedb = { git = "https://github.com/neverhuman/redline", tag = "v5.0.0" }
+redlinedb = { git = "https://github.com/neverhuman/redline", tag = "v5.1.0" }
 ```
 
 This is `crates/redlinedb/examples/readme.rs`; `cargo run -p redlinedb --example readme`
@@ -160,7 +160,7 @@ Install Rust 1.95, a C/C++ compiler and pkg-config
 ```bash
 git clone https://github.com/neverhuman/redline
 cd redline
-git checkout v5.0.0
+git checkout v5.1.0
 ./scripts/build-from-source.sh
 ./scripts/install-from-source.sh
 ```
@@ -205,6 +205,15 @@ Measured 2026-09-28 on AMD Ryzen Threadripper PRO 3995WX 64-Cores (128 CPUs, Lin
 
 Older published figures, most of which cannot be reproduced, are kept with
 their caveats in [docs/performance-history.md](docs/performance-history.md).
+
+## What's new in v5.1.0
+
+Full notes: [docs/releases/v5.1.0.md](docs/releases/v5.1.0.md) and [CHANGELOG.md](CHANGELOG.md). The file format and the C ABI are those of v5.0.0.
+
+- **SQLite's error text.** A statement SQLite rejects fails with SQLite's own message (`no such table: t`, `UNIQUE constraint failed: t.x`, `near "X": syntax error`, ...), in the shell and from `sqlite3_errmsg`; error codes keep their classes.
+- **The shell reads scripts as sqlite3 does.** A failed line group is reported as `Parse error near line N: ...` and the script goes on unless `-bail`; SQL given as arguments still stops at its first failure.
+- **Shell output.** BLOBs print their own bytes, `-escape ascii|symbol|off` applies to TEXT and BLOB, csv and tabs quote by sqlite3's rules, and `.schema`, `.dump`, `.fullschema`, `.parameter`, `.dbconfig`, `.show`, `.clone`, `.connection`, `.sha3sum`, `.shell` and `-memtrace` do what sqlite3's do. `.shell` and `.system` now run commands; `-safe` refuses them.
+- **SQL.** `ALTER TABLE ... ADD COLUMN` accepts CHECK and keeps the column's text in the schema; `RAISE()` outside a trigger is refused; a `CASE ... END` inside a trigger body no longer ends the body.
 
 ## What's new in v5.0.0
 

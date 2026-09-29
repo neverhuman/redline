@@ -23,9 +23,10 @@ There is no bug bounty.
 
 | Version | Security fixes |
 | --- | --- |
-| 5.0.x | Yes. Fixes ship as 5.0 patch releases. |
-| 5.x prereleases (alpha, beta, rc) | Best effort. Fixes land in the next prerelease or in 5.0.x. |
-| 4.x and earlier | No. Unsupported from the 5.0.0 release; upgrade to 5.0.x. The C ABI changed in 5.0.0, so see `CHANGELOG.md` before upgrading C programs. |
+| 5.1.x | Yes. Fixes ship as 5.1 patch releases. |
+| 5.0.x | No further 5.0 releases; upgrade to 5.1.x, which keeps the 5.0 file format and C ABI. |
+| 5.x prereleases (alpha, beta, rc) | Best effort. Fixes land in the next prerelease or in 5.1.x. |
+| 4.x and earlier | No. Unsupported from the 5.0.0 release; upgrade to 5.1.x. The C ABI changed in 5.0.0, so see `CHANGELOG.md` before upgrading C programs. |
 
 ## Scope
 
