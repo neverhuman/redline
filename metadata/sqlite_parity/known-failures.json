@@ -44,14 +44,6 @@
     },
     {
       "suite": "sqlite_parity",
-      "case_id": "00124",
-      "name": "DOT_BAIL_OFF",
-      "stage": "target_semantic_failure",
-      "reason": "RedlineDB stops at the first error on stdin even after `.bail off`, so the later `SELECT 1` never runs and stdout lacks the declared `1`.",
-      "owner": "Phase 4l: CLI continues after an error unless -bail"
-    },
-    {
-      "suite": "sqlite_parity",
       "case_id": "00128",
       "name": "DOT_DBCONFIG",
       "stage": "differential_mismatch",
@@ -124,14 +116,6 @@
     },
     {
       "suite": "sqlite_parity",
-      "case_id": "00194",
-      "name": "OPT_IFEXISTS_NEGATIVE_TEMPFILE",
-      "stage": "target_semantic_failure",
-      "reason": "RedlineDB prints `Error: unable to open database file` without the path; the case declares `missing.db\": unable to open database file`.",
-      "owner": "Phase 4l: SQLite error message shapes in the RedlineDB CLI"
-    },
-    {
-      "suite": "sqlite_parity",
       "case_id": "00209",
       "name": "OPT_INTERACTIVE_CATALOG",
       "stage": "differential_mismatch",
@@ -153,14 +137,6 @@
       "stage": "differential_mismatch",
       "reason": "`.show` pads names to a different width, prints `separator` where sqlite3 prints `colseparator` and `rowseparator`, omits `stats`, and prints `width: (none)` for an empty width list.",
       "owner": "Phase 4l: RedlineDB CLI dot-command and option output"
-    },
-    {
-      "suite": "sqlite_parity",
-      "case_id": "10198",
-      "name": "OPT_BAIL_ABORTS_ON_ERROR",
-      "stage": "target_semantic_failure",
-      "reason": "RedlineDB prints `Error: 12: no such column: bogus`, which has no lowercase `error`; sqlite3 prints `Parse error near line 1: no such column: bogus`.",
-      "owner": "Phase 4l: SQLite error message shapes in the RedlineDB CLI"
     },
     {
       "suite": "sqlite_parity",
@@ -308,14 +284,6 @@
     },
     {
       "suite": "memory",
-      "case_id": "00124",
-      "name": "DOT_BAIL_OFF",
-      "stage": "target_semantic_failure",
-      "reason": "RedlineDB stops at the first error on stdin even after `.bail off`, so the later `SELECT 1` never runs and stdout lacks the declared `1`.",
-      "owner": "Phase 4l: CLI continues after an error unless -bail"
-    },
-    {
-      "suite": "memory",
       "case_id": "00128",
       "name": "DOT_DBCONFIG",
       "stage": "differential_mismatch",
@@ -388,14 +356,6 @@
     },
     {
       "suite": "memory",
-      "case_id": "00194",
-      "name": "OPT_IFEXISTS_NEGATIVE_TEMPFILE",
-      "stage": "target_semantic_failure",
-      "reason": "RedlineDB prints `Error: unable to open database file` without the path; the case declares `missing.db\": unable to open database file`.",
-      "owner": "Phase 4l: SQLite error message shapes in the RedlineDB CLI"
-    },
-    {
-      "suite": "memory",
       "case_id": "00209",
       "name": "OPT_INTERACTIVE_CATALOG",
       "stage": "differential_mismatch",
@@ -417,14 +377,6 @@
       "stage": "differential_mismatch",
       "reason": "`.show` pads names to a different width, prints `separator` where sqlite3 prints `colseparator` and `rowseparator`, omits `stats`, and prints `width: (none)` for an empty width list.",
       "owner": "Phase 4l: RedlineDB CLI dot-command and option output"
-    },
-    {
-      "suite": "memory",
-      "case_id": "10198",
-      "name": "OPT_BAIL_ABORTS_ON_ERROR",
-      "stage": "target_semantic_failure",
-      "reason": "RedlineDB prints `Error: 12: no such column: bogus`, which has no lowercase `error`; sqlite3 prints `Parse error near line 1: no such column: bogus`.",
-      "owner": "Phase 4l: SQLite error message shapes in the RedlineDB CLI"
     },
     {
       "suite": "memory",
