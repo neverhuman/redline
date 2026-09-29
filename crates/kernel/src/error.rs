@@ -79,6 +79,11 @@ pub enum Error {
     #[error("write conflict")]
     WriteConflict,
 
+    /// An insert asked for a row id that a row still holds: one committed,
+    /// or written by the inserting transaction itself.
+    #[error("row id is in use")]
+    RowIdInUse,
+
     #[error("lock timeout")]
     LockTimeout,
 

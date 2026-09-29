@@ -16,6 +16,16 @@
   silently replaced that row. It now takes the next free rowid, as sqlite3
   does.
 
+- **Two connections writing the same rowid lost a row.** An insert took no
+  row lock and did not look at a row committed after its transaction began,
+  so it wrote over another connection's row: an `INSERT` with an explicit
+  key, an `UPDATE` moving a key, or an `AUTOINCREMENT` insert (four
+  connections inserting 200 rows kept 82). An insert now takes the row lock
+  as an update does, and a rowid a row still holds fails with `UNIQUE
+  constraint failed`. NULL keys and `AUTOINCREMENT` step past a rowid
+  another transaction is writing or has committed, so concurrent inserts
+  get distinct rowids.
+
 ### Changed
 
 - **A statement no longer creates or checks its spill directory unless it
@@ -29,9 +39,12 @@
 - **`DELETE` no longer reads the whole table for each deleted row.** Only
   removing a table's highest rowid (by `DELETE`, an `UPDATE` of the key,
   `REPLACE`, `MERGE` or a cascade) reads the table for the new maximum. An
-  `AUTOINCREMENT` table never reuses a rowid, and its insert reads the
-  table only when its `sqlite_sequence` entry is behind the rows the table
-  has held: after a rolled-back insert, or after a reopen.
+  `AUTOINCREMENT` table does not lower its counter, and its insert reads
+  the table only when its `sqlite_sequence` entry is behind the rows the
+  table has held (after a rolled-back insert, a reopen, or another
+  connection's insert). `sqlite_sequence` is not yet kept across a reopen,
+  so after one an `AUTOINCREMENT` table can reuse a rowid deleted before
+  it, as in v5.1.0.
 
 ## [5.1.0] - 2026-09-29
 

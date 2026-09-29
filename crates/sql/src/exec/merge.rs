@@ -269,8 +269,7 @@ fn apply_not_matched_insert(
         super::choose_rowid_for_insert(session, conn.engine(), tx, &plan.target, &mut row_values)?;
     super::ensure_unique_constraints(conn, session, tx, &plan.target, &row_values, None)?;
     let payload = encode_sql_row(plan.target.table_id.0, &row_values)?;
-    conn.engine()
-        .insert_for_relation(tx, plan.target.relation_id, new_rowid, payload)?;
+    super::tail::insert_row(conn, tx, &plan.target, new_rowid, payload)?;
     super::index_dml::maintain_indexes_on_insert(
         conn.engine(),
         tx,

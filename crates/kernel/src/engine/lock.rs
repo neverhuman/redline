@@ -172,6 +172,27 @@ impl RowLockManager {
         }
     }
 
+    /// Take the lock on `(rel_id, row_id)` for `tx_id` if it is free with
+    /// nobody waiting, or already `tx_id`'s; never wait. `false` means
+    /// another transaction holds it or is queued for it.
+    pub fn try_lock(&self, rel_id: RelId, row_id: RowId, tx_id: TxId) -> Result<bool> {
+        let key = RowKey { rel_id, row_id };
+        let mut rows = self
+            .shard(key)
+            .rows
+            .lock()
+            .map_err(|_| Error::CorruptPage("row lock shard poisoned"))?;
+        let state = rows.entry(key).or_default();
+        Ok(match state.owner {
+            None if state.waiters.is_empty() => {
+                state.owner = Some(tx_id);
+                true
+            }
+            Some(owner) => owner == tx_id,
+            None => false,
+        })
+    }
+
     pub fn unlock(&self, rel_id: RelId, row_id: RowId, tx_id: TxId) {
         let key = RowKey { rel_id, row_id };
         let shard = self.shard(key);
