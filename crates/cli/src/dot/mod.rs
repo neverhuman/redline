@@ -11,11 +11,13 @@ use std::path::PathBuf;
 
 use redlinedb::{Connection, Database};
 
+pub mod connection;
 pub mod control;
 pub mod display;
 pub mod io_cmd;
 pub mod parameter;
 pub mod schema;
+pub mod sha3sum;
 
 /// Output formatting modes accepted by `.mode` and the flag parser.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -118,9 +120,12 @@ pub struct CliState {
     pub explain: ExplainSetting,
     pub stats: bool,
     pub expert: bool,
-    pub escape_symbol: bool,
+    /// `-escape`: how control characters in a value print.
+    pub escape: crate::control_chars::Escape,
     pub dbconfig_defensive: bool,
-    pub widths: Vec<usize>,
+    /// `.width` as given: a negative width right-aligns in sqlite3, which
+    /// the renderers do not; they use its magnitude.
+    pub widths: Vec<i64>,
     pub limits: Vec<(String, i64)>,
     pub output: OutputTarget,
     pub defer_output_flush: bool,
@@ -135,6 +140,10 @@ pub struct CliState {
     pub once: Option<PathBuf>,
     pub safe_mode: bool,
     pub safe_nonce: Option<String>,
+    /// `.connection`: the slot that holds `db` and `conn`, and the other
+    /// slots' databases (`None` when closed).
+    pub active_slot: usize,
+    pub slots: [Option<connection::Slot>; connection::SLOTS],
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -250,7 +259,7 @@ impl CliState {
             explain: ExplainSetting::Auto,
             stats: false,
             expert: false,
-            escape_symbol: false,
+            escape: crate::control_chars::Escape::default(),
             dbconfig_defensive: false,
             widths: Vec::new(),
             limits: Vec::new(),
@@ -261,6 +270,8 @@ impl CliState {
             once: None,
             safe_mode: false,
             safe_nonce: None,
+            active_slot: 0,
+            slots: std::array::from_fn(|_| None),
         })
     }
 
@@ -329,7 +340,7 @@ pub fn dispatch(state: &mut CliState, line: &str) -> Result<DotOutcome, String> 
         ".log" => control::log(state, &args),
         ".prompt" => control::prompt(state, &args),
         ".dbconfig" => control::dbconfig(state, &args),
-        ".connection" => control::connection(state, &args),
+        ".connection" => connection::connection(state, &args),
         ".nonce" => control::nonce(state, &args),
         ".shell" | ".system" => control::shell(state, &args),
         ".excel" | ".www" => control::external_app(state, &args),
@@ -347,7 +358,7 @@ pub fn dispatch(state: &mut CliState, line: &str) -> Result<DotOutcome, String> 
         ".expert" => control::expert(state, &args),
         ".scanstats" => control::scanstats(state, &args),
         ".archive" => control::archive(state, &args),
-        ".sha3sum" => control::sha3sum(state, &args),
+        ".sha3sum" => sha3sum::sha3sum(state, &args),
         ".filectrl" => control::filectrl(state, &args),
         ".imposter" => control::imposter(state, &args),
         ".intck" => control::intck(state, &args),

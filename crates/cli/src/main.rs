@@ -33,13 +33,17 @@ compile_error!(
     "redlinedb-cli allocator features are mutually exclusive: enable only one of alloc-mimalloc / alloc-jemalloc / alloc-snmalloc"
 );
 
+// Each allocator sits behind `memtrace::Traced`, which reports allocations on
+// stderr once `-memtrace` turns it on.
 #[cfg(feature = "alloc-mimalloc")]
 #[global_allocator]
-static GLOBAL: mimalloc::MiMalloc = mimalloc::MiMalloc;
+static GLOBAL: redlinedb_cli::memtrace::Traced<mimalloc::MiMalloc> =
+    redlinedb_cli::memtrace::Traced(mimalloc::MiMalloc);
 
 #[cfg(all(not(feature = "alloc-mimalloc"), feature = "alloc-jemalloc"))]
 #[global_allocator]
-static GLOBAL: tikv_jemallocator::Jemalloc = tikv_jemallocator::Jemalloc;
+static GLOBAL: redlinedb_cli::memtrace::Traced<tikv_jemallocator::Jemalloc> =
+    redlinedb_cli::memtrace::Traced(tikv_jemallocator::Jemalloc);
 
 #[cfg(all(
     not(feature = "alloc-mimalloc"),
@@ -47,7 +51,8 @@ static GLOBAL: tikv_jemallocator::Jemalloc = tikv_jemallocator::Jemalloc;
     feature = "alloc-snmalloc"
 ))]
 #[global_allocator]
-static GLOBAL: snmalloc_rs::SnMalloc = snmalloc_rs::SnMalloc;
+static GLOBAL: redlinedb_cli::memtrace::Traced<snmalloc_rs::SnMalloc> =
+    redlinedb_cli::memtrace::Traced(snmalloc_rs::SnMalloc);
 
 fn main() {
     redlinedb_cli::run();

@@ -160,10 +160,29 @@ pub fn restore(state: &mut CliState, args: &[&str]) -> Result<DotOutcome, String
 
 /// `.clone FILE` — copy the current database image and leave the shell on the
 /// original connection.
+/// `.clone FILE`: copy the database to FILE and, as sqlite3 does, report
+/// `NAME... done` for each object copied, the tables first. RedlineDB copies
+/// the whole database in one backup, so the lines follow its success.
 pub fn clone_db(state: &mut CliState, args: &[&str]) -> Result<DotOutcome, String> {
     let Some(path) = args.first() else {
         return Err("Error: usage: .clone FILE".to_owned());
     };
+    let mut conn = state.db.connect().map_err(|err| err.to_string())?;
+    let mut stmt = conn
+        .prepare(
+            "SELECT type, name FROM sqlite_master \
+             WHERE name NOT LIKE 'sqlite_%' AND sql IS NOT NULL",
+        )
+        .map_err(|err| err.to_string())?;
+    let mut objects: Vec<(bool, String)> = Vec::new();
+    while let Step::Row(row) = stmt.step().map_err(|err| err.to_string())? {
+        let obj_type: String = row.get(0).map_err(|err| err.to_string())?;
+        let name: String = row.get(1).map_err(|err| err.to_string())?;
+        objects.push((obj_type != "table", name));
+    }
+    drop(stmt);
+    // Stable: the tables in catalog order, then everything else.
+    objects.sort_by_key(|(not_table, _)| *not_table);
     state
         .db
         .backup_to_path(PathBuf::from(path), BackupOptions::default())
@@ -171,6 +190,12 @@ pub fn clone_db(state: &mut CliState, args: &[&str]) -> Result<DotOutcome, Strin
     state
         .snapshots
         .insert(PathBuf::from(path), state.db.clone());
+    for (_, name) in objects {
+        state
+            .output
+            .write_line(&format!("{name}... done"))
+            .map_err(|err| err.to_string())?;
+    }
     Ok(DotOutcome::Ok)
 }
 
@@ -488,48 +513,63 @@ fn import_rows(
 
 /// `.dump [TABLE]` — serialise the database (or one table) to SQLite-shell
 /// compatible text on the active output sink.
+/// `.dump [TABLE]`, in sqlite3's order: `PRAGMA foreign_keys=OFF;`, then
+/// each table in creation order followed by its rows, then the views,
+/// triggers and indexes (sqlite3 orders those by type, descending), all in
+/// one transaction.
 pub fn dump(state: &mut CliState, args: &[&str]) -> Result<DotOutcome, String> {
     let table_filter = args.first().copied();
-    state
-        .output
-        .write_line("BEGIN TRANSACTION;")
-        .map_err(|err| err.to_string())?;
+    for line in ["PRAGMA foreign_keys=OFF;", "BEGIN TRANSACTION;"] {
+        state
+            .output
+            .write_line(line)
+            .map_err(|err| err.to_string())?;
+    }
     let mut conn = state.db.connect().map_err(|err| err.to_string())?;
+    // The catalog returns tables in creation order.
     let select_sql = if table_filter.is_some() {
         "SELECT type, name, tbl_name, sql FROM sqlite_master \
          WHERE name = ?1 AND type = 'table'"
     } else {
         "SELECT type, name, tbl_name, sql FROM sqlite_master \
          WHERE type IN ('table','index','view','trigger') \
-           AND name NOT LIKE 'sqlite_%' \
-         ORDER BY CASE type WHEN 'table' THEN 1 WHEN 'index' THEN 2 \
-                            WHEN 'view' THEN 3 WHEN 'trigger' THEN 4 END, name"
+           AND name NOT LIKE 'sqlite_%' AND sql IS NOT NULL"
     };
     let mut stmt = conn.prepare(select_sql).map_err(|err| err.to_string())?;
     if let Some(filter) = table_filter {
         stmt.bind_text(1, filter).map_err(|err| err.to_string())?;
     }
-    let mut tables: Vec<(String, String)> = Vec::new();
+    let mut objects: Vec<(String, String, String)> = Vec::new();
     while let Step::Row(row) = stmt.step().map_err(|err| err.to_string())? {
         let obj_type: String = row.get(0).map_err(|err| err.to_string())?;
         let name: String = row.get(1).map_err(|err| err.to_string())?;
         let sql: String = row.get(3).map_err(|err| err.to_string())?;
-        let trimmed = if sql.ends_with(';') {
-            sql.clone()
-        } else {
-            format!("{sql};")
-        };
-        state
-            .output
-            .write_line(&trimmed)
-            .map_err(|err| err.to_string())?;
-        if obj_type == "table" {
-            tables.push((name, sql));
-        }
+        objects.push((obj_type, name, sql));
     }
     drop(stmt);
-    for (name, _create_sql) in &tables {
+    let statement = |sql: &str| {
+        if sql.ends_with(';') {
+            sql.to_owned()
+        } else {
+            format!("{sql};")
+        }
+    };
+    let (tables, mut others): (Vec<_>, Vec<_>) = objects
+        .into_iter()
+        .partition(|(obj_type, _, _)| obj_type == "table");
+    for (_, name, sql) in &tables {
+        state
+            .output
+            .write_line(&statement(sql))
+            .map_err(|err| err.to_string())?;
         dump_table_rows(state, &mut conn, name)?;
+    }
+    others.sort_by(|a, b| b.0.cmp(&a.0));
+    for (_, _, sql) in &others {
+        state
+            .output
+            .write_line(&statement(sql))
+            .map_err(|err| err.to_string())?;
     }
     state
         .output

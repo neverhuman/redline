@@ -7,7 +7,7 @@ use std::path::{Path, PathBuf};
 use std::time::Duration;
 
 use super::display::parse_bool;
-use super::{CliState, DotOutcome, ExplainSetting};
+use super::{CliState, DotOutcome, ExplainSetting, OutputMode};
 
 pub fn exit(args: &[&str]) -> Result<DotOutcome, String> {
     let code = match args.first() {
@@ -74,13 +74,12 @@ pub fn explain(state: &mut CliState, args: &[&str]) -> Result<DotOutcome, String
     Ok(DotOutcome::Ok)
 }
 
-pub fn crlf(state: &mut CliState, args: &[&str]) -> Result<DotOutcome, String> {
-    let on = parse_required_bool(".crlf", args)?;
-    state.row_separator = if on {
-        "\r\n".to_owned()
-    } else {
-        "\n".to_owned()
-    };
+/// `.crlf ?on|off?`: only Windows builds of sqlite3 translate line endings;
+/// elsewhere the setting stays off and output is unchanged.
+pub fn crlf(_state: &mut CliState, args: &[&str]) -> Result<DotOutcome, String> {
+    if let Some(value) = args.first() {
+        parse_bool(value)?;
+    }
     eprintln!("crlf is OFF");
     Ok(DotOutcome::Ok)
 }
@@ -113,10 +112,6 @@ pub fn log(_state: &mut CliState, _args: &[&str]) -> Result<DotOutcome, String> 
 }
 
 pub fn prompt(_state: &mut CliState, _args: &[&str]) -> Result<DotOutcome, String> {
-    Ok(DotOutcome::Ok)
-}
-
-pub fn connection(_state: &mut CliState, _args: &[&str]) -> Result<DotOutcome, String> {
     Ok(DotOutcome::Ok)
 }
 
@@ -310,32 +305,27 @@ pub fn archive(state: &mut CliState, args: &[&str]) -> Result<DotOutcome, String
     Ok(DotOutcome::Ok)
 }
 
+/// `.dbconfig ?NAME? ?on|off?`: set a flag, then print it as sqlite3 does
+/// (`%19s %s`); only `defensive` is tracked.
 pub fn dbconfig(state: &mut CliState, args: &[&str]) -> Result<DotOutcome, String> {
-    match args {
-        [] => {
-            let line = format!("defensive {}", on_off(state.dbconfig_defensive));
-            state
-                .output
-                .write_line(&line)
-                .map_err(|err| err.to_string())?;
-        }
-        [name] => {
-            let value = if name.eq_ignore_ascii_case("defensive") {
-                state.dbconfig_defensive
-            } else {
-                false
-            };
-            state
-                .output
-                .write_line(&format!("{name} {}", on_off(value)))
-                .map_err(|err| err.to_string())?;
-        }
+    let (name, value) = match args {
+        [] => ("defensive", state.dbconfig_defensive),
+        [name] => (
+            *name,
+            name.eq_ignore_ascii_case("defensive") && state.dbconfig_defensive,
+        ),
         [name, value, ..] => {
-            if name.eq_ignore_ascii_case("defensive") {
+            let is_defensive = name.eq_ignore_ascii_case("defensive");
+            if is_defensive {
                 state.dbconfig_defensive = parse_bool(value)?;
             }
+            (*name, is_defensive && state.dbconfig_defensive)
         }
-    }
+    };
+    state
+        .output
+        .write_line(&format!("{name:>19} {}", on_off(value)))
+        .map_err(|err| err.to_string())?;
     Ok(DotOutcome::Ok)
 }
 
@@ -349,32 +339,46 @@ pub fn nonce(state: &mut CliState, args: &[&str]) -> Result<DotOutcome, String> 
     Ok(DotOutcome::Ok)
 }
 
+/// `.shell CMD ARGS...` and `.system CMD ARGS...`: run the command with
+/// `sh -c` as sqlite3 runs it with system(3). An argument holding a space is
+/// passed in double quotes. The command writes straight to the process's
+/// stdout, after anything the shell has buffered; a nonzero wait status is
+/// reported on stderr as `System command returns N`. `-safe` refuses it.
 pub fn shell(state: &mut CliState, args: &[&str]) -> Result<DotOutcome, String> {
     if state.safe_mode {
         return Err("Error: safe mode prevents .shell".to_owned());
     }
-    if args.first().is_some_and(|arg| *arg == "printf") {
-        state
-            .output
-            .write_all(args[1..].join(" ").as_bytes())
-            .map_err(|err| err.to_string())?;
-        state
-            .output
-            .write_all(b"\n")
-            .map_err(|err| err.to_string())?;
+    if args.is_empty() {
+        return Err("Usage: .system COMMAND".to_owned());
+    }
+    let command = args
+        .iter()
+        .map(|arg| {
+            if arg.contains(' ') {
+                format!("\"{arg}\"")
+            } else {
+                (*arg).to_owned()
+            }
+        })
+        .collect::<Vec<_>>()
+        .join(" ");
+    std::io::Write::flush(&mut state.output).map_err(|err| err.to_string())?;
+    let status = std::process::Command::new("sh")
+        .arg("-c")
+        .arg(&command)
+        .status()
+        .map_err(|err| format!("Error: cannot run {command}: {err}"))?;
+    if !status.success() {
+        #[cfg(unix)]
+        let code = std::os::unix::process::ExitStatusExt::into_raw(status);
+        #[cfg(not(unix))]
+        let code = status.code().unwrap_or(-1);
+        eprintln!("System command returns {code}");
     }
     Ok(DotOutcome::Ok)
 }
 
 pub fn external_app(_state: &mut CliState, _args: &[&str]) -> Result<DotOutcome, String> {
-    Ok(DotOutcome::Ok)
-}
-
-pub fn sha3sum(state: &mut CliState, _args: &[&str]) -> Result<DotOutcome, String> {
-    state
-        .output
-        .write_line("0000000000000000000000000000000000000000000000000000000000000000")
-        .map_err(|err| err.to_string())?;
     Ok(DotOutcome::Ok)
 }
 
@@ -451,37 +455,36 @@ pub fn check(_state: &mut CliState, _args: &[&str]) -> Result<DotOutcome, String
 }
 
 /// `.show` — dump the current configuration to the active output.
+/// `.show`, in sqlite3's layout: each name right-aligned in 12 columns,
+/// strings as C literals, and every width followed by a space.
 pub fn show(state: &mut CliState, _args: &[&str]) -> Result<DotOutcome, String> {
-    let mut lines = Vec::new();
-    lines.push(format!("{:>13}: {}", "echo", on_off(state.echo)));
-    lines.push(format!("{:>13}: {}", "eqp", on_off(state.eqp)));
     let explain_label = match state.explain {
         ExplainSetting::On => "on",
         ExplainSetting::Off => "off",
         ExplainSetting::Auto => "auto",
     };
-    lines.push(format!("{:>13}: {}", "explain", explain_label));
-    lines.push(format!("{:>13}: {}", "headers", on_off(state.show_header)));
-    lines.push(format!("{:>13}: {}", "mode", state.mode.name()));
-    lines.push(format!("{:>13}: \"{}\"", "nullvalue", state.null_value));
-    lines.push(format!("{:>13}: {}", "output", state.output.label()));
-    lines.push(format!(
-        "{:>13}: \"{}\"",
-        "separator",
-        escape(&state.separator)
-    ));
-    let widths_disp = if state.widths.is_empty() {
-        "(none)".to_owned()
+    // CSV rows always end in CRLF (`render`), whatever the row separator.
+    let row_separator = if state.mode == OutputMode::Csv {
+        "\r\n"
     } else {
-        state
-            .widths
-            .iter()
-            .map(|w| w.to_string())
-            .collect::<Vec<_>>()
-            .join(" ")
+        state.row_separator.as_str()
     };
-    lines.push(format!("{:>13}: {}", "width", widths_disp));
-    lines.push(format!("{:>13}: {}", "filename", state.db_path.display()));
+    let widths: String = state.widths.iter().map(|w| format!("{w} ")).collect();
+    let settings = [
+        ("echo", on_off(state.echo).to_owned()),
+        ("eqp", on_off(state.eqp).to_owned()),
+        ("explain", explain_label.to_owned()),
+        ("headers", on_off(state.show_header).to_owned()),
+        ("mode", state.mode.name().to_owned()),
+        ("nullvalue", c_string(&state.null_value)),
+        ("output", state.output.label()),
+        ("colseparator", c_string(&state.separator)),
+        ("rowseparator", c_string(row_separator)),
+        ("stats", on_off(state.stats).to_owned()),
+        ("width", widths),
+        ("filename", state.db_path.display().to_string()),
+    ];
+    let lines = settings.map(|(name, value)| format!("{name:>12.12}: {value}"));
     for line in lines {
         state
             .output
@@ -550,11 +553,26 @@ fn on_off(value: bool) -> &'static str {
     if value { "on" } else { "off" }
 }
 
-fn escape(value: &str) -> String {
-    value
-        .replace('\\', "\\\\")
-        .replace('\t', "\\t")
-        .replace('\n', "\\n")
+/// A string as sqlite3's `output_c_string` writes it: quoted, with C
+/// escapes for backslash, quote, tab, newline and carriage return, and octal
+/// for any other control character.
+fn c_string(value: &str) -> String {
+    let mut out = String::from("\"");
+    for ch in value.chars() {
+        match ch {
+            '\\' => out.push_str("\\\\"),
+            '"' => out.push_str("\\\""),
+            '\t' => out.push_str("\\t"),
+            '\n' => out.push_str("\\n"),
+            '\r' => out.push_str("\\r"),
+            ch if (ch as u32) < 0x20 || ch == '\u{7f}' => {
+                out.push_str(&format!("\\{:03o}", ch as u32));
+            }
+            ch => out.push(ch),
+        }
+    }
+    out.push('"');
+    out
 }
 
 fn has_arg(args: &[&str], name: &str) -> bool {

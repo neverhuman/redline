@@ -12,66 +12,10 @@
     },
     {
       "suite": "sqlite_parity",
-      "case_id": "00115",
-      "name": "DOT_SCHEMA_TABLES_INDEXES",
-      "stage": "differential_mismatch",
-      "reason": "`.schema` omits the `CREATE INDEX idx_t_a ON t(a);` statement that sqlite3 prints after the table.",
-      "owner": "Phase 4l: RedlineDB CLI dot-command and option output"
-    },
-    {
-      "suite": "sqlite_parity",
-      "case_id": "00117",
-      "name": "DOT_DUMP",
-      "stage": "differential_mismatch",
-      "reason": "`.dump` omits the leading `PRAGMA foreign_keys=OFF;` line that sqlite3 prints before `BEGIN TRANSACTION;`.",
-      "owner": "Phase 4l: RedlineDB CLI dot-command and option output"
-    },
-    {
-      "suite": "sqlite_parity",
-      "case_id": "00118",
-      "name": "DOT_FULLSCHEMA",
-      "stage": "differential_mismatch",
-      "reason": "`.fullschema` prints the sqlite_master rows where sqlite3 prints `/* No STAT tables available */`.",
-      "owner": "Phase 4l: RedlineDB CLI dot-command and option output"
-    },
-    {
-      "suite": "sqlite_parity",
-      "case_id": "00121",
-      "name": "DOT_PARAMETER",
-      "stage": "differential_mismatch",
-      "reason": "`.parameter list` separates the name and value with a tab (`@x\\t7`); sqlite3 prints a space (`@x 7`).",
-      "owner": "Phase 4l: RedlineDB CLI dot-command and option output"
-    },
-    {
-      "suite": "sqlite_parity",
-      "case_id": "00128",
-      "name": "DOT_DBCONFIG",
-      "stage": "differential_mismatch",
-      "reason": "`.dbconfig` prints `defensive on` once and unpadded; sqlite3 right-aligns the name and prints it after both the set and the query.",
-      "owner": "Phase 4l: RedlineDB CLI dot-command and option output"
-    },
-    {
-      "suite": "sqlite_parity",
-      "case_id": "00129",
-      "name": "DOT_CONNECTION",
-      "stage": "differential_mismatch",
-      "reason": "`.connection` prints no `ACTIVE 0: :memory:` listing.",
-      "owner": "Phase 4l: RedlineDB CLI dot-command and option output"
-    },
-    {
-      "suite": "sqlite_parity",
       "case_id": "00133",
       "name": "DOT_AUTH",
       "stage": "differential_mismatch",
-      "reason": "`.auth on` prints no authorizer callback line (`authorizer: SELECT NULL NULL NULL NULL`).",
-      "owner": "Phase 4l: RedlineDB CLI dot-command and option output"
-    },
-    {
-      "suite": "sqlite_parity",
-      "case_id": "00134",
-      "name": "DOT_CRLF",
-      "stage": "differential_mismatch",
-      "reason": "RedlineDB reports `crlf is OFF` after `.crlf on`, as the pinned sqlite3 does on Linux, but then ends the first row with CRLF (`1\\r\\n2\\n`); sqlite3 prints `1\\n2\\n`.",
+      "reason": "`.auth on` installs no authorizer. RedlineDB's authorizer fires different events from SQLite's, so there is no SQLite-shaped `authorizer: SELECT NULL NULL NULL NULL` line to print; passing would take made-up output, so the case stays failing by decision (2026-09-29).",
       "owner": "Phase 4l: RedlineDB CLI dot-command and option output"
     },
     {
@@ -79,39 +23,7 @@
       "case_id": "00140",
       "name": "DOT_EXPERT_OPTIONAL",
       "stage": "differential_mismatch",
-      "reason": "`.expert` prints its recommendation twice, without sqlite3's blank separator lines and without the `(a=?)` constraint on the SEARCH line.",
-      "owner": "Phase 4l: RedlineDB CLI dot-command and option output"
-    },
-    {
-      "suite": "sqlite_parity",
-      "case_id": "00141",
-      "name": "DOT_SHA3SUM",
-      "stage": "differential_mismatch",
-      "reason": "`.sha3sum` prints 64 zeros; sqlite3 prints the 56-digit SHA3-224 hash of the database content.",
-      "owner": "Phase 4l: RedlineDB CLI dot-command and option output"
-    },
-    {
-      "suite": "sqlite_parity",
-      "case_id": "00152",
-      "name": "DOT_CLONE_TEMPFILE",
-      "stage": "differential_mismatch",
-      "reason": "`.clone` prints no per-table progress line (`t... done`).",
-      "owner": "Phase 4l: RedlineDB CLI dot-command and option output"
-    },
-    {
-      "suite": "sqlite_parity",
-      "case_id": "00158",
-      "name": "DOT_SHELL_SIDE_EFFECT",
-      "stage": "differential_mismatch",
-      "reason": "`.shell printf shell-ok` output gains a newline (`shell-ok\\ndone`); sqlite3 passes the command's bytes through unchanged (`shell-okdone`).",
-      "owner": "Phase 4l: RedlineDB CLI dot-command and option output"
-    },
-    {
-      "suite": "sqlite_parity",
-      "case_id": "00159",
-      "name": "DOT_SYSTEM_SIDE_EFFECT",
-      "stage": "differential_mismatch",
-      "reason": "`.system printf system-ok` output gains a newline (`system-ok\\ndone`); sqlite3 passes the command's bytes through unchanged (`system-okdone`).",
+      "reason": "`.expert` has no index advisor: it prints a fixed recommendation written for one fixture, twice, without sqlite3's blank separator lines or the `(a=?)` constraint on the SEARCH line. Passing would take made-up output, so the case stays failing by decision (2026-09-29).",
       "owner": "Phase 4l: RedlineDB CLI dot-command and option output"
     },
     {
@@ -119,39 +31,7 @@
       "case_id": "00209",
       "name": "OPT_INTERACTIVE_CATALOG",
       "stage": "differential_mismatch",
-      "reason": "With `-interactive` and empty stdin, sqlite3 prints the prompt `sqlite> ` and a newline at end of input; RedlineDB prints `sqlite>` with neither the trailing space nor the newline.",
-      "owner": "Phase 4l: RedlineDB CLI dot-command and option output"
-    },
-    {
-      "suite": "sqlite_parity",
-      "case_id": "00222",
-      "name": "OPT_ESCAPE_SYMBOL",
-      "stage": "target_semantic_failure",
-      "reason": "`-escape symbol` prints char(1) as the raw 0x01 byte where sqlite3 3.53.1 prints U+2401, so stdout lacks the declared `\u2401x`; RedlineDB does not map control characters to their U+2400 symbols.",
-      "owner": "Phase 4l: RedlineDB CLI dot-command and option output"
-    },
-    {
-      "suite": "sqlite_parity",
-      "case_id": "10182",
-      "name": "DOT_SHOW_LISTS_SETTINGS",
-      "stage": "differential_mismatch",
-      "reason": "`.show` pads names to a different width, prints `separator` where sqlite3 prints `colseparator` and `rowseparator`, omits `stats`, and prints `width: (none)` for an empty width list.",
-      "owner": "Phase 4l: RedlineDB CLI dot-command and option output"
-    },
-    {
-      "suite": "sqlite_parity",
-      "case_id": "10207",
-      "name": "OPT_READONLY_REFUSES_WRITE",
-      "stage": "target_semantic_failure",
-      "reason": "RedlineDB refuses the case's fixture file (`database path exists as a regular file`), so it never reaches the write that must fail with `readonly` under `-readonly`.",
-      "owner": "Phase 4l: RedlineDB CLI open of an existing file under -readonly"
-    },
-    {
-      "suite": "sqlite_parity",
-      "case_id": "10228",
-      "name": "OPT_MEMTRACE",
-      "stage": "target_semantic_failure",
-      "reason": "`-memtrace` is accepted but prints nothing; the case declares the MEMTRACE allocator trace on stderr.",
+      "reason": "The case compares sqlite3's own `-interactive` banner (`SQLite version 3.53.1 ...`) and prompts byte for byte. RedlineDB is not SQLite; its `-interactive` stub ignores stdin and prints `sqlite>` without the trailing space or the final newline. Matching would mean impersonating sqlite3's banner, so the case stays failing by decision (2026-09-29).",
       "owner": "Phase 4l: RedlineDB CLI dot-command and option output"
     },
     {
@@ -188,66 +68,10 @@
     },
     {
       "suite": "memory",
-      "case_id": "00115",
-      "name": "DOT_SCHEMA_TABLES_INDEXES",
-      "stage": "differential_mismatch",
-      "reason": "`.schema` omits the `CREATE INDEX idx_t_a ON t(a);` statement that sqlite3 prints after the table.",
-      "owner": "Phase 4l: RedlineDB CLI dot-command and option output"
-    },
-    {
-      "suite": "memory",
-      "case_id": "00117",
-      "name": "DOT_DUMP",
-      "stage": "differential_mismatch",
-      "reason": "`.dump` omits the leading `PRAGMA foreign_keys=OFF;` line that sqlite3 prints before `BEGIN TRANSACTION;`.",
-      "owner": "Phase 4l: RedlineDB CLI dot-command and option output"
-    },
-    {
-      "suite": "memory",
-      "case_id": "00118",
-      "name": "DOT_FULLSCHEMA",
-      "stage": "differential_mismatch",
-      "reason": "`.fullschema` prints the sqlite_master rows where sqlite3 prints `/* No STAT tables available */`.",
-      "owner": "Phase 4l: RedlineDB CLI dot-command and option output"
-    },
-    {
-      "suite": "memory",
-      "case_id": "00121",
-      "name": "DOT_PARAMETER",
-      "stage": "differential_mismatch",
-      "reason": "`.parameter list` separates the name and value with a tab (`@x\\t7`); sqlite3 prints a space (`@x 7`).",
-      "owner": "Phase 4l: RedlineDB CLI dot-command and option output"
-    },
-    {
-      "suite": "memory",
-      "case_id": "00128",
-      "name": "DOT_DBCONFIG",
-      "stage": "differential_mismatch",
-      "reason": "`.dbconfig` prints `defensive on` once and unpadded; sqlite3 right-aligns the name and prints it after both the set and the query.",
-      "owner": "Phase 4l: RedlineDB CLI dot-command and option output"
-    },
-    {
-      "suite": "memory",
-      "case_id": "00129",
-      "name": "DOT_CONNECTION",
-      "stage": "differential_mismatch",
-      "reason": "`.connection` prints no `ACTIVE 0: :memory:` listing.",
-      "owner": "Phase 4l: RedlineDB CLI dot-command and option output"
-    },
-    {
-      "suite": "memory",
       "case_id": "00133",
       "name": "DOT_AUTH",
       "stage": "differential_mismatch",
-      "reason": "`.auth on` prints no authorizer callback line (`authorizer: SELECT NULL NULL NULL NULL`).",
-      "owner": "Phase 4l: RedlineDB CLI dot-command and option output"
-    },
-    {
-      "suite": "memory",
-      "case_id": "00134",
-      "name": "DOT_CRLF",
-      "stage": "differential_mismatch",
-      "reason": "RedlineDB reports `crlf is OFF` after `.crlf on`, as the pinned sqlite3 does on Linux, but then ends the first row with CRLF (`1\\r\\n2\\n`); sqlite3 prints `1\\n2\\n`.",
+      "reason": "`.auth on` installs no authorizer. RedlineDB's authorizer fires different events from SQLite's, so there is no SQLite-shaped `authorizer: SELECT NULL NULL NULL NULL` line to print; passing would take made-up output, so the case stays failing by decision (2026-09-29).",
       "owner": "Phase 4l: RedlineDB CLI dot-command and option output"
     },
     {
@@ -255,39 +79,7 @@
       "case_id": "00140",
       "name": "DOT_EXPERT_OPTIONAL",
       "stage": "differential_mismatch",
-      "reason": "`.expert` prints its recommendation twice, without sqlite3's blank separator lines and without the `(a=?)` constraint on the SEARCH line.",
-      "owner": "Phase 4l: RedlineDB CLI dot-command and option output"
-    },
-    {
-      "suite": "memory",
-      "case_id": "00141",
-      "name": "DOT_SHA3SUM",
-      "stage": "differential_mismatch",
-      "reason": "`.sha3sum` prints 64 zeros; sqlite3 prints the 56-digit SHA3-224 hash of the database content.",
-      "owner": "Phase 4l: RedlineDB CLI dot-command and option output"
-    },
-    {
-      "suite": "memory",
-      "case_id": "00152",
-      "name": "DOT_CLONE_TEMPFILE",
-      "stage": "differential_mismatch",
-      "reason": "`.clone` prints no per-table progress line (`t... done`).",
-      "owner": "Phase 4l: RedlineDB CLI dot-command and option output"
-    },
-    {
-      "suite": "memory",
-      "case_id": "00158",
-      "name": "DOT_SHELL_SIDE_EFFECT",
-      "stage": "differential_mismatch",
-      "reason": "`.shell printf shell-ok` output gains a newline (`shell-ok\\ndone`); sqlite3 passes the command's bytes through unchanged (`shell-okdone`).",
-      "owner": "Phase 4l: RedlineDB CLI dot-command and option output"
-    },
-    {
-      "suite": "memory",
-      "case_id": "00159",
-      "name": "DOT_SYSTEM_SIDE_EFFECT",
-      "stage": "differential_mismatch",
-      "reason": "`.system printf system-ok` output gains a newline (`system-ok\\ndone`); sqlite3 passes the command's bytes through unchanged (`system-okdone`).",
+      "reason": "`.expert` has no index advisor: it prints a fixed recommendation written for one fixture, twice, without sqlite3's blank separator lines or the `(a=?)` constraint on the SEARCH line. Passing would take made-up output, so the case stays failing by decision (2026-09-29).",
       "owner": "Phase 4l: RedlineDB CLI dot-command and option output"
     },
     {
@@ -295,39 +87,7 @@
       "case_id": "00209",
       "name": "OPT_INTERACTIVE_CATALOG",
       "stage": "differential_mismatch",
-      "reason": "With `-interactive` and empty stdin, sqlite3 prints the prompt `sqlite> ` and a newline at end of input; RedlineDB prints `sqlite>` with neither the trailing space nor the newline.",
-      "owner": "Phase 4l: RedlineDB CLI dot-command and option output"
-    },
-    {
-      "suite": "memory",
-      "case_id": "00222",
-      "name": "OPT_ESCAPE_SYMBOL",
-      "stage": "target_semantic_failure",
-      "reason": "`-escape symbol` prints char(1) as the raw 0x01 byte where sqlite3 3.53.1 prints U+2401, so stdout lacks the declared `\u2401x`; RedlineDB does not map control characters to their U+2400 symbols.",
-      "owner": "Phase 4l: RedlineDB CLI dot-command and option output"
-    },
-    {
-      "suite": "memory",
-      "case_id": "10182",
-      "name": "DOT_SHOW_LISTS_SETTINGS",
-      "stage": "differential_mismatch",
-      "reason": "`.show` pads names to a different width, prints `separator` where sqlite3 prints `colseparator` and `rowseparator`, omits `stats`, and prints `width: (none)` for an empty width list.",
-      "owner": "Phase 4l: RedlineDB CLI dot-command and option output"
-    },
-    {
-      "suite": "memory",
-      "case_id": "10207",
-      "name": "OPT_READONLY_REFUSES_WRITE",
-      "stage": "target_semantic_failure",
-      "reason": "RedlineDB refuses the case's fixture file (`database path exists as a regular file`), so it never reaches the write that must fail with `readonly` under `-readonly`.",
-      "owner": "Phase 4l: RedlineDB CLI open of an existing file under -readonly"
-    },
-    {
-      "suite": "memory",
-      "case_id": "10228",
-      "name": "OPT_MEMTRACE",
-      "stage": "target_semantic_failure",
-      "reason": "`-memtrace` is accepted but prints nothing; the case declares the MEMTRACE allocator trace on stderr.",
+      "reason": "The case compares sqlite3's own `-interactive` banner (`SQLite version 3.53.1 ...`) and prompts byte for byte. RedlineDB is not SQLite; its `-interactive` stub ignores stdin and prints `sqlite>` without the trailing space or the final newline. Matching would mean impersonating sqlite3's banner, so the case stays failing by decision (2026-09-29).",
       "owner": "Phase 4l: RedlineDB CLI dot-command and option output"
     },
     {

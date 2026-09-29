@@ -40,7 +40,7 @@ pub fn width(state: &mut CliState, args: &[&str]) -> Result<DotOutcome, String> 
         let value: i64 = token
             .parse()
             .map_err(|_| format!("Error: invalid width: {token}"))?;
-        widths.push(value.unsigned_abs() as usize);
+        widths.push(value);
     }
     state.widths = widths;
     Ok(DotOutcome::Ok)

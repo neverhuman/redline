@@ -43,7 +43,13 @@ impl From<String> for ShellError {
 }
 
 impl ShellError {
+    /// A statement that could not be prepared. A read-only connection
+    /// refuses a write when it is prepared; sqlite3 refuses it when it runs,
+    /// so that refusal is reported as a run-time error.
     pub(crate) fn prepare(err: &redlinedb::Error) -> Self {
+        if err.code() == redlinedb::ErrorCode::ReadOnly {
+            return Self::Step(sqlite_message(err));
+        }
         Self::Prepare(sqlite_message(err))
     }
 
@@ -95,8 +101,12 @@ fn resolved_when_prepared(err: &redlinedb::Error) -> bool {
 }
 
 /// An engine error as sqlite3 prints it: the message without RedlineDB's
-/// numeric code and category.
+/// numeric code and category. A write refused by a read-only connection
+/// reads as SQLITE_READONLY's message, as `sqlite3_errmsg` gives it.
 fn sqlite_message(err: &redlinedb::Error) -> String {
+    if err.code() == redlinedb::ErrorCode::ReadOnly {
+        return "attempt to write a readonly database".to_owned();
+    }
     let mut text = err.message();
     for prefix in CATEGORY_PREFIXES {
         if let Some(rest) = text.strip_prefix(prefix) {

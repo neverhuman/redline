@@ -1123,3 +1123,43 @@ owner = "c-abi"
 invariant = "S8-03/S9-02 forwarding calls: every sqlite3_* export in this file is an unsafe extern \"C\" fn with a `# Safety` section and passes its arguments to the rldb_* (or sibling sqlite3_*) export that has the same contract; the SAFETY comment on each forwarding `unsafe { ... }` call says so, and calls that build an argument (a zeroblob buffer, bind_value text/blob borrows, the backup_init destination path) justify it in their own SAFETY comment."
 proof_lane = "rtk cargo test -p redlinedb-ffi --quiet --locked"
 proof_test = "redlinedb-ffi::unsafe_exports::pointer_taking_exports_are_unsafe"
+
+[[entries]]
+file = "crates/cli/src/memtrace.rs"
+line = 36
+owner = "cli-shell"
+invariant = "`Traced<A>` implements `GlobalAlloc` by forwarding every method to the wrapped allocator `A` with the caller's arguments unchanged and returning its result unchanged, so it keeps each contract `A` keeps; tracing reads only the sizes and writes a stack buffer to stderr, allocating nothing (a thread-local flag stops a write's own allocation from being traced)."
+proof_lane = "rtk cargo test -p redlinedb-cli --test sqlite_shell_output --quiet --locked"
+proof_test = "redlinedb-cli::sqlite_shell_output::memtrace_reports_each_allocation"
+
+[[entries]]
+file = "crates/cli/src/memtrace.rs"
+line = 39
+owner = "cli-shell"
+invariant = "`alloc` forwards `layout` to the wrapped allocator; the caller upholds `GlobalAlloc::alloc`'s contract (non-zero size), which is exactly what the wrapped allocator requires."
+proof_lane = "rtk cargo test -p redlinedb-cli --test sqlite_shell_output --quiet --locked"
+proof_test = "redlinedb-cli::sqlite_shell_output::memtrace_reports_each_allocation"
+
+[[entries]]
+file = "crates/cli/src/memtrace.rs"
+line = 48
+owner = "cli-shell"
+invariant = "`alloc_zeroed` forwards `layout` to the wrapped allocator; the caller upholds `GlobalAlloc::alloc_zeroed`'s contract, which is exactly what the wrapped allocator requires."
+proof_lane = "rtk cargo test -p redlinedb-cli --test sqlite_shell_output --quiet --locked"
+proof_test = "redlinedb-cli::sqlite_shell_output::memtrace_reports_each_allocation"
+
+[[entries]]
+file = "crates/cli/src/memtrace.rs"
+line = 59
+owner = "cli-shell"
+invariant = "`dealloc` forwards `ptr` and `layout`; the caller guarantees `ptr` was returned by this allocator (so by the wrapped one) for `layout`, which the wrapped allocator requires."
+proof_lane = "rtk cargo test -p redlinedb-cli --test sqlite_shell_output --quiet --locked"
+proof_test = "redlinedb-cli::sqlite_shell_output::memtrace_reports_each_allocation"
+
+[[entries]]
+file = "crates/cli/src/memtrace.rs"
+line = 65
+owner = "cli-shell"
+invariant = "`realloc` forwards `ptr`, `layout` and `new_size`; the caller upholds `GlobalAlloc::realloc`'s contract, which is exactly what the wrapped allocator requires."
+proof_lane = "rtk cargo test -p redlinedb-cli --test sqlite_shell_output --quiet --locked"
+proof_test = "redlinedb-cli::sqlite_shell_output::memtrace_reports_each_allocation"

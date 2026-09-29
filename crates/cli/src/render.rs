@@ -4,7 +4,7 @@ use std::io::Write;
 
 use redlinedb::ValueRef;
 
-use crate::control_chars::{blob_bytes, blob_text, needs_csv_quote};
+use crate::control_chars::{Escape, blob_bytes, blob_text, escape, needs_csv_quote};
 use crate::dot::OutputMode;
 
 #[derive(Clone, Debug)]
@@ -354,13 +354,13 @@ pub(crate) fn write_stream_delimited_value<W: Write>(
     mode: OutputMode,
     separator: &str,
     null_value: &str,
-    escape_symbol: bool,
+    escape: Escape,
     value: ValueRef<'_>,
 ) -> Result<(), String> {
     match mode {
-        OutputMode::Csv => write_csv_value_ref(out, value, separator, null_value),
-        OutputMode::Tabs => write_tabs_value_ref(out, value, null_value, escape_symbol),
-        OutputMode::List => write_text_value_ref(out, value, null_value, escape_symbol),
+        OutputMode::Csv => write_csv_value_ref(out, value, separator, null_value, escape),
+        OutputMode::Tabs => write_tabs_value_ref(out, value, null_value, escape),
+        OutputMode::List => write_text_value_ref(out, value, null_value, escape),
         _ => Err("streaming renderer only supports delimited modes".to_owned()),
     }
 }
@@ -962,20 +962,36 @@ fn write_tabs_cell<W: Write>(out: &mut W, text: &str) -> Result<(), String> {
     }
 }
 
+/// A TEXT or BLOB value in csv or tabs mode, SQLite dialect: quoted by the
+/// shell's rule on the value's own bytes, then escaped by `-escape`.
+fn write_sqlite_delimited_text<W: Write>(
+    out: &mut W,
+    bytes: &[u8],
+    separator: &str,
+    mode: Escape,
+) -> Result<(), String> {
+    let quote = needs_csv_quote(bytes, separator);
+    write_quoted_bytes(out, &escape(bytes, mode), quote)
+}
+
 fn write_csv_value_ref<W: Write>(
     out: &mut W,
     value: ValueRef<'_>,
     separator: &str,
     null_value: &str,
+    mode: Escape,
 ) -> Result<(), String> {
+    let sqlite = !postgres_result_dialect();
     match value {
         ValueRef::Null => write_csv_cell(out, null_value, separator),
         ValueRef::Integer(v) => write!(out, "{v}").map_err(|err| err.to_string()),
         ValueRef::Real(v) => write!(out, "{}", format_real(v)).map_err(|err| err.to_string()),
+        ValueRef::Text(v) if sqlite => {
+            write_sqlite_delimited_text(out, v.as_bytes(), separator, mode)
+        }
         ValueRef::Text(v) => write_csv_cell(out, v, separator),
-        ValueRef::Blob(v) if !postgres_result_dialect() => {
-            let quote = needs_csv_quote(blob_bytes(v), separator);
-            write_quoted_bytes(out, &blob_text(v), quote)
+        ValueRef::Blob(v) if sqlite => {
+            write_sqlite_delimited_text(out, blob_bytes(v), separator, mode)
         }
         ValueRef::Blob(v) => write_csv_cell(out, &format_blob_text(v), separator),
     }
@@ -985,26 +1001,18 @@ fn write_tabs_value_ref<W: Write>(
     out: &mut W,
     value: ValueRef<'_>,
     null_value: &str,
-    escape_symbol: bool,
+    mode: Escape,
 ) -> Result<(), String> {
+    let sqlite = !postgres_result_dialect();
     match value {
         ValueRef::Null => out
             .write_all(null_value.as_bytes())
             .map_err(|err| err.to_string()),
         ValueRef::Integer(v) => write!(out, "{v}").map_err(|err| err.to_string()),
         ValueRef::Real(v) => write!(out, "{}", format_real(v)).map_err(|err| err.to_string()),
-        ValueRef::Text(v) => {
-            if escape_symbol {
-                out.write_all(escape_symbolic(v).as_bytes())
-                    .map_err(|err| err.to_string())
-            } else {
-                write_tabs_cell(out, v)
-            }
-        }
-        ValueRef::Blob(v) if !postgres_result_dialect() => {
-            let quote = needs_csv_quote(blob_bytes(v), "\t");
-            write_quoted_bytes(out, &blob_text(v), quote)
-        }
+        ValueRef::Text(v) if sqlite => write_sqlite_delimited_text(out, v.as_bytes(), "\t", mode),
+        ValueRef::Text(v) => write_tabs_cell(out, v),
+        ValueRef::Blob(v) if sqlite => write_sqlite_delimited_text(out, blob_bytes(v), "\t", mode),
         ValueRef::Blob(v) => write_tabs_cell(out, &format_blob_text(v)),
     }
 }
@@ -1013,7 +1021,7 @@ fn write_text_value_ref<W: Write>(
     out: &mut W,
     value: ValueRef<'_>,
     null_value: &str,
-    escape_symbol: bool,
+    mode: Escape,
 ) -> Result<(), String> {
     match value {
         ValueRef::Null => out
@@ -1032,21 +1040,21 @@ fn write_text_value_ref<W: Write>(
             // PG-03: U+E000 is the `::citext` marker only in the Postgres
             // dialect after citext was enabled; anywhere else it is a
             // character the user stored, and it prints.
-            let v = if postgres_result_dialect() && redlinedb::citext_marker_enabled() {
-                v.strip_prefix('\u{E000}').unwrap_or(v)
-            } else {
-                v
-            };
-            if escape_symbol {
-                out.write_all(escape_symbolic(v).as_bytes())
-                    .map_err(|err| err.to_string())
-            } else {
+            if postgres_result_dialect() {
+                let v = if redlinedb::citext_marker_enabled() {
+                    v.strip_prefix('\u{E000}').unwrap_or(v)
+                } else {
+                    v
+                };
                 out.write_all(v.as_bytes()).map_err(|err| err.to_string())
+            } else {
+                out.write_all(&escape(v.as_bytes(), mode))
+                    .map_err(|err| err.to_string())
             }
         }
-        ValueRef::Blob(v) if !postgres_result_dialect() => {
-            out.write_all(&blob_text(v)).map_err(|err| err.to_string())
-        }
+        ValueRef::Blob(v) if !postgres_result_dialect() => out
+            .write_all(&escape(blob_bytes(v), mode))
+            .map_err(|err| err.to_string()),
         ValueRef::Blob(v) => out
             .write_all(format_blob_text(v).as_bytes())
             .map_err(|err| err.to_string()),
@@ -1071,20 +1079,6 @@ fn write_quoted_bytes<W: Write>(out: &mut W, bytes: &[u8], quote: bool) -> Resul
         out.write_all(bytes)
     };
     result.map_err(|err| err.to_string())
-}
-
-fn escape_symbolic(value: &str) -> String {
-    let mut out = String::with_capacity(value.len());
-    for ch in value.chars() {
-        match ch {
-            '\n' => out.push_str(r"\n"),
-            '\r' => out.push_str(r"\r"),
-            '\t' => out.push_str(r"\t"),
-            '\\' => out.push_str(r"\\"),
-            other => out.push(other),
-        }
-    }
-    out
 }
 
 fn format_real(value: f64) -> String {

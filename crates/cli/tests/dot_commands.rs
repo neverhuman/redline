@@ -267,8 +267,10 @@ fn dot_crlf_toggles_row_separator() {
          SELECT 2;\n",
     );
     assert_eq!(code, 0, "stderr={err}");
-    assert!(out.contains("1\r\n"), "stdout={out:?}");
-    assert!(out.contains("2\n"), "stdout={out:?}");
+    // Case 00134: off Windows sqlite3 keeps `crlf is OFF` and changes no
+    // line ending.
+    assert_eq!(out, "1\n2\n");
+    assert_eq!(err, "crlf is OFF\ncrlf is OFF\n");
 }
 
 #[test]
@@ -428,9 +430,15 @@ fn delimited_modes_stream_headers_nulls_and_escaping() {
 
 #[test]
 fn cli_escape_symbol_renders_control_characters_symbolically() {
-    let (out, err, code) = run_script_with_args(&["-escape", "symbol"], None, "SELECT char(10);\n");
+    // A newline passes through; other control characters become their
+    // Unicode control pictures.
+    let (out, err, code) = run_script_with_args(
+        &["-escape", "symbol"],
+        None,
+        "SELECT char(10);\nSELECT char(1)||'x';\n",
+    );
     assert_eq!(code, 0, "stderr={err}");
-    assert!(out.contains(r"\n"), "stdout={out}");
+    assert_eq!(out, "\n\n\u{2401}x\n");
 }
 
 #[test]
@@ -670,24 +678,37 @@ fn unknown_dot_command_reports_error_without_terminating() {
 }
 
 #[test]
-fn dot_fullschema_emits_schema_and_sqlite_master_section() {
+fn dot_fullschema_emits_schema_and_stat_section() {
+    // Case 00118: sqlite3 follows the schema with its statistics, or says
+    // there are none.
     let (out, err, code) = run_script(
         None,
         "CREATE TABLE widgets(id INTEGER PRIMARY KEY, name TEXT);\n\
          .fullschema\n",
     );
     assert_eq!(code, 0, "stderr={err}");
-    let lower = out.to_ascii_lowercase();
-    assert!(lower.contains("create table"), "stdout={out}");
-    assert!(out.contains("widgets"), "stdout={out}");
-    assert!(
-        out.contains("/* sqlite_master */"),
-        "fullschema must emit sqlite_master section: stdout={out}"
+    assert_eq!(
+        out,
+        "CREATE TABLE widgets(id INTEGER PRIMARY KEY, name TEXT);\n\
+         /* No STAT tables available */\n"
     );
-    assert!(
-        out.lines().any(|l| l.starts_with("table|widgets|")),
-        "fullschema must dump sqlite_master rows: stdout={out}"
+    let (out, err, code) = run_script(
+        None,
+        "CREATE TABLE t(x INT);\nCREATE INDEX i ON t(x);\n\
+         INSERT INTO t VALUES (1), (2);\nANALYZE;\n.fullschema\n",
     );
+    assert_eq!(code, 0, "stderr={err}");
+    let lines: Vec<&str> = out.lines().collect();
+    assert_eq!(
+        lines[..2],
+        ["CREATE TABLE t(x INT);", "CREATE INDEX i ON t(x);"]
+    );
+    assert_eq!(lines[2], "ANALYZE sqlite_schema;");
+    assert!(
+        lines[3].starts_with("INSERT INTO sqlite_stat1 VALUES('t','i',"),
+        "{out}"
+    );
+    assert_eq!(lines.last(), Some(&"ANALYZE sqlite_schema;"));
 }
 
 #[test]
@@ -1120,16 +1141,9 @@ fn dot_parameter_list_and_clear_round_trip() {
          .print done\n",
     );
     assert_eq!(code, 0, "stderr={err}");
-    let listed = out.lines().filter(|l| l.contains('\t')).collect::<Vec<_>>();
-    assert!(
-        listed.iter().any(|l| l.contains(":a") && l.contains('1')),
-        "first .parameter list should include :a=1, got: {listed:?}"
-    );
-    assert!(
-        listed.iter().any(|l| l.contains(":b") && l.contains("two")),
-        "first .parameter list should include :b=two, got: {listed:?}"
-    );
-    assert!(out.trim_end().ends_with("done"), "stdout={out}");
+    // sqlite3's layout (case 00121): names padded to the longest, values
+    // as quote() spells them.
+    assert_eq!(out, ":a 1\n:b 'two'\ndone\n");
 }
 
 #[test]
