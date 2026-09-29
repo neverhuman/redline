@@ -17,15 +17,14 @@ fn canonical_remote(url: &str) -> bool {
 
 // These records describe past executions. Rewriting them would invalidate their
 // hashes. They are never read as operational configuration by this controller.
-// `subrepos/redline/` is the imported historical hub and `tips/` holds planning
-// records; both quote the retired repository name as history.
+// `tips/` holds planning records that quote the retired repository name as
+// history.
 fn historical(path: &Path) -> bool {
     let text = path.to_string_lossy();
     text.contains("/release-evidence/")
         || text.starts_with("docs/archive/")
         || text.contains("/docs/archive/")
         || text.starts_with("docs/migration/")
-        || text.starts_with("subrepos/redline/")
         || text.starts_with("tips/")
         || path.file_name().is_some_and(|name| name == "CHANGELOG.md")
         || (text.contains(".jankurai/")
@@ -263,9 +262,7 @@ mod tests {
     }
 
     #[test]
-    fn historical_hub_and_planning_tips_are_records() {
-        assert!(historical(Path::new("subrepos/redline/AGENTS.md")));
-        assert!(historical(Path::new("subrepos/redline/ops/ci/lib.sh")));
+    fn planning_tips_are_records() {
         assert!(historical(Path::new("tips/phases/00-phase-index.md")));
         assert!(historical(Path::new("tips/release/plan.toml")));
         assert!(!historical(Path::new("subrepos/redline-web/install.sh")));

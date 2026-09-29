@@ -46,11 +46,3 @@ source_tree = "2d8ab9a26b05005fbf1a24a02a53ba05d55249c9"
 import_commit = "800b85f1ffcc6e16e703084cd251390156afed04"
 role = "release"
 
-[[component]]
-name = "redline"
-path = "subrepos/redline"
-source_commit = "4b549cef9eefe5b44664dfde8b598fc80befb495"
-source_tree = "ddff073a9525214c469dd6e96193cd7a537dc23f"
-import_commit = "f7781b806365790c2d9c1a066fcd118784b640cb"
-role = "historical-hub"
-

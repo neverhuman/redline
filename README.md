@@ -313,7 +313,6 @@ RedlineDB is a layered Rust workspace. Lower layers never depend on higher ones.
 |---|---|
 | `subrepos/redline-testing` | Official conformance runner, corpora and report renderers |
 | `subrepos/redline-web`, `redline-central`, `redline-split-ops` | Web console, Rust client and database shim, release tooling |
-| `subrepos/redline` | Historical public hub, kept for its history |
 | `metadata/` | SQLite known failures, PostgreSQL regression baseline and capability matrix |
 | `contracts/` | C ABI headers (`contracts/c-abi`) |
 | `ops/` | CI scripts and git hooks |

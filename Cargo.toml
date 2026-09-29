@@ -13,7 +13,7 @@ members = [
     "crates/redlinedb-lite",
 ]
 resolver = "3"
-exclude = ["subrepos/redline-testing", "subrepos/redline-web", "subrepos/redline-central", "subrepos/redline-split-ops", "subrepos/redline"]
+exclude = ["subrepos/redline-testing", "subrepos/redline-web", "subrepos/redline-central", "subrepos/redline-split-ops"]
 
 [workspace.package]
 version = "5.0.0"

@@ -59,7 +59,6 @@ Out of scope:
   impact. Report those upstream; do tell us if a release ships an affected
   version.
 - Scanner output without a demonstrated impact.
-- Historical material under `subrepos/redline/`.
 
 ## What to include
 

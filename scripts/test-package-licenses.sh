@@ -123,7 +123,7 @@ while IFS= read -r manifest; do
       ;;
     *) fail "$manifest does not declare Apache-2.0 (${line:-no license key})" ;;
   esac
-done < <(cd "$root" && git ls-files -- Cargo.toml '*/Cargo.toml' | grep -v '^subrepos/redline/')
+done < <(cd "$root" && git ls-files -- Cargo.toml '*/Cargo.toml')
 
 # 2. Collector fixture. One local git repository holds the third-party crates.
 deps=$work/deps app=$work/app

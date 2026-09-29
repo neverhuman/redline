@@ -35,7 +35,6 @@ impl Checkout {
             "subrepos/redline-web",
             "subrepos/redline-central",
             "subrepos/redline-split-ops",
-            "subrepos/redline",
         ] {
             let component = path.join(relative);
             fs::create_dir_all(&component).unwrap();
@@ -133,10 +132,6 @@ fn retired_repository_remote_is_rejected() {
 fn active_files_cannot_reintroduce_the_retired_repository() {
     let checkout = Checkout::new();
     for (relative, text) in [
-        (
-            "subrepos/redline/AGENTS.md",
-            format!("Historical hub of {}\n", legacy_url()),
-        ),
         (
             "tips/phases/plan.toml",
             format!("repository = \"{}\"\n", legacy_url()),

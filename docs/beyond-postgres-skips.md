@@ -94,7 +94,6 @@ manual page.
 The same file is copied at:
 
 - `subrepos/redline-testing/metadata/beyond_sqlite/skip-list.toml` (the runner compiles this copy)
-- `subrepos/redline/metadata/beyond_sqlite/skip-list.toml`
 
 Those three copies stay identical.
 

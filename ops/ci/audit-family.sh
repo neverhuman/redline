@@ -6,7 +6,7 @@ bash ops/ci/install-github-tools.sh
 # shellcheck source=ops/ci/lib.sh
 source ops/ci/lib.sh
 mkdir -p target/audit-family
-components=(. subrepos/redline-testing subrepos/redline-web subrepos/redline-central subrepos/redline-split-ops subrepos/redline)
+components=(. subrepos/redline-testing subrepos/redline-web subrepos/redline-central subrepos/redline-split-ops)
 if [[ ${1:-all} == components ]]; then components=("${components[@]:1}"); fi
 for component in "${components[@]}"; do
   name=${component##*/}; [[ $name != . ]] || name=engine
