@@ -14,6 +14,7 @@
 use redlinedb::{Step, ValueRef};
 
 use super::{CliState, DotOutcome};
+use crate::render::{Cell, render_query};
 
 const USAGE: &str = ".sha3sum ...             Compute a SHA3 hash of database content
     Options:
@@ -65,17 +66,33 @@ pub fn sha3sum(state: &mut CliState, args: &[&str]) -> Result<DotOutcome, String
     }
     // The result prints through the current output mode, as sqlite3's
     // query does.
-    let sql = if pattern.is_some() {
-        labelled
-            .iter()
-            .map(|(hash, label)| format!("SELECT '{hash}' AS hash, {} AS label", quote(label)))
-            .collect::<Vec<_>>()
-            .join(" UNION ALL ")
+    let (columns, rows) = if pattern.is_some() {
+        let rows = labelled
+            .into_iter()
+            .map(|(hash, label)| vec![Cell::Text(hash), Cell::Text(label)])
+            .collect();
+        (vec!["hash".to_owned(), "label".to_owned()], rows)
     } else {
-        format!("SELECT '{}' AS hash", hex(&sha3(&all, bits)))
+        let hash = hex(&sha3(&all, bits));
+        (vec!["hash".to_owned()], vec![vec![Cell::Text(hash)]])
     };
     drop(conn);
-    crate::run_query_with_state(state, &sql).map_err(|err| err.report(None))?;
+    let widths: Vec<usize> = state
+        .widths
+        .iter()
+        .map(|w| w.unsigned_abs() as usize)
+        .collect();
+    render_query(
+        &mut state.output,
+        state.mode,
+        &state.separator,
+        state.show_header,
+        &state.null_value,
+        &state.insert_table_name,
+        &widths,
+        &columns,
+        &rows,
+    )?;
     Ok(DotOutcome::Ok)
 }
 
@@ -117,8 +134,8 @@ fn table_content(conn: &mut redlinedb::Connection, table: &str) -> Result<Vec<u8
         let name = quote_ident(table);
         let order = row_order(conn, table)?;
         (
-            format!("SELECT * FROM {name} NOT INDEXED;"),
-            format!("SELECT * FROM {name} ORDER BY {order}"),
+            format!("SELECT * FROM {name} NOT INDEXED;"), // jankurai:allow HLT-023-INPUT-BOUNDARY-GAP reason=table-identifier-escaped-via-quote-ident-not-a-bindable-data-value expires=2027-06-01
+            format!("SELECT * FROM {name} ORDER BY {order}"), // jankurai:allow HLT-023-INPUT-BOUNDARY-GAP reason=table-identifier-escaped-via-quote-ident-not-a-bindable-data-value expires=2027-06-01
         )
     };
     let mut out = format!("S{}:{hashed_sql}", hashed_sql.len()).into_bytes();
@@ -172,7 +189,7 @@ fn row_order(conn: &mut redlinedb::Connection, table: &str) -> Result<String, St
         return Ok("rowid".to_owned());
     }
     let mut info = conn
-        .prepare(&format!("PRAGMA table_info({})", quote_ident(table)))
+        .prepare(&format!("PRAGMA table_info({})", quote_ident(table))) // jankurai:allow HLT-023-INPUT-BOUNDARY-GAP reason=table-identifier-escaped-via-quote-ident-not-a-bindable-data-value expires=2027-06-01
         .map_err(|err| err.to_string())?;
     let mut keys: Vec<(i64, String)> = Vec::new();
     while let Step::Row(row) = info.step().map_err(|err| err.to_string())? {
@@ -192,10 +209,6 @@ fn row_order(conn: &mut redlinedb::Connection, table: &str) -> Result<String, St
 
 fn quote_ident(name: &str) -> String {
     format!("\"{}\"", name.replace('"', "\"\""))
-}
-
-fn quote(text: &str) -> String {
-    format!("'{}'", text.replace('\'', "''"))
 }
 
 fn hex(bytes: &[u8]) -> String {
