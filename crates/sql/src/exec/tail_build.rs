@@ -590,6 +590,14 @@ pub(crate) fn record_sqlite_sequence_rowid(
     }
 }
 
+/// The next rowid of an AUTOINCREMENT table: one past the larger of its
+/// `sqlite_sequence` entry and its highest live rowid, as SQLite computes
+/// it. AUTOINCREMENT never lowers the table's rowid counter
+/// (`lower_rowid_allocator_after_delete`), so every rowid the table has held
+/// is below it; when the sequence already reaches that far no live row can
+/// be above the sequence, and the table is not read. The sequence falls
+/// behind after a rolled-back insert and after a reopen, which does not keep
+/// it; then the table is read once for its highest live rowid.
 fn sqlite_sequence_next_rowid(
     session: &mut SessionState,
     engine: &Engine,
@@ -598,9 +606,6 @@ fn sqlite_sequence_next_rowid(
 ) -> Result<RowId> {
     let key = table.folded.as_ref();
     let current = session.sqlite_sequences.get(key).copied().unwrap_or(0);
-    // Every rowid the table has held is below its next rowid, so when the
-    // sequence already reaches that far no live row can be above it. Only
-    // a sequence lowered by hand needs the table's live maximum.
     let highest_held = engine
         .relation_next_row(table.relation_id)?
         .saturating_sub(1);
@@ -622,12 +627,7 @@ fn sqlite_sequence_next_rowid(
     let next = base
         .checked_add(1)
         .ok_or_else(|| Error::ConstraintViolation("database or disk is full".to_owned()))?;
-    if next > i64::MAX {
-        return Err(Error::ConstraintViolation(
-            "database or disk is full".to_owned(),
-        ));
-    }
-    session.sqlite_sequences.insert(key.to_owned(), next as i64);
+    session.sqlite_sequences.insert(key.to_owned(), next);
     session.sqlite_sequences_dirty.insert(key.to_owned());
     Ok(RowId::new(next as u64))
 }

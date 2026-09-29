@@ -9,20 +9,25 @@
   lowered it to that table's highest rowid + 1. The next insert into any
   other table could then take a rowid that table already used, and the new
   row replaced the live one. Each table now allocates its own rowids.
-- **False `UNIQUE constraint failed` after a rolled-back delete.** Once a
-  transaction that deleted a table's highest `INTEGER PRIMARY KEY` rolled
-  back, the next insert with a NULL key was given that key again and
-  failed. It now takes the next free rowid, as sqlite3 does.
+- **A rolled-back delete could make the next insert fail or replace a row.**
+  Once a transaction that deleted a table's highest `INTEGER PRIMARY KEY`
+  rolled back, the next insert with a NULL key was given a key a row still
+  held: a plain insert failed with `UNIQUE constraint failed`, and `REPLACE`
+  silently replaced that row. It now takes the next free rowid, as sqlite3
+  does.
 
 ### Changed
 
-- **Rowids are numbered per table**, from 1, as in SQLite. A table without an
-  `INTEGER PRIMARY KEY` used to take its rowids from the shared counter, so
-  its first row could be 4 rather than 1.
-- **`DELETE` no longer reads the whole table for each deleted row.** Only a
-  delete of the table's highest rowid looks for the new maximum, and an
-  `AUTOINCREMENT` insert reads the table only when `sqlite_sequence` was
-  lowered by hand.
+- **Rowids are numbered per table**, from 1, as in SQLite. Every table took
+  its rowids from the shared counter, so the key a NULL `INTEGER PRIMARY
+  KEY` was given (and `last_insert_rowid()`), or a table's first rowid,
+  could be 4 rather than 1.
+- **`DELETE` no longer reads the whole table for each deleted row.** Only
+  removing a table's highest rowid (by `DELETE`, an `UPDATE` of the key,
+  `REPLACE`, `MERGE` or a cascade) reads the table for the new maximum. An
+  `AUTOINCREMENT` table never reuses a rowid, and its insert reads the
+  table only when its `sqlite_sequence` entry is behind the rows the table
+  has held: after a rolled-back insert, or after a reopen.
 
 ## [5.1.0] - 2026-09-29
 

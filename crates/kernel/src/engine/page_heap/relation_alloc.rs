@@ -7,11 +7,13 @@
 //! next, and an insert into another table then landed on a live row of its
 //! own and replaced it.
 //!
-//! A relation's counter moves wherever the engine-wide one does: past every
+//! A relation's counter moves wherever the engine-wide one did: past every
 //! row inserted, including an explicit rowid, past every row the WAL names
-//! at recovery, and past every tuple the page-directory rebuild reads. A
-//! delete's tombstone does not move it, so a delete of the highest rowid can
-//! lower it first.
+//! at recovery, and past every tuple the page-directory rebuild reads,
+//! deleted rows included. At runtime a delete's tombstone does not move it,
+//! so removing a table's highest rowid can lower it (SQL's
+//! `lower_rowid_allocator_after_delete`). After a reopen it starts past rows
+//! deleted before the close, as the engine-wide counter did.
 
 use std::collections::HashMap;
 use std::sync::RwLock;
