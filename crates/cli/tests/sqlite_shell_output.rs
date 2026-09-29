@@ -158,6 +158,16 @@ fn sha3sum_hashes_the_database_content() {
 }
 
 #[test]
+fn sha3sum_quotes_a_table_name_that_holds_a_double_quote() {
+    // The table name is quoted as an identifier, never spliced as SQL; the
+    // hash is the pinned sqlite3's for the same table.
+    assert_eq!(
+        batch("CREATE TABLE \"We\"\"ird\"(x);\nINSERT INTO \"We\"\"ird\" VALUES(1);\n.sha3sum\n"),
+        "7ebcc471d36f1969591761992dc846f993e15e9d066279dc7e8ebad0\n"
+    );
+}
+
+#[test]
 fn clone_reports_each_object_it_copies() {
     // 00152
     let dir = tempfile::tempdir().expect("tempdir");
