@@ -18,6 +18,10 @@
 
 ### Changed
 
+- **A statement no longer touches the file system unless it spills.** Every
+  statement created its spill directory up front: a failing `mkdir` and a
+  `statx` per `SELECT`, even a point read. The directory is now made when a
+  query first spills.
 - **Rowids are numbered per table**, from 1, as in SQLite. Every table took
   its rowids from the shared counter, so the key a NULL `INTEGER PRIMARY
   KEY` was given (and `last_insert_rowid()`), or a table's first rowid,
