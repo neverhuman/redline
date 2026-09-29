@@ -72,20 +72,24 @@ redlinedb -batch :memory: 'SELECT 1;'
 # prints: 1
 ```
 
-The installer checks the archive's checksum and build provenance before it
-writes anything. It installs each version under
+Before it writes anything, the installer checks the archive's SHA-256 and that
+the build-provenance record inside it names this repository and the release
+tag. A checksum and a provenance file prove only that the download is intact:
+set `REDLINEDB_VERIFY_ATTESTATION=1` (it needs the GitHub CLI) to also verify
+the signed attestation that the release workflow of `neverhuman/redline` built
+the archive, or run `gh attestation verify <archive> --repo neverhuman/redline`
+yourself. The installer keeps each version under
 `~/.local/lib/redlinedb/versions/` and switches versions with one rename, so a
 failed upgrade leaves the previous version working; `REDLINEDB_ROLLBACK=1`
 switches back. Set `PREFIX` to choose another root and `REDLINEDB_SHA256` to
 require a specific archive digest. A prefix that an installer before v5.0.0
 filled is refused until you set `REDLINEDB_MIGRATE_LEGACY=1`. The installer
-installs no `sqlite3` binary or alias. It does link RedlineDB's subset
-`sqlite3.h` into `PREFIX/include`, so do not choose a prefix whose `include/`
-directory your SQLite builds read. [docs/install.md](docs/install.md) is the
-full guide. Archives and checksums are on
-[GitHub Releases](https://github.com/neverhuman/redline/releases), and each
-archive has a build provenance attestation
-(`gh attestation verify <archive> --repo neverhuman/redline`). CI runs the
+installs no `sqlite3` binary or alias. It links RedlineDB's subset `sqlite3.h`
+into `PREFIX/include`, except under `/usr` and `/usr/local`, where it would
+shadow the system SQLite header; do not point other SQLite builds at that
+directory. [docs/install.md](docs/install.md) is the full guide, and archives
+and checksums are on
+[GitHub Releases](https://github.com/neverhuman/redline/releases). CI runs the
 `quickstart` blocks in this README against every platform's package
 (`scripts/test-docs-quickstart.sh`).
 
@@ -169,14 +173,16 @@ Node 22 and npm).
 ### Read more
 
 [docs/manual](docs/manual/README.md) is the book for operators and for people
-embedding the engine. It was written against commit `8ae3a8b79` (crate version
-4.1.0); where it differs from the generated blocks in this README, the blocks
-are the measurement.
+embedding the engine. It was written against v4.1.0 and updated for v5.0.0
+where the release changed what it describes; where it differs from the
+generated blocks in this README, the blocks are the measurement.
 
 ## Versions over time
 
-Every row is a build of that version's commit, re-run on today's corpus against
-SQLite. A lower ratio is better, and the note under the table says how it was
+Every row is a release build of the commit shown, re-run on today's corpus
+against SQLite. The v5.0.0 row was measured at `55637d088`; nothing the
+`redlinedb` shell is built from changed between that commit and the `v5.0.0`
+tag. A lower ratio is better, and the note under the table says how it was
 measured. Older versions are judged by today's stricter comparator, so their
 pass counts are not comparable with the counts they published at the time.
 
