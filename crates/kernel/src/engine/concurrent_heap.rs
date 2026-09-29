@@ -207,7 +207,7 @@ impl ConcurrentHeap {
     fn current_tuple(&self, row_id: RowId) -> Result<TupleVersion> {
         let ptr = self
             .head(row_id)?
-            .ok_or(Error::CorruptPage("row id missing from row directory"))?;
+            .ok_or_else(|| Error::CorruptPage("row id missing from row directory"))?;
         self.read_tuple(ptr)
     }
 
@@ -235,12 +235,12 @@ impl ConcurrentHeap {
         let lane = self
             .lanes
             .get(lane_idx)
-            .ok_or(Error::CorruptPage("heap lane missing"))?
+            .ok_or_else(|| Error::CorruptPage("heap lane missing"))?
             .lock()
             .map_err(|_| Error::CorruptPage("heap lane poisoned"))?;
         lane.get(ptr.slot as usize)
             .cloned()
-            .ok_or(Error::CorruptPage("tuple slot missing"))
+            .ok_or_else(|| Error::CorruptPage("tuple slot missing"))
     }
 
     fn append_undo(&self, record: UndoRecord) -> Result<UndoPtr> {
@@ -262,7 +262,7 @@ impl ConcurrentHeap {
             .map_err(|_| Error::CorruptPage("undo store poisoned"))?;
         undo.get(ptr.0 as usize - 1)
             .cloned()
-            .ok_or(Error::CorruptPage("undo pointer out of bounds"))
+            .ok_or_else(|| Error::CorruptPage("undo pointer out of bounds"))
     }
 
     fn head(&self, row_id: RowId) -> Result<Option<TuplePtr>> {

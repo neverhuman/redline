@@ -37,11 +37,11 @@ pub fn apply_create_trigger(
     if spec.when_time == TriggerTimeKind::InsteadOf {
         let _view = snapshot
             .lookup_view(schema_id, spec.table.folded())
-            .ok_or(Error::ObjectNotFound)?;
+            .ok_or_else(|| Error::ObjectNotFound)?;
     } else {
         let _table = snapshot
             .lookup_table(schema_id, spec.table.folded())
-            .ok_or(Error::ObjectNotFound)?;
+            .ok_or_else(|| Error::ObjectNotFound)?;
     }
 
     let mut next_object_id = snapshot.meta.next_object_id;

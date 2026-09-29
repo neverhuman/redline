@@ -26,7 +26,7 @@ pub fn resolve_schema_id(snapshot: &SchemaSnapshot, schema: Option<&DbName>) -> 
         }
         _ => snapshot
             .lookup_namespace("main")
-            .ok_or(Error::CatalogCorrupt("main schema missing")),
+            .ok_or_else(|| Error::CatalogCorrupt("main schema missing")),
     }
 }
 
@@ -34,14 +34,14 @@ pub fn lookup_table(snapshot: &SchemaSnapshot, name: &QualifiedName) -> Result<A
     let schema_id = resolve_schema_id(snapshot, Some(&name.schema))?;
     snapshot
         .lookup_table(schema_id, name.name.folded())
-        .ok_or(Error::ObjectNotFound)
+        .ok_or_else(|| Error::ObjectNotFound)
 }
 
 pub fn lookup_index(snapshot: &SchemaSnapshot, name: &QualifiedName) -> Result<Arc<IndexDef>> {
     let schema_id = resolve_schema_id(snapshot, Some(&name.schema))?;
     snapshot
         .lookup_index(schema_id, name.name.folded())
-        .ok_or(Error::ObjectNotFound)
+        .ok_or_else(|| Error::ObjectNotFound)
 }
 
 pub fn apply_create_table(
@@ -523,7 +523,7 @@ pub fn apply_inherited_index_key_collations(
         .indexes
         .iter()
         .position(|idx| idx.index_id == index_id)
-        .ok_or(Error::ObjectNotFound)?;
+        .ok_or_else(|| Error::ObjectNotFound)?;
     let Some(collations) =
         super::collation::index_keys_needing_inherited_collation(&table, &table.indexes[position])
     else {
@@ -637,7 +637,7 @@ pub fn apply_alter_table(
                 .columns
                 .iter_mut()
                 .find(|column| column.folded.as_ref() == old_name.folded())
-                .ok_or(Error::ObjectNotFound)?;
+                .ok_or_else(|| Error::ObjectNotFound)?;
             column.name = new_name.original().into();
             column.folded = new_name.folded().into();
             // sqlite_master must reflect the new column name.
@@ -772,7 +772,7 @@ pub fn apply_alter_table(
                 .columns
                 .iter_mut()
                 .find(|column| column.folded.as_ref() == column_name.folded())
-                .ok_or(Error::ObjectNotFound)?;
+                .ok_or_else(|| Error::ObjectNotFound)?;
             column.default_value = default_value;
             column.default_expr = None;
             table.normalized_sql = None;
@@ -782,7 +782,7 @@ pub fn apply_alter_table(
                 .columns
                 .iter_mut()
                 .find(|column| column.folded.as_ref() == column_name.folded())
-                .ok_or(Error::ObjectNotFound)?;
+                .ok_or_else(|| Error::ObjectNotFound)?;
             column.default_value = None;
             column.default_expr = None;
             table.normalized_sql = None;
@@ -794,7 +794,7 @@ pub fn apply_alter_table(
                 .iter()
                 .find(|column| column.folded.as_ref() == folded)
                 .map(|column| column.column_id)
-                .ok_or(Error::ObjectNotFound)?;
+                .ok_or_else(|| Error::ObjectNotFound)?;
             for column in table.columns.iter_mut() {
                 if column.folded.as_ref() == folded {
                     column.not_null = false;
@@ -813,7 +813,7 @@ pub fn apply_alter_table(
                 .iter()
                 .find(|column| column.folded.as_ref() == folded)
                 .map(|column| column.column_id)
-                .ok_or(Error::ObjectNotFound)?;
+                .ok_or_else(|| Error::ObjectNotFound)?;
             for column in table.columns.iter_mut() {
                 if column.folded.as_ref() == folded {
                     column.not_null = true;
@@ -946,7 +946,7 @@ pub fn apply_alter_table(
                 .iter()
                 .find(|column| column.folded.as_ref() == folded)
                 .map(|column| column.column_id)
-                .ok_or(Error::ObjectNotFound)?;
+                .ok_or_else(|| Error::ObjectNotFound)?;
             for column in table.columns.iter_mut() {
                 if column.folded.as_ref() == folded {
                     column.not_null = true;
@@ -977,7 +977,7 @@ pub fn apply_alter_table(
                 .columns
                 .iter_mut()
                 .find(|column| column.folded.as_ref() == folded)
-                .ok_or(Error::ObjectNotFound)?;
+                .ok_or_else(|| Error::ObjectNotFound)?;
             column.declared_type = Some(declared_type.clone().into_boxed_str());
             column.affinity = derive_affinity(Some(declared_type.as_str()));
             table.normalized_sql = None;
@@ -1065,7 +1065,7 @@ fn apply_alter_add_constraint(
                 let ordinal = column_lookup
                     .get(&folded)
                     .copied()
-                    .ok_or(Error::ColumnNotFound)?;
+                    .ok_or_else(|| Error::ColumnNotFound)?;
                 keys.push(super::key::IndexKeyDef {
                     ordinal,
                     source: super::key::IndexKeySource::Column { attnum: ordinal },
@@ -1124,7 +1124,7 @@ fn apply_alter_add_constraint(
                 let ordinal = column_lookup
                     .get(&folded)
                     .copied()
-                    .ok_or(Error::ColumnNotFound)?;
+                    .ok_or_else(|| Error::ColumnNotFound)?;
                 ordinals.push(ordinal);
             }
             table.foreign_keys.push(ForeignKeyDef {
@@ -1390,7 +1390,7 @@ fn build_index_keys(table: &TableDef, columns: &[IndexColumnSpec]) -> Result<Vec
                 .columns
                 .iter()
                 .find(|candidate| candidate.folded.as_ref() == column.name.folded())
-                .ok_or(Error::ColumnNotFound)?
+                .ok_or_else(|| Error::ColumnNotFound)?
                 .ordinal;
             (ordinal, IndexKeySource::Column { attnum: ordinal })
         };
@@ -1416,7 +1416,7 @@ fn build_index_keys_from_names(
     for column in columns {
         let ordinal = *column_lookup
             .get(column.folded())
-            .ok_or(Error::ColumnNotFound)?;
+            .ok_or_else(|| Error::ColumnNotFound)?;
         keys.push(IndexKeyDef {
             ordinal,
             source: IndexKeySource::Column { attnum: ordinal },

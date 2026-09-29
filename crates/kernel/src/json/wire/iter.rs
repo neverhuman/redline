@@ -29,7 +29,7 @@ impl<'a> ObjectIter<'a> {
             .map_err(|_| Error::InvalidJsonb("composite length overflow"))?;
         let end = body_start
             .checked_add(body_len)
-            .ok_or(Error::InvalidJsonb("composite length overflow"))?;
+            .ok_or_else(|| Error::InvalidJsonb("composite length overflow"))?;
         if end > buf.len() {
             return Err(Error::InvalidJsonb("composite truncated"));
         }
@@ -100,7 +100,7 @@ impl<'a> ArrayIter<'a> {
             .map_err(|_| Error::InvalidJsonb("composite length overflow"))?;
         let end = body_start
             .checked_add(body_len)
-            .ok_or(Error::InvalidJsonb("composite length overflow"))?;
+            .ok_or_else(|| Error::InvalidJsonb("composite length overflow"))?;
         if end > buf.len() {
             return Err(Error::InvalidJsonb("composite truncated"));
         }

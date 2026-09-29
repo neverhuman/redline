@@ -88,7 +88,8 @@ pub(super) fn decode_column_stats(reader: &mut BytesReader<'_>) -> Result<super:
     let mut mcv = Vec::with_capacity(mcv_count);
     for _ in 0..mcv_count {
         mcv.push(MostCommonValue {
-            value: read_value(reader)?.ok_or(Error::CatalogCorrupt("missing most common value"))?,
+            value: read_value(reader)?
+                .ok_or_else(|| Error::CatalogCorrupt("missing most common value"))?,
             frequency: reader.f64()?,
         });
     }

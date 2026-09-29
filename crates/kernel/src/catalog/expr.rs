@@ -104,7 +104,7 @@ pub fn eval_expr(
             ExprOp::Const(v) => scratch.stack.push(v.clone()),
             ExprOp::Column(col) => scratch
                 .stack
-                .push(row.value_at(*col).ok_or(ExprError::UnknownColumn)?),
+                .push(row.value_at(*col).ok_or_else(|| ExprError::UnknownColumn)?),
             ExprOp::CurrentDate => scratch.stack.push(OwnedValue::Text(Arc::from(
                 UtcDateTime::now().format_date(),
             ))),
@@ -115,7 +115,10 @@ pub fn eval_expr(
                 UtcDateTime::now().format_timestamp(),
             ))),
             ExprOp::Not => {
-                let v = scratch.stack.pop().ok_or(ExprError::StackUnderflow)?;
+                let v = scratch
+                    .stack
+                    .pop()
+                    .ok_or_else(|| ExprError::StackUnderflow)?;
                 scratch.stack.push(bool_value(!truthy(&v)));
             }
             ExprOp::And => binary_bool(&mut scratch.stack, |a, b| a && b)?,
@@ -127,13 +130,22 @@ pub fn eval_expr(
             ExprOp::Gt => compare_into(&mut scratch.stack, |o| o == Ordering::Greater)?,
             ExprOp::Ge => compare_into(&mut scratch.stack, |o| o != Ordering::Less)?,
             ExprOp::Like { negated, escape } => {
-                let pattern = scratch.stack.pop().ok_or(ExprError::StackUnderflow)?;
-                let value = scratch.stack.pop().ok_or(ExprError::StackUnderflow)?;
+                let pattern = scratch
+                    .stack
+                    .pop()
+                    .ok_or_else(|| ExprError::StackUnderflow)?;
+                let value = scratch
+                    .stack
+                    .pop()
+                    .ok_or_else(|| ExprError::StackUnderflow)?;
                 let result = like_result(&value, &pattern, *negated, *escape, like_case_sensitive);
                 scratch.stack.push(result);
             }
             ExprOp::BlobLen => {
-                let v = scratch.stack.pop().ok_or(ExprError::StackUnderflow)?;
+                let v = scratch
+                    .stack
+                    .pop()
+                    .ok_or_else(|| ExprError::StackUnderflow)?;
                 let result = match v {
                     OwnedValue::Blob(b) => OwnedValue::Integer(b.len() as i64),
                     // Null propagates so that a CHECK like
@@ -335,8 +347,8 @@ fn binary_bool(
     stack: &mut Vec<OwnedValue>,
     combine: impl FnOnce(bool, bool) -> bool,
 ) -> Result<(), ExprError> {
-    let right = truthy(&stack.pop().ok_or(ExprError::StackUnderflow)?);
-    let left = truthy(&stack.pop().ok_or(ExprError::StackUnderflow)?);
+    let right = truthy(&stack.pop().ok_or_else(|| ExprError::StackUnderflow)?);
+    let left = truthy(&stack.pop().ok_or_else(|| ExprError::StackUnderflow)?);
     stack.push(bool_value(combine(left, right)));
     Ok(())
 }
@@ -345,8 +357,8 @@ fn compare_into(
     stack: &mut Vec<OwnedValue>,
     accept: impl FnOnce(Ordering) -> bool,
 ) -> Result<(), ExprError> {
-    let right = stack.pop().ok_or(ExprError::StackUnderflow)?;
-    let left = stack.pop().ok_or(ExprError::StackUnderflow)?;
+    let right = stack.pop().ok_or_else(|| ExprError::StackUnderflow)?;
+    let left = stack.pop().ok_or_else(|| ExprError::StackUnderflow)?;
     // SQL three-valued logic: any comparison with NULL produces NULL. The
     // SQL `apply_constraints` treats NULL as "constraint satisfied", which is
     // what callers depend on (e.g. the auto-emitted `BlobLen(col) = K` for

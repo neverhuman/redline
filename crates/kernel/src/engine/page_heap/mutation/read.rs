@@ -190,9 +190,7 @@ impl PageBackedHeap {
         };
         let ptr = self
             .head_for_relation(rel_id, row_id)?
-            .ok_or(Error::CorruptPage(
-                "row id missing from relation row directory",
-            ))?;
+            .ok_or_else(|| Error::CorruptPage("row id missing from relation row directory"))?;
         self.read_tuple(ptr)
     }
 
@@ -273,7 +271,7 @@ impl PageBackedHeap {
         let page = frame
             .page
             .as_mut()
-            .ok_or(Error::CorruptPage("resident frame missing page"))?;
+            .ok_or_else(|| Error::CorruptPage("resident frame missing page"))?;
         #[cfg(test)]
         super::test_hooks::run_before_tuple_overwrite_hook(page);
         // A page reinitialised for reuse since the caller read `ptr` holds

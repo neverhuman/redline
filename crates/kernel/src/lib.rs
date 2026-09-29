@@ -3,6 +3,11 @@
 //! This crate starts with the correctness-critical foundation: typed storage IDs,
 //! explicit on-disk page/WAL encodings, checksums, and MVCC visibility rules.
 
+// Kernel code writes `ok_or_else(|| Error::X)` even where clippy calls the
+// value cheap: dropping an unused `Error` is a real call on the success
+// path (see tests/no_eager_error_values.rs, which enforces the rule).
+#![allow(clippy::unnecessary_lazy_evaluations)]
+
 /// A26: process-wide cached `std::thread::available_parallelism()`.
 ///
 /// `available_parallelism()` on Linux walks the cgroup hierarchy looking for

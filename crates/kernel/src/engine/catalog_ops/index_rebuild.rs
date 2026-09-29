@@ -105,7 +105,7 @@ impl Engine {
         let snapshot = self.catalog_snapshot_for_tx(tx);
         let index = snapshot
             .index_by_id(index_id)
-            .ok_or(Error::ObjectNotFound)?;
+            .ok_or_else(|| Error::ObjectNotFound)?;
         if kernel_backfill
             && (index.predicate_sql.is_some()
                 || index.keys.iter().any(|key| {
@@ -123,7 +123,9 @@ impl Engine {
         // declare (Q5-10), so an index built without them is brought in line.
         let mut next =
             crate::catalog::apply_inherited_index_key_collations((*snapshot).clone(), index_id)?;
-        let index = next.index_by_id(index_id).ok_or(Error::ObjectNotFound)?;
+        let index = next
+            .index_by_id(index_id)
+            .ok_or_else(|| Error::ObjectNotFound)?;
         // A fresh object id, never reused, keeps the old B-tree's WAL
         // records out of the new one during recovery.
         let physical_id = PhysicalIndexId(next.meta.next_object_id.0);
@@ -148,11 +150,11 @@ impl Engine {
         )?);
         let rebuilt = next
             .index_by_id(index_id)
-            .ok_or(Error::CatalogCorrupt("rebuilt index missing from snapshot"))?;
+            .ok_or_else(|| Error::CatalogCorrupt("rebuilt index missing from snapshot"))?;
         if kernel_backfill {
             let table = next
                 .table_by_id(rebuilt.table_id)
-                .ok_or(Error::ObjectNotFound)?;
+                .ok_or_else(|| Error::ObjectNotFound)?;
             self.backfill_index(tx, &btree, &table, &rebuilt)?;
         }
         tx.push_pending_index_handle(PendingIndexHandle::Install(index_id, Arc::new(btree)));

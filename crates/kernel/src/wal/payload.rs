@@ -329,7 +329,7 @@ impl WalPayload {
     pub fn decode(bytes: &[u8]) -> Result<Self> {
         let tag = *bytes
             .first()
-            .ok_or(Error::CorruptWal("empty wal payload"))?;
+            .ok_or_else(|| Error::CorruptWal("empty wal payload"))?;
         match tag {
             TAG_HEAP_INSERT => {
                 decode_row_payload(bytes, |tx_id, rel_id, row_id, payload| Self::HeapInsert {
@@ -399,7 +399,7 @@ impl WalPayload {
                 let image_len = read_u32(bytes, 17)? as usize;
                 let expected = 21_usize
                     .checked_add(image_len)
-                    .ok_or(Error::CorruptWal("page image length overflow"))?;
+                    .ok_or_else(|| Error::CorruptWal("page image length overflow"))?;
                 require_exact_len(bytes, expected)?;
                 Ok(Self::PageImage {
                     page_id: PageId(read_u64(bytes, 1)?),
@@ -475,7 +475,7 @@ impl WalPayload {
                 let snapshot_len = read_u32(bytes, 17)? as usize;
                 let expected = 21_usize
                     .checked_add(snapshot_len)
-                    .ok_or(Error::CorruptWal("catalog snapshot length overflow"))?;
+                    .ok_or_else(|| Error::CorruptWal("catalog snapshot length overflow"))?;
                 require_exact_len(bytes, expected)?;
                 Ok(Self::CatalogSnapshot {
                     tx_id: TxId(read_u64(bytes, 1)?),
@@ -555,7 +555,7 @@ fn decode_index_payload<T>(
     let key_len = read_u32(bytes, 39)? as usize;
     let expected = 43_usize
         .checked_add(key_len)
-        .ok_or(Error::CorruptWal("index payload length overflow"))?;
+        .ok_or_else(|| Error::CorruptWal("index payload length overflow"))?;
     require_exact_len(bytes, expected)?;
     f(tx_id, index_id, bytes[43..expected].to_vec(), row)
 }
@@ -574,7 +574,7 @@ fn decode_row_payload(
         let payload_len = read_u32(bytes, 25)? as usize;
         let expected = 29_usize
             .checked_add(payload_len)
-            .ok_or(Error::CorruptWal("heap payload length overflow"))?;
+            .ok_or_else(|| Error::CorruptWal("heap payload length overflow"))?;
         if bytes.len() < expected {
             return Err(Error::BufferTooSmall {
                 needed: expected,
@@ -593,7 +593,7 @@ fn decode_row_payload(
     let payload_len = read_u32(bytes, 17)? as usize;
     let expected = 21_usize
         .checked_add(payload_len)
-        .ok_or(Error::CorruptWal("heap payload length overflow"))?;
+        .ok_or_else(|| Error::CorruptWal("heap payload length overflow"))?;
     if bytes.len() < expected {
         return Err(Error::BufferTooSmall {
             needed: expected,
@@ -715,7 +715,7 @@ fn decode_logical_event(bytes: &[u8]) -> Result<(LogicalEvent, usize)> {
                 cursor += 8;
                 let end = cursor
                     .checked_add(len)
-                    .ok_or(Error::CorruptWal("logical payload overflow"))?;
+                    .ok_or_else(|| Error::CorruptWal("logical payload overflow"))?;
                 if bytes.len() < end {
                     return Err(Error::BufferTooSmall {
                         needed: end,
@@ -876,7 +876,7 @@ fn encode_combined_value(value: &CombinedReplacementValue, out: &mut Vec<u8>) {
 fn decode_combined_value(bytes: &[u8]) -> Result<(CombinedReplacementValue, usize)> {
     let tag = *bytes
         .first()
-        .ok_or(Error::CorruptWal("combined value: missing tag"))?;
+        .ok_or_else(|| Error::CorruptWal("combined value: missing tag"))?;
     match tag {
         COMBINED_VAL_NULL => Ok((CombinedReplacementValue::Null, 1)),
         COMBINED_VAL_INTEGER => {
@@ -909,7 +909,7 @@ fn decode_combined_value(bytes: &[u8]) -> Result<(CombinedReplacementValue, usiz
             let len = u32::from_le_bytes(bytes[1..5].try_into().unwrap()) as usize;
             let end = 5usize
                 .checked_add(len)
-                .ok_or(Error::CorruptWal("combined value length overflow"))?;
+                .ok_or_else(|| Error::CorruptWal("combined value length overflow"))?;
             if bytes.len() < end {
                 return Err(Error::BufferTooSmall {
                     needed: end,

@@ -100,7 +100,7 @@ impl Graph {
         Ok(&self
             .nodes
             .get(&id)
-            .ok_or(Error::CorruptPage("unknown hnsw node id"))?
+            .ok_or_else(|| Error::CorruptPage("unknown hnsw node id"))?
             .vector)
     }
 
@@ -108,7 +108,7 @@ impl Graph {
         Ok(self
             .nodes
             .get(&id)
-            .ok_or(Error::CorruptPage("unknown hnsw node id"))?
+            .ok_or_else(|| Error::CorruptPage("unknown hnsw node id"))?
             .layer)
     }
 
@@ -116,7 +116,7 @@ impl Graph {
         let node = self
             .nodes
             .get(&id)
-            .ok_or(Error::CorruptPage("unknown hnsw node id"))?;
+            .ok_or_else(|| Error::CorruptPage("unknown hnsw node id"))?;
         match node.neighbors.get(layer as usize) {
             Some(list) => Ok(list),
             None => Ok(&[]),
@@ -127,7 +127,7 @@ impl Graph {
         let node = self
             .nodes
             .get_mut(&id)
-            .ok_or(Error::CorruptPage("unknown hnsw node id"))?;
+            .ok_or_else(|| Error::CorruptPage("unknown hnsw node id"))?;
         while node.neighbors.len() <= layer as usize {
             node.neighbors.push(Vec::new());
         }
@@ -146,13 +146,13 @@ impl Graph {
     pub(crate) fn node(&self, id: u32) -> Result<&GraphNode> {
         self.nodes
             .get(&id)
-            .ok_or(Error::CorruptPage("unknown hnsw node id"))
+            .ok_or_else(|| Error::CorruptPage("unknown hnsw node id"))
     }
 
     pub(crate) fn node_mut(&mut self, id: u32) -> Result<&mut GraphNode> {
         self.nodes
             .get_mut(&id)
-            .ok_or(Error::CorruptPage("unknown hnsw node id"))
+            .ok_or_else(|| Error::CorruptPage("unknown hnsw node id"))
     }
 
     pub(crate) fn iter(&self) -> impl Iterator<Item = (&u32, &GraphNode)> {
@@ -345,7 +345,7 @@ impl HnswIndex {
         state.next_node_id = state
             .next_node_id
             .checked_add(1)
-            .ok_or(Error::CorruptPage("hnsw node id overflow"))?;
+            .ok_or_else(|| Error::CorruptPage("hnsw node id overflow"))?;
         let m = state.params.m;
         let level = assign_level(&mut state.rng, m);
         let level = level.min(u8::MAX as usize) as u8;
@@ -561,7 +561,7 @@ impl HnswIndex {
         };
         let resolved_page = state
             .last_data_page
-            .ok_or(Error::CorruptPage("hnsw missing data page"))?;
+            .ok_or_else(|| Error::CorruptPage("hnsw missing data page"))?;
         let node = state.graph.node_mut(node_id)?;
         node.page_id = resolved_page;
         node.slot = slot;
@@ -704,7 +704,7 @@ impl HnswState {
             .graph
             .nodes
             .get(&node_id)
-            .ok_or(Error::CorruptPage("unknown hnsw node id"))?;
+            .ok_or_else(|| Error::CorruptPage("unknown hnsw node id"))?;
         Ok(NodeRecord {
             node_id: node.node_id,
             layer: node.layer,

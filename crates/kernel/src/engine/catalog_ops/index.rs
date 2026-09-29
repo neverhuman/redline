@@ -21,7 +21,7 @@ impl Engine {
             .indexes
             .last()
             .cloned()
-            .ok_or(Error::CatalogCorrupt("created index missing from snapshot"))?;
+            .ok_or_else(|| Error::CatalogCorrupt("created index missing from snapshot"))?;
 
         // Step 2: allocate physical B-tree pages with the WAL coordinator.
         let descriptor = IndexDescriptor::new(
@@ -46,14 +46,14 @@ impl Engine {
         let with_meta = Arc::new(with_meta);
         let final_index = with_meta
             .index_by_id(created_index.index_id)
-            .ok_or(Error::CatalogCorrupt("created index missing from snapshot"))?;
+            .ok_or_else(|| Error::CatalogCorrupt("created index missing from snapshot"))?;
 
         // Step 4: DDL backfill — index every visible row of the underlying
         // table at the time of CREATE INDEX. The backfill uses the in-memory
         // snapshot/tx_status; if the table is empty this is a no-op.
         let table = with_meta
             .table_by_id(final_index.table_id)
-            .ok_or(Error::ObjectNotFound)?;
+            .ok_or_else(|| Error::ObjectNotFound)?;
         self.backfill_index(tx, &btree, &table, &final_index)?;
 
         // Step 5: install the handle only if the surrounding DDL transaction

@@ -190,7 +190,7 @@ impl WalLaneCoordinator {
         let coord = self
             .lanes
             .get(lane)
-            .ok_or(Error::CorruptWal("lane index out of range"))?;
+            .ok_or_else(|| Error::CorruptWal("lane index out of range"))?;
         coord.append(kind, tx_id, payload)
     }
 
@@ -214,7 +214,7 @@ impl WalLaneCoordinator {
         let coord = self
             .lanes
             .get(lane)
-            .ok_or(Error::CorruptWal("lane index out of range"))?;
+            .ok_or_else(|| Error::CorruptWal("lane index out of range"))?;
         #[cfg(feature = "wal_cross_lane_coalescer")]
         {
             if let Some(c) = &self.coalescer

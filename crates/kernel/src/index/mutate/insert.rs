@@ -97,7 +97,9 @@ impl BtreeIndex {
         loop {
             let root = self.meta()?.root_page_id;
             let path = self.find_leaf_path(root, physical.as_slice())?;
-            let leaf_id = *path.last().ok_or(Error::CorruptPage("empty search path"))?;
+            let leaf_id = *path
+                .last()
+                .ok_or_else(|| Error::CorruptPage("empty search path"))?;
             let leaf_latch = self.inner.latches.get(leaf_id);
             let leaf_write = leaf_latch.write();
             let guard = self.inner.buffer.pin(leaf_id)?;
@@ -105,7 +107,7 @@ impl BtreeIndex {
             let page_ref = page
                 .page
                 .as_mut()
-                .ok_or(Error::CorruptPage("resident frame missing page"))?;
+                .ok_or_else(|| Error::CorruptPage("resident frame missing page"))?;
             let header = Self::read_page_header(page_ref)?;
             if header.kind != PAGE_LEAF_KIND {
                 return Err(Error::CorruptPage("expected leaf page"));
@@ -184,7 +186,7 @@ impl BtreeIndex {
                 let page_ref = page
                     .page
                     .as_mut()
-                    .ok_or(Error::CorruptPage("resident frame missing page"))?;
+                    .ok_or_else(|| Error::CorruptPage("resident frame missing page"))?;
                 let mut staged = page_ref.clone();
                 Self::rewrite_leaf(
                     &mut staged,
@@ -250,7 +252,9 @@ impl BtreeIndex {
                 drop(leaf_write);
                 let _structure = self.lock_structure()?;
                 let path = self.find_leaf_path(self.meta()?.root_page_id, physical.as_slice())?;
-                let leaf_id = *path.last().ok_or(Error::CorruptPage("empty search path"))?;
+                let leaf_id = *path
+                    .last()
+                    .ok_or_else(|| Error::CorruptPage("empty search path"))?;
                 self.split_leaf_and_insert(
                     &path[..path.len().saturating_sub(1)],
                     leaf_id,
@@ -273,7 +277,7 @@ impl BtreeIndex {
             let page_ref = page
                 .page
                 .as_mut()
-                .ok_or(Error::CorruptPage("resident frame missing page"))?;
+                .ok_or_else(|| Error::CorruptPage("resident frame missing page"))?;
             let mut staged = page_ref.clone();
             if super::insert_leaf::direct_leaf_insert_enabled() {
                 super::insert_leaf::insert_one_cell(&mut staged, slot, &entries[slot])?;

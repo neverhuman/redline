@@ -156,7 +156,7 @@ pub fn path_eval<'a>(jsonb: &'a [u8], compiled: &CompiledPath) -> Result<Option<
             Op::LoadObjKey(id) => {
                 let key = compiled
                     .key_literal(*id)
-                    .ok_or(Error::InvalidJsonPath("missing key literal"))?;
+                    .ok_or_else(|| Error::InvalidJsonPath("missing key literal"))?;
                 let t = read_tag(jsonb, cursor)?;
                 if t != tag::OBJECT {
                     return Ok(None);

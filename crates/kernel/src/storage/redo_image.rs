@@ -50,7 +50,7 @@ impl BufferPool {
         let resident = frame
             .page
             .as_mut()
-            .ok_or(Error::CorruptPage("resident frame missing page"))?;
+            .ok_or_else(|| Error::CorruptPage("resident frame missing page"))?;
         if resident.header()?.page_lsn >= lsn {
             return Ok(false);
         }

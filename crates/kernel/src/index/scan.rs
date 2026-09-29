@@ -192,7 +192,7 @@ impl BtreeIndex {
             if header.kind == PAGE_INTERNAL_KIND {
                 let child = header
                     .left
-                    .ok_or(Error::CorruptPage("internal page missing leftmost child"))?;
+                    .ok_or_else(|| Error::CorruptPage("internal page missing leftmost child"))?;
                 return Ok(Some(child));
             }
             Err(Error::CorruptPage(

@@ -67,7 +67,7 @@ impl TupleVersion {
         }
         TUPLE_HEADER_LEN
             .checked_add(self.payload.len())
-            .ok_or(Error::CorruptPage("tuple length overflow"))
+            .ok_or_else(|| Error::CorruptPage("tuple length overflow"))
     }
 
     pub fn encode(&self) -> Result<Vec<u8>> {
@@ -107,7 +107,7 @@ impl TupleVersion {
         let payload_len = read_u32(bytes, 56)? as usize;
         let end = TUPLE_HEADER_LEN
             .checked_add(payload_len)
-            .ok_or(Error::CorruptPage("tuple length overflow"))?;
+            .ok_or_else(|| Error::CorruptPage("tuple length overflow"))?;
         if bytes.len() < end {
             return Err(Error::BufferTooSmall {
                 needed: end,

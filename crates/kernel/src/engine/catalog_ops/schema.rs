@@ -47,7 +47,7 @@ impl Engine {
             .tables
             .last()
             .cloned()
-            .ok_or(Error::CatalogCorrupt("created table missing from snapshot"))?;
+            .ok_or_else(|| Error::CatalogCorrupt("created table missing from snapshot"))?;
         tx.set_pending_schema_snapshot(Arc::clone(&next));
         Ok(table)
     }
@@ -92,7 +92,7 @@ impl Engine {
             .views
             .last()
             .cloned()
-            .ok_or(Error::CatalogCorrupt("created view missing from snapshot"))?;
+            .ok_or_else(|| Error::CatalogCorrupt("created view missing from snapshot"))?;
         tx.set_pending_schema_snapshot(Arc::clone(&next));
         Ok(view)
     }
@@ -118,9 +118,11 @@ impl Engine {
             spec,
         )?;
         let next = Arc::new(next);
-        let trigger = next.triggers.last().cloned().ok_or(Error::CatalogCorrupt(
-            "created trigger missing from snapshot",
-        ))?;
+        let trigger = next
+            .triggers
+            .last()
+            .cloned()
+            .ok_or_else(|| Error::CatalogCorrupt("created trigger missing from snapshot"))?;
         tx.set_pending_schema_snapshot(Arc::clone(&next));
         Ok(trigger)
     }

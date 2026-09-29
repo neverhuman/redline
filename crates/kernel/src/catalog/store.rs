@@ -843,7 +843,8 @@ fn decode_check(reader: &mut BytesReader<'_>) -> Result<CheckDef> {
     Ok(CheckDef {
         constraint_id: super::ConstraintId(reader.u64()?),
         name: read_opt_box_str(reader)?,
-        expr: read_opt_expr(reader)?.ok_or(Error::CatalogCorrupt("missing check expression"))?,
+        expr: read_opt_expr(reader)?
+            .ok_or_else(|| Error::CatalogCorrupt("missing check expression"))?,
     })
 }
 
@@ -1104,7 +1105,10 @@ fn decode_expr_op(reader: &mut BytesReader<'_>) -> Result<ExprOp> {
             let negated = reader.bool()?;
             let escape = if reader.bool()? {
                 let value = reader.u32()?;
-                Some(char::from_u32(value).ok_or(Error::CatalogCorrupt("invalid expr escape"))?)
+                Some(
+                    char::from_u32(value)
+                        .ok_or_else(|| Error::CatalogCorrupt("invalid expr escape"))?,
+                )
             } else {
                 None
             };

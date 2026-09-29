@@ -109,5 +109,5 @@ pub fn lookup_view(
     let schema_id = resolve_schema_id(snapshot, Some(&name.schema))?;
     snapshot
         .lookup_view(schema_id, name.name.folded())
-        .ok_or(Error::ObjectNotFound)
+        .ok_or_else(|| Error::ObjectNotFound)
 }

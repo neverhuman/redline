@@ -241,9 +241,7 @@ impl ConcurrentTxStatus {
         let next =
             tx.0.checked_add(1)
                 .filter(|next| *next < crate::index::NON_TRANSACTIONAL_DELETE_TX.0)
-                .ok_or(Error::CorruptWal(
-                    "wal names a transaction id with no successor",
-                ))?;
+                .ok_or_else(|| Error::CorruptWal("wal names a transaction id with no successor"))?;
         advance_atomic_to_at_least(&self.inner.next_tx, next);
         Ok(())
     }

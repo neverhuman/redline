@@ -177,12 +177,12 @@ impl BtreeIndex {
         let mut ancestors = ancestors.to_vec();
         let first = levels
             .first()
-            .ok_or(Error::CorruptPage("split has no leaf level"))?;
+            .ok_or_else(|| Error::CorruptPage("split has no leaf level"))?;
         let mut current_left = first.left.id();
         let mut current_right = first
             .right
             .as_ref()
-            .ok_or(Error::CorruptPage("split has no right leaf"))?
+            .ok_or_else(|| Error::CorruptPage("split has no right leaf"))?
             .id();
         let mut current_separator = separator;
         let mut left_level = 1_u16;

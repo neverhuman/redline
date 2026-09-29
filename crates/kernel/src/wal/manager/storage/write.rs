@@ -152,7 +152,7 @@ impl<Fs: FileSystem> WalManager<Fs> {
     ) -> Result<WalAppend> {
         let encoded_len = WAL_HEADER_LEN
             .checked_add(payload.len())
-            .ok_or(Error::CorruptWal("record length overflow"))?;
+            .ok_or_else(|| Error::CorruptWal("record length overflow"))?;
         self.settle_torn_tail()?;
         let append = self.reserve_append(encoded_len as u64)?;
         let record = WalRecord {

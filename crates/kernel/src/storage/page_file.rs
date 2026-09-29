@@ -142,7 +142,7 @@ impl<Fs: FileSystem> PageFile<Fs> {
             .0
             .checked_sub(1)
             .and_then(|idx| idx.checked_mul(self.page_size as u64))
-            .ok_or(Error::CorruptPage("page offset overflow"))
+            .ok_or_else(|| Error::CorruptPage("page offset overflow"))
     }
 }
 

@@ -79,7 +79,7 @@ impl UndoRecord {
         let image_len = read_u32(bytes, 32)? as usize;
         let end = UNDO_HEADER_LEN
             .checked_add(image_len)
-            .ok_or(Error::CorruptPage("undo length overflow"))?;
+            .ok_or_else(|| Error::CorruptPage("undo length overflow"))?;
         if bytes.len() < end {
             return Err(Error::BufferTooSmall {
                 needed: end,

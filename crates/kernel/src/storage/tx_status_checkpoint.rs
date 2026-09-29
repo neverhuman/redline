@@ -110,7 +110,7 @@ impl TxStatusCheckpoint {
         }
         let len = TX_STATUS_HEADER_LEN
             .checked_add(self.entries.len() * TX_STATUS_ENTRY_LEN)
-            .ok_or(Error::CorruptPage("tx status checkpoint length overflow"))?;
+            .ok_or_else(|| Error::CorruptPage("tx status checkpoint length overflow"))?;
         let mut out = vec![0; len];
         write_u32(&mut out, 0, TX_STATUS_MAGIC)?;
         write_u32(&mut out, 4, TX_STATUS_VERSION)?;
@@ -156,7 +156,7 @@ impl TxStatusCheckpoint {
         let entry_count = read_u32(bytes, 12)? as usize;
         let needed = TX_STATUS_HEADER_LEN
             .checked_add(entry_count * TX_STATUS_ENTRY_LEN)
-            .ok_or(Error::CorruptPage("tx status checkpoint length overflow"))?;
+            .ok_or_else(|| Error::CorruptPage("tx status checkpoint length overflow"))?;
         if bytes.len() != needed {
             return Err(Error::BufferTooSmall {
                 needed,

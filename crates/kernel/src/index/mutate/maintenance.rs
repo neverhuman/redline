@@ -13,7 +13,7 @@ impl BtreeIndex {
         let page_ref = page
             .page
             .as_mut()
-            .ok_or(Error::CorruptPage("resident frame missing page"))?;
+            .ok_or_else(|| Error::CorruptPage("resident frame missing page"))?;
         let header = Self::read_page_header(page_ref)?;
         if header.kind != PAGE_LEAF_KIND {
             return Err(Error::CorruptPage("expected leaf page"));
@@ -57,7 +57,7 @@ impl BtreeIndex {
         let page_ref = page
             .page
             .as_mut()
-            .ok_or(Error::CorruptPage("resident frame missing page"))?;
+            .ok_or_else(|| Error::CorruptPage("resident frame missing page"))?;
         let header = Self::read_page_header(page_ref)?;
         if header.kind != PAGE_LEAF_KIND {
             return Err(Error::CorruptPage("expected leaf page"));
