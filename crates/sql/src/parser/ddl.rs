@@ -738,10 +738,14 @@ pub(crate) fn bind_alter_table(
             }
             let mut alter_constraints = Vec::new();
             let mut identities = Vec::new();
+            // A CHECK on the new column may name it and the columns before it.
+            let ordinal = alter_target_lookup.len();
+            let mut column_lookup = alter_target_lookup.clone();
+            column_lookup.insert(column_def.name.value.to_ascii_lowercase(), ordinal);
             let column = convert_column_def(
                 column_def,
-                0,
-                &std::collections::HashMap::new(),
+                ordinal,
+                &column_lookup,
                 &mut alter_constraints,
                 &mut identities,
             )?;
@@ -754,11 +758,13 @@ pub(crate) fn bind_alter_table(
             if column.constraints.iter().any(|constraint| {
                 !matches!(
                     constraint,
-                    ColumnConstraintSpec::NotNull { .. } | ColumnConstraintSpec::Default { .. }
+                    ColumnConstraintSpec::NotNull { .. }
+                        | ColumnConstraintSpec::Default { .. }
+                        | ColumnConstraintSpec::Check { .. }
                 )
             }) {
                 return Err(Error::UnsupportedSql(
-                    "ALTER TABLE ADD COLUMN supports NOT NULL and DEFAULT only".to_owned(),
+                    "ALTER TABLE ADD COLUMN supports NOT NULL, DEFAULT and CHECK only".to_owned(),
                 ));
             }
             if column

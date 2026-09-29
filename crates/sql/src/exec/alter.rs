@@ -117,6 +117,40 @@ pub(super) fn convert_rows_to_new_type(
     Ok(())
 }
 
+/// `ADD COLUMN ... CHECK`: as sqlite3 (3.37 and later) does, test the
+/// table's CHECKs against every row already stored, with the new column at
+/// its default, so the ALTER fails and changes nothing if a row breaks one.
+pub(super) fn check_rows_after_add_column(
+    conn: &Connection,
+    tx: &mut Txn,
+    spec: &redlinedb_kernel::catalog::AlterTableSpec,
+) -> Result<()> {
+    let AlterTableOperationSpec::AddColumn { column, .. } = &spec.operation else {
+        return Ok(());
+    };
+    if !column.constraints.iter().any(|constraint| {
+        matches!(
+            constraint,
+            redlinedb_kernel::catalog::ColumnConstraintSpec::Check { .. }
+        )
+    }) {
+        return Ok(());
+    }
+    let snapshot = conn.engine().schema_snapshot_for_tx(tx);
+    let schema_id = resolve_schema_id(&snapshot, Some(&spec.name.schema))?;
+    let Some(table) = snapshot.lookup_table(schema_id, spec.name.name.folded()) else {
+        return Ok(());
+    };
+    for row in collect_table_rows(conn.engine(), tx, &table)? {
+        let mut values = row.values;
+        for column in table.columns.iter().skip(values.len()) {
+            values.push(column.default_value.clone().unwrap_or(SqlValue::Null));
+        }
+        apply_constraints(&table, &values)?;
+    }
+    Ok(())
+}
+
 /// Same storage class and the same value, REAL compared by its bits.
 fn same_stored_value(a: &SqlValue, b: &SqlValue) -> bool {
     match (a, b) {

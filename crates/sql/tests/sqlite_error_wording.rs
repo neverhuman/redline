@@ -218,6 +218,13 @@ fn functions_and_subqueries_misused() {
 }
 
 #[test]
+fn raise_is_refused_outside_a_trigger() {
+    // 10570
+    assert_sqlite_wording(&[], "SELECT RAISE(ABORT, 'no')");
+    assert_sqlite_wording(&[], "SELECT RAISE(IGNORE)");
+}
+
+#[test]
 fn table_definitions_sqlite_refuses() {
     // 10097, 10098
     assert_sqlite_wording(&[], "CREATE TABLE t(a VARCHAR) STRICT");

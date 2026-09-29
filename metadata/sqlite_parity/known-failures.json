@@ -43,22 +43,6 @@
       "owner": "Phase 4l: RedlineDB CLI dot-command and option output"
     },
     {
-      "suite": "sqlite_parity",
-      "case_id": "10413",
-      "name": "ADD_COLUMN_WITH_CHECK_ENFORCED",
-      "stage": "target_semantic_failure",
-      "reason": "A column added by `ALTER TABLE ... ADD COLUMN b INTEGER CHECK (b >= 0)` is not visible to the next INSERT, which fails with `no such column: b` instead of the declared `CHECK constraint failed`.",
-      "owner": "Phase 4l: ADD COLUMN with CHECK (case 10413)"
-    },
-    {
-      "suite": "sqlite_parity",
-      "case_id": "10570",
-      "name": "RAISE_OUTSIDE_TRIGGER",
-      "stage": "target_semantic_failure",
-      "reason": "`SELECT RAISE(ABORT, 'no')` outside a trigger raises the abort (`constraint violation: no`) instead of rejecting RAISE with `RAISE() may only be used within a trigger-program`.",
-      "owner": "Phase 4l: RAISE outside a trigger (case 10570)"
-    },
-    {
       "suite": "memory",
       "case_id": "00076",
       "name": "EXPLAIN_BYTECODE",
@@ -97,22 +81,6 @@
       "stage": "target_semantic_failure",
       "reason": "`-pcachetrace` is accepted but prints nothing; the case declares the PCACHETRACE page-cache trace on stderr.",
       "owner": "Phase 4l: RedlineDB CLI dot-command and option output"
-    },
-    {
-      "suite": "memory",
-      "case_id": "10413",
-      "name": "ADD_COLUMN_WITH_CHECK_ENFORCED",
-      "stage": "target_semantic_failure",
-      "reason": "A column added by `ALTER TABLE ... ADD COLUMN b INTEGER CHECK (b >= 0)` is not visible to the next INSERT, which fails with `no such column: b` instead of the declared `CHECK constraint failed`.",
-      "owner": "Phase 4l: ADD COLUMN with CHECK (case 10413)"
-    },
-    {
-      "suite": "memory",
-      "case_id": "10570",
-      "name": "RAISE_OUTSIDE_TRIGGER",
-      "stage": "target_semantic_failure",
-      "reason": "`SELECT RAISE(ABORT, 'no')` outside a trigger raises the abort (`constraint violation: no`) instead of rejecting RAISE with `RAISE() may only be used within a trigger-program`.",
-      "owner": "Phase 4l: RAISE outside a trigger (case 10570)"
     }
   ]
 }

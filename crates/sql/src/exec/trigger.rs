@@ -52,6 +52,12 @@ thread_local! {
     static RUNNING: RefCell<Vec<RunningTrigger>> = const { RefCell::new(Vec::new()) };
 }
 
+/// Whether a trigger program is running on this thread, the only place
+/// `RAISE()` may be evaluated.
+pub(crate) fn in_trigger_program() -> bool {
+    RUNNING.with(|stack| !stack.borrow().is_empty())
+}
+
 /// One running trigger program: which connection runs which trigger.
 /// Triggers another connection runs on this thread (from a callback) are
 /// separate programs with their own depth.

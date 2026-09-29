@@ -109,7 +109,8 @@
       "proof_kind": "semantic_match",
       "tests": [
         "crates/sql/tests/parity_coverage.rs::alter_table_rename_to",
-        "crates/sql/tests/parity_coverage.rs::alter_table_rename_column"
+        "crates/sql/tests/parity_coverage.rs::alter_table_rename_column",
+        "crates/sql/tests/alter_add_column_check.rs::stored_rows_are_tested_with_the_new_default"
       ],
       "artifacts": [],
       "corpus_case_ids": [
@@ -119,7 +120,7 @@
       ],
       "open_subfeatures": [
         "ADD COLUMN and DROP COLUMN variants are outside the covered subset",
-        "a CHECK on an added column is not visible to the next INSERT (case 10413)"
+        "after ADD COLUMN the stored CREATE TABLE text is rebuilt without the table's CHECK and UNIQUE clauses (they are still enforced), so `.schema` and `.dump` omit them"
       ],
       "owner": "sql-parser-planner-executor",
       "notes": "The official sqlite_parity corpus covers rename of tables and columns."
@@ -346,7 +347,8 @@
         "crates/sql/tests/launch_trigger_chains.rs::self_trigger_is_skipped_when_off_and_nests_when_on",
         "crates/sql/tests/launch_trigger_chains.rs::instead_of_self_insert_does_not_recurse",
         "crates/sql/tests/launch_trigger_chains.rs::trigger_depth_cap_boundary",
-        "crates/sql/tests/launch_trigger_chains.rs::failing_body_leaves_no_partial_effects"
+        "crates/sql/tests/launch_trigger_chains.rs::failing_body_leaves_no_partial_effects",
+        "crates/sql/tests/sqlite_error_wording.rs::raise_is_refused_outside_a_trigger"
       ],
       "artifacts": [],
       "corpus_case_ids": [
@@ -358,7 +360,7 @@
         "trigger programs nest at most 8 deep, where SQLite allows 1000; the ninth fails its statement with \"too many levels of trigger recursion\", which the C API reports as SQLITE_MISUSE rather than SQLITE_ERROR",
         "a CASE ... END expression inside a trigger body fails to parse",
         "a dropped trigger's name cannot be used again: CREATE TRIGGER fails with \"object already exists\"",
-        "RAISE outside a trigger raises instead of being rejected (case 10570)"
+        "RAISE outside a trigger is refused when it is evaluated, not when the statement is prepared as in SQLite, so a RAISE that never runs (a SELECT over no rows) is not refused"
       ],
       "owner": "sql-parser-planner-executor",
       "notes": "The official sqlite_parity corpus covers `CREATE TRIGGER {BEFORE|AFTER} {INSERT|UPDATE [OF col,...]|DELETE}` plus `DROP TRIGGER`, including `OLD`/`NEW` and `UPDATE OF`. `recursive_triggers` follows SQLite: when off, only a trigger that is already running is not fired again, so chains of distinct triggers run to any depth; when on, triggers nest up to the cap. A failed trigger fails its statement: outside an explicit transaction the statement changes nothing, and inside one the transaction must be rolled back."
