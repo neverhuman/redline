@@ -59,7 +59,6 @@ fn cell(figure: Option<&Figure>, unit: &str) -> String {
             median: Some(value),
             ..
         }) => rate(*value, unit),
-        Some(figure) if figure.timed_out_runs > 0 => "timed out".to_owned(),
         _ => "—".to_owned(),
     }
 }
@@ -147,20 +146,26 @@ pub fn block(summary: &Summary, bundle_path: &str) -> Result<String> {
                 None => "—".to_owned(),
             });
         }
-        row.push(cell(workload.throughput.get("sqlite"), &workload.unit));
+        row.push(cell(
+            workload.throughput.get(&format!("sqlite@{newest}")),
+            &workload.unit,
+        ));
         row.push(ratio(workload.vs_sqlite.get(newest).and_then(|f| f.median)));
         out.push_str(&format!("| {} |\n", row.join(" | ")));
     }
     out.push('\n');
     out.push_str(&format!(
         "Throughput, higher is better, except open times. Each figure is the median of {runs} runs, \
-each the median of up to five repetitions of the same fixed work on a fresh copy of a \
-{rows}-row database, in one process on one thread. RedlineDB `Normal` durability is paired \
-with {sqlite_name} in WAL mode with `synchronous=NORMAL`: a commit survives a process crash, \
-not a power loss. Each engine has a 64 MiB page cache; SQLite uses 4 KiB pages and no mmap. \
-The files are on tmpfs, so no device cost is measured. The last column is RedlineDB's \
-throughput over SQLite's in the same runs; below 1 means SQLite is faster.",
+each the median of {reps} repetitions (3 when one takes over 10 s) of the same fixed work on a \
+fresh copy of a {rows}-row database, in one process, with every query on the calling thread. \
+RedlineDB `Normal` durability is paired with {sqlite_name} in WAL mode with \
+`synchronous=NORMAL` and `locking_mode=EXCLUSIVE`: a commit survives a process crash, not a \
+power loss, and one process owns the database. Each engine has a 64 MiB page cache; SQLite \
+uses 4 KiB pages and no mmap. The files are on tmpfs, so no device cost is measured. SQLite \
+is measured beside the newest version in the same runs, and the last column is RedlineDB's \
+throughput over that SQLite's; below 1 means SQLite is faster.",
         runs = summary.runs,
+        reps = summary.reps,
         rows = summary.rows,
     ));
     if noise {

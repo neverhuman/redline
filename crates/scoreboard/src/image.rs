@@ -77,6 +77,7 @@ pub fn amount_of(event: i64) -> i64 {
 /// Create the schema and load every table, each in one transaction, then
 /// analyze and checkpoint.
 pub fn build<D: Driver>(driver: &D, rows: u64) -> Result<()> {
+    driver.verify()?;
     let scale = Scale::new(rows);
     driver.batch(SCHEMA)?;
     driver.begin()?;
@@ -128,17 +129,22 @@ pub fn build<D: Driver>(driver: &D, rows: u64) -> Result<()> {
     driver.checkpoint()
 }
 
-/// Apply [`IMAGE_UPDATES`] autocommit updates, leaving them in the log.
-pub fn apply_updates<D: Driver>(driver: &D, rows: u64) -> Result<()> {
+/// Apply [`IMAGE_UPDATES`] autocommit updates, then close leaving them in
+/// the log (the caller has stopped the engine folding the log in meanwhile).
+pub fn apply_updates<D: Driver>(driver: D, rows: u64) -> Result<()> {
+    driver.verify()?;
     let scale = Scale::new(rows);
-    let mut stmt = driver.prepare("UPDATE events SET amount = amount + 1 WHERE id = ?")?;
-    for i in 0..IMAGE_UPDATES {
-        D::run(&mut stmt, &[Arg::Int(1 + mix(i, scale.events))], 0)?;
+    {
+        let mut stmt = driver.prepare("UPDATE events SET amount = amount + 1 WHERE id = ?")?;
+        for i in 0..IMAGE_UPDATES {
+            D::run(&mut stmt, &[Arg::Int(1 + mix(i, scale.events))], 0)?;
+        }
     }
-    Ok(())
+    driver.close_leaving_log()
 }
 
-/// Copy the directory `from` to `to`, which must not exist.
+/// Copy the directory `from` to `to`, which must not exist, and sync every
+/// file and directory, so a timed fsync does not also write the copy.
 pub fn copy_dir(from: &Path, to: &Path) -> Result<()> {
     fs::create_dir_all(to).with_context(|| format!("create {}", to.display()))?;
     for entry in fs::read_dir(from).with_context(|| format!("read {}", from.display()))? {
@@ -149,8 +155,10 @@ pub fn copy_dir(from: &Path, to: &Path) -> Result<()> {
         } else {
             fs::copy(entry.path(), &target)
                 .with_context(|| format!("copy {}", entry.path().display()))?;
+            fs::File::open(&target)?.sync_all()?;
         }
     }
+    fs::File::open(to)?.sync_all()?;
     Ok(())
 }
 

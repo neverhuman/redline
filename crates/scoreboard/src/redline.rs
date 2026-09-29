@@ -23,7 +23,8 @@ pub struct Redline {
 
 impl Redline {
     /// Open (or create) the database at `path` with the pair's durability,
-    /// a 64 MiB page cache and one query thread.
+    /// a 64 MiB page cache and queries on the calling thread. Settings are
+    /// checked by [`Driver::verify`], outside any timed open.
     pub fn open(path: &Path, pair: Pair) -> Result<Self> {
         let options = OpenOptions {
             durability: match pair {
@@ -33,44 +34,24 @@ impl Redline {
             memory: MemoryOptions {
                 cache_bytes: CACHE_BYTES,
             },
+            // `Some(1)` disables the query pool: every query runs on the
+            // calling thread. The engine's own WAL-writer and prefetch
+            // threads run as they always do.
             rayon_threads: Some(1),
             ..OpenOptions::default()
         };
         let db = Database::open_with_options(path, options)
             .with_context(|| format!("open {}", path.display()))?;
         let conn = db.connect()?;
-        let driver = Self {
+        Ok(Self {
             db,
             conn: RefCell::new(conn),
             pair,
-        };
-        driver.check_settings()?;
-        Ok(driver)
+        })
     }
 
-    /// Refuse to measure unless the engine runs the pair's durability and
-    /// one query thread.
-    fn check_settings(&self) -> Result<()> {
-        let durability = self.db.commit_durability();
-        let wanted = match self.pair {
-            Pair::Normal => redlinedb::CommitDurability::Normal,
-            Pair::Strict => redlinedb::CommitDurability::Strict,
-        };
-        if durability != wanted {
-            bail!(
-                "redline runs {durability:?}, the {} pair needs {wanted:?}",
-                self.pair
-            );
-        }
-        // `rayon_threads = Some(1)` disables the query pool, which then
-        // reports 0 threads: every query runs on the calling thread.
-        if self.db.rayon_thread_count() > 1 {
-            bail!(
-                "redline runs a {}-thread query pool; the scoreboard is single-threaded",
-                self.db.rayon_thread_count()
-            );
-        }
-        Ok(())
+    fn cache_bytes(&self) -> usize {
+        self.db.buffer_pool_pages() * redlinedb_kernel::format::DEFAULT_PAGE_SIZE
     }
 }
 
@@ -82,6 +63,34 @@ impl Driver for Redline {
 
     fn engine_version(&self) -> String {
         format!("redlinedb {}", env!("CARGO_PKG_VERSION"))
+    }
+
+    fn verify(&self) -> Result<()> {
+        let durability = self.db.commit_durability();
+        let wanted = match self.pair {
+            Pair::Normal => redlinedb::CommitDurability::Normal,
+            Pair::Strict => redlinedb::CommitDurability::Strict,
+        };
+        if durability != wanted {
+            bail!(
+                "redline runs {durability:?}, the {} pair needs {wanted:?}",
+                self.pair
+            );
+        }
+        // A disabled query pool reports 0 threads.
+        if self.db.rayon_thread_count() > 1 {
+            bail!(
+                "redline runs a {}-thread query pool; the scoreboard runs queries on one thread",
+                self.db.rayon_thread_count()
+            );
+        }
+        if self.cache_bytes() != CACHE_BYTES {
+            bail!(
+                "redline's page cache is {} bytes, not the {CACHE_BYTES} the pairs use",
+                self.cache_bytes()
+            );
+        }
+        Ok(())
     }
 
     fn prepare(&self, sql: &str) -> Result<OwnedStatement> {
@@ -98,18 +107,19 @@ impl Driver for Redline {
             }
         }
         let mut rows = Rows::default();
+        let mut values = Vec::with_capacity(columns);
         while let OwnedStep::Row = stmt.step()? {
-            rows.count += 1;
+            values.clear();
             for column in 0..columns {
-                let part = match stmt.column_ref(column)? {
+                values.push(match stmt.column_ref(column)? {
                     ValueRef::Integer(value) => value,
                     ValueRef::Real(value) => value as i64,
                     ValueRef::Text(text) => text.len() as i64,
                     ValueRef::Blob(blob) => blob.len() as i64,
                     ValueRef::Null => 0,
-                };
-                rows.digest = rows.digest.wrapping_add(part);
+                });
             }
+            rows.push_row(values.iter().copied());
         }
         Ok(rows)
     }
@@ -132,16 +142,22 @@ impl Driver for Redline {
         Ok(())
     }
 
+    fn close_leaving_log(self) -> Result<()> {
+        // RedlineDB does not checkpoint when a database closes.
+        drop(self);
+        Ok(())
+    }
+
     fn settings(&self) -> Result<serde_json::Value> {
         Ok(serde_json::json!({
             "durability": format!("{:?}", self.db.commit_durability()),
-            "cache_bytes": CACHE_BYTES,
+            "cache_bytes": self.cache_bytes(),
             "buffer_pool_pages": self.db.buffer_pool_pages(),
             "query_pool_threads": self.db.rayon_thread_count(),
         }))
     }
 
-    fn counters(&self) -> Option<serde_json::Value> {
+    fn counters() -> Option<serde_json::Value> {
         serde_json::to_value(redlinedb_kernel::observe::snapshot()).ok()
     }
 }

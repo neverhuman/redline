@@ -3,14 +3,13 @@
 //! one JSON line.
 
 use std::path::{Path, PathBuf};
-use std::time::Instant;
 
 use anyhow::{Context, Result};
 use serde::Serialize;
 
 use crate::driver::Driver;
 use crate::image::{self, ImageKind};
-use crate::measure::{self, Io, Latency};
+use crate::measure::{self, Latency};
 use crate::pair::{Engine, Pair};
 use crate::redline::Redline;
 use crate::sqlite::Sqlite;
@@ -73,8 +72,12 @@ pub fn build_image(
             image::copy_dir(base, out)?;
             let path = db_path(out, engine);
             match engine {
-                Engine::Redline => image::apply_updates(&Redline::open(&path, Pair::Normal)?, rows),
-                Engine::Sqlite => image::apply_updates(&Sqlite::open(&path, Pair::Normal)?, rows),
+                Engine::Redline => image::apply_updates(Redline::open(&path, Pair::Normal)?, rows),
+                Engine::Sqlite => {
+                    let sqlite = Sqlite::open(&path, Pair::Normal)?;
+                    sqlite.keep_log()?;
+                    image::apply_updates(sqlite, rows)
+                }
             }
         }
     }
@@ -119,35 +122,21 @@ fn measure_with<D: Driver>(open: impl Fn() -> Result<D>, shape: &Shape<'_>) -> R
         pair,
         divisor,
     } = *shape;
-    let (driver, timed, usage_before, io_before, counters_before) = if workloads::is_open(workload)
-    {
-        // Opening is the measurement: nothing is opened before the clock.
-        let usage_before = measure::usage();
-        let io_before = measure::io();
-        let start = Instant::now();
+    let (driver, timed) = if workloads::is_open(workload) {
+        // Opening is the measurement: nothing is opened before the clock,
+        // and the settings are read back only after it stops.
+        let clock = workloads::Clock::start::<D>();
         let driver = open()?;
         let digest = workloads::first_read(&driver, rows)?;
-        let timed = workloads::Timed {
-            ops: 1,
-            elapsed: start.elapsed(),
-            digest,
-            latency_ns: Vec::new(),
-        };
-        (driver, timed, usage_before, io_before, None)
+        let timed = clock.done(1, digest);
+        driver.verify()?;
+        (driver, timed)
     } else {
         let driver = open()?;
+        driver.verify()?;
         workloads::warm(&driver)?;
-        let counters_before = driver.counters();
-        let usage_before = measure::usage();
-        let io_before = measure::io();
         let timed = workloads::run(&driver, workload, rows, pair, divisor)?;
-        (driver, timed, usage_before, io_before, counters_before)
-    };
-    let usage_after = measure::usage();
-    let io_after: Io = measure::io().since(io_before);
-    let counters = match (driver.counters(), counters_before) {
-        (Some(after), Some(before)) => Some(measure::counters_since(&after, &before)),
-        _ => None,
+        (driver, timed)
     };
     let latency: Option<Latency> = measure::latency(timed.latency_ns);
     let engine_version = driver.engine_version();
@@ -166,12 +155,12 @@ fn measure_with<D: Driver>(open: impl Fn() -> Result<D>, shape: &Shape<'_>) -> R
         work_divisor: divisor,
         ops: timed.ops,
         elapsed_ns: timed.elapsed.as_nanos() as u64,
-        cpu_user_ns: usage_after.user_ns.saturating_sub(usage_before.user_ns),
-        cpu_sys_ns: usage_after.sys_ns.saturating_sub(usage_before.sys_ns),
-        rss_peak_kib: usage_after.max_rss_kib,
-        io: serde_json::to_value(io_after)?,
+        cpu_user_ns: timed.cpu_user_ns,
+        cpu_sys_ns: timed.cpu_sys_ns,
+        rss_peak_kib: measure::usage().max_rss_kib,
+        io: serde_json::to_value(timed.io)?,
         latency_ns: latency.map(serde_json::to_value).transpose()?,
-        counters,
+        counters: timed.counters,
         digest: timed.digest,
         settings: driver.settings()?,
     })

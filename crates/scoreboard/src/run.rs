@@ -213,6 +213,29 @@ fn run_child(
         Ok(child) => child,
         Err(err) => return Outcome::Failed(format!("spawn: {err}")),
     };
+    // Drain both pipes while the child runs, so a large stderr cannot fill
+    // a pipe and stall the child until it is killed as timed out.
+    let drain = |pipe: Option<Box<dyn Read + Send>>| {
+        std::thread::spawn(move || {
+            let mut text = String::new();
+            if let Some(mut pipe) = pipe {
+                let _ = pipe.read_to_string(&mut text);
+            }
+            text
+        })
+    };
+    let stdout_reader = drain(
+        child
+            .stdout
+            .take()
+            .map(|p| Box::new(p) as Box<dyn Read + Send>),
+    );
+    let stderr_reader = drain(
+        child
+            .stderr
+            .take()
+            .map(|p| Box::new(p) as Box<dyn Read + Send>),
+    );
     let deadline = Instant::now() + args.budget;
     let status = loop {
         match child.try_wait() {
@@ -226,14 +249,8 @@ fn run_child(
             Err(err) => return Outcome::Failed(format!("wait: {err}")),
         }
     };
-    let mut stdout = String::new();
-    let mut stderr = String::new();
-    if let Some(mut pipe) = child.stdout.take() {
-        let _ = pipe.read_to_string(&mut stdout);
-    }
-    if let Some(mut pipe) = child.stderr.take() {
-        let _ = pipe.read_to_string(&mut stderr);
-    }
+    let stdout = stdout_reader.join().unwrap_or_default();
+    let stderr = stderr_reader.join().unwrap_or_default();
     if !status.success() {
         return Outcome::Failed(format!("exit {status}: {}", stderr.trim()));
     }
