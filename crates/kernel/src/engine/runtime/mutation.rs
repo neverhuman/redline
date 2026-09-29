@@ -76,6 +76,12 @@ impl Engine {
         Ok(row_id)
     }
 
+    /// Insert a row at `row_id`. Like an update or a delete, it takes the
+    /// row lock first, so two writers of one row id run one after the other.
+    /// Once the lock is held, a row that the latest committed state or `tx`'s
+    /// own writes show at `row_id` makes the insert fail with
+    /// [`Error::RowIdInUse`]: writing over it would lose that row, whatever
+    /// `tx`'s snapshot shows.
     pub fn insert_for_relation(
         &self,
         tx: &mut Txn,
@@ -84,9 +90,31 @@ impl Engine {
         payload: Vec<u8>,
     ) -> Result<()> {
         tx.ensure_open()?;
+        self.lock_row_in_rel(tx, rel_id, row_id)?;
+        if self.row_id_held(tx, rel_id, row_id)? {
+            return Err(Error::RowIdInUse);
+        }
         self.refresh_read_committed(tx);
         self.heap
             .insert_for_relation(tx.id(), rel_id, row_id, payload, Lsn(1))
+    }
+
+    /// Claim `row_id` of `rel_id` for an insert by `tx`, without waiting:
+    /// `true` when `tx` now holds the row lock and no row holds the row id.
+    /// A rowid allocator steps past `false`: another transaction is writing
+    /// that row id, or a row committed after `tx`'s snapshot holds it.
+    pub fn claim_row_id(&self, tx: &mut Txn, rel_id: RelId, row_id: RowId) -> Result<bool> {
+        tx.ensure_open()?;
+        if !self.try_lock_row_in_rel(tx, rel_id, row_id)? {
+            return Ok(false);
+        }
+        Ok(!self.row_id_held(tx, rel_id, row_id)?)
+    }
+
+    /// Whether a row that the latest committed state or `tx`'s own writes
+    /// show holds `row_id`.
+    fn row_id_held(&self, tx: &Txn, rel_id: RelId, row_id: RowId) -> Result<bool> {
+        Ok(self.get_for_relation_latest(tx, rel_id, row_id)?.is_some())
     }
 
     pub fn reserve_row_id(&self) -> RowId {

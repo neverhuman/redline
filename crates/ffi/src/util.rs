@@ -41,6 +41,7 @@ pub(crate) fn map_error(err: SqlError) -> c_int {
             RLDB_MISMATCH
         }
         SqlError::Kernel(KernelError::ConstraintViolation(_))
+        | SqlError::Kernel(KernelError::RowIdInUse)
         | SqlError::ConstraintViolation(_) => RLDB_CONSTRAINT,
         SqlError::CommitMaybeCommitted
         | SqlError::Kernel(KernelError::WalWriterFailed { .. })

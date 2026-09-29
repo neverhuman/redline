@@ -497,9 +497,7 @@ fn apply_upsert_update(
         ctx.conn
             .engine()
             .delete_for_relation(ctx.tx, ctx.table.relation_id, existing.rowid)?;
-        ctx.conn
-            .engine()
-            .insert_for_relation(ctx.tx, ctx.table.relation_id, new_rowid, payload)?;
+        super::insert_row(ctx.conn, ctx.tx, ctx.table, new_rowid, payload)?;
         super::lower_rowid_allocator_after_delete(ctx.conn, ctx.tx, ctx.table, existing.rowid)?;
     }
     crate::exec::index_dml::maintain_indexes_on_update(
@@ -635,8 +633,7 @@ pub(in crate::exec) fn insert_row_with_resolution(
         // the index insert fails, the kernel rolls back the whole tx so
         // recovery either replays both or neither.
         let payload = encode_sql_row(table.table_id.0, values)?;
-        conn.engine()
-            .insert_for_relation(tx, table.relation_id, rowid, payload)?;
+        super::insert_row(conn, tx, table, rowid, payload)?;
         crate::exec::index_dml::maintain_indexes_on_insert(
             conn.engine(),
             tx,
@@ -754,8 +751,7 @@ fn apply_unique_conflict_resolution(
                     values,
                 )?;
             } else {
-                conn.engine()
-                    .insert_for_relation(tx, table.relation_id, rowid, payload)?;
+                super::insert_row(conn, tx, table, rowid, payload)?;
                 crate::exec::index_dml::maintain_indexes_on_insert(
                     conn.engine(),
                     tx,

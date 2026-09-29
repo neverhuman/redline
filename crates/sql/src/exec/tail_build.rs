@@ -555,17 +555,15 @@ pub(crate) fn choose_rowid_for_update(
     }
 }
 
-/// The next rowid of a table with an INTEGER PRIMARY KEY that no row holds.
-/// Deleting the table's highest rowid lowers its counter so the rowid is
-/// reused, as SQLite's max(rowid)+1 reuses it; if that delete rolls back,
-/// the row is back and the counter must step over it.
-fn reserve_unused_rowid(engine: &Engine, tx: &Txn, table: &TableDef) -> Result<RowId> {
+/// The next rowid of a table with an INTEGER PRIMARY KEY that no row holds,
+/// claimed for this transaction. Deleting the table's highest rowid lowers
+/// its counter so the rowid is reused, as SQLite's max(rowid)+1 reuses it;
+/// a rowid a row still holds (that delete rolled back) or another
+/// transaction is writing is stepped over.
+fn reserve_unused_rowid(engine: &Engine, tx: &mut Txn, table: &TableDef) -> Result<RowId> {
     loop {
         let rowid = engine.reserve_row_id_for(table.relation_id)?;
-        if engine
-            .get_for_relation_latest(tx, table.relation_id, rowid)?
-            .is_none()
-        {
+        if engine.claim_row_id(tx, table.relation_id, rowid)? {
             return Ok(rowid);
         }
     }
@@ -624,9 +622,14 @@ fn sqlite_sequence_next_rowid(
         ));
     }
     let base = current.max(max_live_rowid as i64);
-    let next = base
-        .checked_add(1)
-        .ok_or_else(|| Error::ConstraintViolation("database or disk is full".to_owned()))?;
+    let full = || Error::ConstraintViolation("database or disk is full".to_owned());
+    let mut next = base.checked_add(1).ok_or_else(full)?;
+    // The table was read in this transaction's snapshot. A rowid a row
+    // committed since then holds, or another transaction is writing, is
+    // stepped over, so concurrent inserts take distinct rowids.
+    while !engine.claim_row_id(tx, table.relation_id, RowId::new(next as u64))? {
+        next = next.checked_add(1).ok_or_else(full)?;
+    }
     session.sqlite_sequences.insert(key.to_owned(), next);
     session.sqlite_sequences_dirty.insert(key.to_owned());
     Ok(RowId::new(next as u64))

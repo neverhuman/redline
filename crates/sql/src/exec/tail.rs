@@ -78,6 +78,32 @@ pub(crate) fn restrict_dml_rows(
     Ok(filtered.into_iter().skip(offset_n).take(limit_n).collect())
 }
 
+/// Insert a row version at `rowid`. The kernel refuses a rowid that a row
+/// still holds, one this transaction's snapshot may not show; that is the
+/// key conflict SQLite reports for the table's INTEGER PRIMARY KEY (or
+/// rowid), so it is reported the same way.
+pub(crate) fn insert_row(
+    conn: &Connection,
+    tx: &mut Txn,
+    table: &TableDef,
+    rowid: RowId,
+    payload: Vec<u8>,
+) -> Result<()> {
+    match conn
+        .engine()
+        .insert_for_relation(tx, table.relation_id, rowid, payload)
+    {
+        Err(redlinedb_kernel::Error::RowIdInUse) => {
+            let key: Vec<usize> = table
+                .rowid_alias_column
+                .map(|alias| vec![alias as usize])
+                .unwrap_or_default();
+            Err(crate::sqlite_errors::unique_failed(table, &key, None))
+        }
+        other => Ok(other?),
+    }
+}
+
 /// Called after a row of `table` is deleted, or moved to another rowid. A
 /// table with an INTEGER PRIMARY KEY and no AUTOINCREMENT reuses its
 /// highest rowid once that row is gone, as SQLite's max(rowid)+1 does. Only
@@ -366,12 +392,7 @@ pub(crate) fn execute_update(
             } else {
                 conn.engine()
                     .delete_for_relation(tx, plan.table.relation_id, fresh.rowid)?;
-                conn.engine().insert_for_relation(
-                    tx,
-                    plan.table.relation_id,
-                    new_rowid,
-                    payload,
-                )?;
+                insert_row(conn, tx, &plan.table, new_rowid, payload)?;
                 lower_rowid_allocator_after_delete(conn, tx, &plan.table, fresh.rowid)?;
             }
             crate::exec::index_dml::maintain_indexes_on_update(

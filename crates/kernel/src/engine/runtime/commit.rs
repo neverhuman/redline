@@ -267,6 +267,25 @@ impl Engine {
         Ok(())
     }
 
+    /// [`Self::lock_row_in_rel`] without waiting: `false` when another
+    /// transaction holds the row lock or is queued for it.
+    pub(super) fn try_lock_row_in_rel(
+        &self,
+        tx: &mut Txn,
+        rel_id: RelId,
+        row_id: RowId,
+    ) -> Result<bool> {
+        let key = crate::engine::lock::RowKey { rel_id, row_id };
+        if tx.has_row_lock(key) {
+            return Ok(true);
+        }
+        if !self.locks.try_lock(rel_id, row_id, tx.id())? {
+            return Ok(false);
+        }
+        tx.push_row_lock(key);
+        Ok(true)
+    }
+
     pub(super) fn release_locks(&self, tx: &mut Txn) {
         let tx_id = tx.id();
         for key in tx.drain_row_locks() {

@@ -116,6 +116,7 @@ impl From<redlinedb_sql::Error> for Error {
             SqlError::Kernel(kernel_error::Error::DatatypeMismatch)
             | SqlError::DatatypeMismatch => Self::new(ErrorCode::Mismatch, value.to_string()),
             SqlError::Kernel(kernel_error::Error::ConstraintViolation(_))
+            | SqlError::Kernel(kernel_error::Error::RowIdInUse)
             | SqlError::ConstraintViolation(_) => {
                 Self::new(ErrorCode::Constraint, value.to_string())
             }
