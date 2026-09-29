@@ -31,6 +31,10 @@ pub const MIN_RUNS: u32 = 3;
 pub const SQLITE_DRIFT: f64 = 0.10;
 /// The series name of SQLite records; no version may use it.
 pub const SQLITE: &str = "sqlite";
+/// A speedup counts as beyond noise only when the versions' run ranges do
+/// not overlap and it moves by more than this, or than SQLite's own spread
+/// across the newer version's runs, whichever is larger.
+pub const MIN_EFFECT: f64 = 0.05;
 
 /// `bundle.json`, written by `scripts/perf/scoreboard-bench.sh`.
 #[derive(Debug, Deserialize)]
@@ -134,8 +138,14 @@ struct HostRun {
     label: String,
     run: u32,
     pair: String,
+    /// The run started although the host was still busy.
+    #[serde(default)]
+    waited_out: bool,
     runner_jobs_before: u64,
     runner_jobs_after: u64,
+    /// The most CI jobs seen while the run went on.
+    #[serde(default)]
+    runner_jobs_max: u64,
 }
 
 /// Every raw record file of the bundle: `<label>/run-<k>-<pair>.jsonl`.
@@ -227,13 +237,35 @@ pub fn summarize(bundle: &Path) -> Result<Summary> {
     }
     match fs::read_to_string(bundle.join("runs.jsonl")) {
         Ok(text) => {
+            let mut recorded = BTreeSet::new();
             for line in text.lines().filter(|line| !line.trim().is_empty()) {
                 let run: HostRun = serde_json::from_str(line).context("parse runs.jsonl")?;
-                if run.runner_jobs_before > 0 || run.runner_jobs_after > 0 {
+                if run.waited_out {
+                    blockers.insert(format!(
+                        "{} run {} {}: started on a busy host",
+                        run.label, run.run, run.pair
+                    ));
+                }
+                if run.runner_jobs_before > 0
+                    || run.runner_jobs_after > 0
+                    || run.runner_jobs_max > 0
+                {
                     blockers.insert(format!(
                         "{} run {} {}: a CI job ran on the host during the run",
                         run.label, run.run, run.pair
                     ));
+                }
+                recorded.insert((run.label, run.run, run.pair));
+            }
+            for label in &manifest.labels {
+                for run in 1..=manifest.runs {
+                    for pair in &manifest.pairs {
+                        if !recorded.contains(&(label.clone(), run, pair.to_string())) {
+                            blockers.insert(format!(
+                                "{label} run {run} {pair}: no host record in runs.jsonl"
+                            ));
+                        }
+                    }
                 }
             }
         }
@@ -247,6 +279,7 @@ pub fn summarize(bundle: &Path) -> Result<Summary> {
     let mut records = Vec::new();
     for path in &files {
         let relative = path.strip_prefix(bundle)?.to_string_lossy().into_owned();
+        let owner = relative.split('/').next().unwrap_or_default().to_owned();
         raw.push(RawFile {
             path: relative.clone(),
             sha256: sha256_file(path)?,
@@ -258,6 +291,14 @@ pub fn summarize(bundle: &Path) -> Result<Summary> {
             }
             let record: Record =
                 serde_json::from_str(line).with_context(|| format!("{relative}:{}", number + 1))?;
+            if record.with != owner || (record.label != owner && record.label != SQLITE) {
+                blockers.insert(format!(
+                    "{relative}:{}: a record of {} beside {} in {owner}'s file",
+                    number + 1,
+                    record.label,
+                    record.with
+                ));
+            }
             records.push(record);
         }
     }
@@ -332,7 +373,11 @@ pub fn summarize(bundle: &Path) -> Result<Summary> {
     for pair in &manifest.pairs {
         let pair_name = pair.to_string();
         for entry in selected(&None, *pair)? {
-            let per_run = |series: &str| -> BTreeMap<u32, f64> {
+            // A run counts only with the repetitions the protocol asks for:
+            // all of them, or 3 when one took over 10 s.
+            let needed = manifest.reps.min(3) as usize;
+            let mut short = Vec::new();
+            let mut per_run = |series: &str| -> BTreeMap<u32, f64> {
                 let mut out = BTreeMap::new();
                 for run in 1..=manifest.runs {
                     let key = (
@@ -342,6 +387,13 @@ pub fn summarize(bundle: &Path) -> Result<Summary> {
                         run,
                     );
                     if let Some(values) = samples.get(&key) {
+                        if values.len() < needed {
+                            short.push(format!(
+                                "{series} {pair_name} {} run {run}: {} repetitions, fewer than {needed}",
+                                entry.id,
+                                values.len()
+                            ));
+                        }
                         let mut values = values.clone();
                         if let Some(m) = median(&mut values) {
                             out.insert(run, m);
@@ -382,6 +434,7 @@ pub fn summarize(bundle: &Path) -> Result<Summary> {
                 throughput.insert(sqlite_series(label), beside_figure);
                 runs_of.insert(label.clone(), own);
             }
+            blockers.extend(short.drain(..));
             // Open times are a few milliseconds and vary more than the
             // work the other workloads time, so they are not held to it.
             let low = sqlite_medians.iter().copied().reduce(f64::min);
@@ -410,12 +463,23 @@ pub fn summarize(bundle: &Path) -> Result<Summary> {
                     let fig = figure(&paired);
                     let new_fig = &throughput[label];
                     let old_fig = &throughput[baseline];
-                    let exceeds_noise = match (new_fig.min, new_fig.max, old_fig.min, old_fig.max) {
+                    let apart = match (new_fig.min, new_fig.max, old_fig.min, old_fig.max) {
                         (Some(new_min), Some(new_max), Some(old_min), Some(old_max)) => {
                             new_min > old_max || new_max < old_min
                         }
                         _ => false,
                     };
+                    let sqlite_spread = match &throughput[&sqlite_series(label)] {
+                        Figure {
+                            median: Some(median),
+                            min: Some(min),
+                            max: Some(max),
+                        } if *median > 0.0 => (max - min) / median,
+                        _ => f64::INFINITY,
+                    };
+                    let floor = MIN_EFFECT.max(sqlite_spread);
+                    let exceeds_noise =
+                        apart && fig.median.is_some_and(|value| (value - 1.0).abs() > floor);
                     speedup.insert(
                         format!("{label}/{baseline}"),
                         Speedup {
