@@ -68,8 +68,10 @@ pub fn tables(state: &mut CliState, args: &[&str]) -> Result<DotOutcome, String>
     Ok(DotOutcome::Ok)
 }
 
-/// `.schema [TABLE]` — print stored `CREATE` statements. Pattern is matched
-/// against the object name with LIKE.
+/// `.schema [TABLE]` — print stored `CREATE` statements. As in sqlite3, the
+/// pattern is matched against the lower-cased name of the table each object
+/// belongs to (so a table's indexes and triggers print with it), with GLOB
+/// when it holds `*`, `?` or `[` and with LIKE otherwise.
 ///
 /// Recognises the sqlite3 shell flags `--indent` and `--nosys`. `--indent` is
 /// honoured by stripping the flag (the underlying CREATE text is emitted
@@ -108,11 +110,16 @@ pub fn schema(state: &mut CliState, args: &[&str]) -> Result<DotOutcome, String>
     // sqlite3 emits schema entries in creation order. redlinedb's
     // sqlite_master doesn't expose `rowid`, so we leave ORDER BY off and
     // rely on the catalog returning rows in insertion order.
+    let matcher = if pattern.contains(['*', '?', '[']) {
+        "GLOB ?1"
+    } else {
+        "LIKE ?1 ESCAPE '\\'"
+    };
     let mut stmt = conn
-        .prepare(
+        .prepare(&format!(
             "SELECT sql FROM sqlite_master \
-             WHERE name NOT LIKE 'sqlite_%' AND name LIKE ?1 AND sql IS NOT NULL",
-        )
+             WHERE name NOT LIKE 'sqlite_%' AND lower(tbl_name) {matcher} AND sql IS NOT NULL"
+        ))
         .map_err(|err| err.to_string())?;
     stmt.bind_text(1, pattern).map_err(|err| err.to_string())?;
     while let Step::Row(row) = stmt.step().map_err(|err| err.to_string())? {
@@ -180,33 +187,47 @@ pub fn databases(state: &mut CliState, _args: &[&str]) -> Result<DotOutcome, Str
     Ok(DotOutcome::Ok)
 }
 
-/// `.fullschema [PATTERN]` — like `.schema` but also dumps the contents of
-/// `sqlite_master` so callers can see the raw catalog rows (type, name,
-/// tbl_name, rootpage, sql).
+/// `.fullschema` — the schema, then what sqlite3 needs to reproduce the
+/// planner statistics: `/* No STAT tables available */` when ANALYZE has
+/// not run, and otherwise the `sqlite_stat1` rows as INSERTs between two
+/// `ANALYZE sqlite_schema;` lines.
 pub fn fullschema(state: &mut CliState, args: &[&str]) -> Result<DotOutcome, String> {
     schema(state, args)?;
-    state
-        .output
-        .write_line("/* sqlite_master */")
-        .map_err(|err| err.to_string())?;
     let mut conn = state.db.connect().map_err(|err| err.to_string())?;
+    let mut probe = conn
+        .prepare("SELECT name FROM sqlite_master WHERE name GLOB 'sqlite_stat[134]'")
+        .map_err(|err| err.to_string())?;
+    let has_stats = matches!(probe.step().map_err(|err| err.to_string())?, Step::Row(_));
+    drop(probe);
+    if !has_stats {
+        return state
+            .output
+            .write_line("/* No STAT tables available */")
+            .map(|()| DotOutcome::Ok)
+            .map_err(|err| err.to_string());
+    }
+    let mut lines = vec!["ANALYZE sqlite_schema;".to_owned()];
     let mut stmt = conn
-        .prepare(
-            "SELECT type, name, tbl_name, rootpage, sql FROM sqlite_master \
-             ORDER BY type, name",
-        )
+        .prepare("SELECT tbl, idx, stat FROM sqlite_stat1")
         .map_err(|err| err.to_string())?;
     while let Step::Row(row) = stmt.step().map_err(|err| err.to_string())? {
-        let ty: String = row.get(0).map_err(|err| err.to_string())?;
-        let name: String = row.get(1).map_err(|err| err.to_string())?;
-        let tbl_name: String = row.get(2).map_err(|err| err.to_string())?;
-        let rootpage: i64 = row.get(3).unwrap_or(0);
-        let sql = match row.get::<Option<String>>(4) {
-            Ok(Some(sql)) => sql,
-            Ok(None) => String::new(),
-            Err(err) => return Err(err.to_string()),
-        };
-        let line = format!("{ty}|{name}|{tbl_name}|{rootpage}|{sql}");
+        let mut values = Vec::with_capacity(3);
+        for index in 0..3 {
+            let value = row
+                .get::<Option<String>>(index)
+                .map_err(|err| err.to_string())?;
+            values.push(value.map_or_else(
+                || "NULL".to_owned(),
+                |text| format!("'{}'", text.replace('\'', "''")),
+            ));
+        }
+        lines.push(format!(
+            "INSERT INTO sqlite_stat1 VALUES({});",
+            values.join(",")
+        ));
+    }
+    lines.push("ANALYZE sqlite_schema;".to_owned());
+    for line in lines {
         state
             .output
             .write_line(&line)

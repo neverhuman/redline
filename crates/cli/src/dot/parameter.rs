@@ -34,12 +34,13 @@ impl ParameterValue {
         }
     }
 
-    fn display_value(&self) -> String {
+    /// The value as SQL's `quote()` spells it, which `.parameter list` prints.
+    fn quoted(&self) -> String {
         match self {
             Self::Null => "NULL".to_owned(),
             Self::Integer(value) => value.to_string(),
-            Self::Real(value) => value.to_string(),
-            Self::Text(value) => value.clone(),
+            Self::Real(value) => redlinedb::format_real_sqlite(*value),
+            Self::Text(value) => format!("'{}'", value.replace('\'', "''")),
             Self::Blob(value) => {
                 let mut out = String::from("X'");
                 for byte in value {
@@ -64,10 +65,18 @@ pub fn parameter(state: &mut CliState, args: &[&str]) -> Result<DotOutcome, Stri
             Ok(DotOutcome::Ok)
         }
         "list" => {
+            // sqlite3 pads each name to the longest one and prints the value
+            // quoted, in key order.
+            let width = state
+                .params
+                .keys()
+                .map(|name| name.chars().count())
+                .max()
+                .unwrap_or(0);
             for (name, value) in &state.params {
                 state
                     .output
-                    .write_line(&format!("{name}\t{}", value.display_value()))
+                    .write_line(&format!("{name:<width$} {}", value.quoted()))
                     .map_err(|err| err.to_string())?;
             }
             Ok(DotOutcome::Ok)

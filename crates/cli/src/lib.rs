@@ -36,6 +36,7 @@ mod control_chars;
 mod dot;
 mod line_group;
 mod maintenance;
+pub mod memtrace;
 mod render;
 mod shellzero;
 
@@ -293,6 +294,9 @@ pub fn run() {
     }
 
     let cli = Cli::parse_from(args);
+    if cli.memtrace {
+        memtrace::enable();
+    }
     if let Some(code) = cli.error_exit {
         SQL_ERROR_EXIT.store(code, Ordering::Relaxed);
     }
@@ -409,6 +413,7 @@ pub fn run() {
     // opt-in for the broader audited surface; `--no-shellzero` disables
     // both paths.
     let shellzero_base_eligible = (filename == ":memory:" || filename.is_empty())
+        && cli.escape.is_none()
         && cli.init.is_none()
         && !cli.echo
         && !cli.bail
@@ -454,6 +459,11 @@ pub fn run() {
         && readonly_sidecar_path(std::path::Path::new(&filename)).exists();
     let db_res = if filename == ":memory:" || filename.is_empty() || use_deserialize_sidecar {
         Database::create_in_memory(cli_open_options())
+    } else if cli.readonly && is_empty_file(&filename) {
+        // sqlite3 reads a 0-byte file as an empty database. A RedlineDB
+        // database is a directory, so `-readonly` opens an empty read-only
+        // one in its place; every write is refused as read-only.
+        Database::create_in_memory(cli_open_options().with_read_only(true))
     } else if cli.readonly {
         Database::open_with_options(
             &filename,
@@ -505,7 +515,11 @@ pub fn run() {
     state.echo = cli.echo;
     state.stats = cli.stats;
     state.defer_output_flush = stdin_is_batch || !cli.sql.is_empty();
-    state.escape_symbol = cli.escape.as_deref() == Some("symbol");
+    state.escape = cli
+        .escape
+        .as_deref()
+        .and_then(control_chars::Escape::parse)
+        .unwrap_or_default();
     if let Some(nullvalue) = flag_state.null_value {
         state.null_value = nullvalue;
     }
@@ -729,6 +743,10 @@ fn run_script_file(state: &mut CliState, path: &std::path::Path) -> Result<(), S
     run_input(state, contents)
 }
 
+fn is_empty_file(path: &str) -> bool {
+    fs::metadata(path).is_ok_and(|meta| meta.is_file() && meta.len() == 0)
+}
+
 fn readonly_sidecar_path(db_path: &std::path::Path) -> PathBuf {
     let mut sidecar = db_path.as_os_str().to_os_string();
     sidecar.push(".redlinedb-readonly.sql");
@@ -821,7 +839,12 @@ fn resolve_cli_flags(raw_args: &[String]) -> CliFlagState {
     };
     let mut iter = raw_args.iter();
     while let Some(arg) = iter.next() {
-        let token = arg.trim_start_matches('-');
+        // Only an option names a mode: the value of `-escape ascii`, a SQL
+        // argument or a file named `list` does not.
+        let Some(token) = arg.strip_prefix('-') else {
+            continue;
+        };
+        let token = token.trim_start_matches('-');
         let new_mode = match token {
             "csv" => Some(OutputMode::Csv),
             "json" => Some(OutputMode::Json),
@@ -885,7 +908,7 @@ fn print_sqlite_help() {
     println!("   -ascii               set output mode to 'ascii'");
     println!("   -append              append output to files where supported");
     println!("   -echo                print inputs before execution");
-    println!("   -escape symbol       render control characters as symbolic escapes");
+    println!("   -escape T            ctrl-char escape; T is one of: symbol, ascii, off");
     println!("   -ifexists            refuse to create a missing database");
     println!("   -[no]header          turn headers on or off");
     println!("   -heap N MIN          set heap configuration");
@@ -938,8 +961,12 @@ fn run_query_with_state(state: &mut CliState, sql: &str) -> Result<(), ShellErro
         explain: state.explain,
         stats: state.stats,
         expert: state.expert,
-        escape_symbol: state.escape_symbol,
-        widths: state.widths.clone(),
+        escape: state.escape,
+        widths: state
+            .widths
+            .iter()
+            .map(|w| w.unsigned_abs() as usize)
+            .collect(),
         params,
     };
     let total_changes_before = state.total_changes;
@@ -1013,8 +1040,12 @@ fn run_rql_program_with_state(state: &mut CliState, program: &RqlProgram) -> Res
         explain: state.explain,
         stats: state.stats,
         expert: state.expert,
-        escape_symbol: state.escape_symbol,
-        widths: state.widths.clone(),
+        escape: state.escape,
+        widths: state
+            .widths
+            .iter()
+            .map(|w| w.unsigned_abs() as usize)
+            .collect(),
         params: Vec::new(),
     };
     let total_changes_before = state.total_changes;
@@ -1063,7 +1094,7 @@ struct QueryOptions {
     explain: dot::ExplainSetting,
     stats: bool,
     expert: bool,
-    escape_symbol: bool,
+    escape: control_chars::Escape,
     widths: Vec<usize>,
     params: Vec<(String, dot::parameter::ParameterValue)>,
 }
@@ -1145,7 +1176,7 @@ fn run_query_writer<W: Write>(
                         options.mode,
                         &options.separator,
                         &options.null_value,
-                        options.escape_symbol,
+                        options.escape,
                         stmt.column_ref(index).map_err(|err| err.to_string())?,
                     )?;
                 }
@@ -1246,7 +1277,7 @@ fn run_rql_writer<W: Write>(
                         options.mode,
                         &options.separator,
                         &options.null_value,
-                        options.escape_symbol,
+                        options.escape,
                         stmt.column_ref(index).map_err(|err| err.to_string())?,
                     )?;
                 }

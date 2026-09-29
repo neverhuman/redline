@@ -217,7 +217,13 @@ impl Value {
             Value::Null => null_text.to_owned(),
             Value::Int(i) => i.to_string(),
             Value::Real(f) => format_real(*f),
-            Value::Text(s) => s.clone(),
+            // The shell's default `-escape ascii`; ShellZero stays out of
+            // the way when `-escape` is given.
+            Value::Text(s) => String::from_utf8_lossy(&crate::control_chars::escape(
+                s.as_bytes(),
+                crate::control_chars::Escape::Ascii,
+            ))
+            .into_owned(),
         }
     }
 }
@@ -384,7 +390,9 @@ fn tokenize(input: &str) -> Option<Vec<Token>> {
                 }
             }
             b'\'' => {
-                let mut s = String::new();
+                // Bytes, decoded once at the closing quote: pushing each
+                // byte as a char would re-encode UTF-8 as Latin-1.
+                let mut s = Vec::new();
                 i += 1;
                 loop {
                     if i >= bytes.len() {
@@ -392,18 +400,18 @@ fn tokenize(input: &str) -> Option<Vec<Token>> {
                     }
                     if bytes[i] == b'\'' {
                         if i + 1 < bytes.len() && bytes[i + 1] == b'\'' {
-                            s.push('\'');
+                            s.push(b'\'');
                             i += 2;
                         } else {
                             i += 1;
                             break;
                         }
                     } else {
-                        s.push(bytes[i] as char);
+                        s.push(bytes[i]);
                         i += 1;
                     }
                 }
-                tokens.push(Token::Str(s));
+                tokens.push(Token::Str(String::from_utf8(s).ok()?));
             }
             b'0'..=b'9' | b'.' => {
                 let start = i;
