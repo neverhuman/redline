@@ -358,7 +358,7 @@ pub fn dispatch(state: &mut CliState, line: &str) -> Result<DotOutcome, String> 
         ".dbtotxt" => io_cmd::dbtotxt(state, &args),
         ".recover" => io_cmd::recover(state, &args),
         other => Err(format!(
-            "Error: unknown command or invalid arguments: \"{}\". Enter \".help\" for help",
+            "Error: unknown command or invalid arguments:  \"{}\". Enter \".help\" for help",
             other.trim_start_matches('.')
         )),
     }

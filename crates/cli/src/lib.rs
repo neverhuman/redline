@@ -33,11 +33,13 @@ use redlinedb::{Database, OpenOptions, OwnedStep, RqlProgram, RqlStatement};
 
 mod build_info;
 mod dot;
+mod line_group;
 mod maintenance;
 mod render;
 mod shellzero;
 
 use dot::{CliState, DotOutcome, OutputMode, OutputTarget};
+use line_group::{ShellError, is_alternate_terminator, print_error, run_input};
 use maintenance::run_maintenance;
 use render::{
     Cell, is_streaming_delimited_mode, render_query, write_delimited_row,
@@ -442,7 +444,7 @@ pub fn run() {
         && !filename.is_empty()
         && !PathBuf::from(&filename).exists()
     {
-        eprintln!("Error: unable to open database file");
+        eprintln!("Error: unable to open database \"{filename}\": unable to open database file");
         exit(1);
     }
     let use_deserialize_sidecar = cli.deserialize
@@ -515,14 +517,14 @@ pub fn run() {
     if use_deserialize_sidecar {
         let sidecar = readonly_sidecar_path(std::path::Path::new(&filename));
         if let Err(e) = run_script_file(&mut state, &sidecar) {
-            eprintln!("{e}");
+            print_error(&e);
             exit(1);
         }
     }
 
     if let Some(init) = cli.init {
         if let Err(e) = run_script_file(&mut state, &PathBuf::from(init)) {
-            eprintln!("{e}");
+            print_error(&e);
             exit(1);
         }
     }
@@ -551,7 +553,7 @@ pub fn run() {
 
     for cmd in &cli.cmd {
         if let Err(e) = run_input(&mut state, cmd) {
-            eprintln!("{e}");
+            print_error(&e);
             if state.bail {
                 exit(sql_error_exit());
             }
@@ -562,7 +564,7 @@ pub fn run() {
         let sql = cli.sql.join("\n");
         if let Err(e) = run_input(&mut state, &sql) {
             flush_output_or_exit(&mut state);
-            eprintln!("{e}");
+            print_error(&e);
             exit(sql_error_exit());
         }
         if state.had_error {
@@ -587,7 +589,7 @@ pub fn run() {
         };
         if let Err(e) = run_input(&mut state, &input) {
             flush_output_or_exit(&mut state);
-            eprintln!("{e}");
+            print_error(&e);
             if state.bail {
                 exit(sql_error_exit());
             }
@@ -622,7 +624,7 @@ pub fn run() {
 
                     if !buffer.trim().is_empty() && is_alternate_terminator(line) {
                         if let Err(e) = execute_sql_buffer(&mut state, &buffer) {
-                            eprintln!("{e}");
+                            eprintln!("{}", e.report(None));
                         }
                         buffer.clear();
                         continue;
@@ -633,7 +635,7 @@ pub fn run() {
                             Ok(DotOutcome::Ok) => {}
                             Ok(DotOutcome::ReadFile(path)) => {
                                 if let Err(e) = run_script_file(&mut state, &path) {
-                                    eprintln!("{e}");
+                                    print_error(&e);
                                 }
                             }
                             Ok(DotOutcome::Exit(code)) => {
@@ -651,7 +653,7 @@ pub fn run() {
 
                     if redlinedb::sql_input_complete(&buffer) {
                         if let Err(e) = execute_sql_buffer(&mut state, &buffer) {
-                            eprintln!("{e}");
+                            eprintln!("{}", e.report(None));
                         }
                         buffer.clear();
                     }
@@ -669,111 +671,6 @@ pub fn run() {
             }
         }
     }
-}
-
-/// Drive a chunk of SQL with optional embedded dot-commands. Used by `--cmd`.
-fn run_input(state: &mut CliState, input: &str) -> Result<(), String> {
-    if !input_has_batch_control_lines(input) {
-        return execute_sql_buffer(state, input);
-    }
-    if input
-        .lines()
-        .any(|line| line.trim_start().starts_with(".once"))
-    {
-        return run_input_incremental(state, input);
-    }
-
-    let mut sql_chunk = String::new();
-    for raw_line in input.lines() {
-        let trimmed = raw_line.trim();
-        if !sql_chunk.trim().is_empty() && is_alternate_terminator(trimmed) {
-            execute_sql_chunk(state, &mut sql_chunk)?;
-            continue;
-        }
-        if raw_line.trim_start().starts_with('.') {
-            if !sql_chunk.trim().is_empty() && redlinedb::sql_input_complete(&sql_chunk) {
-                execute_sql_chunk(state, &mut sql_chunk)?;
-            }
-        }
-        if sql_chunk.trim().is_empty() && raw_line.trim_start().starts_with('.') {
-            // sqlite3 echoes every executed input line (including dot
-            // commands) when `.echo on` is active; check the flag BEFORE
-            // dispatching so a leading `.echo off` still gets logged.
-            if state.echo {
-                println!("{}", raw_line.trim_end());
-            }
-            match dot::dispatch(state, raw_line.trim())? {
-                DotOutcome::Ok => {}
-                DotOutcome::ReadFile(path) => run_script_file(state, &path)?,
-                DotOutcome::Exit(code) => {
-                    flush_output_or_exit(state);
-                    exit(code);
-                }
-            }
-            continue;
-        }
-        sql_chunk.push_str(raw_line);
-        sql_chunk.push('\n');
-    }
-    execute_sql_chunk(state, &mut sql_chunk)?;
-    Ok(())
-}
-
-fn run_input_incremental(state: &mut CliState, input: &str) -> Result<(), String> {
-    let mut buffer = String::new();
-    for raw_line in input.lines() {
-        let trimmed = raw_line.trim();
-        if !buffer.trim().is_empty() && is_alternate_terminator(trimmed) {
-            execute_sql_buffer(state, &buffer)?;
-            buffer.clear();
-            continue;
-        }
-        if buffer.is_empty() && raw_line.trim_start().starts_with('.') {
-            if state.echo {
-                println!("{}", raw_line.trim_end());
-            }
-            match dot::dispatch(state, raw_line.trim())? {
-                DotOutcome::Ok => {}
-                DotOutcome::ReadFile(path) => run_script_file(state, &path)?,
-                DotOutcome::Exit(code) => {
-                    flush_output_or_exit(state);
-                    exit(code);
-                }
-            }
-            continue;
-        }
-        buffer.push_str(raw_line);
-        buffer.push('\n');
-        if redlinedb::sql_input_complete(&buffer) {
-            execute_sql_buffer(state, &buffer)?;
-            buffer.clear();
-        }
-    }
-    if !buffer.trim().is_empty() {
-        execute_sql_buffer(state, &buffer)?;
-    }
-    Ok(())
-}
-
-fn input_has_batch_control_lines(input: &str) -> bool {
-    input.lines().any(|line| {
-        let trimmed = line.trim();
-        line.trim_start().starts_with('.') || is_alternate_terminator(trimmed)
-    })
-}
-
-fn execute_sql_chunk(state: &mut CliState, sql_chunk: &mut String) -> Result<(), String> {
-    if sql_chunk.trim().is_empty() {
-        sql_chunk.clear();
-        return Ok(());
-    }
-    execute_sql_buffer(state, sql_chunk)?;
-    sql_chunk.clear();
-    Ok(())
-}
-
-fn is_alternate_terminator(line: &str) -> bool {
-    line == "/" || line.eq_ignore_ascii_case("go")
 }
 
 /// Whether the leading keyword of an uppercased SQL statement actually
@@ -794,20 +691,12 @@ fn flush_output_or_exit(state: &mut CliState) {
     }
 }
 
-fn execute_sql_buffer(state: &mut CliState, sql: &str) -> Result<(), String> {
+fn execute_sql_buffer(state: &mut CliState, sql: &str) -> Result<(), ShellError> {
     if sql.trim().is_empty() {
         return Ok(());
     }
-    if state.echo {
-        println!("{}", sql.trim_end());
-    }
-    match run_query_with_state(state, sql) {
-        Ok(()) => Ok(()),
-        Err(err) => {
-            state.had_error = true;
-            Err(format!("Error: {}", sqlite_shell_error_text(&err)))
-        }
-    }
+    line_group::echo(state, sql.trim_end());
+    run_query_with_state(state, sql).inspect_err(|_| state.had_error = true)
 }
 
 fn sqlite_shell_error_text(err: &str) -> String {
@@ -1029,7 +918,7 @@ fn print_sqlite_help() {
 /// CliState-aware query runner that honours `.once FILE` (one-shot
 /// redirect, consumed after a single call) and binds any values stored by
 /// `.parameter set` to the prepared statement.
-fn run_query_with_state(state: &mut CliState, sql: &str) -> Result<(), String> {
+fn run_query_with_state(state: &mut CliState, sql: &str) -> Result<(), ShellError> {
     let params: Vec<(String, dot::parameter::ParameterValue)> = state
         .params
         .iter()
@@ -1184,13 +1073,15 @@ fn run_query_writer<W: Write>(
     out: &mut W,
     options: &QueryOptions,
     total_changes: &mut i64,
-) -> Result<(), String> {
+) -> Result<(), ShellError> {
     let mut rest = sql;
     while !rest.trim().is_empty() {
         if write_cli_readfile_hex_query(rest, out, options)? {
             break;
         }
-        let (stmt_opt, tail) = conn.prepare_v2(rest).map_err(|err| err.to_string())?;
+        let (stmt_opt, tail) = conn
+            .prepare_v2(rest)
+            .map_err(|err| ShellError::prepare(&err))?;
         let Some(mut stmt) = stmt_opt else {
             break;
         };
@@ -1239,7 +1130,7 @@ fn run_query_writer<W: Write>(
                 )?;
                 wrote_anything = true;
             }
-            while let OwnedStep::Row = stmt.step().map_err(|err| err.to_string())? {
+            while let OwnedStep::Row = stmt.step().map_err(|err| ShellError::step(&err))? {
                 if wrote_anything {
                     write_row_separator(out, &row_terminator)?;
                 }
@@ -1268,7 +1159,7 @@ fn run_query_writer<W: Write>(
                 .collect();
             let mut rows: Vec<Vec<Cell>> = Vec::new();
 
-            while let OwnedStep::Row = stmt.step().map_err(|err| err.to_string())? {
+            while let OwnedStep::Row = stmt.step().map_err(|err| ShellError::step(&err))? {
                 let mut row = Vec::with_capacity(column_count);
                 for index in 0..column_count {
                     row.push(Cell::from_value_ref(

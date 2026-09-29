@@ -92,13 +92,20 @@ fn split_first_statement_state(sql: &str) -> StatementSplit<'_> {
                     i += 2;
                 }
             }
-            b'$' => {
-                if let Some(end) = dollar_quote_end(bytes, i) {
-                    i = end;
-                } else {
-                    i += 1;
+            b'$' => match dollar_quote(bytes, i) {
+                DollarQuote::Closed(end) => i = end,
+                // A dollar quote the input has not closed yet (a function
+                // body still being typed or read line by line): its `;`s
+                // are text, so the statement is not complete.
+                DollarQuote::Unclosed => {
+                    return StatementSplit {
+                        head: sql,
+                        tail: "",
+                        terminated: false,
+                    };
                 }
-            }
+                DollarQuote::None => i += 1,
+            },
             b';' if block_depth == 0 => {
                 let head_end = i + 1;
                 return StatementSplit {
@@ -172,11 +179,22 @@ pub(crate) fn is_ident_byte(b: u8) -> bool {
     b.is_ascii_alphanumeric() || b == b'_'
 }
 
-/// End index just past a dollar-quoted string that starts at `start`.
-/// `$1` style parameters are not quotes and return `None`.
-fn dollar_quote_end(bytes: &[u8], start: usize) -> Option<usize> {
-    if start + 1 >= bytes.len() {
-        return None;
+enum DollarQuote {
+    /// Not a dollar quote: a `$1` or `$name` parameter, or a `$` inside an
+    /// identifier.
+    None,
+    /// A dollar-quoted string ending just before this index.
+    Closed(usize),
+    /// A `$$` or `$tag$` opener with no closing tag in the input.
+    Unclosed,
+}
+
+/// The dollar-quoted string that starts at `start`, if one does. As in
+/// PostgreSQL's lexer, a `$` right after an identifier character is part of
+/// the identifier and opens nothing.
+fn dollar_quote(bytes: &[u8], start: usize) -> DollarQuote {
+    if start > 0 && is_ident_byte(bytes[start - 1]) || start + 1 >= bytes.len() {
+        return DollarQuote::None;
     }
     let tag_end = if bytes[start + 1] == b'$' {
         start + 2
@@ -186,21 +204,21 @@ fn dollar_quote_end(bytes: &[u8], start: usize) -> Option<usize> {
             j += 1;
         }
         if j >= bytes.len() || bytes[j] != b'$' {
-            return None;
+            return DollarQuote::None;
         }
         j + 1
     } else {
-        return None;
+        return DollarQuote::None;
     };
     let tag = &bytes[start..tag_end];
     let mut i = tag_end;
     while i + tag.len() <= bytes.len() {
         if &bytes[i..i + tag.len()] == tag {
-            return Some(i + tag.len());
+            return DollarQuote::Closed(i + tag.len());
         }
         i += 1;
     }
-    None
+    DollarQuote::Unclosed
 }
 
 /// True if `sql` (after trimming whitespace and stripping comments) is empty.
@@ -305,6 +323,24 @@ mod tests {
         assert_eq!(head, "select [a; b] from t;");
         assert_eq!(tail, " select 2;");
         assert!(first_statement_complete(sql));
+    }
+
+    #[test]
+    fn an_unclosed_dollar_quote_keeps_the_statement_open() {
+        // A PL/pgSQL body read line by line: the `;` inside it ends nothing.
+        let partial = "CREATE FUNCTION f() RETURNS int AS $$\nBEGIN\n  RETURN 42;\n";
+        assert!(!first_statement_complete(partial));
+        let whole = "CREATE FUNCTION f() RETURNS int AS $$\nBEGIN\n  RETURN 42;\n\
+                     END;\n$$ LANGUAGE plpgsql;\nSELECT f();";
+        let (head, tail) = split_first_statement(whole);
+        assert!(head.ends_with("$$ LANGUAGE plpgsql;"), "{head}");
+        assert_eq!(tail, "\nSELECT f();");
+        // `$tag$` quotes close only on the same tag.
+        assert!(!first_statement_complete("SELECT $body$ a; $x$;"));
+        assert!(first_statement_complete("SELECT $body$ a; $body$;"));
+        // Parameters and a `$` inside an identifier open nothing.
+        assert!(first_statement_complete("SELECT $1, $name;"));
+        assert!(first_statement_complete("SELECT a$b$c FROM t;"));
     }
 
     #[test]

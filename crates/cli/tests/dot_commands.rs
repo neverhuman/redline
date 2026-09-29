@@ -669,9 +669,12 @@ fn dot_read_executes_file_contents() {
 
 #[test]
 fn unknown_dot_command_reports_error_without_terminating() {
-    let (_out, err, code) = run_script(None, ".bogus\n.print after\n");
-    assert_eq!(code, 0);
+    // sqlite3 reports the unknown command, runs the rest of the script,
+    // and exits 1 because a line failed.
+    let (out, err, code) = run_script(None, ".bogus\n.print after\n");
+    assert_eq!(code, 1);
     assert!(err.contains("unknown command"), "stderr={err}");
+    assert_eq!(out, "after\n");
 }
 
 #[test]
