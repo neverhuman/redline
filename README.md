@@ -10,7 +10,7 @@
 
 <p align="center">
   <!-- sqlite-parity-badge:begin -->
-  <a href="#sqlite-parity-status"><img src="https://img.shields.io/badge/SQLite%20SQL%2FCLI%20corpus-2368%2F2445%20%C2%B7%2077%20failed%20%C2%B7%200%20skipped%20%C2%B7%203.53.1-red" alt="SQLite SQL/CLI corpus: 2368/2445 cases passed, 77 failed, 0 skipped against the SQLite 3.53.1 shell; 11 declared deviations; not full SQLite compatibility"></a><!-- sqlite-parity-badge:end -->
+  <a href="#sqlite-parity-status"><img src="https://img.shields.io/badge/SQLite%20SQL%2FCLI%20corpus-2440%2F2445%20%C2%B7%205%20failed%20%C2%B7%200%20skipped%20%C2%B7%203.53.1-red" alt="SQLite SQL/CLI corpus: 2440/2445 cases passed, 5 failed, 0 skipped against the SQLite 3.53.1 shell; 13 declared deviations; not full SQLite compatibility"></a><!-- sqlite-parity-badge:end -->
   <a href="#postgresql-sql-shell-corpus"><img src="https://img.shields.io/badge/PostgreSQL%2016.15-SQL--shell%20corpus-blue" alt="PostgreSQL 16.15 SQL-shell corpus: counts in the block below; no wire protocol"></a>
   <a href="docs/releases/v5.0.0.md"><img src="https://img.shields.io/badge/version-5.0.0-blue" alt="version 5.0.0"></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-Apache--2.0-blue" alt="license Apache-2.0"></a>
@@ -237,11 +237,11 @@ version table above.
 
 <a id="sqlite-parity-status"></a>
 <!-- sqlite-parity-report:begin -->
-**SQLite SQL/CLI corpus** (redline-testing `sqlite_parity`, SQLite 3.53.1 shell): **2368 / 2445** cases passed, **77** failed, **0** skipped. Updated 2026-09-28.
+**SQLite SQL/CLI corpus** (redline-testing `sqlite_parity`, SQLite 3.53.1 shell): **2440 / 2445** cases passed, **5** failed, **0** skipped. Updated 2026-09-29.
 
 **Scope** (`sqlite_sql_cli`): each case runs one SQL or dot-command script through the `redlinedb` and SQLite shells and compares their output and exit status. It does not test C ABI semantics, the database file format, or prepared-statement state.
 
-**Evidence:** qualified: official evidence run `5f6c42e912bc` records the same 2445 total, 2368 passed, 77 failed, 0 skipped. Corpus `sqlite_parity` from redline-testing 1.0.1 (runner SHA-256 `3b80deab9435`), corpus SHA-256 `542cf3afd9c5`; oracle SQLite 3.53.1 (binary SHA-256 `fd3bdd25217a`), build stamp `36ca143645cf`. Run provenance `b60481753254`: source tree `c1ea9c92e57e` (clean), source inputs `1a8563b6f9c8`, assertion policy `537c7df9f5d1`.
+**Evidence:** qualified: official evidence run `d348cb3b526b` records the same 2445 total, 2440 passed, 5 failed, 0 skipped. Corpus `sqlite_parity` from redline-testing 1.0.1 (runner SHA-256 `baec37c30140`), corpus SHA-256 `542cf3afd9c5`; oracle SQLite 3.53.1 (binary SHA-256 `211e83a5a197`), build stamp `36ca143645cf`. Run provenance `407bbe06a88c`: source tree `493e07a60193` (clean), source inputs `ba5959ef796f`, assertion policy `f9df5af05e65`.
 
 **Declared deviations (6):** these cases pass, but RedlineDB produces the compared output without the SQLite feature behind it.
 
@@ -252,9 +252,11 @@ version table above.
 - `10405` PRAGMA_MODULE_LIST_FILTER: `pragma_module_list` prints SQLite's module names, including `fts3`, `fts4`, `fts3tokenize`, `fts4aux` and `fts5vocab`, which create no table.
 - `12023` PRAGMA_COMPILE_OPTIONS: `PRAGMA compile_options` prints a fixed copy of the reference build's option list, not how RedlineDB was built.
 
-**Declared shared rejections (4):** the pinned SQLite build lacks the feature, so these cases declare its error; a pass means RedlineDB rejected the statement too, not that the feature works.
+**Declared shared rejections (6):** the pinned SQLite build lacks the feature, so these cases declare its error; a pass means RedlineDB rejected the statement too, not that the feature works.
 
 - `00167` DOT_UNMODULE_CATALOG: The pinned sqlite3 is not an `SQLITE_DEBUG` build, and the 3.53.1 shell compiles `.unmodule` only under `SQLITE_DEBUG`, so `.unmodule fts5` is `unknown command or invalid arguments` and `.unmodule` itself is not tested.
+- `00219` UPDATE_LIMIT_OPTIONAL: The 3.53.1 amalgamation parser is generated without SQLITE_UDL_CAPABLE_PARSER, so `UPDATE ... ORDER BY ... LIMIT` is `near "ORDER": syntax error` even though the reference build passes `-DSQLITE_ENABLE_UPDATE_DELETE_LIMIT`.
+- `00220` DELETE_LIMIT_OPTIONAL: As 00219, for `DELETE ... ORDER BY ... LIMIT`.
 - `11437` STRING_SOUNDEX_ROBERT: The pinned sqlite3 is built without `SQLITE_SOUNDEX`, so `soundex()` is `no such function` and `soundex()` itself is not tested.
 - `11438` STRING_SOUNDEX_RUPERT: As 11437.
 - `11439` STRING_SOUNDEX_X: As 11437.
@@ -278,7 +280,7 @@ is in [`metadata/sqlite_parity/known-failures.json`](metadata/sqlite_parity/know
 <!-- POSTGRES_PARITY_START -->
 PostgreSQL **16.15** SQL-shell corpus (`redlinedb` CLI, `REDLINEDB_RESULT_DIALECT=postgres`, fresh `:memory:` per case): **254/265 agree** = **242** row matches + **12** expected rejections (declared error text verified); **11** declared unsupported; **0** mismatches; **0** skipped.
 
-Agreement is normalized SQL-shell transcript agreement, not typed-result or application parity. Not covered: wire protocol, TLS, roles/authorization, SQLSTATE, NOTIFY delivery, replication/CDC, extensions ([capability matrix](docs/beyond-postgres-skips.md#capability-matrix)). Source `55637d0887935e8be0202ed699ffb47e10a5eef2`; corpus SHA-256 `b240a7204eeb46893ea1f06e715a144f6cd962efe8f41041582e52ca975cd5be`.
+Agreement is normalized SQL-shell transcript agreement, not typed-result or application parity. Not covered: wire protocol, TLS, roles/authorization, SQLSTATE, NOTIFY delivery, replication/CDC, extensions ([capability matrix](docs/beyond-postgres-skips.md#capability-matrix)). Source `890122c69b1af0c22f56ca2c7d8611e176503da6`; corpus SHA-256 `b240a7204eeb46893ea1f06e715a144f6cd962efe8f41041582e52ca975cd5be`.
 <!-- POSTGRES_PARITY_END -->
 
 More detail: [docs/sqlite-parity.md](docs/sqlite-parity.md) (reference build
