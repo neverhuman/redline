@@ -221,7 +221,7 @@
       "proof_kind": "semantic_match",
       "tests": [
         "crates/sql/tests/parity_coverage.rs::row_value_in_subquery_matches",
-        "crates/sql/tests/differential_lab.rs::diff_subquery_matrix"
+        "crates/sql/tests/differential_lab/query_shapes.rs::diff_subquery_matrix"
       ],
       "artifacts": [],
       "corpus_case_ids": [],
@@ -236,7 +236,7 @@
       "status": "partial",
       "proof_kind": "semantic_match",
       "tests": [
-        "crates/sql/tests/differential_lab.rs::diff_subquery_matrix",
+        "crates/sql/tests/differential_lab/query_shapes.rs::diff_subquery_matrix",
         "crates/sql/tests/differential_lab.rs::diff_correlated_subquery_outer_pk_is_not_inner_rowid_alias"
       ],
       "artifacts": [],
