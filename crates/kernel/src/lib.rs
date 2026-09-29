@@ -10,7 +10,7 @@
 // free, and keep the same form so the rule has no exceptions.
 #![allow(
     clippy::unnecessary_lazy_evaluations,
-    reason = "a success path must not build and drop an unused kernel Error"
+    reason = "a success path must not build and drop a kernel Error it never returns"
 )]
 
 /// A26: process-wide cached `std::thread::available_parallelism()`.
