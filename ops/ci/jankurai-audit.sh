@@ -121,11 +121,14 @@ step_doctor() {
 # ---- 7) Proofbind verify ---------------------------------------------------
 step_proofbind() {
     local -a changed_paths=()
-    local path
+    local added deleted path
 
-    while IFS= read -r -d '' path; do
+    # Binary files (numstat "-", "-") carry no proof text, and proofbind
+    # reads each changed path as UTF-8, so a changed PNG would abort it.
+    while IFS=$'\t' read -r -d '' added deleted path; do
+        [[ $added == - && $deleted == - ]] && continue
         changed_paths+=(--changed "$path")
-    done < <(git diff --name-only -z --diff-filter=ACMRT origin/main...HEAD --)
+    done < <(git diff --numstat --no-renames -z --diff-filter=ACMRT origin/main...HEAD --)
 
     jankurai proofbind verify . "${changed_paths[@]}"
 }
