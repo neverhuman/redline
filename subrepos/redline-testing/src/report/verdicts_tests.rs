@@ -68,9 +68,11 @@ fn verdict_rejects_duplicate_samples() {
     }
     indexed[0].sample_index = Some(2);
     reduce_sqlite_verdicts(&indexed, &ids(&["A"]), 2, 1).expect("distinct warmups");
-    // A duplicated placeholder is a duplicate too.
+    // A duplicated not-run record is a duplicate too.
     let skip = || record("S", "skipped", "skipped");
-    assert!(reduce_error(&[skip(), skip()], &["S"], 0, 1).contains("duplicate sample placeholder"));
+    assert!(
+        reduce_error(&[skip(), skip()], &["S"], 0, 1).contains("duplicate sample not-run record")
+    );
 }
 
 #[test]
@@ -108,10 +110,10 @@ fn verdict_rejects_per_case_incomplete_reps() {
     let mut records = case("A", 0, 2, "passed");
     records[1].repetition_index = Some(1);
     assert!(reduce_error(&records, &["A"], 0, 2).contains("carries repetition_index Some(1)"));
-    // A placeholder beside samples is not a skip.
+    // A not-run record beside samples is not a skip.
     let mut records = case("A", 0, 1, "passed");
     records.push(record("A", "skipped", "skipped"));
-    assert!(reduce_error(&records, &["A"], 0, 1).contains("one placeholder record"));
+    assert!(reduce_error(&records, &["A"], 0, 1).contains("one not-run record"));
 }
 
 #[test]

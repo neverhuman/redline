@@ -90,7 +90,7 @@ pub(super) fn render_block(summary: &Summary, link: &str) -> Result<String> {
     writeln!(
         out,
         "Measured {date} on {cpu} ({nproc} CPUs, {kernel}), {pinned}, {workers} worker(s), \
-         `--order {order}`, temp roots on {fs}, {durability}. SQLite reference {reference} \
+         `--order {order}`, scratch directories on {fs}, {durability}. SQLite reference {reference} \
          (`{reference_sha}`); runner {runner}. {builds}{narrowed} Bundle: [`{link}`]({link}/).",
         date = summary
             .finished_at_utc

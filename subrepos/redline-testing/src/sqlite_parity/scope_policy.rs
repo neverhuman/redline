@@ -202,17 +202,17 @@ impl ScopePolicy {
             .iter()
             .chain(summary.failures.iter().map(|failure| &failure.case_id))
             .collect::<BTreeSet<_>>();
-        let stale = self
+        let executed = self
             .listed(suite)
             .into_iter()
             .filter(|case_id| ran.contains(case_id))
             .collect::<Vec<_>>();
-        if stale.is_empty() {
+        if executed.is_empty() {
             return Ok(());
         }
         bail!(
             "{suite}: {SCOPE_POLICY_PATH} lists case(s) {} as skipped, but the run executed them: remove the entries",
-            stale.join(", ")
+            executed.join(", ")
         )
     }
 }

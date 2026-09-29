@@ -202,7 +202,7 @@ fn renders_the_table_between_the_markers_and_nothing_else() {
         "per-case CLI process wall time (`cli_case_wall_time`)",
         "the 2390 cases every version passed in every run",
         "Each version ran 3 time(s), interleaved",
-        "Measured 2026-10-01 on Fixture CPU (128 CPUs, Linux 6.8.0 x86_64), pinned to CPUs 2-5, 1 worker(s), `--order alternate`, temp roots on tmpfs, each version's built-in default durability.",
+        "Measured 2026-10-01 on Fixture CPU (128 CPUs, Linux 6.8.0 x86_64), pinned to CPUs 2-5, 1 worker(s), `--order alternate`, scratch directories on tmpfs, each version's built-in default durability.",
         "SQLite reference 3.53.1 (`fd3bdd25217a`); runner redline-testing 1.0.1.",
         "RUSTFLAGS `\"\"`, without PGO.",
         "Bundle: [`benchmark-results/sqlite-parity/releases/v5.0.0`](benchmark-results/sqlite-parity/releases/v5.0.0/).",

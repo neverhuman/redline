@@ -40,7 +40,7 @@ enum Sample {
     Measured(usize),
     /// The one record of a case that did not run: a policy skip
     /// (`skipped`) or a selection failure (`not_run`).
-    Placeholder,
+    NotRun,
 }
 
 impl fmt::Display for Sample {
@@ -49,7 +49,7 @@ impl fmt::Display for Sample {
             Self::Warmup(Some(index)) => write!(f, "warmup (sample {index})"),
             Self::Warmup(None) => f.write_str("warmup"),
             Self::Measured(repetition) => write!(f, "measured:{repetition}"),
-            Self::Placeholder => f.write_str("placeholder"),
+            Self::NotRun => f.write_str("not-run record"),
         }
     }
 }
@@ -86,7 +86,7 @@ pub(crate) fn reduce_sqlite_verdicts(
             Sample::Measured(repetition) => {
                 case.measured.insert(repetition);
             }
-            Sample::Placeholder => case.placeholder_status = Some(record.status.clone()),
+            Sample::NotRun => case.placeholder_status = Some(record.status.clone()),
         }
         case.failed |= record.status == "failed";
     }
@@ -97,7 +97,7 @@ pub(crate) fn reduce_sqlite_verdicts(
             Some(status) => {
                 if case.samples.len() != 1 {
                     bail!(
-                        "case {case_id}: a case that did not run has one placeholder record, found {} records",
+                        "case {case_id}: a case that did not run has one not-run record, found {} records",
                         case.samples.len()
                     );
                 }
@@ -188,11 +188,11 @@ fn sample_of(record: &RawRecord, warmup: usize, repetitions: usize) -> Result<Sa
     } else if (role == "skipped" && status == "skipped")
         || (role == "not_run" && status == "failed")
     {
-        Sample::Placeholder
+        Sample::NotRun
     } else {
         bail!("record with sample_role {role:?} and status {status:?} is no known sample");
     };
-    if !matches!(sample, Sample::Placeholder) {
+    if !matches!(sample, Sample::NotRun) {
         if record.repetition_index.is_some() && matches!(sample, Sample::Warmup(_)) {
             bail!(
                 "warmup carries repetition_index {:?}",

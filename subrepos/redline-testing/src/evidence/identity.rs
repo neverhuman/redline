@@ -67,9 +67,9 @@ pub(crate) struct RunIdentity {
     pub(crate) source: SourceIdentity,
     pub(crate) corpus_sha256: String,
     pub(crate) assertion_policy_sha256: String,
-    /// `<prefix>/.sqlite-reference-sha3` beside `<prefix>/bin/sqlite3`: the
-    /// source archive SHA3-256 and compile flags of
-    /// scripts/sqlite/build-reference.sh. `None` for any other sqlite3.
+    /// `<prefix>/.sqlite-reference-sha3` beside the reference shell in
+    /// `<prefix>/bin`: the source archive SHA3-256 and compile flags of
+    /// scripts/sqlite/build-reference.sh. `None` for any other reference shell.
     pub(crate) oracle_build_stamp: Option<String>,
     /// The directory the identity was taken in, where `still_unchanged`
     /// takes it again. Not recorded.

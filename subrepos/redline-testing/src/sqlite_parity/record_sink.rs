@@ -58,8 +58,9 @@ impl RecordSink {
     pub fn open(path: &Path, suite: &str) -> Result<Self> {
         let marker = completion_marker_path(path);
         if marker.exists() {
-            fs::remove_file(&marker)
-                .with_context(|| format!("remove stale completion marker {}", marker.display()))?;
+            fs::remove_file(&marker).with_context(|| {
+                format!("remove the leftover completion marker {}", marker.display())
+            })?;
         }
         if let Some(parent) = path.parent()
             && !parent.as_os_str().is_empty()

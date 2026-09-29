@@ -40,7 +40,7 @@
   "raw_sha256": "14cf1d3025fe805ff81af1c4c0d46fcc2812c3c8f6d90478175eb4fbdfdf21ef",
   "renderer": {
     "version": "redline-testing 1.0.1",
-    "binary_sha256": "dccf62c12a46973ea95148b1cef2943bdab2f2a58aa51a331968439cc4ff1f70"
+    "binary_sha256": "87fc670668db85f1b889961a8a722caad5ed27f1360c87459d1635535a94eb83"
   },
   "command_line": [
     "redline-testing",
