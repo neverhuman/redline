@@ -20,11 +20,14 @@
   row lock and did not look at a row committed after its transaction began,
   so it wrote over another connection's row: an `INSERT` with an explicit
   key, an `UPDATE` moving a key, or an `AUTOINCREMENT` insert (four
-  connections inserting 200 rows kept 82). An insert now takes the row lock
-  as an update does, and a rowid a row still holds fails with `UNIQUE
-  constraint failed`. NULL keys and `AUTOINCREMENT` step past a rowid
-  another transaction is writing or has committed, so concurrent inserts
-  get distinct rowids.
+  connections inserting 200 rows kept 82). An insert into a table with an
+  `INTEGER PRIMARY KEY` now takes the row lock, as an update does, and a
+  rowid a row committed after the statement's snapshot holds is a
+  serialization failure, SQLite's `BUSY_SNAPSHOT`. An autocommit statement
+  retries it and then fails with `UNIQUE constraint failed` or resolves
+  its `OR IGNORE`, `OR REPLACE` or upsert clause. NULL keys and
+  `AUTOINCREMENT` step past a rowid another transaction is writing or has
+  committed, so concurrent inserts get distinct rowids.
 
 ### Changed
 
