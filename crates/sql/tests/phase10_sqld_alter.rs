@@ -187,12 +187,10 @@ fn alter_table_drop_column_rejects_indexed_column() {
         .expect("create index");
     let res = conn.execute("ALTER TABLE t DROP COLUMN b");
     assert!(res.is_err(), "drop column should reject indexed column");
-    let msg = format!("{:?}", res.unwrap_err());
-    assert!(
-        msg.to_ascii_lowercase().contains("rewrite")
-            || msg.to_ascii_lowercase().contains("indexed")
-            || msg.to_ascii_lowercase().contains("unsupported"),
-        "expected indexed-column rejection, got {msg}"
+    let msg = res.unwrap_err().to_string();
+    assert_eq!(
+        msg, "error in index t_b_idx after drop column: no such column: b",
+        "expected sqlite3's indexed-column rejection"
     );
 }
 

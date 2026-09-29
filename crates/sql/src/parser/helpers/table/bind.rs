@@ -34,7 +34,18 @@ pub(crate) fn bind_table_name(
         ));
     }
     let qualified = parse_qualified_name(name.clone())?;
-    Ok(lookup_table(schema, &qualified)?)
+    lookup_table(schema, &qualified).map_err(|err| match err {
+        redlinedb_kernel::Error::ObjectNotFound => {
+            let display = name
+                .0
+                .iter()
+                .filter_map(|part| object_name_part_to_string(part).ok())
+                .collect::<Vec<_>>()
+                .join(".");
+            crate::sqlite_errors::missing_table(&display, qualified.name.folded())
+        }
+        other => other.into(),
+    })
 }
 
 pub(crate) fn bind_table_object(

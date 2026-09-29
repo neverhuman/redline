@@ -325,13 +325,15 @@ pub(crate) fn bind_delete(
     // `DELETE FROM t WHERE rowid IN (SELECT rowid FROM t ORDER BY x
     // LIMIT n)` for equivalent semantics.
     if !delete.order_by.is_empty() {
-        return Err(Error::UnsupportedSql(
-            "DELETE ORDER BY is not supported".to_owned(),
+        return Err(crate::sqlite_errors::delete_clause(
+            "ORDER",
+            "DELETE ORDER BY is not supported",
         ));
     }
     if delete.limit.is_some() {
-        return Err(Error::UnsupportedSql(
-            "DELETE LIMIT is not supported".to_owned(),
+        return Err(crate::sqlite_errors::delete_clause(
+            "LIMIT",
+            "DELETE LIMIT is not supported",
         ));
     }
 

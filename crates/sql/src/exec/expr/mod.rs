@@ -516,10 +516,6 @@ pub(crate) fn eval_scalar(
                 &mut evaluator,
             )?
         }
-        other => {
-            return Err(Error::UnsupportedSql(format!(
-                "unsupported expression: {other:?}"
-            )));
-        }
+        other => return Err(crate::sqlite_errors::unsupported_expression(other)),
     })
 }

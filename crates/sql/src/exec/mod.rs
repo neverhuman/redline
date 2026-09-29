@@ -27,6 +27,7 @@ use crate::connection::Connection;
 use crate::error::{Error, Result};
 use crate::planner::{self, ExplainMetrics};
 use crate::session::{BeginMode, SessionState};
+use crate::sqlite_errors;
 use crate::statement::{
     AnalyzePlan, CreateTableAsSelectSpec, DmlValue, ExecutionResult, ExplainPlan, PragmaPlan,
     PreparedKind, PreparedTemplate, RuntimeState, SelectPlan, SelectRuntime, SelectRuntimeSource,
@@ -375,9 +376,7 @@ pub fn execute_prepared(
     if template_writes(&template.kind)
         && with_session_reentrant(conn, |session| Ok(session.query_only))?
     {
-        return Err(Error::UnsupportedSql(
-            "attempt to write while PRAGMA query_only is set".to_owned(),
-        ));
+        return Err(Error::ReadOnly);
     }
     match &template.kind {
         PreparedKind::Begin(mode) => {
@@ -470,6 +469,9 @@ pub fn execute_prepared(
                 let table = conn.engine().create_table(tx, spec.clone())?;
                 session.last_insert_rowid = Some(table.table_id.0 as i64);
                 Ok(())
+            })
+            .map_err(|err| {
+                sqlite_errors::create_object(conn, spec.schema.as_ref(), &spec.name, err)
             })?;
             Ok(ExecutionResult {
                 runtime: RuntimeState::Done,
@@ -533,7 +535,8 @@ pub fn execute_prepared(
                     .insert(spec.name.name.folded().to_owned());
                 conn.engine().drop_table(tx, spec.clone())?;
                 Ok(())
-            })?;
+            })
+            .map_err(|err| sqlite_errors::drop_table(conn, &spec.name, err))?;
             Ok(ExecutionResult {
                 runtime: RuntimeState::Done,
                 affected_rows: 1,
@@ -543,7 +546,8 @@ pub fn execute_prepared(
             with_write_tx(conn, |_session, tx| {
                 conn.engine().drop_index(tx, spec.clone())?;
                 Ok(())
-            })?;
+            })
+            .map_err(|err| sqlite_errors::drop_object("index", &spec.name, err))?;
             Ok(ExecutionResult {
                 runtime: RuntimeState::Done,
                 affected_rows: 1,
@@ -553,6 +557,9 @@ pub fn execute_prepared(
             with_write_tx(conn, |_session, tx| {
                 conn.engine().create_view(tx, spec.clone())?;
                 Ok(())
+            })
+            .map_err(|err| {
+                sqlite_errors::create_object(conn, spec.schema.as_ref(), &spec.name, err)
             })?;
             Ok(ExecutionResult {
                 runtime: RuntimeState::Done,
@@ -563,7 +570,8 @@ pub fn execute_prepared(
             with_write_tx(conn, |_session, tx| {
                 conn.engine().drop_view(tx, spec.clone())?;
                 Ok(())
-            })?;
+            })
+            .map_err(|err| sqlite_errors::drop_view(conn, &spec.name, err))?;
             Ok(ExecutionResult {
                 runtime: RuntimeState::Done,
                 affected_rows: 1,
@@ -583,7 +591,8 @@ pub fn execute_prepared(
             with_write_tx(conn, |_session, tx| {
                 conn.engine().drop_trigger(tx, spec.clone())?;
                 Ok(())
-            })?;
+            })
+            .map_err(|err| sqlite_errors::drop_object("trigger", &spec.name, err))?;
             Ok(ExecutionResult {
                 runtime: RuntimeState::Done,
                 affected_rows: 1,
@@ -603,7 +612,7 @@ pub fn execute_prepared(
                 Ok(())
             });
             redlinedb_kernel::catalog::set_legacy_alter_table(prev_legacy);
-            alter_result?;
+            alter_result.map_err(|err| sqlite_errors::alter_table(conn, &spec.name, err))?;
             crate::identity::after_alter(conn, template.sql.as_ref(), spec)?;
             Ok(ExecutionResult {
                 runtime: RuntimeState::Done,
@@ -679,10 +688,7 @@ pub fn execute_prepared(
         }
         PreparedKind::CrossDbSql(plan) => {
             let Some(sidecar) = conn.attach_map().database(&plan.alias) else {
-                return Err(Error::UnknownTable(format!(
-                    "no such database: {}",
-                    plan.alias
-                )));
+                return Err(Error::UnknownDatabase(plan.alias.to_string()));
             };
             let sidecar_conn = sidecar.connect();
             sidecar_conn.execute(plan.sql.as_ref())?;
@@ -699,10 +705,7 @@ pub fn execute_prepared(
             }
             let source_rows = materialize_select_plan_rows(conn, &plan.source, bindings)?;
             let Some(sidecar) = conn.attach_map().database(&plan.alias) else {
-                return Err(Error::UnknownTable(format!(
-                    "no such database: {}",
-                    plan.alias
-                )));
+                return Err(Error::UnknownDatabase(plan.alias.to_string()));
             };
             let sidecar_conn = sidecar.connect();
             let insert_sql =
@@ -1415,7 +1418,7 @@ fn execute_pragma(conn: &Connection, plan: &PragmaPlan) -> Result<()> {
         PragmaPlan::SetUserVersion { alias, value } => {
             if let Some(alias) = alias.as_ref() {
                 let Some(db) = conn.attach_map().database(alias.as_ref()) else {
-                    return Err(Error::UnknownTable(format!("no such database: {alias}")));
+                    return Err(Error::UnknownDatabase(alias.to_string()));
                 };
                 db.set_user_version(*value)
             } else {

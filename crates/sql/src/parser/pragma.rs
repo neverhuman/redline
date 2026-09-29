@@ -29,10 +29,11 @@ pub(crate) fn parse_pragma_template(
             rest = after_schema.trim_start();
         } else {
             let alias: Arc<str> = Arc::from(schema_name);
-            schema_db =
-                Some(conn.attach_map().database(alias.as_ref()).ok_or_else(|| {
-                    Error::UnknownTable(format!("no such database: {schema_name}"))
-                })?);
+            schema_db = Some(
+                conn.attach_map()
+                    .database(alias.as_ref())
+                    .ok_or_else(|| Error::UnknownDatabase(schema_name.to_owned()))?,
+            );
             schema_alias = Some(alias);
             rest = after_schema.trim_start();
         }

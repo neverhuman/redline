@@ -74,9 +74,7 @@ impl AttachMap {
             .write()
             .map_err(|_| Error::TransactionState("attach map poisoned"))?;
         if guard.contains_key(&lower) {
-            return Err(Error::UnsupportedSql(format!(
-                "database '{alias}' is already in use"
-            )));
+            return Err(Error::Sqlite(format!("database {alias} is already in use")));
         }
         guard.insert(lower, AttachedDb { path, db });
         Ok(())
@@ -94,7 +92,7 @@ impl AttachMap {
             .write()
             .map_err(|_| Error::TransactionState("attach map poisoned"))?;
         if guard.remove(&lower).is_none() {
-            return Err(Error::UnknownTable(format!("no such database: {alias}")));
+            return Err(Error::UnknownDatabase(alias.to_string()));
         }
         Ok(())
     }

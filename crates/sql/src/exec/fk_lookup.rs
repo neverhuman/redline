@@ -19,8 +19,8 @@ use super::super::*;
 use super::affinity::{parent_child_equal, with_column_affinity};
 
 /// Resolve the parent table referenced by `fk` from the current schema
-/// snapshot. Errors with `ConstraintViolation` when the parent is missing,
-/// matching SQLite's behaviour for an unresolved REFERENCES target.
+/// snapshot. A missing parent fails the statement as sqlite3 does:
+/// `no such table: main.<parent>`.
 pub(super) fn lookup_parent(schema: &SchemaSnapshot, fk: &ForeignKeyDef) -> Result<Arc<TableDef>> {
     match schema
         .tables
@@ -29,10 +29,7 @@ pub(super) fn lookup_parent(schema: &SchemaSnapshot, fk: &ForeignKeyDef) -> Resu
         .cloned()
     {
         Some(t) => Ok(t),
-        None => Err(Error::ConstraintViolation(format!(
-            "FOREIGN KEY constraint refers to unknown table {}",
-            fk.parent_table
-        ))),
+        None => Err(Error::UnknownTable(format!("main.{}", fk.parent_table))),
     }
 }
 

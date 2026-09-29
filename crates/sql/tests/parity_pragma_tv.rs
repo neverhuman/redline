@@ -348,10 +348,10 @@ fn pragma_query_only_round_trips_and_blocks_writes() {
         .redline
         .execute("INSERT INTO t(a) VALUES (1)")
         .expect_err("query_only should block INSERT");
-    let msg = format!("{err}");
-    assert!(
-        msg.contains("query_only"),
-        "write rejection should mention query_only: {msg}"
+    assert_eq!(
+        err,
+        redlinedb_sql::Error::ReadOnly,
+        "query_only rejects a write as sqlite3 does: {err}"
     );
 
     pair.redline

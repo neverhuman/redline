@@ -12,6 +12,7 @@ use crate::error::{Error, Result};
 use crate::parser::parse_prepared_template;
 use crate::parser::savepoint::{SavepointAction, try_parse_savepoint};
 use crate::session::{BeginMode, JournalEntry, SavepointFrame, SessionState, UniqueLockTable};
+use crate::sqlite_errors;
 use crate::statement::{PreparedTemplate, Statement, Step};
 
 use super::cache::{StatementCache, StatementCacheKey};
@@ -422,7 +423,7 @@ impl Connection {
             .savepoints
             .iter()
             .rposition(|frame| frame.name == name)
-            .ok_or(Error::TransactionState("no such savepoint"))?;
+            .ok_or_else(|| Error::NoSuchSavepoint(name.to_owned()))?;
         // Track whether the bottom-most popped frame was implicit. If yes
         // and the stack is now empty AND no nested releases shadowed the
         // implicit-tx flag, we commit the surrounding tx (the SAVEPOINT
@@ -464,7 +465,7 @@ impl Connection {
                 .savepoints
                 .iter()
                 .rposition(|frame| frame.name == name)
-                .ok_or(Error::TransactionState("no such savepoint"))?;
+                .ok_or_else(|| Error::NoSuchSavepoint(name.to_owned()))?;
             let journal_len = session.savepoints[pos].journal_len;
             if session.journal[..journal_len]
                 .iter()
@@ -561,7 +562,7 @@ impl Connection {
         let committed_sqlite_sequences = self.db.sqlite_sequence_snapshot();
         let mut session = self.session.lock().expect("session poisoned");
         if session.tx.is_some() {
-            return Err(Error::TransactionState("transaction already active"));
+            return Err(Error::TransactionState(sqlite_errors::BEGIN_IN_TRANSACTION));
         }
         let mut tx = self.db.engine.begin(match mode {
             BeginMode::Deferred | BeginMode::Immediate | BeginMode::Exclusive => {
@@ -650,10 +651,9 @@ impl Connection {
             }
             session.tx = Some(tx);
         }
-        let tx = session
-            .tx
-            .take()
-            .ok_or(Error::TransactionState("no active transaction"))?;
+        let tx = session.tx.take().ok_or(Error::TransactionState(
+            sqlite_errors::COMMIT_WITHOUT_TRANSACTION,
+        ))?;
         match crate::exec::reindex::commit_session_tx(self, &mut session, tx) {
             Ok(CommitOutcome::Committed(_)) => {
                 session.kernel_unique_guards.clear();
@@ -725,10 +725,9 @@ impl Connection {
 
     pub fn rollback(&self) -> Result<()> {
         let mut session = self.session.lock().expect("session poisoned");
-        let tx = session
-            .tx
-            .take()
-            .ok_or(Error::TransactionState("no active transaction"))?;
+        let tx = session.tx.take().ok_or(Error::TransactionState(
+            sqlite_errors::ROLLBACK_WITHOUT_TRANSACTION,
+        ))?;
         let result = self.db.engine.rollback(tx);
         session.kernel_unique_guards.clear();
         session.unique_guards.clear();

@@ -69,15 +69,17 @@ pub(crate) fn bind_create_table(
     if create_table.strict {
         for column in &create_table.columns {
             if column.data_type == sqlparser::ast::DataType::Unspecified {
-                return Err(Error::UnsupportedSql(format!(
-                    "STRICT table column {} requires a declared type",
+                return Err(Error::Sqlite(format!(
+                    "missing datatype for {}.{}",
+                    name.original(),
                     column.name.value
                 )));
             }
             let declared = column.data_type.to_string();
             if !is_strict_table_allowed_type(&declared) {
-                return Err(Error::UnsupportedSql(format!(
-                    "STRICT table column {} declares unsupported type {declared}",
+                return Err(Error::Sqlite(format!(
+                    "unknown datatype for {}.{}: \"{declared}\"",
+                    name.original(),
                     column.name.value
                 )));
             }
@@ -86,7 +88,13 @@ pub(crate) fn bind_create_table(
     let mut columns = Vec::with_capacity(create_table.columns.len());
     let mut column_lookup = std::collections::HashMap::new();
     for (ordinal, column) in create_table.columns.iter().enumerate() {
-        column_lookup.insert(column.name.value.to_ascii_lowercase(), ordinal);
+        let folded = column.name.value.to_ascii_lowercase();
+        if column_lookup.insert(folded, ordinal).is_some() {
+            return Err(Error::Sqlite(format!(
+                "duplicate column name: {}",
+                column.name.value
+            )));
+        }
     }
     let mut constraints = Vec::new();
     let mut identities = Vec::new();
@@ -789,12 +797,14 @@ pub(crate) fn bind_alter_table(
                     "ALTER TABLE DROP COLUMN supports a single column at a time".to_owned(),
                 ));
             }
-            // Parser-only Tier-1 acceptance: catalog mutation is rejected.
-            // We still accept and validate the syntax so callers can build
-            // prepared templates and schema migration tools surface the
-            // correct unsupported-execution error instead of a parse error.
+            let column = column_names.into_iter().next().unwrap().value;
+            if let Some(table) = parse_qualified_name(name.clone()).ok().and_then(|qname| {
+                schema.lookup_table(schema.lookup_namespace("main")?, qname.name.folded())
+            }) {
+                crate::sqlite_errors::check_drop_column(&table, &column, if_exists)?;
+            }
             redlinedb_kernel::catalog::AlterTableOperationSpec::DropColumn {
-                column_name: DbName::new(column_names.into_iter().next().unwrap().value),
+                column_name: DbName::new(column),
                 if_exists,
             }
         }

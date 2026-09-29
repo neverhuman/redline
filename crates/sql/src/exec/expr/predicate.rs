@@ -117,9 +117,7 @@ pub(crate) fn eval_subquery_value(
         None => Ok(SqlValue::Null),
         Some(first) if first.is_empty() => Ok(SqlValue::Null),
         Some(first) if first.len() == 1 => Ok(first[0].clone()),
-        Some(_) => Err(Error::UnsupportedSql(
-            "scalar subquery must return exactly one column".to_owned(),
-        )),
+        Some(first) => Err(crate::sqlite_errors::sub_select_columns(first.len(), 1)),
     }
 }
 
@@ -361,8 +359,9 @@ pub(crate) fn in_subquery_result(
     };
     let template = bind_subquery(conn, subquery)?;
     if template.output_columns.len() != value.len() {
-        return Err(Error::UnsupportedSql(
-            "IN subquery must return the same number of columns as the row value".to_owned(),
+        return Err(crate::sqlite_errors::sub_select_columns(
+            template.output_columns.len(),
+            value.len(),
         ));
     }
     let cache_key = subquery_cache_key(conn, subquery);

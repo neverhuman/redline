@@ -108,6 +108,7 @@ impl From<redlinedb_sql::Error> for Error {
             }
             SqlError::Kernel(kernel_error::Error::ObjectNotFound)
             | SqlError::UnknownTable(_)
+            | SqlError::UnknownDatabase(_)
             | SqlError::UnknownColumn(_) => Self::new(ErrorCode::NotFound, value.to_string()),
             SqlError::Kernel(kernel_error::Error::ObjectExists) => {
                 Self::new(ErrorCode::Constraint, value.to_string())
@@ -122,16 +123,19 @@ impl From<redlinedb_sql::Error> for Error {
                 Self::new(ErrorCode::TooBig, value.to_string())
             }
             SqlError::CommitMaybeCommitted => Self::new(ErrorCode::IoErr, value.to_string()),
+            SqlError::ReadOnly => Self::new(ErrorCode::ReadOnly, value.to_string()),
             SqlError::Kernel(
                 kernel_error::Error::WalWriterFailed { .. }
                 | kernel_error::Error::CommitOutcomeUnknown { .. },
             ) => Self::new(ErrorCode::IoErr, value.to_string()),
-            SqlError::TransactionState(_) | SqlError::ParameterOutOfRange(_) => {
-                Self::new(ErrorCode::Misuse, value.to_string())
-            }
-            SqlError::Parse(_) | SqlError::IntegerOverflow | SqlError::BigintOutOfRange => {
-                Self::new(ErrorCode::Error, value.to_string())
-            }
+            SqlError::TransactionState(_)
+            | SqlError::NoSuchSavepoint(_)
+            | SqlError::ParameterOutOfRange(_) => Self::new(ErrorCode::Misuse, value.to_string()),
+            SqlError::Parse(_)
+            | SqlError::Sqlite(_)
+            | SqlError::NoSuchFunction(_)
+            | SqlError::IntegerOverflow
+            | SqlError::BigintOutOfRange => Self::new(ErrorCode::Error, value.to_string()),
             SqlError::UnsupportedSql(_) | SqlError::UnsupportedCapability { .. } => {
                 Self::new(ErrorCode::Unsupported, value.to_string())
             }

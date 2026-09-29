@@ -225,7 +225,7 @@ fn an_unused_cte_naming_a_missing_table_is_an_error() {
         Err(err) => err.to_string(),
         Ok(mut stmt) => stmt.step().expect_err("redline binds the CTE").to_string(),
     };
-    assert!(err.contains("object not found"), "{err}");
+    assert!(err.contains("no such table: no_such_table"), "{err}");
 }
 
 /// A data-modifying CTE writes while its statement is bound (Postgres

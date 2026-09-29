@@ -75,9 +75,7 @@ pub(crate) fn try_resolve_cross_db_bound_table(
         return Ok(None);
     };
     let Some(sidecar) = conn.attach_map().database(&qualifier) else {
-        return Err(Error::UnknownTable(format!(
-            "no such database: {qualifier}"
-        )));
+        return Err(Error::UnknownTable(format!("{qualifier}.{table}")));
     };
 
     if !is_valid_identifier(&table) {

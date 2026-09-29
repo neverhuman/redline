@@ -111,6 +111,7 @@ pub(super) fn eval_function(
     }
 
     eval_scalar_function_values(name, values)
+        .map_err(|err| crate::sqlite_errors::function_as_written(err, &func.name))
 }
 
 pub(crate) fn eval_scalar_function_values(
@@ -641,9 +642,10 @@ pub(crate) fn eval_scalar_function_values(
             match crate::udf::call_registered_scalar(db, &name, &values) {
                 Some(Ok(v)) => Ok(v),
                 Some(Err(msg)) => Err(Error::UnsupportedSql(msg)),
-                None => Err(Error::UnsupportedSql(format!(
-                    "unsupported function {name}"
-                ))),
+                None => Err(crate::sqlite_errors::unknown_function(
+                    &name,
+                    crate::exec::agg_eval::is_aggregate_name(&name),
+                )),
             }
         }
     }

@@ -446,6 +446,12 @@ fn eval_group_function_or_scalar(
     }
 
     crate::exec::expr::json_dispatch::eval_scalar_function_values(&name, values)
+        .map_err(|err| crate::sqlite_errors::function_as_written(err, &func.name))
+}
+
+/// True for a built-in or registered aggregate, whatever its argument count.
+pub(crate) fn is_aggregate_name(name: &str) -> bool {
+    is_builtin_aggregate_name(name) || crate::udf::is_registered_aggregate(name)
 }
 
 fn is_aggregate_call(func: &sqlparser::ast::Function, name: &str) -> bool {
@@ -1099,16 +1105,12 @@ fn percentile_argument(
     group: &[SqlRow],
     bindings: &[Option<SqlValue>],
 ) -> Result<f64> {
-    let FunctionArguments::List(list) = &func.args else {
-        return Err(Error::UnsupportedSql(
-            "percentile_cont requires two arguments".to_owned(),
-        ));
+    let list = match &func.args {
+        FunctionArguments::List(list) if list.args.len() == 2 && func.within_group.is_empty() => {
+            list
+        }
+        _ => return Err(crate::sqlite_errors::percentile_cont_form(func)),
     };
-    if list.args.len() != 2 {
-        return Err(Error::UnsupportedSql(
-            "percentile_cont requires two arguments".to_owned(),
-        ));
-    }
     let FunctionArg::Unnamed(FunctionArgExpr::Expr(expr)) = &list.args[1] else {
         return Err(Error::UnsupportedSql(
             "unsupported percentile_cont argument".to_owned(),

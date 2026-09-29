@@ -160,7 +160,8 @@ pub(crate) fn convert_column_def(
             }),
             ColumnOption::Check(check) => {
                 constraints.push(ColumnConstraintSpec::Check {
-                    expr: expr_to_kernel_ast(&check.expr, column_lookup)?,
+                    expr: expr_to_kernel_ast(&check.expr, column_lookup)
+                        .map_err(crate::sqlite_errors::in_check_constraint)?,
                     normalized_sql: check.expr.to_string(),
                 });
             }
@@ -301,7 +302,8 @@ pub(crate) fn convert_table_constraint(
         }),
         sqlparser::ast::TableConstraint::Check(check) => Ok(TableConstraintSpec::Check {
             name: check.name.map(|name| DbName::new(name.value)),
-            expr: expr_to_kernel_ast(&check.expr, column_lookup)?,
+            expr: expr_to_kernel_ast(&check.expr, column_lookup)
+                .map_err(crate::sqlite_errors::in_check_constraint)?,
             normalized_sql: check.expr.to_string(),
         }),
         sqlparser::ast::TableConstraint::ForeignKey(fk) => Ok(table_level_foreign_key(fk)),

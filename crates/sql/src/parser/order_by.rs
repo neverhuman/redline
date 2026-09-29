@@ -237,6 +237,42 @@ fn guard_constant(expr: Expr) -> Expr {
     }
 }
 
+/// A compound SELECT's ORDER BY: sqlite3 resolves a bare identifier term
+/// against the result column names of the SELECTs it joins, and refuses one
+/// that names none of them by its position in the clause.
+pub(crate) fn check_compound_order_by(
+    order_by: Option<&OrderBy>,
+    names: &[&[String]],
+) -> Result<()> {
+    let Some(OrderBy {
+        kind: OrderByKind::Expressions(terms),
+        ..
+    }) = order_by
+    else {
+        return Ok(());
+    };
+    for (index, term) in terms.iter().enumerate() {
+        let mut inner = &term.expr;
+        while let Expr::Nested(next) | Expr::Collate { expr: next, .. } = inner {
+            inner = next;
+        }
+        let Expr::Identifier(ident) = inner else {
+            continue;
+        };
+        let known = names
+            .iter()
+            .flat_map(|columns| columns.iter())
+            .any(|name| name.eq_ignore_ascii_case(&ident.value));
+        if !known {
+            return Err(Error::Sqlite(format!(
+                "{} ORDER BY term does not match any column in the result set",
+                ordinal_word(index + 1)
+            )));
+        }
+    }
+    Ok(())
+}
+
 pub(crate) fn ordinal_word(n: usize) -> String {
     let mod100 = n % 100;
     if (11..=13).contains(&mod100) {

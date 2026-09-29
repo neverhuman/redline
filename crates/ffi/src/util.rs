@@ -46,11 +46,15 @@ pub(crate) fn map_error(err: SqlError) -> c_int {
         | SqlError::Kernel(KernelError::WalWriterFailed { .. })
         | SqlError::Kernel(KernelError::CommitOutcomeUnknown { .. }) => RLDB_IOERR,
         SqlError::Kernel(KernelError::SchemaChanged) => RLDB_SCHEMA,
+        SqlError::ReadOnly => RLDB_READONLY,
         SqlError::Kernel(KernelError::ObjectNotFound)
         | SqlError::UnknownTable(_)
+        | SqlError::UnknownDatabase(_)
         | SqlError::UnknownColumn(_) => RLDB_NOTADB,
         SqlError::ParameterOutOfRange(_) => RLDB_RANGE,
-        SqlError::TransactionState(_) | SqlError::Bind(_) => RLDB_MISUSE,
+        SqlError::TransactionState(_) | SqlError::NoSuchSavepoint(_) | SqlError::Bind(_) => {
+            RLDB_MISUSE
+        }
         SqlError::Parse(_) | SqlError::IntegerOverflow | SqlError::BigintOutOfRange => RLDB_ERROR,
         SqlError::UnsupportedSql(_) => RLDB_MISUSE,
         SqlError::NotAuthorized => RLDB_AUTH,

@@ -15,8 +15,11 @@ pub enum Error {
     #[error("bind error: {0}")]
     Bind(String),
 
-    #[error("unknown table: {0}")]
+    #[error("no such table: {0}")]
     UnknownTable(String),
+
+    #[error("no such database: {0}")]
+    UnknownDatabase(String),
 
     #[error("unknown column: {0}")]
     UnknownColumn(String),
@@ -32,6 +35,22 @@ pub enum Error {
 
     #[error("transaction state error: {0}")]
     TransactionState(&'static str),
+
+    #[error("no such savepoint: {0}")]
+    NoSuchSavepoint(String),
+
+    #[error("no such function: {0}")]
+    NoSuchFunction(String),
+
+    /// A write refused because the connection may only read (`PRAGMA
+    /// query_only`), in SQLite's words and with its SQLITE_READONLY code.
+    #[error("attempt to write a readonly database")]
+    ReadOnly,
+
+    /// A statement SQLite rejects, in the words `sqlite3_errmsg` uses
+    /// (`crate::sqlite_errors`). The code is SQLite's: plain SQLITE_ERROR.
+    #[error("{0}")]
+    Sqlite(String),
 
     #[error("commit outcome uncertain")]
     CommitMaybeCommitted,
@@ -80,11 +99,16 @@ impl PartialEq for Error {
             (Self::UnsupportedSql(a), Self::UnsupportedSql(b)) => a == b,
             (Self::Bind(a), Self::Bind(b)) => a == b,
             (Self::UnknownTable(a), Self::UnknownTable(b)) => a == b,
+            (Self::UnknownDatabase(a), Self::UnknownDatabase(b)) => a == b,
             (Self::UnknownColumn(a), Self::UnknownColumn(b)) => a == b,
             (Self::AmbiguousColumn(a), Self::AmbiguousColumn(b)) => a == b,
             (Self::ParameterOutOfRange(a), Self::ParameterOutOfRange(b)) => a == b,
             (Self::SchemaChanged, Self::SchemaChanged) => true,
             (Self::TransactionState(a), Self::TransactionState(b)) => a == b,
+            (Self::NoSuchSavepoint(a), Self::NoSuchSavepoint(b)) => a == b,
+            (Self::NoSuchFunction(a), Self::NoSuchFunction(b)) => a == b,
+            (Self::ReadOnly, Self::ReadOnly) => true,
+            (Self::Sqlite(a), Self::Sqlite(b)) => a == b,
             (Self::CommitMaybeCommitted, Self::CommitMaybeCommitted) => true,
             (Self::ConstraintViolation(a), Self::ConstraintViolation(b)) => a == b,
             (Self::DatatypeMismatch, Self::DatatypeMismatch) => true,
