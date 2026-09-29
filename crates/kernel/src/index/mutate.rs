@@ -25,7 +25,7 @@ pub(super) fn recovered_leaf_lsn(frame: &FrameState) -> Result<Lsn> {
     let page_lsn = frame
         .page
         .as_ref()
-        .ok_or(Error::CorruptPage("resident frame missing page"))?
+        .ok_or_else(|| Error::CorruptPage("resident frame missing page"))?
         .header()?
         .page_lsn;
     Ok(if frame.dirty { page_lsn } else { Lsn::ZERO })

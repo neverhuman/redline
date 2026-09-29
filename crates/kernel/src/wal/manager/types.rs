@@ -271,7 +271,7 @@ impl WalOpenScanSummary {
             .0
             .div_ceil(segment_bytes)
             .checked_mul(segment_bytes)
-            .ok_or(Error::CorruptWal("lsn overflow"))?;
+            .ok_or_else(|| Error::CorruptWal("lsn overflow"))?;
         Ok(Self {
             valid_end_lsn: Lsn(start),
             last_record_lsn: Lsn::ZERO,
@@ -315,7 +315,7 @@ pub(super) fn validate_record_position(
         .checked_sub(1)
         .and_then(|index| index.checked_mul(segment_bytes))
         .and_then(|base| base.checked_add(offset))
-        .ok_or(Error::CorruptWal("lsn overflow"))?;
+        .ok_or_else(|| Error::CorruptWal("lsn overflow"))?;
     if record.lsn.0 != expected {
         return Err(Error::CorruptWal(
             "record lsn does not match segment position",

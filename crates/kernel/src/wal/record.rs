@@ -107,7 +107,7 @@ impl WalRecord {
         let payload_len = read_u32(bytes, 12)? as usize;
         let record_len = WAL_HEADER_LEN
             .checked_add(payload_len)
-            .ok_or(Error::CorruptWal("record length overflow"))?;
+            .ok_or_else(|| Error::CorruptWal("record length overflow"))?;
         if bytes.len() < record_len {
             return Err(Error::BufferTooSmall {
                 needed: record_len,

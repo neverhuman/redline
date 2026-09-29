@@ -61,10 +61,10 @@ pub fn read_varint(buf: &[u8], offset: usize) -> Result<(u64, usize)> {
         }
         let idx = offset
             .checked_add(consumed)
-            .ok_or(Error::InvalidJsonb("varint offset overflow"))?;
+            .ok_or_else(|| Error::InvalidJsonb("varint offset overflow"))?;
         let byte = *buf
             .get(idx)
-            .ok_or(Error::InvalidJsonb("varint truncated"))?;
+            .ok_or_else(|| Error::InvalidJsonb("varint truncated"))?;
         consumed += 1;
         let chunk = (byte & 0x7F) as u64;
         if shift >= 64 && chunk != 0 {
@@ -107,7 +107,7 @@ pub fn parse_preamble(buf: &[u8]) -> Result<usize> {
 pub fn read_tag(buf: &[u8], offset: usize) -> Result<u8> {
     let byte = *buf
         .get(offset)
-        .ok_or(Error::InvalidJsonb("tag truncated"))?;
+        .ok_or_else(|| Error::InvalidJsonb("tag truncated"))?;
     Ok(byte & tag::TYPE_MASK)
 }
 
@@ -169,7 +169,7 @@ pub fn read_bytes_payload(buf: &[u8], offset: usize) -> Result<(&[u8], usize)> {
     let start = offset + 1 + n;
     let end = start
         .checked_add(len)
-        .ok_or(Error::InvalidJsonb("text/blob length overflow"))?;
+        .ok_or_else(|| Error::InvalidJsonb("text/blob length overflow"))?;
     if end > buf.len() {
         return Err(Error::InvalidJsonb("text/blob truncated"));
     }

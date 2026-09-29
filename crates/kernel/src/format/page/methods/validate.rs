@@ -29,7 +29,7 @@ impl Page {
         self.bytes.fill(0);
         let special = page_size
             .checked_sub(special_len)
-            .ok_or(Error::BufferTooSmall {
+            .ok_or_else(|| Error::BufferTooSmall {
                 needed: PAGE_HEADER_LEN + special_len,
                 actual: page_size,
             })?;

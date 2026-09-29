@@ -20,7 +20,7 @@ impl Page {
         let new_lower = header.lower as usize + SLOT_LEN;
         let new_upper = (header.upper as usize)
             .checked_sub(payload.len())
-            .ok_or(Error::PageFull)?;
+            .ok_or_else(|| Error::PageFull)?;
 
         if new_lower > new_upper {
             return Err(Error::PageFull);
@@ -88,7 +88,7 @@ impl Page {
         let cell_len = read_u16(&self.bytes, slot_offset + 2)? as usize;
         let end = cell_offset
             .checked_add(cell_len)
-            .ok_or(Error::CorruptPage("cell overflow"))?;
+            .ok_or_else(|| Error::CorruptPage("cell overflow"))?;
         if end > self.bytes.len() {
             return Err(Error::CorruptPage("cell extends past page"));
         }
@@ -110,7 +110,7 @@ impl Page {
 
         let end = cell_offset
             .checked_add(cell_len)
-            .ok_or(Error::CorruptPage("cell overflow"))?;
+            .ok_or_else(|| Error::CorruptPage("cell overflow"))?;
         if end > self.bytes.len() {
             return Err(Error::CorruptPage("cell extends past page"));
         }

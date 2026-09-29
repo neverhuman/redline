@@ -127,7 +127,7 @@ impl Inner {
             let page = state
                 .page
                 .as_ref()
-                .ok_or(Error::CorruptPage("resident frame missing page"))?;
+                .ok_or_else(|| Error::CorruptPage("resident frame missing page"))?;
             let page_lsn = page.header()?.page_lsn;
             if page_lsn > *durable {
                 *durable = (*durable).max(force_wal(page_lsn)?);
@@ -155,7 +155,7 @@ impl Inner {
         let current_lsn = state
             .page
             .as_ref()
-            .ok_or(Error::CorruptPage("resident frame missing page"))?
+            .ok_or_else(|| Error::CorruptPage("resident frame missing page"))?
             .header()?
             .page_lsn;
         if current_lsn <= written_lsn {

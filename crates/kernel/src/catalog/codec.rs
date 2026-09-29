@@ -82,11 +82,11 @@ impl<'a> BytesReader<'a> {
         let end = self
             .pos
             .checked_add(len)
-            .ok_or(Error::CatalogCorrupt("catalog snapshot length overflow"))?;
+            .ok_or_else(|| Error::CatalogCorrupt("catalog snapshot length overflow"))?;
         let bytes = self
             .bytes
             .get(self.pos..end)
-            .ok_or(Error::CatalogCorrupt("catalog snapshot truncated"))?;
+            .ok_or_else(|| Error::CatalogCorrupt("catalog snapshot truncated"))?;
         self.pos = end;
         Ok(bytes)
     }

@@ -163,7 +163,7 @@ pub(super) fn next_version(row: IndexRowRef) -> Result<IndexRowRef> {
         .generation
         .0
         .checked_add(1)
-        .ok_or(Error::CorruptPage("index entry version counter exhausted"))?;
+        .ok_or_else(|| Error::CorruptPage("index entry version counter exhausted"))?;
     let mut next = row;
     next.tuple.generation = PageGeneration::new(generation);
     Ok(next)

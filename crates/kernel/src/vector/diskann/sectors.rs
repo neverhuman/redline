@@ -97,14 +97,16 @@ impl SectorLayout {
     pub fn for_dim_degree(dim: usize, max_degree: usize) -> Result<Self, SectorError> {
         let vector_off = HEADER_LEN;
         let neighbour_off = vector_off
-            + dim.checked_mul(4).ok_or(SectorError::SectorTooSmall {
-                needed: usize::MAX,
-                available: SECTOR_SIZE,
-            })?;
+            + dim
+                .checked_mul(4)
+                .ok_or_else(|| SectorError::SectorTooSmall {
+                    needed: usize::MAX,
+                    available: SECTOR_SIZE,
+                })?;
         let needed = neighbour_off
             + max_degree
                 .checked_mul(4)
-                .ok_or(SectorError::SectorTooSmall {
+                .ok_or_else(|| SectorError::SectorTooSmall {
                     needed: usize::MAX,
                     available: SECTOR_SIZE,
                 })?;

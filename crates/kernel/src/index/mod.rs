@@ -502,7 +502,7 @@ impl BtreeIndex {
         Ok(*self
             .find_leaf_path(page_id, key)?
             .last()
-            .ok_or(Error::CorruptPage("empty search path"))?)
+            .ok_or_else(|| Error::CorruptPage("empty search path"))?)
     }
 
     /// Phase 5 WS-A2c: descend to the right-most leaf of the tree by

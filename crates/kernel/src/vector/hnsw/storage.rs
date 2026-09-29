@@ -265,7 +265,7 @@ pub(crate) fn read_meta(page: &crate::format::Page) -> Result<MetaSnapshot> {
     let ef_construction = read_u16(special, META_EF_CONSTR_OFF)? as usize;
     let ef_search = read_u16(special, META_EF_SEARCH_OFF)? as usize;
     let metric = Metric::from_u8(special[META_METRIC_OFF])
-        .ok_or(crate::Error::CorruptPage("hnsw: invalid metric byte"))?;
+        .ok_or_else(|| crate::Error::CorruptPage("hnsw: invalid metric byte"))?;
     let rng_seed = read_u64(special, META_RNG_SEED_OFF)?;
     let entry = if entry_node == u32::MAX {
         None

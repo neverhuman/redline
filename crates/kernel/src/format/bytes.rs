@@ -59,7 +59,7 @@ pub fn write_u64(buf: &mut [u8], offset: usize, value: u64) -> Result<()> {
 pub fn write_bytes(buf: &mut [u8], offset: usize, bytes: &[u8]) -> Result<()> {
     let end = offset
         .checked_add(bytes.len())
-        .ok_or(Error::BufferTooSmall {
+        .ok_or_else(|| Error::BufferTooSmall {
             needed: usize::MAX,
             actual: buf.len(),
         })?;
@@ -75,7 +75,7 @@ pub fn write_bytes(buf: &mut [u8], offset: usize, bytes: &[u8]) -> Result<()> {
 
 #[inline]
 fn read_array<const N: usize>(buf: &[u8], offset: usize) -> Result<[u8; N]> {
-    let end = offset.checked_add(N).ok_or(Error::BufferTooSmall {
+    let end = offset.checked_add(N).ok_or_else(|| Error::BufferTooSmall {
         needed: usize::MAX,
         actual: buf.len(),
     })?;

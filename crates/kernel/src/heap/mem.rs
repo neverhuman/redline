@@ -130,7 +130,7 @@ impl MemHeap {
             .row_dir
             .get(&row_id)
             .copied()
-            .ok_or(Error::CorruptPage("row id missing from row directory"))?;
+            .ok_or_else(|| Error::CorruptPage("row id missing from row directory"))?;
         self.read_tuple(ptr)
     }
 
@@ -163,7 +163,7 @@ impl MemHeap {
         let page = self
             .pages
             .get(page_index)
-            .ok_or(Error::CorruptPage("tuple page missing"))?;
+            .ok_or_else(|| Error::CorruptPage("tuple page missing"))?;
         TupleVersion::decode(page.cell(ptr.slot)?)
     }
 
@@ -178,6 +178,6 @@ impl MemHeap {
         }
         self.undo
             .get(ptr.0 as usize - 1)
-            .ok_or(Error::CorruptPage("undo pointer out of bounds"))
+            .ok_or_else(|| Error::CorruptPage("undo pointer out of bounds"))
     }
 }

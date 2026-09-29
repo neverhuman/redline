@@ -67,7 +67,7 @@ impl<'a> RecordRef<'a> {
             scratch.offsets.push(payload);
             payload = payload
                 .checked_add(payload_len(st)?)
-                .ok_or(RecordError::Truncated)?;
+                .ok_or_else(|| RecordError::Truncated)?;
             if payload > self.bytes.len() {
                 return Err(RecordError::Truncated);
             }
@@ -86,11 +86,11 @@ impl<'a> RecordRef<'a> {
         let st = *scratch
             .serials
             .get(ordinal)
-            .ok_or(RecordError::ColumnOutOfBounds)?;
+            .ok_or_else(|| RecordError::ColumnOutOfBounds)?;
         let off = *scratch
             .offsets
             .get(ordinal)
-            .ok_or(RecordError::ColumnOutOfBounds)?;
+            .ok_or_else(|| RecordError::ColumnOutOfBounds)?;
         Ok(match st {
             ST_NULL => ValueRef::Null,
             ST_I8 => ValueRef::Integer(read_exact(self.bytes, off, 1)?[0] as i8 as i64),
@@ -203,7 +203,7 @@ fn is_text_serial(serial: u64) -> bool {
 fn read_exact(bytes: &[u8], off: usize, len: usize) -> Result<&[u8], RecordError> {
     bytes
         .get(off..off.saturating_add(len))
-        .ok_or(RecordError::Truncated)
+        .ok_or_else(|| RecordError::Truncated)
 }
 
 fn put_varint(mut value: u64, out: &mut Vec<u8>) {
@@ -218,7 +218,7 @@ fn read_varint(bytes: &[u8], pos: &mut usize) -> Result<u64, RecordError> {
     let mut out = 0u64;
     let mut shift = 0u32;
     loop {
-        let byte = *bytes.get(*pos).ok_or(RecordError::Truncated)?;
+        let byte = *bytes.get(*pos).ok_or_else(|| RecordError::Truncated)?;
         *pos += 1;
         out |= ((byte & 0x7f) as u64) << shift;
         if byte & 0x80 == 0 {

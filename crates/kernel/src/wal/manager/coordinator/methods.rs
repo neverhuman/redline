@@ -158,7 +158,7 @@ impl WalCoordinator {
         }
         let encoded_len = WAL_HEADER_LEN
             .checked_add(17)
-            .ok_or(Error::CorruptWal("record length overflow"))?;
+            .ok_or_else(|| Error::CorruptWal("record length overflow"))?;
         let mut state = self.wait_for_wal_buffer(encoded_len)?;
         let reserved = reserve_csn();
         let csn = *reserved.borrow();
@@ -189,7 +189,7 @@ impl WalCoordinator {
         }
         let encoded_len = WAL_HEADER_LEN
             .checked_add(17)
-            .ok_or(Error::CorruptWal("record length overflow"))?;
+            .ok_or_else(|| Error::CorruptWal("record length overflow"))?;
         let mut state = self.wait_for_wal_buffer(encoded_len)?;
         let payload = WalPayload::Commit { tx_id, csn }.encode()?;
         let append = enqueue_reserved_record(
@@ -302,7 +302,7 @@ impl WalCoordinator {
         }
         let encoded_len = WAL_HEADER_LEN
             .checked_add(payload.len())
-            .ok_or(Error::CorruptWal("record length overflow"))?;
+            .ok_or_else(|| Error::CorruptWal("record length overflow"))?;
         if encoded_len as u64 > self.config.segment_bytes {
             return Err(Error::CorruptWal("record larger than wal segment"));
         }
@@ -420,7 +420,7 @@ impl WalCoordinator {
         let merged_payload_bytes = merged_payload.encode()?;
         let merged_encoded_len = WAL_HEADER_LEN
             .checked_add(merged_payload_bytes.len())
-            .ok_or(Error::CorruptWal("record length overflow"))?;
+            .ok_or_else(|| Error::CorruptWal("record length overflow"))?;
         if merged_encoded_len > self.config.segment_bytes as usize
             || merged_encoded_len > self.config.wal_buffer_bytes
         {
@@ -432,7 +432,7 @@ impl WalCoordinator {
             .pending_bytes
             .checked_sub(old_encoded_len)
             .and_then(|value| value.checked_add(merged_encoded_len))
-            .ok_or(Error::CorruptWal("pending WAL bytes overflow"))?;
+            .ok_or_else(|| Error::CorruptWal("pending WAL bytes overflow"))?;
         if new_pending_bytes > self.config.wal_buffer_bytes {
             return Ok(None);
         }
@@ -458,7 +458,7 @@ impl WalCoordinator {
         let last = state
             .pending
             .back_mut()
-            .ok_or(Error::CorruptWal("pending WAL queue unexpectedly empty"))?;
+            .ok_or_else(|| Error::CorruptWal("pending WAL queue unexpectedly empty"))?;
         last.append.end_lsn = merged_end_lsn;
         last.encoded = merged_encoded;
         state.pending_bytes = new_pending_bytes;

@@ -189,7 +189,7 @@ impl PageBackedHeap {
             let resident = frame
                 .page
                 .as_mut()
-                .ok_or(Error::CorruptPage("resident frame missing page"))?;
+                .ok_or_else(|| Error::CorruptPage("resident frame missing page"))?;
             let mut staged_page = resident.clone();
             if reinit {
                 let next_generation = staged_page.header()?.generation.next();

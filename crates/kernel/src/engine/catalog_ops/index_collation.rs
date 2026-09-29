@@ -47,7 +47,9 @@ impl Engine {
             (*snapshot).clone(),
             index_id,
         )?);
-        let updated = next.index_by_id(index_id).ok_or(Error::ObjectNotFound)?;
+        let updated = next
+            .index_by_id(index_id)
+            .ok_or_else(|| Error::ObjectNotFound)?;
         tx.set_pending_schema_snapshot(next);
         Ok(updated)
     }

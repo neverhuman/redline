@@ -131,7 +131,7 @@ impl WalCoalescer {
             .shared
             .lanes
             .get(lane_idx)
-            .ok_or(Error::CorruptWal("lane index out of range"))?;
+            .ok_or_else(|| Error::CorruptWal("lane index out of range"))?;
 
         if self.shared.panicked.load(Ordering::Acquire)
             || self.shared.shutdown.load(Ordering::Acquire)

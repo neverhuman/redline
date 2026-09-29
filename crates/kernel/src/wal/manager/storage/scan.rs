@@ -204,7 +204,7 @@ impl<Fs: FileSystem> WalReader<Fs> {
         let base = segment
             .checked_sub(1)
             .and_then(|index| index.checked_mul(self.config.segment_bytes))
-            .ok_or(Error::CorruptWal("lsn overflow"))?;
+            .ok_or_else(|| Error::CorruptWal("lsn overflow"))?;
         // The last position a whole header can start at.
         let Some(last_start) = file_len.checked_sub(header_len) else {
             return Ok(None);

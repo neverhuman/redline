@@ -807,7 +807,7 @@ impl Inner {
                 let page = state
                     .page
                     .as_ref()
-                    .ok_or(Error::CorruptPage("resident frame missing page"))?;
+                    .ok_or_else(|| Error::CorruptPage("resident frame missing page"))?;
                 let scratch = self.scratch.load(Ordering::Acquire);
                 if !scratch && !eviction_may_write(page)? {
                     continue;
@@ -957,7 +957,7 @@ impl Inner {
             let page = state
                 .page
                 .as_ref()
-                .ok_or(Error::CorruptPage("resident frame missing page"))?;
+                .ok_or_else(|| Error::CorruptPage("resident frame missing page"))?;
             let page_lsn = page.header()?.page_lsn;
             if page_lsn > durable_lsn {
                 return if strict {
@@ -984,7 +984,7 @@ impl Inner {
                 let current_lsn = state
                     .page
                     .as_ref()
-                    .ok_or(Error::CorruptPage("resident frame missing page"))?
+                    .ok_or_else(|| Error::CorruptPage("resident frame missing page"))?
                     .header()?
                     .page_lsn;
                 if current_lsn <= written_lsn {
@@ -1035,7 +1035,7 @@ impl PageGuard {
         let page = frame
             .page
             .as_ref()
-            .ok_or(Error::CorruptPage("resident frame missing page"))?;
+            .ok_or_else(|| Error::CorruptPage("resident frame missing page"))?;
         f(page)
     }
 
@@ -1044,7 +1044,7 @@ impl PageGuard {
         let page = frame
             .page
             .as_mut()
-            .ok_or(Error::CorruptPage("resident frame missing page"))?;
+            .ok_or_else(|| Error::CorruptPage("resident frame missing page"))?;
         f(page)
     }
 
@@ -1053,7 +1053,7 @@ impl PageGuard {
         let page = frame
             .page
             .as_mut()
-            .ok_or(Error::CorruptPage("resident frame missing page"))?;
+            .ok_or_else(|| Error::CorruptPage("resident frame missing page"))?;
         page.set_page_lsn(lsn)?;
         frame.dirty = true;
         Ok(())
@@ -1068,7 +1068,7 @@ impl PageGuard {
         let page = frame
             .page
             .as_mut()
-            .ok_or(Error::CorruptPage("resident frame missing page"))?;
+            .ok_or_else(|| Error::CorruptPage("resident frame missing page"))?;
         *page = new_page;
         page.set_page_lsn(lsn)?;
         frame.dirty = true;

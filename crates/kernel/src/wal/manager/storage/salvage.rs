@@ -92,7 +92,7 @@ pub(crate) fn salvage_bytes<Fs: FileSystem>(
 ) -> Result<PathBuf> {
     let len = to
         .checked_sub(from)
-        .ok_or(Error::CorruptWal("salvage range ends before it starts"))?;
+        .ok_or_else(|| Error::CorruptWal("salvage range ends before it starts"))?;
     let len = usize::try_from(len).map_err(|_| Error::CorruptWal("salvage range too large"))?;
     let mut bytes = vec![0; len];
     file.read_exact_at(from, &mut bytes)?;
