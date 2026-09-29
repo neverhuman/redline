@@ -23,7 +23,7 @@
 set -euo pipefail
 die() { printf 'redlinedb install: %s\n' "$*" >&2; exit 1; }
 note() { printf 'redlinedb install: %s\n' "$*" >&2; }
-[[ $# == 0 ]] || { printf 'Usage: VERSION=v5.0.0 PREFIX=/installation/path bash install.sh\n' >&2; exit 64; }
+[[ $# == 0 ]] || { printf 'Usage: VERSION=v5.1.0 PREFIX=/installation/path bash install.sh\n' >&2; exit 64; }
 # Release authority, repeated from ops/release/authority.env because a piped
 # installer cannot read files. Archives must name this repository id.
 repo_slug=neverhuman/redline

@@ -1,6 +1,6 @@
 # Changelog
 
-## [Unreleased]
+## [5.1.0] - 2026-09-29
 
 SQLite shell and error-text parity: most sqlite_parity cases that v5.0.0
 listed as known failures now pass against the pinned sqlite3 3.53.1. Those

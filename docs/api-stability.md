@@ -26,7 +26,7 @@ Depend on a release tag and commit your `Cargo.lock`:
 
 ```toml
 [dependencies]
-redlinedb = { git = "https://github.com/neverhuman/redline", tag = "v5.0.0" }
+redlinedb = { git = "https://github.com/neverhuman/redline", tag = "v5.1.0" }
 ```
 
 The Rust API of the `redlinedb` facade has no semver promise: any release,
