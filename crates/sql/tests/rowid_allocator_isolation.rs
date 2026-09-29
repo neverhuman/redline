@@ -130,3 +130,97 @@ fn a_rolled_back_delete_of_the_highest_rowid_leaves_that_rowid_taken() {
         [(1, 1), (2, 2), (3, 3), (4, 9)]
     );
 }
+
+fn labelled(conn: &Arc<Connection>, sql: &str) -> Vec<(i64, String)> {
+    let mut stmt = conn.prepare(sql).expect("prepare");
+    let mut out = Vec::new();
+    while stmt.step().expect("step") == Step::Row {
+        out.push((
+            stmt.column_i64(0).expect("column 0"),
+            stmt.column_text(1).expect("column 1").to_owned(),
+        ));
+    }
+    out
+}
+
+fn pairs(expected: &[(i64, &str)]) -> Vec<(i64, String)> {
+    expected
+        .iter()
+        .map(|(id, label)| (*id, (*label).to_owned()))
+        .collect()
+}
+
+#[test]
+fn autoincrement_never_hands_out_a_live_rowid_after_a_rolled_back_delete() {
+    let dir = tempfile::tempdir().expect("temp dir");
+    {
+        let conn = open(&dir);
+        conn.execute_batch(
+            "CREATE TABLE t(id INTEGER PRIMARY KEY AUTOINCREMENT, v TEXT);
+             INSERT INTO t(v) VALUES ('a'), ('b'), ('c');",
+        )
+        .expect("first session");
+    }
+    let conn = open(&dir);
+    conn.execute_batch(
+        "BEGIN;
+         DELETE FROM t;
+         ROLLBACK;
+         INSERT INTO t(v) VALUES ('new');
+         REPLACE INTO t(v) VALUES ('x');",
+    )
+    .expect("second session");
+    assert_eq!(
+        labelled(&conn, "SELECT id, v FROM t"),
+        pairs(&[(1, "a"), (2, "b"), (3, "c"), (4, "new"), (5, "x")])
+    );
+}
+
+#[test]
+fn autoincrement_does_not_reuse_a_deleted_highest_rowid() {
+    let dir = tempfile::tempdir().expect("temp dir");
+    let conn = open(&dir);
+    conn.execute_batch(
+        "CREATE TABLE t(id INTEGER PRIMARY KEY AUTOINCREMENT, v TEXT);
+         INSERT INTO t(v) VALUES ('a'), ('b'), ('c');
+         DELETE FROM t WHERE id = 3;
+         INSERT INTO t(v) VALUES ('d');",
+    )
+    .expect("script");
+    assert_eq!(
+        labelled(&conn, "SELECT id, v FROM t"),
+        pairs(&[(1, "a"), (2, "b"), (4, "d")])
+    );
+}
+
+#[test]
+fn moving_the_highest_rowid_lets_the_next_insert_reuse_it() {
+    let dir = tempfile::tempdir().expect("temp dir");
+    let conn = open(&dir);
+    conn.execute_batch(
+        "CREATE TABLE a(id INTEGER PRIMARY KEY, v);
+         INSERT INTO a(v) VALUES (1), (2), (3);
+         UPDATE a SET id = 0 WHERE id = 3;
+         DELETE FROM a WHERE id = 2;
+         INSERT INTO a(v) VALUES (9);",
+    )
+    .expect("script");
+    assert_eq!(rows(&conn, "SELECT id, v FROM a"), [(0, 3), (1, 1), (2, 9)]);
+}
+
+#[test]
+fn a_replace_that_removes_the_highest_rowid_lets_the_next_insert_reuse_it() {
+    let dir = tempfile::tempdir().expect("temp dir");
+    let conn = open(&dir);
+    conn.execute_batch(
+        "CREATE TABLE r(id INTEGER PRIMARY KEY, u TEXT UNIQUE);
+         INSERT INTO r(u) VALUES ('a'), ('b'), ('c');
+         REPLACE INTO r(id, u) VALUES (1, 'c');
+         INSERT INTO r(u) VALUES ('d');",
+    )
+    .expect("script");
+    assert_eq!(
+        labelled(&conn, "SELECT id, u FROM r"),
+        pairs(&[(1, "c"), (2, "b"), (3, "d")])
+    );
+}

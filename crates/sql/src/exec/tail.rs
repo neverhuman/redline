@@ -78,17 +78,19 @@ pub(crate) fn restrict_dml_rows(
     Ok(filtered.into_iter().skip(offset_n).take(limit_n).collect())
 }
 
-/// A table with an INTEGER PRIMARY KEY reuses its highest rowid once that
-/// row is deleted, as SQLite's max(rowid)+1 does. Only a delete of the row
-/// just below the table's next rowid can change it, so every other delete
-/// returns at once; that one reads the table for its new maximum.
-fn lower_rowid_allocator_after_delete(
+/// Called after a row of `table` is deleted, or moved to another rowid. A
+/// table with an INTEGER PRIMARY KEY and no AUTOINCREMENT reuses its
+/// highest rowid once that row is gone, as SQLite's max(rowid)+1 does. Only
+/// removing the row just below the table's next rowid can change that, so
+/// every other call returns at once; that one reads the table for its new
+/// maximum. AUTOINCREMENT never reuses a rowid, so its counter never drops.
+pub(crate) fn lower_rowid_allocator_after_delete(
     conn: &Connection,
     tx: &mut Txn,
     table: &Arc<TableDef>,
     deleted_rowid: RowId,
 ) -> Result<()> {
-    if table.rowid_alias_column.is_none() {
+    if table.rowid_alias_column.is_none() || table.is_autoincrement() {
         return Ok(());
     }
     let engine = conn.engine();
@@ -370,6 +372,7 @@ pub(crate) fn execute_update(
                     new_rowid,
                     payload,
                 )?;
+                lower_rowid_allocator_after_delete(conn, tx, &plan.table, fresh.rowid)?;
             }
             crate::exec::index_dml::maintain_indexes_on_update(
                 conn.engine(),
@@ -593,9 +596,9 @@ pub(crate) fn execute_delete(
             };
             // BEFORE DELETE triggers fire while the before-image row still exists.
             fire_before_delete_triggers(conn, tx, &plan.table, row.rowid, &live)?;
-            lower_rowid_allocator_after_delete(conn, tx, &plan.table, row.rowid)?;
             conn.engine()
                 .delete_for_relation(tx, plan.table.relation_id, row.rowid)?;
+            lower_rowid_allocator_after_delete(conn, tx, &plan.table, row.rowid)?;
             crate::exec::index_dml::maintain_indexes_on_delete(
                 conn.engine(),
                 tx,

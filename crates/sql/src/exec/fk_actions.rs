@@ -137,6 +137,7 @@ fn cascade_delete_child(
 ) -> Result<()> {
     let engine = conn.engine();
     engine.delete_for_relation(tx, child.relation_id, rowid)?;
+    super::super::tail::lower_rowid_allocator_after_delete(conn, tx, child, rowid)?;
     super::super::index_dml::maintain_indexes_on_delete(engine, tx, child, values, rowid)?;
     // Recurse: the deleted child may itself be a parent for grand-children.
     enforce_fk_on_parent_change(conn, session, tx, child, values, None, depth + 1)

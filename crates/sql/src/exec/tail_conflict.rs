@@ -500,6 +500,7 @@ fn apply_upsert_update(
         ctx.conn
             .engine()
             .insert_for_relation(ctx.tx, ctx.table.relation_id, new_rowid, payload)?;
+        super::lower_rowid_allocator_after_delete(ctx.conn, ctx.tx, ctx.table, existing.rowid)?;
     }
     crate::exec::index_dml::maintain_indexes_on_update(
         ctx.conn.engine(),
@@ -711,6 +712,7 @@ fn apply_unique_conflict_resolution(
                     }
                     conn.engine()
                         .delete_for_relation(tx, table.relation_id, conflict.rowid)?;
+                    super::lower_rowid_allocator_after_delete(conn, tx, table, conflict.rowid)?;
                     if let Some(old_row) = old_row {
                         crate::exec::index_dml::maintain_indexes_on_delete(
                             conn.engine(),

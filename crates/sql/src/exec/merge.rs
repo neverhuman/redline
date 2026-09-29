@@ -227,6 +227,7 @@ fn apply_matched_delete(
         };
     conn.engine()
         .delete_for_relation(tx, plan.target.relation_id, target_row.rowid)?;
+    super::tail::lower_rowid_allocator_after_delete(conn, tx, &plan.target, target_row.rowid)?;
     super::index_dml::maintain_indexes_on_delete(
         conn.engine(),
         tx,

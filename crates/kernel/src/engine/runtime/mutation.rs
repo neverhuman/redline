@@ -24,8 +24,9 @@ impl Engine {
     }
 
     /// Row `row_id` of `rel_id` as the latest committed state and `tx`'s own
-    /// writes show it, whatever `tx`'s snapshot. A uniqueness check reads
-    /// this, so a row another transaction committed after `tx` began counts.
+    /// writes show it, whatever `tx`'s snapshot, so a row another transaction
+    /// committed after `tx` began counts. Rowid allocation reads it to skip a
+    /// rowid a row still holds.
     pub fn get_for_relation_latest(
         &self,
         tx: &Txn,
