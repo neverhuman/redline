@@ -35,12 +35,21 @@
   `AUTOINCREMENT` step past a rowid another transaction is writing or has
   committed, so concurrent inserts get distinct rowids.
 
+- **A pin could fail although the buffer pool had room.** Under
+  concurrent reads a pin could fail with "no unpinned frame available for
+  eviction" (in a database, after a needless pressure checkpoint), because
+  the pool checked for room again after evicting and another thread's pin
+  had filled it meanwhile.
+
 ### Changed
 
 - **A statement no longer creates or checks its spill directory unless it
   spills.** Every statement did so up front: a failing `mkdir` and a
   `statx` per `SELECT`, even a point read. The directory is now made when a
   query first spills.
+- **Unpinning a page wakes no one.** Every page unpin made a futex call to
+  wake threads that could not be waiting for it, about a fifth of the time
+  of an `UPDATE` in the performance audit's profile.
 - **Rowids are numbered per table**, from 1, as in SQLite. Every table took
   its rowids from the shared counter, so the key a NULL `INTEGER PRIMARY
   KEY` was given (and `last_insert_rowid()`), or a table's first rowid,
