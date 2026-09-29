@@ -33,7 +33,7 @@ pub const SQLITE_DRIFT: f64 = 0.10;
 pub const SQLITE: &str = "sqlite";
 /// A speedup counts as beyond noise only when the versions' run ranges do
 /// not overlap and it moves by more than this, or than SQLite's own spread
-/// across the newer version's runs, whichever is larger.
+/// across either version's runs, whichever is larger.
 pub const MIN_EFFECT: f64 = 0.05;
 
 /// `bundle.json`, written by `scripts/perf/scoreboard-bench.sh`.
@@ -146,6 +146,12 @@ struct HostRun {
     /// The most CI jobs seen while the run went on.
     #[serde(default)]
     runner_jobs_max: u64,
+    /// The highest one-minute load seen while the run went on, and the
+    /// limit the run was started under.
+    #[serde(default)]
+    loadavg_max: f64,
+    #[serde(default)]
+    max_loadavg: f64,
 }
 
 /// Every raw record file of the bundle: `<label>/run-<k>-<pair>.jsonl`.
@@ -253,6 +259,12 @@ pub fn summarize(bundle: &Path) -> Result<Summary> {
                     blockers.insert(format!(
                         "{} run {} {}: a CI job ran on the host during the run",
                         run.label, run.run, run.pair
+                    ));
+                }
+                if run.max_loadavg > 0.0 && run.loadavg_max >= run.max_loadavg {
+                    blockers.insert(format!(
+                        "{} run {} {}: host load reached {} during the run (limit {})",
+                        run.label, run.run, run.pair, run.loadavg_max, run.max_loadavg
                     ));
                 }
                 recorded.insert((run.label, run.run, run.pair));
@@ -469,7 +481,9 @@ pub fn summarize(bundle: &Path) -> Result<Summary> {
                         }
                         _ => false,
                     };
-                    let sqlite_spread = match &throughput[&sqlite_series(label)] {
+                    // SQLite's own run-to-run spread beside either version,
+                    // the larger: a change smaller than that is not shown.
+                    let spread = |series: &str| match &throughput[series] {
                         Figure {
                             median: Some(median),
                             min: Some(min),
@@ -477,6 +491,8 @@ pub fn summarize(bundle: &Path) -> Result<Summary> {
                         } if *median > 0.0 => (max - min) / median,
                         _ => f64::INFINITY,
                     };
+                    let sqlite_spread =
+                        spread(&sqlite_series(label)).max(spread(&sqlite_series(baseline)));
                     let floor = MIN_EFFECT.max(sqlite_spread);
                     let exceeds_noise =
                         apart && fig.median.is_some_and(|value| (value - 1.0).abs() > floor);
