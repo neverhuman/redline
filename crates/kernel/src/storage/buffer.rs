@@ -730,13 +730,17 @@ impl Inner {
                     .eviction
                     .lock()
                     .map_err(|_| Error::CorruptPage("buffer eviction mutex poisoned"))?;
-                while self.resident.load(Ordering::Relaxed) >= self.capacity {
+                // Succeed on the reading that shows room. Reading `resident`
+                // again afterwards raced with other threads' pins adding
+                // frames, and reported a full pool after a successful
+                // eviction.
+                loop {
+                    if self.resident.load(Ordering::Relaxed) < self.capacity {
+                        return Ok(());
+                    }
                     if !self.evict_one()? {
                         break;
                     }
-                }
-                if self.resident.load(Ordering::Relaxed) < self.capacity {
-                    return Ok(());
                 }
             }
             // A full clock pass locked every resident frame, so this thread
