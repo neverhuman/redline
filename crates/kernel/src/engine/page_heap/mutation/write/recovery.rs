@@ -57,6 +57,7 @@ impl PageBackedHeap {
         } else {
             rel_id
         };
+        self.advance_relation_next_row(rel_id, row_id)?;
         let current = match self.head_for_relation(rel_id, row_id)? {
             Some(ptr) => self.read_tuple(ptr).ok(),
             None => None,

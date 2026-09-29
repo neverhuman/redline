@@ -510,7 +510,7 @@ pub(crate) fn choose_rowid_for_insert(
                 let rowid = if table.is_autoincrement() {
                     sqlite_sequence_next_rowid(session, engine, tx, table)?
                 } else {
-                    engine.reserve_row_id()
+                    reserve_unused_rowid(engine, tx, table)?
                 };
                 values[slot] = SqlValue::Integer(rowid.0 as i64);
                 Ok(rowid)
@@ -529,7 +529,7 @@ pub(crate) fn choose_rowid_for_insert(
             _ => Err(Error::DatatypeMismatch),
         }
     } else {
-        Ok(engine.reserve_row_id())
+        Ok(engine.reserve_row_id_for(table.relation_id)?)
     }
 }
 
@@ -545,13 +545,29 @@ pub(crate) fn choose_rowid_for_update(
             .cloned()
             .unwrap_or(SqlValue::Null)
         {
-            SqlValue::Null => Ok(engine.reserve_row_id()),
+            SqlValue::Null => Ok(engine.reserve_row_id_for(table.relation_id)?),
             SqlValue::Integer(v) if v >= 0 => Ok(RowId::new(v as u64)),
             SqlValue::Real(v) => rowid_from_real(v).ok_or(Error::DatatypeMismatch),
             _ => Err(Error::DatatypeMismatch),
         }
     } else {
         Ok(current_rowid)
+    }
+}
+
+/// The next rowid of a table with an INTEGER PRIMARY KEY that no row holds.
+/// Deleting the table's highest rowid lowers its counter so the rowid is
+/// reused, as SQLite's max(rowid)+1 reuses it; if that delete rolls back,
+/// the row is back and the counter must step over it.
+fn reserve_unused_rowid(engine: &Engine, tx: &Txn, table: &TableDef) -> Result<RowId> {
+    loop {
+        let rowid = engine.reserve_row_id_for(table.relation_id)?;
+        if engine
+            .get_for_relation_latest(tx, table.relation_id, rowid)?
+            .is_none()
+        {
+            return Ok(rowid);
+        }
     }
 }
 
@@ -582,11 +598,21 @@ fn sqlite_sequence_next_rowid(
 ) -> Result<RowId> {
     let key = table.folded.as_ref();
     let current = session.sqlite_sequences.get(key).copied().unwrap_or(0);
-    let max_live_rowid = collect_table_rowids(engine, tx, table)?
-        .into_iter()
-        .map(|rowid| rowid.0)
-        .max()
-        .unwrap_or(0);
+    // Every rowid the table has held is below its next rowid, so when the
+    // sequence already reaches that far no live row can be above it. Only
+    // a sequence lowered by hand needs the table's live maximum.
+    let highest_held = engine
+        .relation_next_row(table.relation_id)?
+        .saturating_sub(1);
+    let max_live_rowid = if current >= 0 && current as u64 >= highest_held {
+        0
+    } else {
+        collect_table_rowids(engine, tx, table)?
+            .into_iter()
+            .map(|rowid| rowid.0)
+            .max()
+            .unwrap_or(0)
+    };
     if max_live_rowid > i64::MAX as u64 {
         return Err(Error::ConstraintViolation(
             "database or disk is full".to_owned(),

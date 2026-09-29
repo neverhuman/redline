@@ -539,9 +539,11 @@ fn reserve_ids_named_in_wal(
             txs.advance_next_tx_past(payload.tx_id())?;
         }
         match payload {
-            WalPayload::HeapInsert { row_id, .. }
-            | WalPayload::HeapUpdate { row_id, .. }
-            | WalPayload::HeapDelete { row_id, .. } => heap.reserve_recovered_row_id(row_id),
+            WalPayload::HeapInsert { rel_id, row_id, .. }
+            | WalPayload::HeapUpdate { rel_id, row_id, .. }
+            | WalPayload::HeapDelete { rel_id, row_id, .. } => {
+                heap.reserve_recovered_row_id_in(rel_id, row_id)?
+            }
             WalPayload::Commit { csn, .. } => txs.advance_next_csn_past(csn),
             _ => {}
         }
