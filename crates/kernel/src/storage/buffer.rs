@@ -536,6 +536,7 @@ impl Inner {
                     .lock()
                     .map_err(|_| Error::CorruptPage("buffer frame poisoned"))?;
                 state.page = Some(page);
+                crate::observe::add_frame_wakeup();
                 frame.ready.notify_all();
                 drop(state);
                 return Ok(PageGuard { page_id, frame });
@@ -853,6 +854,7 @@ impl Inner {
             shard.remove(&page_id);
             self.resident.fetch_sub(1, Ordering::Relaxed);
         }
+        crate::observe::add_frame_wakeup();
         frame.ready.notify_all();
         Ok(())
     }
@@ -991,10 +993,12 @@ impl Inner {
                     state.dirty = false;
                 }
                 self.stats.writes.fetch_add(1, Ordering::Relaxed);
+                crate::observe::add_frame_wakeup();
                 frame.ready.notify_all();
                 Ok(true)
             }
             Err(err) => {
+                crate::observe::add_frame_wakeup();
                 frame.ready.notify_all();
                 Err(err)
             }
@@ -1099,6 +1103,7 @@ impl Drop for PageGuard {
     fn drop(&mut self) {
         if let Ok(mut frame) = self.frame() {
             frame.pin_count = frame.pin_count.saturating_sub(1);
+            crate::observe::add_frame_wakeup();
             self.frame.ready.notify_all();
         }
     }
