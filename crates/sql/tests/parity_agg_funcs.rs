@@ -7,6 +7,12 @@ use rusqlite::types::Value as RuValue;
 use std::sync::Arc;
 use tempfile::tempdir;
 
+#[path = "parity_agg_funcs/group_concat.rs"]
+mod group_concat;
+
+#[path = "parity_agg_funcs/total.rs"]
+mod total;
+
 fn open() -> (tempfile::TempDir, Arc<Connection>) {
     let dir = tempdir().expect("temp dir");
     let path = dir.path().join("agg.db");
@@ -123,36 +129,6 @@ fn aggregate_distinct_and_filter_match_sqlite() {
 // ── group_concat ──────────────────────────────────────────────────────────────
 
 #[test]
-fn group_concat_basic_default_separator() {
-    let (_d, c) = open();
-    let setup = [
-        "CREATE TABLE t(v TEXT)",
-        "INSERT INTO t VALUES ('b'), ('c'), ('a')",
-    ];
-    for statement in setup {
-        c.execute(statement).expect("setup");
-    }
-    assert_matches_sqlite(&c, &setup, "SELECT group_concat(v ORDER BY v) FROM t");
-}
-
-#[test]
-fn group_concat_custom_separator() {
-    let (_d, c) = open();
-    let setup = [
-        "CREATE TABLE t(v TEXT)",
-        "INSERT INTO t VALUES ('z'), ('x'), ('y')",
-    ];
-    for statement in setup {
-        c.execute(statement).expect("setup");
-    }
-    assert_matches_sqlite(
-        &c,
-        &setup,
-        "SELECT group_concat(v, ' | ' ORDER BY v) FROM t",
-    );
-}
-
-#[test]
 fn group_concat_skips_nulls() {
     let (_d, c) = open();
     setup_words(&c);
@@ -163,80 +139,7 @@ fn group_concat_skips_nulls() {
     );
 }
 
-#[test]
-fn group_concat_all_null_returns_null() {
-    let (_d, c) = open();
-    c.execute("CREATE TABLE t(v TEXT)").expect("create");
-    c.execute("INSERT INTO t VALUES (NULL), (NULL)")
-        .expect("insert");
-    let v = q1(&c, "SELECT group_concat(v) FROM t");
-    assert_eq!(v, SqlValue::Null);
-}
-
-#[test]
-fn group_concat_empty_table_returns_null() {
-    let (_d, c) = open();
-    c.execute("CREATE TABLE t(v TEXT)").expect("create");
-    let v = q1(&c, "SELECT group_concat(v) FROM t");
-    assert_eq!(v, SqlValue::Null);
-}
-
-#[test]
-fn group_concat_with_group_by() {
-    let (_d, c) = open();
-    setup_words(&c);
-    assert_matches_sqlite(
-        &c,
-        SETUP_WORDS,
-        "SELECT grp, group_concat(w ORDER BY w) FROM words WHERE w IS NOT NULL GROUP BY grp ORDER BY grp",
-    );
-}
-
-// ── string_agg (alias) ────────────────────────────────────────────────────────
-
-#[test]
-fn string_agg_alias_works() {
-    let (_d, c) = open();
-    let setup = [
-        "CREATE TABLE t(v TEXT)",
-        "INSERT INTO t VALUES ('q'), ('p')",
-    ];
-    for statement in setup {
-        c.execute(statement).expect("setup");
-    }
-    assert_matches_sqlite(&c, &setup, "SELECT string_agg(v, '-' ORDER BY v) FROM t");
-}
-
 // ── total ─────────────────────────────────────────────────────────────────────
-
-#[test]
-fn total_basic_sum() {
-    let (_d, c) = open();
-    c.execute("CREATE TABLE t(n REAL)").expect("create");
-    c.execute("INSERT INTO t VALUES (1.0), (2.0), (3.0)")
-        .expect("insert");
-    let v = q1(&c, "SELECT total(n) FROM t");
-    assert_eq!(v, SqlValue::Real(6.0));
-}
-
-#[test]
-fn total_all_null_returns_zero_real() {
-    // SQLite: total(X) returns 0.0 for all-NULL groups, unlike sum() which returns NULL.
-    let (_d, c) = open();
-    c.execute("CREATE TABLE t(n INTEGER)").expect("create");
-    c.execute("INSERT INTO t VALUES (NULL), (NULL)")
-        .expect("insert");
-    let v = q1(&c, "SELECT total(n) FROM t");
-    assert_eq!(v, SqlValue::Real(0.0));
-}
-
-#[test]
-fn total_empty_table_returns_zero_real() {
-    let (_d, c) = open();
-    c.execute("CREATE TABLE t(n INTEGER)").expect("create");
-    let v = q1(&c, "SELECT total(n) FROM t");
-    assert_eq!(v, SqlValue::Real(0.0));
-}
 
 #[test]
 fn total_vs_sum_null_difference() {
@@ -247,16 +150,6 @@ fn total_vs_sum_null_difference() {
     let total_v = q1(&c, "SELECT total(n) FROM t");
     assert_eq!(sum_v, SqlValue::Null);
     assert_eq!(total_v, SqlValue::Real(0.0));
-}
-
-#[test]
-fn total_skips_null_values() {
-    let (_d, c) = open();
-    c.execute("CREATE TABLE t(n INTEGER)").expect("create");
-    c.execute("INSERT INTO t VALUES (10), (NULL), (5)")
-        .expect("insert");
-    let v = q1(&c, "SELECT total(n) FROM t");
-    assert_eq!(v, SqlValue::Real(15.0));
 }
 
 // ── json_group_array ──────────────────────────────────────────────────────────
