@@ -736,6 +736,15 @@ pub(crate) fn bind_alter_table(
                     "ALTER TABLE ADD COLUMN position is not supported".to_owned(),
                 ));
             }
+            let column_text = crate::parser::add_column_sql::column_def_text(sql)
+                .map_or_else(|| column_def.to_string(), str::to_owned);
+            let table_sql = parse_qualified_name(name.clone()).ok().and_then(|qname| {
+                crate::parser::add_column_sql::table_sql_after_add(
+                    schema,
+                    qname.name.folded(),
+                    &column_text,
+                )
+            });
             let mut alter_constraints = Vec::new();
             let mut identities = Vec::new();
             // A CHECK on the new column may name it and the columns before it.
@@ -785,6 +794,7 @@ pub(crate) fn bind_alter_table(
                 column,
                 if_not_exists,
                 table_constraints: alter_constraints,
+                table_sql,
             }
         }
         AlterTableOperation::DropColumn {

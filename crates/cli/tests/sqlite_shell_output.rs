@@ -168,6 +168,42 @@ fn sha3sum_quotes_a_table_name_that_holds_a_double_quote() {
 }
 
 #[test]
+fn sha3sum_reads_without_rowid_from_the_table_options_only() {
+    // The words inside a column default do not make the table WITHOUT
+    // ROWID; the hash is the pinned sqlite3's.
+    assert_eq!(
+        batch(
+            "CREATE TABLE w(a TEXT DEFAULT 'without rowid');\nINSERT INTO w VALUES('x');\n.sha3sum\n"
+        ),
+        "2fb2aa3f971ecfeff9dce3a5203c4f5d335c968d1f0aef4788a6099f\n"
+    );
+}
+
+#[test]
+fn added_columns_keep_their_text_in_the_schema() {
+    // sqlite3 splices the column as written before any table constraint,
+    // so .schema and .dump keep every CHECK.
+    assert_eq!(
+        batch(
+            "CREATE TABLE t(a, c, CONSTRAINT k PRIMARY KEY(a), CHECK(c>0));\n\
+             ALTER TABLE t ADD COLUMN b INT CHECK(b<9);\n.schema t\n"
+        ),
+        "CREATE TABLE t(a, c, b INT CHECK(b<9), CONSTRAINT k PRIMARY KEY(a), CHECK(c>0));\n"
+    );
+}
+
+#[test]
+fn shellzero_prints_postgres_text_unescaped() {
+    let output = Command::new(cargo_bin("redlinedb-cli"))
+        .args([":memory:", "SELECT 'a\u{1}b';"])
+        .env("REDLINEDB_QUIET_DURABILITY", "1")
+        .env("REDLINEDB_RESULT_DIALECT", "postgres")
+        .output()
+        .expect("run redlinedb cli");
+    assert_eq!(output.stdout, b"a\x01b\n");
+}
+
+#[test]
 fn clone_reports_each_object_it_copies() {
     // 00152
     let dir = tempfile::tempdir().expect("tempdir");

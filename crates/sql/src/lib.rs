@@ -34,7 +34,9 @@ pub use connection::{
     StatsConfig,
 };
 pub use error::{Error, Result};
-pub use parser::{first_statement_complete, is_blank_sql, split_first_statement, split_statements};
+pub use parser::{
+    first_statement_complete, input_complete, is_blank_sql, split_first_statement, split_statements,
+};
 pub use redlinedb_kernel::engine::{Engine, RecoveryTarget};
 pub use rql::{
     RqlBeginMode, RqlBinaryOp, RqlColumnDef, RqlColumnRef, RqlCreateIndex, RqlCreateTable,

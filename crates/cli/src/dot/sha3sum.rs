@@ -180,7 +180,10 @@ fn row_order(conn: &mut redlinedb::Connection, table: &str) -> Result<String, St
         Step::Done => String::new(),
     };
     drop(stmt);
-    let compact: String = sql
+    // The table options follow the column list's closing parenthesis, so
+    // the words `without rowid` inside a column's text do not count.
+    let options = sql.rfind(')').map_or("", |end| &sql[end + 1..]);
+    let compact: String = options
         .to_ascii_lowercase()
         .split_whitespace()
         .collect::<Vec<_>>()
@@ -198,6 +201,9 @@ fn row_order(conn: &mut redlinedb::Connection, table: &str) -> Result<String, St
             let name: String = row.get(1).map_err(|err| err.to_string())?;
             keys.push((position, quote_ident(&name)));
         }
+    }
+    if keys.is_empty() {
+        return Ok("rowid".to_owned());
     }
     keys.sort();
     Ok(keys

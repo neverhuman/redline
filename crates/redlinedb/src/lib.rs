@@ -78,9 +78,9 @@ pub use value::{Value, ValueRef};
 // path stable by re-exporting the implementation hosted in `handle`.
 pub(crate) use handle::{private_in_memory_sql_options, sql_options};
 
-/// True when the input contains a complete first SQL statement.
+/// True when the input ends on a statement boundary (`sqlite3_complete`).
 pub fn sql_input_complete(sql: &str) -> bool {
-    redlinedb_sql::first_statement_complete(sql)
+    redlinedb_sql::input_complete(sql)
 }
 
 #[cfg(test)]

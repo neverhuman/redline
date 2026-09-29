@@ -213,6 +213,7 @@ fn a_collation_survives_alter_table_add_column() {
                 column: column("d", Some("NOCASE"), Vec::new()),
                 if_not_exists: false,
                 table_constraints: Vec::new(),
+                table_sql: None,
             },
         },
     )

@@ -577,6 +577,9 @@ pub fn run() {
 
     if !cli.sql.is_empty() {
         let sql = cli.sql.join("\n");
+        // sqlite3 runs SQL given as arguments until the first statement
+        // fails, whatever -bail says; only stdin and .read go on.
+        state.bail = true;
         if let Err(e) = run_input(&mut state, &sql) {
             flush_output_or_exit(&mut state);
             print_error(&e);
@@ -800,6 +803,8 @@ fn run_readonly_sidecar(
     state.bail = bail;
     state.echo = echo;
     run_script_file(&mut state, &sidecar)?;
+    // SQL arguments stop at the first failure, as in `run`.
+    state.bail = true;
     run_input(&mut state, &sql_args.join("\n"))?;
     if state.had_error {
         return Err("Error: readonly sidecar query failed".to_owned());

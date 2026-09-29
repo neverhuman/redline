@@ -24,6 +24,26 @@ pub fn first_statement_complete(sql: &str) -> bool {
     split_first_statement_state(sql).terminated
 }
 
+/// True when `sql` ends on a statement boundary, as `sqlite3_complete`
+/// decides: every statement in it is terminated, and only whitespace and
+/// comments follow the last `;`. A shell reads a line group until this holds,
+/// so `SELECT 1; SELECT` on one line is not yet complete.
+pub fn input_complete(sql: &str) -> bool {
+    let mut rest = sql;
+    let mut terminated_any = false;
+    loop {
+        if is_blank_sql(rest) {
+            return terminated_any || rest.contains(';');
+        }
+        let split = split_first_statement_state(rest);
+        if !split.terminated {
+            return false;
+        }
+        terminated_any = true;
+        rest = split.tail;
+    }
+}
+
 struct StatementSplit<'a> {
     head: &'a str,
     tail: &'a str,
@@ -44,6 +64,9 @@ fn split_first_statement_state(sql: &str) -> StatementSplit<'_> {
     // `BEGIN IMMEDIATE` outside a trigger context must still split.
     let mut block_depth = 0usize;
     let mut in_trigger = false;
+    // A `CASE ... END` expression inside a trigger body ends with `END` too;
+    // that `END` closes the CASE, not the body.
+    let mut case_depth = 0usize;
     while i < len {
         let b = bytes[i];
         if let Some(quote) = in_string {
@@ -134,10 +157,18 @@ fn split_first_statement_state(sql: &str) -> StatementSplit<'_> {
                 block_depth += 1;
                 i += 5;
             }
+            b'C' | b'c' if in_trigger && is_word_boundary_keyword(bytes, i, b"CASE") => {
+                case_depth += 1;
+                i += 4;
+            }
             b'E' | b'e' if in_trigger && is_word_boundary_keyword(bytes, i, b"END") => {
-                block_depth = block_depth.saturating_sub(1);
-                if block_depth == 0 {
-                    in_trigger = false;
+                if case_depth > 0 {
+                    case_depth -= 1;
+                } else {
+                    block_depth = block_depth.saturating_sub(1);
+                    if block_depth == 0 {
+                        in_trigger = false;
+                    }
                 }
                 i += 3;
             }
@@ -287,7 +318,31 @@ pub fn split_statements(sql: &str) -> Vec<&str> {
 
 #[cfg(test)]
 mod tests {
-    use super::{first_statement_complete, split_first_statement};
+    use super::{first_statement_complete, input_complete, split_first_statement};
+
+    #[test]
+    fn input_is_complete_only_on_a_statement_boundary() {
+        assert!(!input_complete("SELECT 1; SELECT\n"));
+        assert!(input_complete("SELECT 1; SELECT\n2;\n"));
+        assert!(!input_complete("BEGIN; CREATE TABLE t(\n"));
+        assert!(input_complete("SELECT 1; -- trailing note\n"));
+        assert!(input_complete("SELECT 1; /* note */\n"));
+        assert!(!input_complete("SELECT 1 -- ;\n"));
+        assert!(!input_complete(""));
+    }
+
+    #[test]
+    fn a_case_end_inside_a_trigger_body_does_not_close_it() {
+        let sql = "CREATE TRIGGER tr AFTER INSERT ON t BEGIN \
+                   UPDATE t SET a = CASE WHEN new.a > 0 THEN 1 ELSE 0 END WHERE rowid = new.rowid; \
+                   DELETE FROM audit; END; SELECT 2;";
+        let (head, tail) = split_first_statement(sql);
+        assert!(head.ends_with("DELETE FROM audit; END;"), "{head}");
+        assert_eq!(tail, " SELECT 2;");
+        assert!(!input_complete(
+            "CREATE TRIGGER tr AFTER INSERT ON t BEGIN SELECT CASE 1 WHEN 1 THEN 2 END;\n"
+        ));
+    }
 
     #[test]
     fn split_ignores_semicolons_in_line_comments() {

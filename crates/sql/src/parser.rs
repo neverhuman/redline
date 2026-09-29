@@ -31,6 +31,7 @@ use crate::session::BeginMode;
 use crate::statement::*;
 use crate::value::SqlValue;
 
+mod add_column_sql;
 pub(crate) mod bind;
 mod helpers;
 #[allow(unused_imports)]
@@ -58,7 +59,9 @@ mod select;
 pub(crate) use select::*;
 mod split;
 pub(crate) mod templates;
-pub use split::{first_statement_complete, is_blank_sql, split_first_statement, split_statements};
+pub use split::{
+    first_statement_complete, input_complete, is_blank_sql, split_first_statement, split_statements,
+};
 pub(crate) use templates::{bind_statement, template};
 
 mod collation_stmt;
