@@ -217,8 +217,10 @@ impl Value {
             Value::Null => null_text.to_owned(),
             Value::Int(i) => i.to_string(),
             Value::Real(f) => format_real(*f),
-            // The shell's default `-escape ascii`; ShellZero stays out of
-            // the way when `-escape` is given.
+            // The postgres dialect prints text as it is; the SQLite shell's
+            // default is `-escape ascii`, and ShellZero stays out of the way
+            // when `-escape` is given.
+            Value::Text(s) if crate::cli_dialect().is_postgres() => s.clone(),
             Value::Text(s) => String::from_utf8_lossy(&crate::control_chars::escape(
                 s.as_bytes(),
                 crate::control_chars::Escape::Ascii,

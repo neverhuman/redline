@@ -120,7 +120,7 @@
       ],
       "open_subfeatures": [
         "ADD COLUMN and DROP COLUMN variants are outside the covered subset",
-        "after ADD COLUMN the stored CREATE TABLE text is rebuilt without the table's CHECK and UNIQUE clauses (they are still enforced), so `.schema` and `.dump` omit them"
+        "after RENAME TO, RENAME COLUMN or DROP COLUMN the stored CREATE TABLE text is rebuilt without the table's CHECK and UNIQUE clauses (they are still enforced), so `.schema` and `.dump` omit them; ADD COLUMN splices the new column into the text as SQLite does"
       ],
       "owner": "sql-parser-planner-executor",
       "notes": "The official sqlite_parity corpus covers rename of tables and columns."
@@ -348,7 +348,8 @@
         "crates/sql/tests/launch_trigger_chains.rs::instead_of_self_insert_does_not_recurse",
         "crates/sql/tests/launch_trigger_chains.rs::trigger_depth_cap_boundary",
         "crates/sql/tests/launch_trigger_chains.rs::failing_body_leaves_no_partial_effects",
-        "crates/sql/tests/sqlite_error_wording.rs::raise_is_refused_outside_a_trigger"
+        "crates/sql/tests/sqlite_error_wording.rs::raise_is_refused_outside_a_trigger",
+        "crates/sql/tests/trigger_case_body.rs::a_case_expression_inside_a_trigger_body_keeps_the_body_whole"
       ],
       "artifacts": [],
       "corpus_case_ids": [
@@ -358,7 +359,6 @@
       "open_subfeatures": [
         "INSTEAD OF UPDATE and INSTEAD OF DELETE on views (INSTEAD OF INSERT fires)",
         "trigger programs nest at most 8 deep, where SQLite allows 1000; the ninth fails its statement with \"too many levels of trigger recursion\", which the C API reports as SQLITE_MISUSE rather than SQLITE_ERROR",
-        "a CASE ... END expression inside a trigger body fails to parse",
         "a dropped trigger's name cannot be used again: CREATE TRIGGER fails with \"object already exists\"",
         "RAISE outside a trigger is refused when it is evaluated, not when the statement is prepared as in SQLite, so a RAISE that never runs (a SELECT over no rows) is not refused"
       ],

@@ -97,6 +97,51 @@ fn echo_interleaves_input_with_results() {
 }
 
 #[test]
+fn a_line_that_starts_the_next_statement_keeps_its_group_open() {
+    // The group ends only where the whole buffer ends on a statement
+    // boundary, as sqlite3_complete decides.
+    let script = "SELECT 1; SELECT\n2;\nBEGIN; CREATE TABLE t(\n a INT\n);\nCOMMIT;\n\
+                  SELECT count(*) FROM t;\n";
+    let (out, err, code) = run(&[], script);
+    assert_eq!(err, "");
+    assert_eq!(out, "1\n2\n0\n");
+    assert_eq!(code, 0);
+}
+
+#[test]
+fn a_case_end_inside_a_trigger_body_stays_in_the_trigger() {
+    // The body's statements run when the trigger fires, never as top-level
+    // SQL while the trigger is being created.
+    let script = "CREATE TABLE t(a);\nCREATE TABLE audit(x);\nINSERT INTO audit VALUES(1);\n\
+                  CREATE TRIGGER tr AFTER INSERT ON t BEGIN \
+                  UPDATE t SET a = CASE WHEN new.a>0 THEN 1 ELSE 0 END WHERE rowid=new.rowid; \
+                  DELETE FROM audit; END;\n\
+                  SELECT count(*) FROM audit;\nINSERT INTO t VALUES(5);\n\
+                  SELECT count(*) FROM audit;\nSELECT a FROM t;\n";
+    let (out, err, code) = run(&[], script);
+    assert_eq!(err, "");
+    assert_eq!(out, "1\n0\n1\n");
+    assert_eq!(code, 0);
+}
+
+#[test]
+fn sql_arguments_stop_at_the_first_failure() {
+    // Unlike stdin, SQL given on the command line stops where it fails, as
+    // in sqlite3, so a failed statement is not followed by later writes.
+    let output = Command::new(cargo_bin("redlinedb-cli"))
+        .args([":memory:", "SELECT bad;\nSELECT 2;"])
+        .env("REDLINEDB_QUIET_DURABILITY", "1")
+        .output()
+        .expect("run redlinedb cli");
+    assert_eq!(String::from_utf8_lossy(&output.stdout), "");
+    assert_eq!(
+        String::from_utf8_lossy(&output.stderr),
+        "Parse error near line 1: no such column: bad\n"
+    );
+    assert_eq!(output.status.code(), Some(1));
+}
+
+#[test]
 fn a_dollar_quoted_body_keeps_its_group_open() {
     // A PL/pgSQL body spans lines that end in `;`; the group ends only
     // after the closing `$$` (PostgreSQL corpus case 20301).

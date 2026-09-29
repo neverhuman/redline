@@ -656,6 +656,7 @@ pub fn apply_alter_table(
             column,
             if_not_exists,
             table_constraints,
+            table_sql,
         } => {
             if table
                 .columns
@@ -752,9 +753,10 @@ pub fn apply_alter_table(
                     }
                 }
             }
-            // Force CREATE TABLE re-render so the new column appears in
-            // sqlite_master.sql alongside the existing definitions.
-            table.normalized_sql = None;
+            // The binder's spliced text keeps every clause the table was
+            // created with; without it, sqlite_master.sql is rendered again
+            // from the catalog so the new column appears.
+            table.normalized_sql = table_sql.map(String::into_boxed_str);
         }
         AlterTableOperationSpec::DropColumn {
             column_name,

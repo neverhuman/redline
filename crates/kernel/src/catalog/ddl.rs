@@ -157,6 +157,10 @@ pub enum AlterTableOperationSpec {
         column: ColumnSpec,
         if_not_exists: bool,
         table_constraints: Vec<TableConstraintSpec>,
+        /// The table's `CREATE TABLE` text with the new column's definition
+        /// spliced in, as SQLite rewrites it; `None` renders the text again
+        /// from the catalog, which has no CHECK clauses to show.
+        table_sql: Option<String>,
     },
     DropColumn {
         column_name: DbName,

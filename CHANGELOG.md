@@ -22,7 +22,8 @@ reason, and the counts are in the generated README block.
 - **Shell input.** The shell reads a script in sqlite3's line groups: a failed
   group is reported as `Parse error near line N: ...` or `Error near line N:
   ...` and the script goes on, unless `-bail` or `.bail on`; the exit code is
-  1 once anything failed. Errors no longer carry RedlineDB's numeric code.
+  1 once anything failed. SQL given as command-line arguments still stops at
+  its first failure. Errors no longer carry RedlineDB's numeric code.
 - **Shell output.** BLOBs print their own bytes; `-escape ascii|symbol|off`
   applies to TEXT and BLOB with `^X` as the default; csv and tabs quote by
   sqlite3's rules. `.schema`, `.dump`, `.fullschema`, `.parameter list`,
@@ -32,12 +33,21 @@ reason, and the counts are in the generated README block.
   `-memtrace` reports RedlineDB's allocations, and `-readonly` opens a 0-byte
   file as an empty read-only database.
 - **SQL.** `ALTER TABLE ... ADD COLUMN` accepts a CHECK constraint and tests it
-  against the stored rows; `RAISE()` outside a trigger is refused.
+  against the stored rows, and splices the column into the table's stored
+  `CREATE TABLE` text as SQLite does, so `.schema` and `.dump` keep every
+  CHECK; `RAISE()` outside a trigger is refused.
+- **`.shell` and `.system` run commands.** They used to imitate `printf`. Any
+  script the shell reads (stdin, `.read`, `-init`) can now start processes, as
+  in sqlite3; run untrusted scripts with `-safe`, which refuses them.
 
 ### Fixed
 
 - The shell's option scan no longer reads an option's value (`-escape ascii`)
   as a mode flag, and ShellZero no longer re-encodes non-ASCII text literals.
+- A `CASE ... END` expression inside a trigger body no longer ends the body:
+  the statement splitter closed the trigger at the CASE's `END`, so creating
+  such a trigger failed. A `$$` quote that is still open keeps a statement
+  open, and a line group ends only where the whole input is complete.
 
 ## [5.0.0] - 2026-09-29
 
