@@ -41,7 +41,7 @@ impl Engine {
         index_id: CatalogIndexId,
     ) -> Result<Arc<crate::catalog::IndexDef>> {
         tx.ensure_open()?;
-        let _ddl = self.catalog.lock_ddl();
+        let _ddl = self.lock_schema(tx)?;
         let snapshot = self.catalog_snapshot_for_tx(tx);
         let next = Arc::new(crate::catalog::apply_inherited_index_key_collations(
             (*snapshot).clone(),

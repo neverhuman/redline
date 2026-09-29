@@ -40,7 +40,7 @@ impl Engine {
         spec: crate::catalog::CreateTableSpec,
     ) -> Result<Arc<crate::catalog::TableDef>> {
         tx.ensure_open()?;
-        let _ddl = self.catalog.lock_ddl();
+        let _ddl = self.lock_schema(tx)?;
         let next = apply_create_table((*self.catalog_snapshot_for_tx(tx)).clone(), spec)?;
         let next = Arc::new(next);
         let table = next
@@ -54,7 +54,7 @@ impl Engine {
 
     pub fn drop_table(&self, tx: &mut Txn, spec: crate::catalog::DropTableSpec) -> Result<()> {
         tx.ensure_open()?;
-        let _ddl = self.catalog.lock_ddl();
+        let _ddl = self.lock_schema(tx)?;
         let next = apply_drop_table((*self.catalog_snapshot_for_tx(tx)).clone(), spec)?;
         tx.set_pending_schema_snapshot(Arc::new(next));
         Ok(())
@@ -62,7 +62,7 @@ impl Engine {
 
     pub fn alter_table(&self, tx: &mut Txn, spec: crate::catalog::AlterTableSpec) -> Result<()> {
         tx.ensure_open()?;
-        let _ddl = self.catalog.lock_ddl();
+        let _ddl = self.lock_schema(tx)?;
         let current = self.catalog_snapshot_for_tx(tx);
         self.validate_drop_column_storage(&current, &spec)?;
         let next = apply_alter_table((*current).clone(), spec)?;
@@ -84,7 +84,7 @@ impl Engine {
         spec: crate::catalog::CreateViewSpec,
     ) -> Result<Arc<crate::catalog::ViewDef>> {
         tx.ensure_open()?;
-        let _ddl = self.catalog.lock_ddl();
+        let _ddl = self.lock_schema(tx)?;
         let next =
             crate::catalog::apply_create_view((*self.catalog_snapshot_for_tx(tx)).clone(), spec)?;
         let next = Arc::new(next);
@@ -99,7 +99,7 @@ impl Engine {
 
     pub fn drop_view(&self, tx: &mut Txn, spec: crate::catalog::DropViewSpec) -> Result<()> {
         tx.ensure_open()?;
-        let _ddl = self.catalog.lock_ddl();
+        let _ddl = self.lock_schema(tx)?;
         let next =
             crate::catalog::apply_drop_view((*self.catalog_snapshot_for_tx(tx)).clone(), spec)?;
         tx.set_pending_schema_snapshot(Arc::new(next));
@@ -112,7 +112,7 @@ impl Engine {
         spec: crate::catalog::CreateTriggerSpec,
     ) -> Result<Arc<crate::catalog::TriggerDef>> {
         tx.ensure_open()?;
-        let _ddl = self.catalog.lock_ddl();
+        let _ddl = self.lock_schema(tx)?;
         let next = crate::catalog::apply_create_trigger(
             (*self.catalog_snapshot_for_tx(tx)).clone(),
             spec,
@@ -129,7 +129,7 @@ impl Engine {
 
     pub fn drop_trigger(&self, tx: &mut Txn, spec: crate::catalog::DropTriggerSpec) -> Result<()> {
         tx.ensure_open()?;
-        let _ddl = self.catalog.lock_ddl();
+        let _ddl = self.lock_schema(tx)?;
         let next =
             crate::catalog::apply_drop_trigger((*self.catalog_snapshot_for_tx(tx)).clone(), spec)?;
         tx.set_pending_schema_snapshot(Arc::new(next));

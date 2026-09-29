@@ -101,7 +101,7 @@ impl Engine {
         kernel_backfill: bool,
     ) -> Result<Arc<crate::catalog::IndexDef>> {
         tx.ensure_open()?;
-        let _ddl = self.catalog.lock_ddl();
+        let _ddl = self.lock_schema(tx)?;
         let snapshot = self.catalog_snapshot_for_tx(tx);
         let index = snapshot
             .index_by_id(index_id)

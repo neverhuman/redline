@@ -15,6 +15,12 @@
   held: a plain insert failed with `UNIQUE constraint failed`, and `REPLACE`
   silently replaced that row. It now takes the next free rowid, as sqlite3
   does.
+- **Two transactions changing the schema at once could lose a table.** Each
+  built its change on the schema as it stood before either committed, so
+  their new tables got the same internal ids, and the second commit
+  replaced the first one's schema: one table vanished and the other showed
+  its rows. A schema change now makes any other schema change wait until
+  its transaction ends, up to the busy timeout (#16).
 
 - **Two connections writing the same rowid lost a row.** An insert took no
   row lock and did not look at a row committed after its transaction began,

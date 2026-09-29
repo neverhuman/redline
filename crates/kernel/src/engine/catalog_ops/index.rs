@@ -7,7 +7,7 @@ impl Engine {
         spec: crate::catalog::CreateIndexSpec,
     ) -> Result<Arc<crate::catalog::IndexDef>> {
         tx.ensure_open()?;
-        let _ddl = self.catalog.lock_ddl();
+        let _ddl = self.lock_schema(tx)?;
         let snapshot = self.catalog_snapshot_for_tx(tx);
         if spec.if_not_exists {
             let schema_id = crate::catalog::resolve_schema_id(&snapshot, spec.schema.as_ref())?;
@@ -73,7 +73,7 @@ impl Engine {
     /// resolve to an index or `new_name` already exists.
     pub fn rename_index(&self, tx: &mut Txn, old_folded: &str, new_name: &str) -> Result<()> {
         tx.ensure_open()?;
-        let _ddl = self.catalog.lock_ddl();
+        let _ddl = self.lock_schema(tx)?;
         let snapshot = self.catalog_snapshot_for_tx(tx);
         let next = crate::catalog::apply_rename_index((*snapshot).clone(), old_folded, new_name)?;
         tx.set_pending_schema_snapshot(Arc::new(next));
@@ -82,7 +82,7 @@ impl Engine {
 
     pub fn drop_index(&self, tx: &mut Txn, spec: crate::catalog::DropIndexSpec) -> Result<()> {
         tx.ensure_open()?;
-        let _ddl = self.catalog.lock_ddl();
+        let _ddl = self.lock_schema(tx)?;
         // Find the index id BEFORE applying the drop (the snapshot mutates).
         let snapshot = self.catalog_snapshot_for_tx(tx);
         let removed_id = crate::catalog::lookup_index(&snapshot, &spec.name)
