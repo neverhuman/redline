@@ -1,11 +1,11 @@
 {
   "schema_version": 1,
   "tool": "redlinedb-bench 5.0.0 durability-evidence",
-  "created_unix": 1790639229,
-  "source_sha": "63e22303f3a69ad93ebe079cb1206e9b3ebf0a93",
+  "created_unix": 1790645760,
+  "source_sha": "b3fc46bba9f87d83f64851dfa864799b4a4cc4c1",
   "dirty": false,
   "binary": {
-    "path": "/home/ubuntu/redlineDB/.agent/drafts/evidence/receipt-63e22303f/redlinedb",
+    "path": "/home/ubuntu/redlineDB/.agent/drafts/evidence/receipt-b3fc46bb/redlinedb",
     "sha256": "0c803caa8e0ef29c4633b660da45fe48a7b237be1816506fbcd9b10d325d23b8",
     "bytes": 10818704,
     "version_line": "redlinedb v5.0.0 (tested against SQLite 3.53.1)",
@@ -31,7 +31,7 @@
   "effective_mode": "strict",
   "failure_model": "process-kill",
   "filesystem": {
-    "work_dir": "/home/ubuntu/redlineDB/.agent/sandbox/durability-work/run-1790639229-7",
+    "work_dir": "/home/ubuntu/redlineDB/.agent/sandbox/durability-work/run-1790645760-7",
     "mount_point": "/",
     "fs_type": "ext4",
     "source": "/dev/nvme2n1p2",
@@ -1292,7 +1292,7 @@
       "acks_drained_after_kill": 0,
       "acknowledged": 138,
       "recovered_acked": 138,
-      "in_flight_committed": 138,
+      "in_flight_committed": null,
       "child_status": "signal(9)",
       "kill_result": "sent SIGKILL",
       "fault_observed": true,
@@ -1304,16 +1304,16 @@
       "wal_segments_after_kill": 1,
       "recovery_reports": [
         [
-          "latest||564|86454|0|142|0|278|0|||||||||||"
+          "latest||562|86292|0|141|0|276|0|||||||||||"
         ],
         [
-          "latest||564|86454|0|142|0|278|0|||||||||||"
+          "latest||562|86292|0|141|0|276|0|||||||||||"
         ]
       ],
       "verdict": {
         "acknowledged": 138,
         "recovered_acked": 138,
-        "in_flight_committed": 138,
+        "in_flight_committed": null,
         "lost_ack_ids": [],
         "unexpected_effects": [],
         "partial_transactions": [],
@@ -1348,8 +1348,8 @@
         },
         {
           "name": "recover-1.stdout",
-          "bytes": 22249,
-          "sha256": "3f2baa9a143c1983bb25acfcaa96d3f9d0f3b4a18769e7399a6d9ae22dc9389e"
+          "bytes": 22086,
+          "sha256": "04ffb0606c37653be9154f0f24e4f35b0c687004ae816a8378bcdb4b1cccb436"
         },
         {
           "name": "recover-1.stderr",
@@ -1358,8 +1358,8 @@
         },
         {
           "name": "recover-2.stdout",
-          "bytes": 22249,
-          "sha256": "3f2baa9a143c1983bb25acfcaa96d3f9d0f3b4a18769e7399a6d9ae22dc9389e"
+          "bytes": 22086,
+          "sha256": "04ffb0606c37653be9154f0f24e4f35b0c687004ae816a8378bcdb4b1cccb436"
         },
         {
           "name": "recover-2.stderr",
@@ -1553,7 +1553,7 @@
       "acks_drained_after_kill": 0,
       "acknowledged": 222,
       "recovered_acked": 222,
-      "in_flight_committed": 222,
+      "in_flight_committed": null,
       "child_status": "signal(9)",
       "kill_result": "sent SIGKILL",
       "fault_observed": true,
@@ -1565,16 +1565,16 @@
       "wal_segments_after_kill": 1,
       "recovery_reports": [
         [
-          "latest||903|183076|0|226|0|446|0|||||||||||"
+          "latest||901|182914|0|225|0|444|0|||||||||||"
         ],
         [
-          "latest||903|183076|0|226|0|446|0|||||||||||"
+          "latest||901|182914|0|225|0|444|0|||||||||||"
         ]
       ],
       "verdict": {
         "acknowledged": 222,
         "recovered_acked": 222,
-        "in_flight_committed": 222,
+        "in_flight_committed": null,
         "lost_ack_ids": [],
         "unexpected_effects": [],
         "partial_transactions": [],
@@ -1609,8 +1609,8 @@
         },
         {
           "name": "recover-1.stdout",
-          "bytes": 35862,
-          "sha256": "ea3a519221afd279925f51051a6606e10d92dafc556021a846a258dde48b0d96"
+          "bytes": 35699,
+          "sha256": "701801070fc9b196147a66a4e99a83aa603cd628c6945a1f4792504b877b0da9"
         },
         {
           "name": "recover-1.stderr",
@@ -1619,8 +1619,8 @@
         },
         {
           "name": "recover-2.stdout",
-          "bytes": 35862,
-          "sha256": "ea3a519221afd279925f51051a6606e10d92dafc556021a846a258dde48b0d96"
+          "bytes": 35699,
+          "sha256": "701801070fc9b196147a66a4e99a83aa603cd628c6945a1f4792504b877b0da9"
         },
         {
           "name": "recover-2.stderr",
@@ -2075,7 +2075,7 @@
       "acks_drained_after_kill": 0,
       "acknowledged": 81,
       "recovered_acked": 81,
-      "in_flight_committed": null,
+      "in_flight_committed": 81,
       "child_status": "signal(9)",
       "kill_result": "sent SIGKILL",
       "fault_observed": true,
@@ -2087,16 +2087,16 @@
       "wal_segments_after_kill": 1,
       "recovery_reports": [
         [
-          "latest||334|65428|0|84|0|162|0|||||||||||"
+          "latest||336|65588|0|85|0|164|0|||||||||||"
         ],
         [
-          "latest||334|65428|0|84|0|162|0|||||||||||"
+          "latest||336|65588|0|85|0|164|0|||||||||||"
         ]
       ],
       "verdict": {
         "acknowledged": 81,
         "recovered_acked": 81,
-        "in_flight_committed": null,
+        "in_flight_committed": 81,
         "lost_ack_ids": [],
         "unexpected_effects": [],
         "partial_transactions": [],
@@ -2131,8 +2131,8 @@
         },
         {
           "name": "recover-1.stdout",
-          "bytes": 13064,
-          "sha256": "d94c07ef6a4f0e948f99e665d20551a79ee9f7a14d19a27183133bffd3de2c02"
+          "bytes": 13217,
+          "sha256": "9e2881d1ecd45b04dbb6ffc494c35f8c83257eab2a8c376c50aaaf2c13696346"
         },
         {
           "name": "recover-1.stderr",
@@ -2141,8 +2141,8 @@
         },
         {
           "name": "recover-2.stdout",
-          "bytes": 13064,
-          "sha256": "d94c07ef6a4f0e948f99e665d20551a79ee9f7a14d19a27183133bffd3de2c02"
+          "bytes": 13217,
+          "sha256": "9e2881d1ecd45b04dbb6ffc494c35f8c83257eab2a8c376c50aaaf2c13696346"
         },
         {
           "name": "recover-2.stderr",
@@ -2423,7 +2423,7 @@
       "acks_drained_after_kill": 0,
       "acknowledged": 230,
       "recovered_acked": 230,
-      "in_flight_committed": 230,
+      "in_flight_committed": null,
       "child_status": "signal(9)",
       "kill_result": "sent SIGKILL",
       "fault_observed": true,
@@ -2435,16 +2435,16 @@
       "wal_segments_after_kill": 1,
       "recovery_reports": [
         [
-          "latest||935|186020|0|234|0|462|0|||||||||||"
+          "latest||933|185858|0|233|0|460|0|||||||||||"
         ],
         [
-          "latest||935|186020|0|234|0|462|0|||||||||||"
+          "latest||933|185858|0|233|0|460|0|||||||||||"
         ]
       ],
       "verdict": {
         "acknowledged": 230,
         "recovered_acked": 230,
-        "in_flight_committed": 230,
+        "in_flight_committed": null,
         "lost_ack_ids": [],
         "unexpected_effects": [],
         "partial_transactions": [],
@@ -2479,8 +2479,8 @@
         },
         {
           "name": "recover-1.stdout",
-          "bytes": 37138,
-          "sha256": "f38d71336a0c0051ca9ce0b0d78acae603ab7be8666a69df6eb245a58e0b35ed"
+          "bytes": 36979,
+          "sha256": "c11ed84a6cda4549ebb651c5e8a36ea3d796b36efc897d164ae9057779ce2225"
         },
         {
           "name": "recover-1.stderr",
@@ -2489,8 +2489,8 @@
         },
         {
           "name": "recover-2.stdout",
-          "bytes": 37138,
-          "sha256": "f38d71336a0c0051ca9ce0b0d78acae603ab7be8666a69df6eb245a58e0b35ed"
+          "bytes": 36979,
+          "sha256": "c11ed84a6cda4549ebb651c5e8a36ea3d796b36efc897d164ae9057779ce2225"
         },
         {
           "name": "recover-2.stderr",
@@ -2597,7 +2597,7 @@
       "acks_drained_after_kill": 0,
       "acknowledged": 235,
       "recovered_acked": 235,
-      "in_flight_committed": 235,
+      "in_flight_committed": null,
       "child_status": "signal(9)",
       "kill_result": "sent SIGKILL",
       "fault_observed": true,
@@ -2609,16 +2609,16 @@
       "wal_segments_after_kill": 1,
       "recovery_reports": [
         [
-          "latest||955|187860|0|239|0|472|0|||||||||||"
+          "latest||953|187698|0|238|0|470|0|||||||||||"
         ],
         [
-          "latest||955|187860|0|239|0|472|0|||||||||||"
+          "latest||953|187698|0|238|0|470|0|||||||||||"
         ]
       ],
       "verdict": {
         "acknowledged": 235,
         "recovered_acked": 235,
-        "in_flight_committed": 235,
+        "in_flight_committed": null,
         "lost_ack_ids": [],
         "unexpected_effects": [],
         "partial_transactions": [],
@@ -2653,8 +2653,8 @@
         },
         {
           "name": "recover-1.stdout",
-          "bytes": 37941,
-          "sha256": "095df455fcd308d9a51213361f209e7908ba05d3d7628e707cdab7021a81d878"
+          "bytes": 37778,
+          "sha256": "a02b34601ba3427407014dcc317350b723a74ebcc02b78036da20751a8f56ddb"
         },
         {
           "name": "recover-1.stderr",
@@ -2663,8 +2663,8 @@
         },
         {
           "name": "recover-2.stdout",
-          "bytes": 37941,
-          "sha256": "095df455fcd308d9a51213361f209e7908ba05d3d7628e707cdab7021a81d878"
+          "bytes": 37778,
+          "sha256": "a02b34601ba3427407014dcc317350b723a74ebcc02b78036da20751a8f56ddb"
         },
         {
           "name": "recover-2.stderr",
@@ -2681,5 +2681,5 @@
     "the receipt records the binary's SHA-256 and the toolchain found on the host; it does not rebuild the binary from source_sha",
     "the result holds for the filesystem, mount options and kernel recorded here"
   ],
-  "logs_dir": "/home/ubuntu/redlineDB/.agent/sandbox/durability-work/run-1790639229-7"
+  "logs_dir": "/home/ubuntu/redlineDB/.agent/sandbox/durability-work/run-1790645760-7"
 }
