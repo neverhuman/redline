@@ -135,7 +135,7 @@ step_proofbind() {
 
 # ---- 8) Proofmark rust -----------------------------------------------------
 step_proofmark() {
-    jankurai proofmark rust . --obligations "$LOG_DIR/proofbind/obligations.json"
+    jankurai proofmark rust . --obligations target/jankurai/proofbind/obligations.json
 }
 
 # ---- 9) Rust witness build -------------------------------------------------
@@ -145,7 +145,7 @@ step_rust_witness() {
 
 # ---- 10) Copy-code audit ---------------------------------------------------
 step_copy_code() {
-    jankurai copy-code . --json "$LOG_DIR/copy-code.json" --md "$LOG_DIR/copy-code.md"
+    jankurai copy-code . --json target/jankurai/copy-code.json --md target/jankurai/copy-code.md
 }
 
 # ---- 11) UX QA smoke -------------------------------------------------------
