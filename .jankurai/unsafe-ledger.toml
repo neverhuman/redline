@@ -20,6 +20,9 @@ proof = "crates/bench/src/process_metrics.rs::tests::rusage_populates_after_init
 proof_lane = "rtk cargo test -p redlinedb-bench process_metrics --quiet --locked"
 proof_test = "redlinedb-bench::process_metrics::tests::rusage_populates_after_init"
 
+reviewed_by = "ops"
+reviewed_on = "2026-05-16"
+
 [[entries]]
 file = "crates/scoreboard/src/measure.rs"
 line = 19
@@ -37,8 +40,6 @@ owner = "bench-harness"
 invariant = "libc::getrusage(RUSAGE_SELF, _) cannot fail with EINVAL for SELF; the pointer is &mut raw on the stack, valid, aligned and writable with exclusive access; on rc == 0 the kernel writes every public field of rusage per `man 2 getrusage`."
 proof_lane = "rtk cargo test -p redlinedb-scoreboard --lib --locked"
 proof_test = "redlinedb-scoreboard::measure::tests::rusage_reports_this_process"
-reviewed_by = "ops"
-reviewed_on = "2026-05-16"
 
 [[entries]]
 file = "crates/bench/src/process_metrics.rs"

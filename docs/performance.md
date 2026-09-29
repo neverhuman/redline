@@ -117,10 +117,23 @@ through rusqlite, and runs the same fixed work on both in one process.
   versions, disagree: a fast wrong answer is not a result.
 - **Pairs.** `normal` pairs RedlineDB `Normal` durability with SQLite WAL
   and `synchronous=NORMAL`, on tmpfs. `strict` pairs `Strict` with
-  `synchronous=FULL` on a real disk, for the writing workloads only. Both
-  engines get a 64 MiB page cache. SQLite uses 4 KiB pages, no mmap and
-  in-memory temp storage, and RedlineDB runs queries on the calling thread.
-  Each case reads the settings back and refuses to run if one differs.
+  `synchronous=FULL` on a real disk, for the writing workloads only.
+  - Both engines get a 64 MiB page cache.
+  - SQLite uses 4 KiB pages, no mmap, in-memory temp storage, foreign keys
+    off (RedlineDB's default), and `locking_mode=EXCLUSIVE`. RedlineDB holds
+    an exclusive owner lock on its database, so SQLite is not made to take a
+    file lock per statement.
+  - Every query runs on the calling thread. RedlineDB's own WAL-writer and
+    prefetch threads run as they always do.
+  - Each case reads the settings back and refuses to run if one differs. For
+    an open workload the check comes after the clock stops.
+- **Reopening.** `open_after_updates` starts from an image whose 5,000
+  updates are still in the log for both engines: SQLite's automatic
+  checkpoint is off while it is built, and neither engine checkpoints on
+  close.
+- **Timing.** Resource figures (CPU time, I/O, RedlineDB's work counters)
+  cover exactly the timed work, not statement preparation or the digest
+  query. Copied images are synced before timing.
 - **Build.** The harness is its own crate because `redlinedb-bench` turns
   the kernel's failpoints on. Build it with `-p redlinedb-scoreboard` only.
   `scripts/perf/build-scoreboard.sh <ref> <label>` builds the harness of
@@ -145,14 +158,23 @@ order from run to run, and waits for a quiet host: no CI job and low load.
 SQLite runs beside each version and serves as the control group.
 
 `redline-scoreboard summarize` blocks publication when any of these holds:
-- fewer than three runs of a version;
+- fewer than three runs;
+- any version, or the SQLite beside it, missing a workload of a pair in any
+  run;
+- a failed or timed-out repetition;
+- a record at another scale;
 - reduced work (`--work-divisor` above 1);
-- a failed case;
+- a series that ran more than one engine version;
 - a result mismatch;
-- SQLite varying more than 10% between versions' runs.
+- a CI job on the host during a run;
+- the normal pair not on tmpfs;
+- SQLite beside different versions differing by more than 10%. Open times,
+  a few milliseconds each, are exempt from this last check.
 
 A speedup is marked as within noise when the two versions' run ranges
-overlap. The README block between `<!-- engine-throughput:begin -->` and
+overlap. `scoreboard-bench.sh` refuses a binary that carries failpoints or
+debug assertions, or that is not the one its `build.json` describes under
+the label given. The README block between `<!-- engine-throughput:begin -->` and
 `<!-- engine-throughput:end -->` is generated from `summary.json`. The
 `redlinedb-scoreboard` library tests fail when it no longer matches its
 bundle's raw records.

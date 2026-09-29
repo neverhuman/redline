@@ -9,6 +9,7 @@ use serde::Serialize;
 
 use crate::driver::{Arg, Driver, Rows, one};
 use crate::image::{ImageKind, NOTE, Scale, VALUE, account_of, amount_of, mix};
+use crate::measure::{self, Io, Usage};
 use crate::pair::Pair;
 
 /// One entry of the catalog.
@@ -179,7 +180,8 @@ fn scaled(ops: u64, divisor: u64) -> u64 {
     (ops / divisor.max(1)).max(1)
 }
 
-/// The timed part of one repetition.
+/// The timed part of one repetition. Resource use and engine counters
+/// cover exactly the timed work: no statement preparation, no digest query.
 #[derive(Debug, Default)]
 pub struct Timed {
     pub ops: u64,
@@ -189,31 +191,57 @@ pub struct Timed {
     pub digest: i64,
     /// Per-operation latency in nanoseconds, where the workload records it.
     pub latency_ns: Vec<u64>,
+    pub cpu_user_ns: u64,
+    pub cpu_sys_ns: u64,
+    pub io: Io,
+    pub counters: Option<serde_json::Value>,
 }
 
 /// Latency is sampled every `LATENCY_EVERY` fast operations, so reading
 /// the clock stays a small share of a sub-microsecond statement.
 const LATENCY_EVERY: u64 = 16;
 
-struct Clock {
+pub struct Clock {
     start: Instant,
+    usage: Usage,
+    io: Io,
+    counters: Option<serde_json::Value>,
+    counters_now: fn() -> Option<serde_json::Value>,
     latency_ns: Vec<u64>,
 }
 
 impl Clock {
-    fn start() -> Self {
+    pub fn start<D: Driver>() -> Self {
+        let counters = D::counters();
+        let usage = measure::usage();
+        let io = measure::io();
         Self {
             start: Instant::now(),
+            usage,
+            io,
+            counters,
+            counters_now: D::counters,
             latency_ns: Vec::new(),
         }
     }
 
-    fn done(self, ops: u64, digest: i64) -> Timed {
+    pub fn done(self, ops: u64, digest: i64) -> Timed {
+        let elapsed = self.start.elapsed();
+        let usage = measure::usage();
+        let io = measure::io().since(self.io);
+        let counters = match ((self.counters_now)(), &self.counters) {
+            (Some(after), Some(before)) => Some(measure::counters_since(&after, before)),
+            _ => None,
+        };
         Timed {
             ops,
-            elapsed: self.start.elapsed(),
+            elapsed,
             digest,
             latency_ns: self.latency_ns,
+            cpu_user_ns: usage.user_ns.saturating_sub(self.usage.user_ns),
+            cpu_sys_ns: usage.sys_ns.saturating_sub(self.usage.sys_ns),
+            io,
+            counters,
         }
     }
 }
@@ -245,7 +273,7 @@ pub fn run<D: Driver>(
         "insert_autocommit" => {
             let ops = scaled(autocommit_ops(pair), divisor);
             let mut stmt = driver.prepare("INSERT INTO kv(k, v) VALUES (?, ?)")?;
-            let mut clock = Clock::start();
+            let mut clock = Clock::start::<D>();
             for i in 0..ops {
                 step(&mut clock, i, 1, || {
                     D::run(
@@ -262,7 +290,7 @@ pub fn run<D: Driver>(
         "insert_batch100" => {
             let ops = scaled((n / 5) as u64, divisor);
             let mut stmt = driver.prepare("INSERT INTO kv(k, v) VALUES (?, ?)")?;
-            let clock = Clock::start();
+            let clock = Clock::start::<D>();
             let mut i = 0;
             while i < ops {
                 driver.begin()?;
@@ -285,7 +313,7 @@ pub fn run<D: Driver>(
             let mut stmt = driver.prepare(
                 "INSERT INTO bulk(id, account_id, ts, amount, note) VALUES (?, ?, ?, ?, ?)",
             )?;
-            let clock = Clock::start();
+            let clock = Clock::start::<D>();
             driver.begin()?;
             for id in 1..=n {
                 D::run(
@@ -308,7 +336,7 @@ pub fn run<D: Driver>(
         "point_pk_prepared" => {
             let ops = scaled(200_000, divisor);
             let mut stmt = driver.prepare("SELECT amount FROM events WHERE id = ?")?;
-            let mut clock = Clock::start();
+            let mut clock = Clock::start::<D>();
             let mut rows = Rows::default();
             for i in 0..ops {
                 let got = step(&mut clock, i, LATENCY_EVERY, || {
@@ -320,7 +348,7 @@ pub fn run<D: Driver>(
         }
         "point_pk_sql_text" => {
             let ops = scaled(20_000, divisor);
-            let mut clock = Clock::start();
+            let mut clock = Clock::start::<D>();
             let mut rows = Rows::default();
             for i in 0..ops {
                 // The id is this program's own integer, not input; each string
@@ -351,7 +379,7 @@ pub fn run<D: Driver>(
             let queries = scaled(queries, divisor);
             let span = 100.min(n);
             let mut stmt = driver.prepare(sql)?;
-            let mut clock = Clock::start();
+            let mut clock = Clock::start::<D>();
             let mut rows = Rows::default();
             for i in 0..queries {
                 let low = 1 + mix(i, n - span + 1);
@@ -383,7 +411,7 @@ pub fn run<D: Driver>(
             };
             let ops = scaled(ops, divisor);
             let mut stmt = driver.prepare(sql)?;
-            let mut clock = Clock::start();
+            let mut clock = Clock::start::<D>();
             let mut rows = Rows::default();
             for i in 0..ops {
                 let got = step(&mut clock, i, LATENCY_EVERY, || {
@@ -413,7 +441,7 @@ pub fn run<D: Driver>(
                 ),
             };
             let mut stmt = driver.prepare(sql)?;
-            let mut clock = Clock::start();
+            let mut clock = Clock::start::<D>();
             let mut rows = Rows::default();
             for i in 0..passes {
                 let got = step(&mut clock, i, 1, || D::run(&mut stmt, &[], columns))?;
@@ -426,7 +454,7 @@ pub fn run<D: Driver>(
             let mut stmt = driver.prepare(
                 "SELECT coalesce(sum(e.amount), 0) FROM accounts a JOIN events e ON e.account_id = a.id WHERE a.id = ?",
             )?;
-            let mut clock = Clock::start();
+            let mut clock = Clock::start::<D>();
             let mut rows = Rows::default();
             for i in 0..ops {
                 let got = step(&mut clock, i, 1, || {
@@ -447,7 +475,7 @@ pub fn run<D: Driver>(
                 divisor,
             );
             let mut stmt = driver.prepare("UPDATE events SET amount = amount + 1 WHERE id = ?")?;
-            let mut clock = Clock::start();
+            let mut clock = Clock::start::<D>();
             if !autocommit {
                 driver.begin()?;
             }
@@ -467,7 +495,7 @@ pub fn run<D: Driver>(
         "update_indexed_1txn" => {
             let ops = scaled(2_000, divisor);
             let mut stmt = driver.prepare("UPDATE events SET account_id = ? WHERE id = ?")?;
-            let clock = Clock::start();
+            let clock = Clock::start::<D>();
             driver.begin()?;
             for i in 0..ops {
                 D::run(
@@ -487,7 +515,7 @@ pub fn run<D: Driver>(
         "delete_pk_1txn" => {
             let ops = scaled(2_000, divisor).min(scale.kv as u64);
             let mut stmt = driver.prepare("DELETE FROM kv WHERE k = ?")?;
-            let clock = Clock::start();
+            let clock = Clock::start::<D>();
             driver.begin()?;
             for k in 1..=ops {
                 D::run(&mut stmt, &[Arg::Int(k as i64)], 0)?;
@@ -546,9 +574,10 @@ pub fn warm<D: Driver>(driver: &D) -> Result<()> {
 /// The first read of an open workload.
 pub fn first_read<D: Driver>(driver: &D, rows: u64) -> Result<i64> {
     let scale = Scale::new(rows);
-    one(
+    Ok(one(
         driver,
         "SELECT amount FROM events WHERE id = ?",
         &[Arg::Int(1 + scale.events / 2)],
-    )
+    )?
+    .digest)
 }

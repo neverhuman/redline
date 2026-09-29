@@ -10,8 +10,8 @@
 # itself comes from one commit (--harness-ref, default HEAD) for every
 # version: its crates/scoreboard is copied over the version's tree and
 # added to the workspace. Only the engine differs between versions in a
-# bundle, and build.json records the harness tree so the summarizer can
-# refuse a bundle whose harnesses differ.
+# bundle, and build.json records the harness tree so scoreboard-bench.sh
+# can refuse versions whose harnesses differ.
 #
 # As in build-version.sh, the build runs in a standalone
 # `git clone --no-local` sandbox under .agent/sandbox, never in /tmp and

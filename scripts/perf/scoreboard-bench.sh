@@ -15,7 +15,7 @@
 # The normal pair runs on tmpfs; the strict pair needs a real disk.
 #
 # Usage: scripts/perf/scoreboard-bench.sh --bundle <name> [--runs 3] [--rows 20000]
-#          [--pairs normal,strict] [--reps 5] [--cpus 2-5] [--max-loadavg 16]
+#          [--pairs normal,strict] [--reps 5] [--cpus 2-5] [--max-loadavg 16] [--max-wait-s 1800]
 #          [--normal-dir /dev/shm/scoreboard] [--strict-dir <dir on disk>]
 #          <label>=<binary> ...
 
@@ -23,13 +23,14 @@ set -euo pipefail
 
 script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 repo_root="$(git -C "$script_dir" rev-parse --show-toplevel)"
+source "$script_dir/lib.sh"
 
 die() {
   printf 'scoreboard-bench: %s\n' "$*" >&2
   exit 2
 }
 
-bundle="" runs=3 rows=20000 pairs=normal reps=5 cpus=2-5 max_loadavg=16
+bundle="" runs=3 rows=20000 pairs=normal reps=5 cpus=2-5 max_loadavg=16 max_wait_s=1800
 normal_dir=/dev/shm/scoreboard strict_dir="$repo_root/target/scoreboard-strict"
 labels=() binaries=()
 while [ $# -gt 0 ]; do
@@ -41,6 +42,7 @@ while [ $# -gt 0 ]; do
     --reps) reps="${2:?}"; shift 2 ;;
     --cpus) cpus="${2:?}"; shift 2 ;;
     --max-loadavg) max_loadavg="${2:?}"; shift 2 ;;
+    --max-wait-s) max_wait_s="${2:?}"; shift 2 ;;
     --normal-dir) normal_dir="${2:?}"; shift 2 ;;
     --strict-dir) strict_dir="${2:?}"; shift 2 ;;
     *=*) labels+=("${1%%=*}"); binaries+=("${1#*=}"); shift ;;
@@ -56,23 +58,51 @@ command -v taskset >/dev/null || die "taskset is missing"
 out="$repo_root/benchmark-results/perf/releases/$bundle"
 [ ! -e "$out" ] || die "$out exists; a bundle is never overwritten"
 
-# One harness and one SQLite for every version: only the engine may differ.
+# Each binary is the release build its build.json describes, under the label
+# given here; one harness and one SQLite serve every version, so only the
+# engine may differ.
 harness="" sqlite=""
+declare -A seen_label=()
 for i in "${!labels[@]}"; do
-  build="$(dirname "${binaries[$i]}")/build.json"
-  [ -f "$build" ] || die "${labels[$i]}: no build.json beside ${binaries[$i]}"
+  label="${labels[$i]}" bin="${binaries[$i]}"
+  [[ "$label" =~ ^[A-Za-z0-9][A-Za-z0-9._+-]*$ ]] || die "bad label '$label'"
+  [ "$label" != sqlite ] || die "the label sqlite is reserved for the control group"
+  [ -z "${seen_label[$label]:-}" ] || die "label $label is given twice"
+  seen_label[$label]=1
+  perf_check_release_binary "$label" "$bin"
+  build="$(dirname "$bin")/build.json"
+  [ -f "$build" ] || die "$label: no build.json beside $bin"
+  [ "$(jq -r .label "$build")" = "$label" ] || die "$label: $build describes $(jq -r .label "$build")"
+  [ "$(jq -r .binary_sha256 "$build")" = "$(sha256sum "$bin" | awk '{print $1}')" ] \
+    || die "$label: $bin is not the binary $build describes"
   tree="$(jq -r .harness_tree "$build")" lib="$(jq -r .engines.sqlite_source_id "$build")"
-  [ -z "$harness" ] || [ "$harness" = "$tree" ] || die "${labels[$i]} was built with another harness ($tree, not $harness)"
-  [ -z "$sqlite" ] || [ "$sqlite" = "$lib" ] || die "${labels[$i]} links another SQLite ($lib, not $sqlite)"
+  [ -z "$harness" ] || [ "$harness" = "$tree" ] || die "$label was built with another harness ($tree, not $harness)"
+  [ -z "$sqlite" ] || [ "$sqlite" = "$lib" ] || die "$label links another SQLite ($lib, not $sqlite)"
   harness="$tree" sqlite="$lib"
 done
 
 fstype() { findmnt -n -o FSTYPE -T "$1" 2>/dev/null || echo unknown; }
 mkdir -p "$normal_dir"
+[ "$(fstype "$normal_dir")" = tmpfs ] || die "the normal pair measures no device cost; $normal_dir is not on tmpfs"
 case ",$pairs," in *,strict,*)
   mkdir -p "$strict_dir"
   [ "$(fstype "$strict_dir")" != tmpfs ] || die "the strict pair syncs to disk; $strict_dir is on tmpfs"
 esac
+# Images and work copies live in per-bundle directories this script makes
+# and removes; leftovers from another run would be reused, so refuse them.
+for dir in "$normal_dir/$bundle" "$strict_dir/$bundle"; do
+  [ ! -e "$dir" ] || die "$dir exists: another run of $bundle is going on, or one was killed; check and remove it"
+done
+finish() {
+  local status=$?
+  rm -rf "${normal_dir:?}/$bundle" "${strict_dir:?}/$bundle"
+  if [ "$status" -ne 0 ] && [ -d "$out" ]; then
+    rm -rf "$out"
+    printf 'scoreboard-bench: failed; removed the partial bundle %s\n' "$out" >&2
+  fi
+  exit "$status"
+}
+trap finish EXIT
 
 runner_jobs() {
   local jobs=0
@@ -84,10 +114,17 @@ runner_jobs() {
 }
 loadavg() { cut -d' ' -f1 /proc/loadavg; }
 
+# Wait up to --max-wait-s for no CI job and load below --max-loadavg. A run
+# that starts or ends with a CI job is recorded in runs.jsonl, and the
+# summary then refuses to publish the bundle.
 wait_quiet() {
   local waited=0
   while [ "$(runner_jobs)" -gt 0 ] || awk -v l="$(loadavg)" -v m="$max_loadavg" 'BEGIN { exit !(l >= m) }'; do
-    [ "$waited" -lt 1800 ] || die "the host stayed busy for 30 minutes (runner jobs $(runner_jobs), load $(loadavg))"
+    if [ "$waited" -ge "$max_wait_s" ]; then
+      printf 'scoreboard-bench: host still busy after %ss (runner jobs %s, load %s); measuring anyway, and the summary will block publication if a CI job overlaps\n' \
+        "$max_wait_s" "$(runner_jobs)" "$(loadavg)" >&2
+      return 0
+    fi
     sleep 30
     waited=$((waited + 30))
   done
@@ -148,6 +185,4 @@ jq -n --arg bundle "$bundle" --argjson labels "$(printf '%s\n' "${labels[@]}" | 
     runs: $runs, reps: $reps, pairs: $pairs, pinned_cpus: $cpus, harness_tree: $harness,
     sqlite_source_id: $sqlite, created_utc: $created}' > "$out/bundle.json"
 
-# Only the per-bundle directories this script made; never the roots given.
-rm -rf "${normal_dir:?}/$bundle" "${strict_dir:?}/$bundle"
 "${binaries[$((n - 1))]}" summarize --bundle "$out"
