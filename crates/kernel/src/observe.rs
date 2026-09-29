@@ -26,6 +26,9 @@ pub struct ObserveSnapshot {
     pub relation_gets: u64,
     pub sql_row_decodes: u64,
     pub join_prefix_clones: u64,
+    /// Wake-ups of threads waiting on a buffer frame (a page load or write
+    /// finished, or a page was unpinned).
+    pub frame_wakeups: u64,
 }
 
 impl ObserveSnapshot {
@@ -53,6 +56,7 @@ impl ObserveSnapshot {
             join_prefix_clones: self
                 .join_prefix_clones
                 .saturating_sub(earlier.join_prefix_clones),
+            frame_wakeups: self.frame_wakeups.saturating_sub(earlier.frame_wakeups),
         }
     }
 }
@@ -68,6 +72,7 @@ struct ObserveCounters {
     relation_gets: AtomicU64,
     sql_row_decodes: AtomicU64,
     join_prefix_clones: AtomicU64,
+    frame_wakeups: AtomicU64,
 }
 
 static OBSERVE: ObserveCounters = ObserveCounters {
@@ -81,6 +86,7 @@ static OBSERVE: ObserveCounters = ObserveCounters {
     relation_gets: AtomicU64::new(0),
     sql_row_decodes: AtomicU64::new(0),
     join_prefix_clones: AtomicU64::new(0),
+    frame_wakeups: AtomicU64::new(0),
 };
 
 pub fn snapshot() -> ObserveSnapshot {
@@ -95,6 +101,7 @@ pub fn snapshot() -> ObserveSnapshot {
         relation_gets: OBSERVE.relation_gets.load(Ordering::Relaxed),
         sql_row_decodes: OBSERVE.sql_row_decodes.load(Ordering::Relaxed),
         join_prefix_clones: OBSERVE.join_prefix_clones.load(Ordering::Relaxed),
+        frame_wakeups: OBSERVE.frame_wakeups.load(Ordering::Relaxed),
     }
 }
 
@@ -165,6 +172,11 @@ pub fn add_sql_row_decode() {
 }
 
 #[inline]
+pub fn add_frame_wakeup() {
+    add(&OBSERVE.frame_wakeups, |s| &mut s.frame_wakeups, 1);
+}
+
+#[inline]
 pub fn add_join_prefix_clone() {
     add(
         &OBSERVE.join_prefix_clones,
@@ -201,6 +213,7 @@ mod this_thread {
                 relation_gets: 0,
                 sql_row_decodes: 0,
                 join_prefix_clones: 0,
+                frame_wakeups: 0,
             })
         };
     }
@@ -236,6 +249,7 @@ mod tests {
         add_relation_get();
         add_sql_row_decode();
         add_join_prefix_clone();
+        add_frame_wakeup();
     }
 
     fn each(checksum: u64, frames: u64, wait_ns: u64) -> ObserveSnapshot {
@@ -250,6 +264,7 @@ mod tests {
             relation_gets: 1,
             sql_row_decodes: 1,
             join_prefix_clones: 1,
+            frame_wakeups: 1,
         }
     }
 
@@ -270,6 +285,7 @@ mod tests {
             (total.relation_gets, part.relation_gets),
             (total.sql_row_decodes, part.sql_row_decodes),
             (total.join_prefix_clones, part.join_prefix_clones),
+            (total.frame_wakeups, part.frame_wakeups),
         ];
         for (total_count, part_count) in pairs {
             assert!(total_count >= part_count, "{total:?} misses {part:?}");
