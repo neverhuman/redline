@@ -257,7 +257,12 @@ impl Engine {
         Ok(())
     }
 
-    pub(super) fn lock_row_in_rel(&self, tx: &mut Txn, rel_id: RelId, row_id: RowId) -> Result<()> {
+    pub(in crate::engine) fn lock_row_in_rel(
+        &self,
+        tx: &mut Txn,
+        rel_id: RelId,
+        row_id: RowId,
+    ) -> Result<()> {
         let key = crate::engine::lock::RowKey { rel_id, row_id };
         if tx.has_row_lock(key) {
             return Ok(());
