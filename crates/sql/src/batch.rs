@@ -85,12 +85,14 @@ pub struct QueryMemoryBroker {
 }
 
 impl QueryMemoryBroker {
+    /// A broker for one statement. The spill directory is created only when
+    /// the statement spills: every statement builds a broker, and creating
+    /// the directory here cost a failing `mkdir` on each one.
     pub fn new(work_mem_bytes: usize, max_spill_bytes: usize, temp_dir: Option<PathBuf>) -> Self {
         let spill_root = match temp_dir {
             Some(dir) => dir,
             None => std::env::temp_dir(),
         };
-        let _ = fs::create_dir_all(&spill_root);
         Self {
             work_mem_bytes,
             max_spill_bytes,
@@ -129,6 +131,9 @@ impl QueryMemoryBroker {
         if self.spill_path.is_some() {
             return Ok(());
         }
+        fs::create_dir_all(&self.spill_root).map_err(|err| {
+            crate::error::Error::ConstraintViolation(format!("spill root create: {err}"))
+        })?;
         let stamp = match SystemTime::now().duration_since(UNIX_EPOCH) {
             Ok(d) => d,
             Err(_) => Duration::default(),
