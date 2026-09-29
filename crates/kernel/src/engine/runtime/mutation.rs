@@ -23,10 +23,12 @@ impl Engine {
             .get_for_relation(&self.txs, &snapshot, Some(tx.id()), rel_id, row_id)
     }
 
-    /// Row `row_id` of `rel_id` as the latest committed state and `tx`'s own
-    /// writes show it, whatever `tx`'s snapshot, so a row another transaction
-    /// committed after `tx` began counts. Rowid allocation reads it to skip a
-    /// rowid a row still holds.
+    /// Row `row_id` of `rel_id` as every committed transaction and `tx`'s own
+    /// writes leave it, whatever `tx`'s snapshot, so a row another
+    /// transaction committed after `tx` began counts. A commit counts as soon
+    /// as it is recorded, before it is published to new snapshots: a writer
+    /// releases its row locks in between, and its row must not look free
+    /// then. Inserts read this to refuse or step over a rowid a row holds.
     pub fn get_for_relation_latest(
         &self,
         tx: &Txn,
@@ -35,9 +37,10 @@ impl Engine {
     ) -> Result<Option<Vec<u8>>> {
         tx.ensure_open()?;
         crate::observe::add_relation_get();
-        let latest = self.txs.snapshot();
+        let mut every_commit = self.txs.snapshot();
+        every_commit.visible_csn = Csn(u64::MAX);
         self.heap
-            .get_for_relation(&self.txs, &latest, Some(tx.id()), rel_id, row_id)
+            .get_for_relation(&self.txs, &every_commit, Some(tx.id()), rel_id, row_id)
     }
 
     /// Every row of `rel_id` that `tx` sees, read by `workers` threads that
@@ -102,13 +105,42 @@ impl Engine {
     /// Claim `row_id` of `rel_id` for an insert by `tx`, without waiting:
     /// `true` when `tx` now holds the row lock and no row holds the row id.
     /// A rowid allocator steps past `false`: another transaction is writing
-    /// that row id, or a row committed after `tx`'s snapshot holds it.
+    /// that row id, or a row committed after `tx`'s snapshot holds it. A lock
+    /// this call took on a held row is let go again, so stepping past a row
+    /// does not block that row's writers until `tx` ends.
     pub fn claim_row_id(&self, tx: &mut Txn, rel_id: RelId, row_id: RowId) -> Result<bool> {
         tx.ensure_open()?;
+        let key = crate::engine::lock::RowKey { rel_id, row_id };
+        let already_held = tx.has_row_lock(key);
         if !self.try_lock_row_in_rel(tx, rel_id, row_id)? {
             return Ok(false);
         }
-        Ok(!self.row_id_held(tx, rel_id, row_id)?)
+        if self.row_id_held(tx, rel_id, row_id)? {
+            if !already_held {
+                tx.remove_row_lock(key);
+                self.locks.unlock(rel_id, row_id, tx.id());
+            }
+            return Ok(false);
+        }
+        Ok(true)
+    }
+
+    /// Insert a row at a row id that no transaction can hold: one this
+    /// relation's counter handed out (`reserve_row_id_for`) and nothing
+    /// lowers again, as for a table without an INTEGER PRIMARY KEY. Such an
+    /// insert needs neither the row lock nor the check
+    /// [`Self::insert_for_relation`] makes.
+    pub fn insert_new_row_for_relation(
+        &self,
+        tx: &mut Txn,
+        rel_id: RelId,
+        row_id: RowId,
+        payload: Vec<u8>,
+    ) -> Result<()> {
+        tx.ensure_open()?;
+        self.refresh_read_committed(tx);
+        self.heap
+            .insert_for_relation(tx.id(), rel_id, row_id, payload, Lsn(1))
     }
 
     /// Whether a row that the latest committed state or `tx`'s own writes

@@ -82,13 +82,13 @@ fn moving_a_key_onto_a_row_committed_after_the_snapshot_fails() {
     mover
         .execute("UPDATE a SET id = 0 WHERE id = 3")
         .expect("first move");
+    // The row at 0 was committed after this transaction's snapshot, which
+    // SQLite reports as BUSY_SNAPSHOT and RedlineDB as a serialization
+    // failure; it is never written over.
     let err = late
         .execute("UPDATE a SET id = 0 WHERE id = 2")
         .expect_err("rowid 0 is taken");
-    assert!(
-        err.to_string().contains("UNIQUE constraint failed: a.id"),
-        "{err}"
-    );
+    assert!(err.to_string().contains("serialization failure"), "{err}");
     late.execute("ROLLBACK").expect("rollback");
     assert_eq!(
         labelled(&mover, "SELECT id, v FROM a"),
@@ -157,4 +157,74 @@ fn concurrent_autoincrement_inserts_keep_every_committed_row() {
         "every committed insert keeps its own row"
     );
     assert_eq!(committed, THREADS * INSERTS, "no insert should have failed");
+}
+
+#[test]
+fn an_insert_or_ignore_that_waited_for_the_row_ignores_it() {
+    let (_dir, db) = database();
+    let first = db.connect();
+    first
+        .execute("CREATE TABLE t(id INTEGER PRIMARY KEY, v TEXT)")
+        .expect("create");
+    first.execute("BEGIN").expect("begin");
+    first
+        .execute("INSERT INTO t(id, v) VALUES (5, 'first')")
+        .expect("first insert");
+    let second = {
+        let db = Arc::clone(&db);
+        std::thread::spawn(move || {
+            db.connect()
+                .execute("INSERT OR IGNORE INTO t(id, v) VALUES (5, 'second')")
+                .map_err(|err| err.to_string())
+        })
+    };
+    std::thread::sleep(Duration::from_millis(300));
+    first.execute("COMMIT").expect("commit");
+    let inserted = second
+        .join()
+        .expect("second writer")
+        .expect("INSERT OR IGNORE resolves once the first row is visible");
+    assert_eq!(inserted, 0, "the conflicting row is ignored");
+    assert_eq!(
+        labelled(&first, "SELECT id, v FROM t"),
+        pairs(&[(5, "first")])
+    );
+}
+
+#[test]
+fn stepping_past_a_committed_row_leaves_its_writers_free() {
+    let (_dir, db) = database();
+    let early = db.connect();
+    early
+        .execute_batch(
+            "CREATE TABLE t(id INTEGER PRIMARY KEY AUTOINCREMENT, v TEXT);
+             INSERT INTO t(v) VALUES ('a');",
+        )
+        .expect("setup");
+    let late = db.connect();
+    late.execute("BEGIN").expect("begin");
+    labelled(&late, "SELECT id, v FROM t");
+    early
+        .execute("INSERT INTO t(v) VALUES ('early')")
+        .expect("committed insert");
+    // The late insert steps past rowid 2, which it cannot see.
+    late.execute("INSERT INTO t(v) VALUES ('late')")
+        .expect("late insert");
+    // While `late` is still open, row 2 can be updated at once.
+    let update = {
+        let db = Arc::clone(&db);
+        std::thread::spawn(move || {
+            let started = std::time::Instant::now();
+            db.connect()
+                .execute("UPDATE t SET v = 'changed' WHERE id = 2")
+                .expect("update");
+            started.elapsed()
+        })
+    };
+    let waited = update.join().expect("updater");
+    late.execute("COMMIT").expect("commit");
+    assert!(
+        waited < Duration::from_millis(500),
+        "updating the row the insert stepped past waited {waited:?}"
+    );
 }

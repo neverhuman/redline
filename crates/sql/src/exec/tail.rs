@@ -78,10 +78,18 @@ pub(crate) fn restrict_dml_rows(
     Ok(filtered.into_iter().skip(offset_n).take(limit_n).collect())
 }
 
-/// Insert a row version at `rowid`. The kernel refuses a rowid that a row
-/// still holds, one this transaction's snapshot may not show; that is the
-/// key conflict SQLite reports for the table's INTEGER PRIMARY KEY (or
-/// rowid), so it is reported the same way.
+/// Insert a row version at `rowid`.
+///
+/// A table without an INTEGER PRIMARY KEY only ever inserts rowids its
+/// counter handed out and nothing lowers again, so no other transaction can
+/// hold one; those inserts skip the row lock. Otherwise the kernel takes
+/// the row lock and refuses a rowid that a committed row or this
+/// transaction holds. The statement's conflict check ran before that and
+/// did not see the row, so another transaction committed it meanwhile: a
+/// serialization failure (SQLite's BUSY_SNAPSHOT). An autocommit statement
+/// retries on a new snapshot, where the conflict check sees the row and
+/// the statement fails with the key conflict or resolves it (IGNORE,
+/// REPLACE, an upsert) as usual.
 pub(crate) fn insert_row(
     conn: &Connection,
     tx: &mut Txn,
@@ -89,16 +97,13 @@ pub(crate) fn insert_row(
     rowid: RowId,
     payload: Vec<u8>,
 ) -> Result<()> {
-    match conn
-        .engine()
-        .insert_for_relation(tx, table.relation_id, rowid, payload)
-    {
+    let engine = conn.engine();
+    if table.rowid_alias_column.is_none() {
+        return Ok(engine.insert_new_row_for_relation(tx, table.relation_id, rowid, payload)?);
+    }
+    match engine.insert_for_relation(tx, table.relation_id, rowid, payload) {
         Err(redlinedb_kernel::Error::RowIdInUse) => {
-            let key: Vec<usize> = table
-                .rowid_alias_column
-                .map(|alias| vec![alias as usize])
-                .unwrap_or_default();
-            Err(crate::sqlite_errors::unique_failed(table, &key, None))
+            Err(Error::Kernel(redlinedb_kernel::Error::SerializationFailure))
         }
         other => Ok(other?),
     }
