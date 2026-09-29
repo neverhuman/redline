@@ -25,6 +25,10 @@
       "command": "cargo check --locked --workspace --all-targets",
       "purpose": "verify the locked dependency graph"
     },
+    "deny.toml": {
+      "command": "cargo deny --locked check --config deny.toml",
+      "purpose": "verify the dependency, licence and source policy"
+    },
     "CHANGELOG.md": {
       "command": "bash ops/ci/contract-drift.sh",
       "purpose": "verify native release identity notes"

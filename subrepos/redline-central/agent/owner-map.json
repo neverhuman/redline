@@ -7,6 +7,7 @@
     "AGENTS.md": "control-plane",
     "Cargo.toml": "workspace",
     "Cargo.lock": "workspace",
+    "deny.toml": "workspace",
     "VERSION": "workspace",
     "CHANGELOG.md": "docs",
     "README.md": "docs",
