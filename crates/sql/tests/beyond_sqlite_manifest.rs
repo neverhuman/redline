@@ -160,10 +160,9 @@ fn proof_lane_names(repo: &std::path::Path) -> BTreeSet<String> {
 // ---------------------------------------------------------------------------
 
 const PG_MANIFEST: &str = "subrepos/redline-testing/corpus/beyond_sqlite/generated_manifest.json";
-const SKIP_LIST_MIRRORS: [&str; 3] = [
+const SKIP_LIST_MIRRORS: [&str; 2] = [
     "metadata/beyond_sqlite/skip-list.toml",
     "subrepos/redline-testing/metadata/beyond_sqlite/skip-list.toml",
-    "subrepos/redline/metadata/beyond_sqlite/skip-list.toml",
 ];
 
 fn pg_cases() -> Vec<serde_json::Value> {

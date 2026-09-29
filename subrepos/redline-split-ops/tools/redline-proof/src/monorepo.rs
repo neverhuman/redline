@@ -13,7 +13,6 @@ const COMPONENTS: &[(&str, &str)] = &[
     ("redline-web", "subrepos/redline-web"),
     ("redline-central", "subrepos/redline-central"),
     ("redline-split-ops", "subrepos/redline-split-ops"),
-    ("redline", "subrepos/redline"),
 ];
 
 pub fn root() -> Option<PathBuf> {
@@ -105,7 +104,7 @@ fn validate(root: &Path, history: bool) -> Result<serde_json::Value> {
         .and_then(toml::Value::as_array)
         .ok_or_else(|| error("missing components"))?;
     if rows.len() != COMPONENTS.len() {
-        return Err(error("expected all six components"));
+        return Err(error("expected all five components"));
     }
     for (name, relative) in COMPONENTS {
         let matches: Vec<_> = rows
