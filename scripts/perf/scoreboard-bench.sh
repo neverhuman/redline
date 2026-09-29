@@ -149,7 +149,9 @@ sample_host() {
     jobs="$(runner_jobs)" load="$(loadavg)"
     [ "$jobs" -le "$most_jobs" ] || most_jobs="$jobs"
     most_load="$(awk -v a="$most_load" -v b="$load" 'BEGIN { print (b > a) ? b : a }')"
-    printf '%s %s\n' "$most_jobs" "$most_load" > "$1"
+    # Written whole and renamed, so a kill mid-write never leaves a torn
+    # or empty sample behind.
+    printf '%s %s\n' "$most_jobs" "$most_load" > "$1.tmp" && mv -f "$1.tmp" "$1"
     sleep 10
   done
 }
@@ -191,7 +193,10 @@ for run in $(seq 1 "$runs"); do
         --out "$out/$label/run-$run-$pair.jsonl"
       kill "$sampler" 2>/dev/null || true
       wait "$sampler" 2>/dev/null || true
-      read -r most_jobs most_load < "$host_sample" || { most_jobs=0 most_load=0; }
+      # No sample to read means the host went unwatched: count it as busy.
+      if ! read -r most_jobs most_load < "$host_sample" || [ -z "${most_load:-}" ]; then
+        most_jobs=1 most_load="$max_loadavg"
+      fi
       jq -n -c --arg label "$label" --argjson run "$run" --arg pair "$pair" --arg started "$started" \
         --arg finished "$(date -u +%Y-%m-%dT%H:%M:%SZ)" --argjson waited_out "$waited_out" \
         --argjson jobs_before "$before_jobs" --argjson jobs_after "$(runner_jobs)" \

@@ -155,6 +155,14 @@ struct Synthetic {
     v2_run3_version: &'static str,
     /// Repetitions written per run (the manifest asks for 2).
     reps_written: u32,
+    /// The highest load recorded for v2's first run (the limit is 16).
+    v2_run1_load_max: f64,
+    /// Write one of v1's records into v2's file.
+    misfile: bool,
+    /// Leave v2's second run out of runs.jsonl.
+    drop_host_record: bool,
+    /// Seconds SQLite takes beside v1 in run 3 (otherwise as in other runs).
+    sqlite_v1_run3_seconds: Option<f64>,
 }
 
 impl Default for Synthetic {
@@ -173,6 +181,10 @@ impl Default for Synthetic {
             normal_fs: "tmpfs",
             v2_run3_version: "redlinedb 5.1.1",
             reps_written: 2,
+            v2_run1_load_max: 2.0,
+            misfile: false,
+            drop_host_record: false,
+            sqlite_v1_run3_seconds: None,
         }
     }
 }
@@ -204,12 +216,21 @@ fn synthetic_bundle(root: &std::path::Path, knobs: Synthetic) -> std::path::Path
     let mut runs = String::new();
     for label in ["v1", "v2"] {
         for run in 1..=knobs.runs {
+            if knobs.drop_host_record && label == "v2" && run == 2 {
+                continue;
+            }
             let busy = u64::from(knobs.busy_host && label == "v2" && run == 1);
             let waited_out = knobs.waited_out && label == "v2" && run == 1;
+            let load_max = if label == "v2" && run == 1 {
+                knobs.v2_run1_load_max
+            } else {
+                2.0
+            };
             runs.push_str(
                 &serde_json::json!({
                     "label": label, "run": run, "pair": "normal", "waited_out": waited_out,
                     "runner_jobs_before": 0, "runner_jobs_after": 0, "runner_jobs_max": busy,
+                    "loadavg_max": load_max, "max_loadavg": 16.0,
                 })
                 .to_string(),
             );
@@ -227,10 +248,10 @@ fn synthetic_bundle(root: &std::path::Path, knobs: Synthetic) -> std::path::Path
                     continue;
                 }
                 for rep in 0..knobs.reps_written {
-                    let sqlite_s = if label == "v1" {
-                        knobs.sqlite_beside_v1
-                    } else {
-                        0.25
+                    let sqlite_s = match (label, run, knobs.sqlite_v1_run3_seconds) {
+                        ("v1", 3, Some(seconds)) => seconds,
+                        ("v1", _, _) => knobs.sqlite_beside_v1,
+                        _ => 0.25,
                     };
                     let own_version = if label == "v2" && run == 3 {
                         knobs.v2_run3_version
@@ -252,7 +273,11 @@ fn synthetic_bundle(root: &std::path::Path, knobs: Synthetic) -> std::path::Path
                             &serde_json::json!({
                                 "status": status,
                                 "label": engine,
-                                "with": label,
+                                "with": if knobs.misfile && label == "v2" && run == 1 && rep == 0 {
+                                    "v1"
+                                } else {
+                                    label
+                                },
                                 "run": run,
                                 "rep": rep,
                                 "pair": "normal",
@@ -520,4 +545,65 @@ fn a_small_change_is_not_called_beyond_noise() {
     let speedup = &summary.workloads[0].speedup["v2/v1"];
     assert!((speedup.median.expect("median") - 1.03).abs() < 1e-6);
     assert!(!speedup.exceeds_noise, "3% is under the 5% floor");
+}
+
+#[test]
+fn high_host_load_during_a_run_blocks_publication() {
+    let blockers = blockers_of(Synthetic {
+        v2_run1_load_max: 20.0,
+        ..Synthetic::default()
+    });
+    assert!(
+        blockers.iter().any(|b| b.contains("host load reached 20")),
+        "{blockers:?}"
+    );
+}
+
+#[test]
+fn a_record_in_another_versions_file_blocks_publication() {
+    let blockers = blockers_of(Synthetic {
+        misfile: true,
+        ..Synthetic::default()
+    });
+    assert!(
+        blockers.iter().any(|b| b.contains("in v2's file")),
+        "{blockers:?}"
+    );
+}
+
+#[test]
+fn a_run_missing_from_the_host_record_blocks_publication() {
+    let blockers = blockers_of(Synthetic {
+        drop_host_record: true,
+        ..Synthetic::default()
+    });
+    assert!(
+        blockers
+            .iter()
+            .any(|b| b.contains("v2 run 2 normal: no host record")),
+        "{blockers:?}"
+    );
+}
+
+#[test]
+fn sqlite_spread_beside_the_baseline_widens_the_noise_floor() {
+    let root = tempfile::tempdir().expect("temp dir");
+    // SQLite beside v1 takes 20% longer in one of three runs; its median,
+    // and so the drift check, is unchanged, but its throughput spreads 17%.
+    let bundle = synthetic_bundle(
+        root.path(),
+        Synthetic {
+            v2_seconds: 1.0 / 1.12,
+            sqlite_v1_run3_seconds: Some(0.3),
+            ..Synthetic::default()
+        },
+    );
+    let summary = crate::summary::summarize(&bundle).expect("summary");
+    assert!(summary.publishable, "{:?}", summary.blockers);
+    let speedup = &summary.workloads[0].speedup["v2/v1"];
+    assert!((speedup.median.expect("median") - 1.12).abs() < 1e-6);
+    assert!(
+        !speedup.exceeds_noise,
+        "12% is inside SQLite's 17% spread beside v1"
+    );
 }

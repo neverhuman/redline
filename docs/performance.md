@@ -168,16 +168,16 @@ SQLite runs beside each version and serves as the control group.
 - reduced work (`--work-divisor` above 1);
 - a series that ran more than one engine version;
 - a result mismatch;
-- a run that started on a busy host, or saw a CI job at any time (sampled
-  every 10 seconds);
+- a run that started on a busy host, or saw a CI job or load at or above
+  `--max-loadavg` at any time (sampled every 10 seconds);
 - the normal pair not on tmpfs;
 - SQLite beside different versions differing by more than 10%. Open times,
   a few milliseconds each, are exempt from this last check.
 
 A speedup is beyond noise only when both of these hold:
 - the two versions' run ranges do not overlap;
-- it moves by more than 5%, or by more than SQLite's own spread across the
-  newer version's runs, whichever is larger.
+- it moves by more than 5%, or by more than SQLite's own spread across
+  either version's runs, whichever is larger.
 
 Anything smaller is marked as within noise. `scoreboard-bench.sh` refuses a binary that carries failpoints or
 debug assertions, or that is not the one its `build.json` describes under
