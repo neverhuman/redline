@@ -1026,7 +1026,7 @@
       ],
       "open_subfeatures": [
         "SQLite shell scripting beyond one-shot query, stats and backup",
-        "a BLOB byte that is not UTF-8 is printed as U+FFFD instead of the raw byte (cases 11306-11362)"
+        "column, box, table and markdown modes lay a BLOB out as text, so a byte that is not UTF-8 shows as U+FFFD there"
       ],
       "owner": "cli-shell",
       "notes": "One-shot queries (`redlinedb DB SQL`), `stats` and `backup` run in the CLI test lanes listed in `.jankurai/test-map.json`."

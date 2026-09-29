@@ -32,6 +32,7 @@ use clap::Parser;
 use redlinedb::{Database, OpenOptions, OwnedStep, RqlProgram, RqlStatement};
 
 mod build_info;
+mod control_chars;
 mod dot;
 mod line_group;
 mod maintenance;
