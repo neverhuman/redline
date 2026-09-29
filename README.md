@@ -30,7 +30,7 @@ between processes, run `redlinedb-server` in one of them.
 > - **Its own file format.** A database is a directory (`data.redline`, `schema.redline`, `wal/`). RedlineDB cannot open SQLite database files, and SQLite cannot open RedlineDB databases. The first time v5.1.0 opens a database written by v4, it rebuilds every index; if a `UNIQUE` index would then hold two rows with one key, the open fails and changes nothing. Do not open the database with v4 afterwards: v4 refuses it when it has an index. Databases written before v4 have not been tested with v5.1.0. Back up before upgrading.
 > - **The C ABI is an experimental subset.** `libredlinedb.so.5` exports RedlineDB's native `rldb_*` API and part of the `sqlite3_*` API. It is not a replacement `libsqlite3`.
 > - **PostgreSQL support is a SQL-shell corpus only.** There is no PostgreSQL wire protocol, TLS, roles or SQLSTATE.
-> - **Durability scope.** In the default `Strict` mode, a committed transaction survives a crash of the RedlineDB process on ext4 on a local NVMe SSD (Linux 6.8.0) ([receipt](benchmark-results/durability/v5.0.0-strict-process-kill.json)). Power loss and operating-system crashes are not claimed. See [docs/manual/durability.md](docs/manual/durability.md).
+> - **Durability scope.** In the default `Strict` mode, a committed transaction survives a crash of the RedlineDB process on ext4 on a local NVMe SSD (Linux 6.8.0) ([receipt](benchmark-results/durability/v5.1.0-strict-process-kill.json)). Power loss and operating-system crashes are not claimed. See [docs/manual/durability.md](docs/manual/durability.md).
 > - **Slower than SQLite today.** On the per-process CLI benchmark in the [version table](#versions-over-time), RedlineDB takes longer than SQLite on the median case.
 
 ## Compatibility qualification
@@ -250,7 +250,7 @@ version table above.
 
 **Scope** (`sqlite_sql_cli`): each case runs one SQL or dot-command script through the `redlinedb` and SQLite shells and compares their output and exit status. It does not test C ABI semantics, the database file format, or prepared-statement state.
 
-**Evidence:** qualified: official evidence run `d348cb3b526b` records the same 2445 total, 2440 passed, 5 failed, 0 skipped. Corpus `sqlite_parity` from redline-testing 1.0.1 (runner SHA-256 `baec37c30140`), corpus SHA-256 `542cf3afd9c5`; oracle SQLite 3.53.1 (binary SHA-256 `211e83a5a197`), build stamp `36ca143645cf`. Run provenance `407bbe06a88c`: source tree `493e07a60193` (clean), source inputs `ba5959ef796f`, assertion policy `f9df5af05e65`.
+**Evidence:** qualified: official evidence run `c1b5daab170d` records the same 2445 total, 2440 passed, 5 failed, 0 skipped. Corpus `sqlite_parity` from redline-testing 1.0.1 (runner SHA-256 `224a0b0fa949`), corpus SHA-256 `542cf3afd9c5`; oracle SQLite 3.53.1 (binary SHA-256 `5efb87ca1598`), build stamp `36ca143645cf`. Run provenance `560a0c51dce6`: source tree `4eb671682ccd` (clean), source inputs `db02c7d2de12`, assertion policy `f9df5af05e65`.
 
 **Declared deviations (6):** these cases pass, but RedlineDB produces the compared output without the SQLite feature behind it.
 
@@ -276,7 +276,7 @@ version table above.
 
 **Performance:** this lane runs every case at once on a shared host to check correctness, so its timings are not a benchmark. Latency is measured separately on a quiet host; see [Versions over time](#versions-over-time).
 
-**Run metadata:** RedlineDB target version **redlinedb v5.0.0 (tested against SQLite 3.53.1)**, SQLite reference version **3.53.1 2026-05-05 10:34:17 c88b22011a54b4f6fbd149e9f8e4de77658ce58143a1af0e3785e4e6475127e9 (64-bit)**, redline-testing runner version **redline-testing 1.0.1**.
+**Run metadata:** RedlineDB target version **redlinedb v5.1.0 (tested against SQLite 3.53.1)**, SQLite reference version **3.53.1 2026-05-05 10:34:17 c88b22011a54b4f6fbd149e9f8e4de77658ce58143a1af0e3785e4e6475127e9 (64-bit)**, redline-testing runner version **redline-testing 1.0.1**.
 
 <!-- sqlite-parity-report:end -->
 
@@ -289,7 +289,7 @@ is in [`metadata/sqlite_parity/known-failures.json`](metadata/sqlite_parity/know
 <!-- POSTGRES_PARITY_START -->
 PostgreSQL **16.15** SQL-shell corpus (`redlinedb` CLI, `REDLINEDB_RESULT_DIALECT=postgres`, fresh `:memory:` per case): **254/265 agree** = **242** row matches + **12** expected rejections (declared error text verified); **11** declared unsupported; **0** mismatches; **0** skipped.
 
-Agreement is normalized SQL-shell transcript agreement, not typed-result or application parity. Not covered: wire protocol, TLS, roles/authorization, SQLSTATE, NOTIFY delivery, replication/CDC, extensions ([capability matrix](docs/beyond-postgres-skips.md#capability-matrix)). Source `890122c69b1af0c22f56ca2c7d8611e176503da6`; corpus SHA-256 `b240a7204eeb46893ea1f06e715a144f6cd962efe8f41041582e52ca975cd5be`.
+Agreement is normalized SQL-shell transcript agreement, not typed-result or application parity. Not covered: wire protocol, TLS, roles/authorization, SQLSTATE, NOTIFY delivery, replication/CDC, extensions ([capability matrix](docs/beyond-postgres-skips.md#capability-matrix)). Source `083e5efa3bbafa1e5dd2b2959cbe36d6acff9471`; corpus SHA-256 `b240a7204eeb46893ea1f06e715a144f6cd962efe8f41041582e52ca975cd5be`.
 <!-- POSTGRES_PARITY_END -->
 
 More detail: [docs/sqlite-parity.md](docs/sqlite-parity.md) (reference build
@@ -335,7 +335,7 @@ RedlineDB is a layered Rust workspace. Lower layers never depend on higher ones.
 
 RQL is an additive, default-off typed relational IR: callers submit JSON or Rust
 values that lower straight into executor plans without the SQL parser. In the
-v5.0.0 official evidence (`55637d088`, 2026-09-28), the `rql_phase1`
+v5.1.0 official evidence (`083e5efa3`, 2026-09-29), the `rql_phase1`
 suite passed 1183 of 1385 cases. It skipped 202, each
 declared in advance: 105 the phase-1 rewriter cannot parse or lower,
 77 known differences between RQL and SQLite output, and
