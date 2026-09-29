@@ -50,6 +50,11 @@
 - **Unpinning a page wakes no one.** Every page unpin made a futex call to
   wake threads that could not be waiting for it, about a fifth of the time
   of an `UPDATE` in the performance audit's profile.
+- **Writing a row with an `INTEGER PRIMARY KEY` no longer reads the whole
+  table.** Every `INSERT`, and every row an `UPDATE`, `UPSERT`, `MERGE` or
+  foreign-key action wrote, read all of the table's rows to test whether
+  the key was taken, so loading N rows cost O(N²). The check now reads the
+  one rowid the key names.
 - **Rowids are numbered per table**, from 1, as in SQLite. Every table took
   its rowids from the shared counter, so the key a NULL `INTEGER PRIMARY
   KEY` was given (and `last_insert_rowid()`), or a table's first rowid,

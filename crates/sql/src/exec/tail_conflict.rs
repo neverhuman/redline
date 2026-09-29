@@ -361,9 +361,13 @@ fn rowid_primary_candidate(
     }
 }
 
-/// The integer primary key is the rowid. Compare those ids instead of
-/// decoding every column of every row. `candidate` comes from
-/// [`rowid_primary_candidate`].
+/// The integer primary key is the rowid, so the key conflicts only if a
+/// row holds `candidate` (from [`rowid_primary_candidate`]): one read after
+/// the key's unique lock is held, where this used to read every row of the
+/// table. The read uses the transaction's snapshot and own writes, as the
+/// rest of the statement sees the table; a row committed after the
+/// snapshot is refused by the kernel when the row is written
+/// (`insert_row`), so it is never written over.
 #[allow(clippy::too_many_arguments)]
 fn rowid_primary_conflicts(
     conn: &Connection,
@@ -376,7 +380,7 @@ fn rowid_primary_conflicts(
     skip_rowid: Option<RowId>,
     mut conflicts: Vec<UniqueConflict>,
 ) -> Result<Vec<UniqueConflict>> {
-    let live = collect_table_rowids(conn.engine(), tx, table)?;
+    let mut held = None;
     for index in indexes {
         let built = crate::exec::index_dml::build_index_key_with_values(table, index, values)?;
         if built.key.contains_null {
@@ -385,10 +389,15 @@ fn rowid_primary_conflicts(
         let lock_key = unique_key_bytes(table.table_id.0, index.index_id.0, &built.values)?;
         let guard = conn.unique_locks().lock(lock_key, tx.id().0)?;
         session.unique_guards.push(guard);
-        if live
-            .iter()
-            .any(|id| *id == candidate && skip_rowid != Some(*id))
-        {
+        let taken = match held {
+            Some(taken) => taken,
+            None => {
+                let taken = rowid_holds_row(conn, tx, table, candidate)?;
+                held = Some(taken);
+                taken
+            }
+        };
+        if taken && skip_rowid != Some(candidate) {
             let constraint_name = match table
                 .constraints
                 .iter()
@@ -407,6 +416,28 @@ fn rowid_primary_conflicts(
         }
     }
     Ok(conflicts)
+}
+
+/// Whether a row of `table` that `tx` sees holds `rowid`. A CTE's rows are
+/// not in the heap, so its rowids are listed instead.
+fn rowid_holds_row(
+    conn: &Connection,
+    tx: &mut Txn,
+    table: &Arc<TableDef>,
+    rowid: RowId,
+) -> Result<bool> {
+    if crate::exec::cte::is_cte_table_def(table) {
+        return Ok(collect_table_rowids(conn.engine(), tx, table)?.contains(&rowid));
+    }
+    Ok(
+        match conn
+            .engine()
+            .get_for_relation(tx, table.relation_id, rowid)?
+        {
+            Some(payload) => sql_row_table_id(&payload)? == Some(table.table_id.0),
+            None => false,
+        },
+    )
 }
 
 fn unique_conflict_matches_target(
