@@ -1100,11 +1100,13 @@ impl PageGuard {
 }
 
 impl Drop for PageGuard {
+    /// Unpinning wakes no one: every wait on a frame's `ready` waits for a
+    /// page to load or a write to finish, never for the pin count, and
+    /// eviction passes over a pinned frame instead of waiting for it. A
+    /// `notify_all` here cost a futex syscall on every unpin.
     fn drop(&mut self) {
         if let Ok(mut frame) = self.frame() {
             frame.pin_count = frame.pin_count.saturating_sub(1);
-            crate::observe::add_frame_wakeup();
-            self.frame.ready.notify_all();
         }
     }
 }
