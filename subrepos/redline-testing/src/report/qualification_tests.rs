@@ -196,7 +196,7 @@ fn sqlite_badge_complete_is_scoped_green() {
     let readme = render(&raw, Some(evidence(&raw, "passed", [3, 3, 0, 0])), README);
     assert_eq!(
         badge(&readme),
-        "  <a href=\"#sqlite-parity-status\"><img src=\"https://img.shields.io/badge/SQLite%20SQL%2FCLI%20corpus-3%2F3%20%C2%B7%200%20failed%20%C2%B7%200%20skipped%20%C2%B7%203.53.1-brightgreen\" alt=\"SQLite SQL/CLI corpus: 3/3 cases passed, 0 failed, 0 skipped against the sqlite3 3.53.1 shell; 3 declared deviations; not full SQLite compatibility\"></a>"
+        "  <a href=\"#sqlite-parity-status\"><img src=\"https://img.shields.io/badge/SQLite%20SQL%2FCLI%20corpus-3%2F3%20%C2%B7%200%20failed%20%C2%B7%200%20skipped%20%C2%B7%203.53.1-brightgreen\" alt=\"SQLite SQL/CLI corpus: 3/3 cases passed, 0 failed, 0 skipped against the SQLite 3.53.1 shell; 3 declared deviations; not full SQLite compatibility\"></a>"
     );
 }
 
@@ -284,13 +284,13 @@ fn report_block_never_claims_full_compatibility() {
     assert!(!lower.contains("coverage"), "coverage claim:\n{block}");
     assert!(
         block.starts_with(
-            "**SQLite SQL/CLI corpus** (redline-testing `sqlite_parity`, sqlite3 3.53.1 shell): **3 / 3** cases passed, **0** failed, **0** skipped. Updated 2026-09-24.\n\n"
+            "**SQLite SQL/CLI corpus** (redline-testing `sqlite_parity`, SQLite 3.53.1 shell): **3 / 3** cases passed, **0** failed, **0** skipped. Updated 2026-09-24.\n\n"
         ),
         "first line must name the corpus and oracle:\n{block}"
     );
     for expected in [
-        "**Scope** (`sqlite_sql_cli`): each case runs one SQL or dot-command script through the `redlinedb` and `sqlite3` shells and compares their output and exit status. It does not test C ABI semantics, the database file format, or prepared-statement state.",
-        "**Evidence:** qualified: official evidence run `daac7524c769` records the same 3 total, 3 passed, 0 failed, 0 skipped. Corpus `sqlite_parity` from redline-testing 1.0.1 (runner SHA-256 `b28c41d40009`), corpus SHA-256 unrecorded; oracle sqlite3 3.53.1 (binary SHA-256 `e99d817b62f1`), build stamp unrecorded.",
+        "**Scope** (`sqlite_sql_cli`): each case runs one SQL or dot-command script through the `redlinedb` and SQLite shells and compares their output and exit status. It does not test C ABI semantics, the database file format, or prepared-statement state.",
+        "**Evidence:** qualified: official evidence run `daac7524c769` records the same 3 total, 3 passed, 0 failed, 0 skipped. Corpus `sqlite_parity` from redline-testing 1.0.1 (runner SHA-256 `b28c41d40009`), corpus SHA-256 unrecorded; oracle SQLite 3.53.1 (binary SHA-256 `e99d817b62f1`), build stamp unrecorded.",
         "**Declared deviations (3):** these cases pass, but RedlineDB produces the compared output without the SQLite feature behind it.",
         "- `00093` CREATE_VIRTUAL_TABLE_FTS5_OPTIONAL: `USING fts5` creates an ordinary table",
         "- `00094` FTS5_HIGHLIGHT_OPTIONAL: ",
@@ -409,8 +409,8 @@ fn report_block_lists_shared_rejections_and_oracle_build_deviations_apart() {
     let block = report_block(&readme);
     for expected in [
         "**Declared deviations (1):** these cases pass, but RedlineDB produces the compared output without the SQLite feature behind it.\n\n- `00093` CREATE_VIRTUAL_TABLE_FTS5_OPTIONAL: ",
-        "**Declared shared rejections (1):** the pinned sqlite3 build lacks the feature, so these cases declare its error; a pass means RedlineDB rejected the statement too, not that the feature works.\n\n- `11437` STRING_SOUNDEX_ROBERT: ",
-        "**Declared oracle-build deviations (1):** these cases were written for a different SQLite build; against the pinned sqlite3 they check what the reason states.\n\n- `10546` MEDIAN_REQUIRES_CAPABILITY: ",
+        "**Declared shared rejections (1):** the pinned SQLite build lacks the feature, so these cases declare its error; a pass means RedlineDB rejected the statement too, not that the feature works.\n\n- `11437` STRING_SOUNDEX_ROBERT: ",
+        "**Declared oracle-build deviations (1):** these cases were written for a different SQLite build; against the pinned SQLite build they check what the reason states.\n\n- `10546` MEDIAN_REQUIRES_CAPABILITY: ",
     ] {
         assert!(
             block.contains(expected),

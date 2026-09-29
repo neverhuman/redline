@@ -13,7 +13,7 @@ pub(crate) const TARGET_PATH: &str = "/ci/target/release/redlinedb";
 pub(crate) const TARGET_SHA256: &str =
     "be49779bace1d97c1d9a78f697f3a7b2bd27c6c4c6a5dccefd29304dfaa55b78";
 pub(crate) const TARGET_VERSION: &str = "redlinedb v4.1.0 (SQLite 3.45.1 compatibility)";
-pub(crate) const SQLITE_PATH: &str = "/ci/target/sqlite-reference/3.53.1/bin/sqlite3";
+pub(crate) const SQLITE_PATH: &str = "/ci/target/sqlite-reference/3.53.1/bin/reference-shell";
 pub(crate) const SQLITE_SHA256: &str =
     "e99d817b62f1ad9ead02b8d4e410fea9d736ee82c35b9a7daa6644d4d3e5ae3a";
 pub(crate) const SQLITE_VERSION: &str = "3.53.1 2026-05-05 10:34:17 c88b22011a54 (64-bit)";

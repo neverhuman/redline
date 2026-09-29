@@ -191,7 +191,7 @@ pub(crate) struct DeclaredDeviation {
 pub(crate) enum DeviationKind {
     /// RedlineDB produces the compared output without the feature behind it.
     StandIn,
-    /// The pinned sqlite3 build lacks the feature; the case declares its
+    /// The pinned SQLite build lacks the feature; the case declares its
     /// error and passes only when RedlineDB rejects the statement with that
     /// declared error.
     SharedRejection,

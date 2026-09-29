@@ -40,7 +40,7 @@ pub(super) fn check_raw_identity(
     target: &Executable,
     sqlite: &Executable,
 ) -> Result<()> {
-    // Beyond-SQLite records describe a PostgreSQL oracle, not sqlite3.
+    // Beyond-SQLite records describe a PostgreSQL oracle, not the SQLite reference shell.
     let sqlite_reference = suite != "beyond_sqlite";
     for record in records.iter().filter(|record| record.status != "skipped") {
         let mut checks = vec![(

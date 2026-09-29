@@ -160,7 +160,7 @@ fn text_at(value: &Value, path: &[&str]) -> Option<String> {
         .map(str::to_owned)
 }
 
-/// The SQLite release in a `sqlite3 --version` line: its first dotted number.
+/// The SQLite release in the reference shell's `--version` line: its first dotted number.
 fn release_of(version: &str) -> Option<String> {
     version
         .split_whitespace()

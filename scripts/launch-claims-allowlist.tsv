@@ -1,7 +1,7 @@
 # Reviewed launch-claim lines for scripts/check-launch-claims.sh.
 # fingerprint<TAB>path<TAB>qualified|historical<TAB>why the line may stand
 # Regenerate candidate rows with: bash scripts/check-launch-claims.sh --print
-8ec71a6393baab46	README.md	qualified	generated badge alt text says "not full SQLite compatibility"; its 2368/2445 count and 77 failures come from the official evidence at 55637d088
+684b333fe58570b8	README.md	qualified	generated badge alt text says "not full SQLite compatibility"; its 2368/2445 count and 77 failures come from the official evidence at 55637d088
 c123ffc3a1d2bdee	docs/performance-history.md	historical	v4.0.0 latency-bucket table, moved from the README into the section docs/performance-history.md marks as that release's measurement
 067c20ad3fdbcc12	docs/PHASE10_HANDOFF.md	historical	the historical/internal-planning banner itself
 0dbfcb2064e7a4f8	docs/WORKPLAN_CLAUDE.md	historical	the historical/internal-planning banner itself

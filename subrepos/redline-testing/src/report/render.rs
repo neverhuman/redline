@@ -260,15 +260,15 @@ fn render_sqlite_scope(
 ) -> String {
     let q = qualification;
     let oracle = q.oracle_version.as_deref().map_or_else(
-        || "sqlite3 shell, version unrecorded".to_owned(),
-        |version| format!("sqlite3 {version} shell"),
+        || "SQLite shell, version unrecorded".to_owned(),
+        |version| format!("SQLite {version} shell"),
     );
     let mut out = format!(
         "**{SQLITE_BADGE_LABEL}** (redline-testing `{}`, {oracle}): **{} / {}** cases passed, **{}** failed, **{}** skipped. Updated {updated_date}.\n\n",
         q.corpus_id, q.passed, q.total, q.failed, q.skipped
     );
     out.push_str(&format!(
-        "**Scope** (`{}`): each case runs one SQL or dot-command script through the `redlinedb` and `sqlite3` shells and compares their output and exit status. It does not test C ABI semantics, the database file format, or prepared-statement state.\n\n",
+        "**Scope** (`{}`): each case runs one SQL or dot-command script through the `redlinedb` and SQLite shells and compares their output and exit status. It does not test C ABI semantics, the database file format, or prepared-statement state.\n\n",
         q.surface
     ));
     let counts = counts_text([q.total, q.passed, q.failed, q.skipped]);
@@ -300,7 +300,7 @@ fn render_sqlite_scope(
                 format!(" (binary SHA-256 `{}`)", short(sha))
             });
         out.push_str(&format!(
-            " Corpus `{}` {runner}, corpus SHA-256 {}; oracle sqlite3 {}{oracle_binary}, build stamp {}.",
+            " Corpus `{}` {runner}, corpus SHA-256 {}; oracle SQLite {}{oracle_binary}, build stamp {}.",
             q.corpus_id,
             recorded(q.corpus_sha256.as_deref()),
             q.oracle_version.as_deref().unwrap_or("unrecorded"),
@@ -351,14 +351,14 @@ const DEVIATION_HEADINGS: [(DeviationKind, (&str, &str)); 3] = [
         DeviationKind::SharedRejection,
         (
             "Declared shared rejections",
-            "the pinned sqlite3 build lacks the feature, so these cases declare its error; a pass means RedlineDB rejected the statement too, not that the feature works.",
+            "the pinned SQLite build lacks the feature, so these cases declare its error; a pass means RedlineDB rejected the statement too, not that the feature works.",
         ),
     ),
     (
         DeviationKind::OracleBuild,
         (
             "Declared oracle-build deviations",
-            "these cases were written for a different SQLite build; against the pinned sqlite3 they check what the reason states.",
+            "these cases were written for a different SQLite build; against the pinned SQLite build they check what the reason states.",
         ),
     ),
 ];
@@ -425,7 +425,7 @@ pub(crate) fn render_sqlite_badge(qualification: &SqliteQualification) -> String
                 ),
                 color,
                 format!(
-                    "{SQLITE_BADGE_LABEL}: {}/{} cases passed, {} failed, {} skipped against the sqlite3 {oracle} shell; {deviations}; not full SQLite compatibility",
+                    "{SQLITE_BADGE_LABEL}: {}/{} cases passed, {} failed, {} skipped against the SQLite {oracle} shell; {deviations}; not full SQLite compatibility",
                     q.passed, q.total, q.failed, q.skipped
                 ),
             )

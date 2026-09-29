@@ -40,7 +40,7 @@
   "raw_sha256": "14cf1d3025fe805ff81af1c4c0d46fcc2812c3c8f6d90478175eb4fbdfdf21ef",
   "renderer": {
     "version": "redline-testing 1.0.1",
-    "binary_sha256": "87fc670668db85f1b889961a8a722caad5ed27f1360c87459d1635535a94eb83"
+    "binary_sha256": "1141674f29de34ee3d5efbf07074b0c35e63a5858e8a235bb2052a3bdbbdf309"
   },
   "command_line": [
     "redline-testing",
@@ -74,8 +74,8 @@
   ],
   "updated_date": "2026-09-28",
   "output_file_hashes": {
-    "README.md#sqlite-parity-badge": "5027b8d5c33c38e0a79d6e762ab18be45de9e327d2bb61e7a5f2ea2dba8a7d71",
-    "README.md#sqlite-parity-report": "52858d217d80cb2c308ac3796f49f07247142804d6b8e0ec9db292f47c480170",
+    "README.md#sqlite-parity-badge": "4ea6785a67153d1d89b0c31c9b5b225b77ea7d4667c39a8f95e2a592986b7a87",
+    "README.md#sqlite-parity-report": "d0c596f997762973d262db05627cb0fd996e6ca9cfc8d6a1c389a5dfabed52df",
     "manifest.json": "398ec969e11fd6053d247eb93534eabcc9382e471d11b4829db3fc3a223e7fbe",
     "ranked.csv": "32cfaa64cff70500dca7e24fbe83fa365336430f3ae15f08e58e85e9716f2202",
     "raw.jsonl": "14cf1d3025fe805ff81af1c4c0d46fcc2812c3c8f6d90478175eb4fbdfdf21ef",
