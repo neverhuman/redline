@@ -35,6 +35,7 @@
     "contracts/": "contracts",
     "crates/": "tools",
     "crates/bench": "tools",
+    "crates/scoreboard": "tools",
     "crates/bench/sqlite_parity/": "tools",
     "crates/bench/src/sqlite_parity/": "tools",
     "crates/bench/src/checksum.rs": "phase10-real-row-hashes",

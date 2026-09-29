@@ -19,6 +19,24 @@ waiver_reason = "libc::rusage is a POSIX-defined POD; the all-zero bit pattern i
 proof = "crates/bench/src/process_metrics.rs::tests::rusage_populates_after_init"
 proof_lane = "rtk cargo test -p redlinedb-bench process_metrics --quiet --locked"
 proof_test = "redlinedb-bench::process_metrics::tests::rusage_populates_after_init"
+
+[[entries]]
+file = "crates/scoreboard/src/measure.rs"
+line = 19
+owner = "bench-harness"
+detector = "rust.unsafe.zeroed"
+invariant = "Valid initializer for libc::rusage, a POSIX-defined Copy POD of integer fields whose all-zero bit pattern is a valid value; `raw` is a fresh stack local with exclusive access, overwritten by getrusage on rc == 0 and discarded otherwise. Same pattern as crates/bench/src/process_metrics.rs, which the scoreboard cannot link because redlinedb-bench enables kernel failpoints."
+waiver_reason = "libc::rusage is a POSIX-defined POD; the all-zero bit pattern is a valid initial value. The kernel overwrites every field on rc == 0; on rc != 0 the value is discarded."
+proof_lane = "rtk cargo test -p redlinedb-scoreboard --lib --locked"
+proof_test = "redlinedb-scoreboard::measure::tests::rusage_reports_this_process"
+
+[[entries]]
+file = "crates/scoreboard/src/measure.rs"
+line = 23
+owner = "bench-harness"
+invariant = "libc::getrusage(RUSAGE_SELF, _) cannot fail with EINVAL for SELF; the pointer is &mut raw on the stack, valid, aligned and writable with exclusive access; on rc == 0 the kernel writes every public field of rusage per `man 2 getrusage`."
+proof_lane = "rtk cargo test -p redlinedb-scoreboard --lib --locked"
+proof_test = "redlinedb-scoreboard::measure::tests::rusage_reports_this_process"
 reviewed_by = "ops"
 reviewed_on = "2026-05-16"
 

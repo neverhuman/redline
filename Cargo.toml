@@ -11,6 +11,7 @@ members = [
     "crates/cli",
     "crates/server",
     "crates/redlinedb-lite",
+    "crates/scoreboard",
 ]
 resolver = "3"
 exclude = ["subrepos/redline-testing", "subrepos/redline-web", "subrepos/redline-central", "subrepos/redline-split-ops"]
