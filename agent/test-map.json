@@ -69,10 +69,6 @@
       "command": "rtk bash scripts/ci-local.sh required",
       "purpose": "verify review instructions through the canonical host-required lane"
     },
-    "EXTERNAL_REVIEW_SUPERPROMPT.md": {
-      "command": "rtk bash scripts/ci-local.sh required",
-      "purpose": "verify review instructions through the canonical host-required lane"
-    },
     "FEATURE_GAPS.md": {
       "command": "rtk bash scripts/ci-local.sh required",
       "purpose": "verify feature-gap documentation through the canonical host-required lane"
@@ -124,10 +120,6 @@
     "benchmark-results/": {
       "command": "rtk bash scripts/ci-local.sh required",
       "purpose": "verify benchmark evidence through the canonical host-required lane"
-    },
-    "branch_recovery_ledger.md": {
-      "command": "rtk bash scripts/ci-local.sh required",
-      "purpose": "verify recovery records through the canonical host-required lane"
     },
     "contracts/": {
       "command": "rtk bash scripts/ci-local.sh required",
@@ -188,18 +180,6 @@
     "scripts/": {
       "command": "rtk bash scripts/ci-local.sh required",
       "purpose": "verify repository automation through the canonical host-required lane"
-    },
-    "speed_up_workplan_FINAL.md": {
-      "command": "rtk bash scripts/ci-local.sh required",
-      "purpose": "verify workplan records through the canonical host-required lane"
-    },
-    "speed_up_workplan_pending.md": {
-      "command": "rtk bash scripts/ci-local.sh required",
-      "purpose": "verify workplan records through the canonical host-required lane"
-    },
-    "super_tasks.md": {
-      "command": "rtk bash scripts/ci-local.sh required",
-      "purpose": "verify task records through the canonical host-required lane"
     },
     "tips/": {
       "command": "rtk bash scripts/ci-local.sh required",

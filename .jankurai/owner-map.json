@@ -17,7 +17,6 @@
     "Cargo.lock": "workspace",
     "Cargo.toml": "workspace",
     "EXTERNAL_REVIEW_MASTER_PROMPT.md": "agent",
-    "EXTERNAL_REVIEW_SUPERPROMPT.md": "agent",
     "FEATURE_GAPS.md": "agent",
     "GROK_GAPS.md": "agent",
     "GEMINI.md": "agent",

@@ -167,10 +167,6 @@
       "command": "just score",
       "purpose": "verify external-review prompt stays visible to the audit"
     },
-    "EXTERNAL_REVIEW_SUPERPROMPT.md": {
-      "command": "just score",
-      "purpose": "verify external-review superprompt stays visible to the audit"
-    },
     "FEATURE_GAPS.md": {
       "command": "just score",
       "purpose": "verify gap tracker stays visible to the audit"

@@ -860,7 +860,7 @@ No encryption/TLS code exists in `crates/` today.
 
 ### 6.2 CLI / harness tax (fastest official-median wins)
 
-Already designed in `speed_up_workplan_FINAL.md` and `super_tasks.md`; several remain open:
+Already designed in `docs/archive/planning/speed_up_workplan_FINAL.md` and `docs/archive/planning/super_tasks.md`; several remain open:
 
 1. **Point official harness at `redlinedb-lite`** after stdout zero-diff (A3).
 2. **`PRAGMA synchronous` → `Engine::set_commit_durability`** (A1 — commit.rs already reads live durability; verify harness sets NORMAL).
@@ -877,8 +877,8 @@ Already designed in `speed_up_workplan_FINAL.md` and `super_tasks.md`; several r
 | Scalar VM off | AST walk per row | Default-on for supported opcode set; keep AST fallback |
 | AccessPath IR off | Planner/executor split | Default-on once `access_path_is_consumable_by_executor` holds on corpus |
 | MERGE nested-loop materialize | O(\|S\|×\|T\|) | Hash probe on ON keys; share insert/update/delete plumbing (FK/triggers) |
-| Recursive CTE clone/dedup | CTE_RECURSIVE_MATRIX slow | Arena + queue indexes (`super_tasks.md` §6) |
-| Window cubes | window cases ~3× | Prefix aggregates / inverse accumulators (`super_tasks.md` §5) |
+| Recursive CTE clone/dedup | CTE_RECURSIVE_MATRIX slow | Arena + queue indexes (`docs/archive/planning/super_tasks.md` §6) |
+| Window cubes | window cases ~3× | Prefix aggregates / inverse accumulators (`docs/archive/planning/super_tasks.md` §5) |
 | Expression-index DML | historical 30× class | Already worked in W6; re-measure |
 | Secondary-index range | paper 0.012× | Leaf prefetch, reverse cursors, covering default, parallel range |
 | Hot-row | paper 0.21× | WAL combiner on for additive updates; group-commit pipeline wired |
