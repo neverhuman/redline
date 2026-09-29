@@ -1,5 +1,44 @@
 # Changelog
 
+## [Unreleased]
+
+SQLite shell and error-text parity: most sqlite_parity cases that v5.0.0
+listed as known failures now pass against the pinned sqlite3 3.53.1. Those
+still listed are `EXPLAIN` bytecode, `.auth`, `.expert` and `-interactive`
+(each could only pass on output RedlineDB does not compute) and
+`-pcachetrace`; `metadata/sqlite_parity/known-failures.json` gives each
+reason, and the counts are in the generated README block.
+
+### Changed
+
+- **Error text.** A statement SQLite rejects fails with SQLite's words:
+  `no such table: t`, `table t already exists`, `UNIQUE constraint failed:
+  t.x`, `cannot start a transaction within a transaction`, `near "X": syntax
+  error`, `no such function: f`, `attempt to write a readonly database`
+  (with SQLITE_READONLY) and others, in the shell and from `sqlite3_errmsg`.
+  Error codes keep their classes. Tests or tools that matched RedlineDB's old
+  wording (`kernel error: object not found`, `unsupported function f`,
+  `transaction state error: ...`) need updating.
+- **Shell input.** The shell reads a script in sqlite3's line groups: a failed
+  group is reported as `Parse error near line N: ...` or `Error near line N:
+  ...` and the script goes on, unless `-bail` or `.bail on`; the exit code is
+  1 once anything failed. Errors no longer carry RedlineDB's numeric code.
+- **Shell output.** BLOBs print their own bytes; `-escape ascii|symbol|off`
+  applies to TEXT and BLOB with `^X` as the default; csv and tabs quote by
+  sqlite3's rules. `.schema`, `.dump`, `.fullschema`, `.parameter list`,
+  `.dbconfig`, `.show`, `.clone` and `.crlf` print what sqlite3 prints;
+  `.connection` has real connection slots, `.sha3sum` computes sqlite3's SHA3
+  content hash, `.shell`/`.system` run the command (`-safe` refuses them),
+  `-memtrace` reports RedlineDB's allocations, and `-readonly` opens a 0-byte
+  file as an empty read-only database.
+- **SQL.** `ALTER TABLE ... ADD COLUMN` accepts a CHECK constraint and tests it
+  against the stored rows; `RAISE()` outside a trigger is refused.
+
+### Fixed
+
+- The shell's option scan no longer reads an option's value (`-escape ascii`)
+  as a mode flag, and ShellZero no longer re-encodes non-ASCII text literals.
+
 ## [5.0.0] - 2026-09-29
 
 First release from the canonical repository `neverhuman/redline`. It covers
