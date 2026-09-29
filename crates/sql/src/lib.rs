@@ -23,6 +23,7 @@ mod regexp;
 mod replay;
 mod rql;
 mod session;
+mod sqlite_errors;
 mod statement;
 pub mod udf;
 pub mod value;

@@ -129,9 +129,12 @@ pub(crate) fn expr_to_kernel_ast(
             low,
             high,
         } => between_to_kernel_ast(expr, *negated, low, high, column_lookup)?,
+        Expr::InSubquery { .. } | Expr::Subquery(_) | Expr::Exists { .. } => {
+            return Err(crate::sqlite_errors::subquery_in_schema_expression());
+        }
         other => {
             return Err(Error::UnsupportedSql(format!(
-                "unsupported DDL expression: {other:?}"
+                "unsupported DDL expression: {other}"
             )));
         }
     })

@@ -5,6 +5,34 @@ struct UniqueConflict {
     rowid: RowId,
     constraint_name: Option<Arc<str>>,
     key_ordinals: Vec<usize>,
+    /// The index name when a key is an expression, which sqlite3 reports
+    /// instead of columns (`UNIQUE constraint failed: index 'i'`).
+    expression_index: Option<Arc<str>>,
+}
+
+/// The UNIQUE violation sqlite3 reports for the first of `conflicts`.
+fn unique_error(table: &TableDef, conflicts: &[UniqueConflict]) -> Error {
+    match conflicts.first() {
+        Some(conflict) => crate::sqlite_errors::unique_failed(
+            table,
+            &conflict.key_ordinals,
+            conflict.expression_index.as_deref(),
+        ),
+        None => Error::ConstraintViolation(format!("UNIQUE constraint failed: {}", table.name)),
+    }
+}
+
+fn expression_index_name(index: &redlinedb_kernel::catalog::IndexDef) -> Option<Arc<str>> {
+    index
+        .keys
+        .iter()
+        .any(|key| {
+            matches!(
+                key.source,
+                redlinedb_kernel::catalog::IndexKeySource::Expression { .. }
+            )
+        })
+        .then(|| Arc::from(index.name.as_ref()))
 }
 
 struct UpsertUpdateContext<'a> {
@@ -89,6 +117,7 @@ fn collect_unique_conflicts(
                     rowid,
                     constraint_name: constraint_name.clone(),
                     key_ordinals: index.keys.iter().map(|key| key.ordinal as usize).collect(),
+                    expression_index: expression_index_name(index),
                 });
             }
             // Hold the kernel `UniqueKeyGuard` until end-of-transaction so
@@ -175,6 +204,7 @@ fn collect_unique_conflicts(
                     rowid: row.rowid,
                     constraint_name,
                     key_ordinals: index.keys.iter().map(|key| key.ordinal as usize).collect(),
+                    expression_index: expression_index_name(index),
                 });
                 break;
             }
@@ -284,6 +314,7 @@ fn column_key_conflicts(
                     rowid: *rowid,
                     constraint_name,
                     key_ordinals: index.keys.iter().map(|key| key.ordinal as usize).collect(),
+                    expression_index: expression_index_name(index),
                 });
                 break;
             }
@@ -371,6 +402,7 @@ fn rowid_primary_conflicts(
                 rowid: candidate,
                 constraint_name,
                 key_ordinals: index.keys.iter().map(|key| key.ordinal as usize).collect(),
+                expression_index: expression_index_name(index),
             });
         }
     }
@@ -742,9 +774,9 @@ fn apply_unique_conflict_resolution(
         // the deviation note on `conflict_action_for` — full FAIL /
         // ROLLBACK semantics require changes outside Lane SQL-C's allowed
         // files.
-        ConflictAction::Abort | ConflictAction::Fail | ConflictAction::Rollback => Err(
-            Error::ConstraintViolation(format!("UNIQUE constraint failed: {}", table.name)),
-        ),
+        ConflictAction::Abort | ConflictAction::Fail | ConflictAction::Rollback => {
+            Err(unique_error(table, conflicts))
+        }
     }
 }
 
@@ -786,10 +818,7 @@ fn apply_upsert_branch(
             ),
         };
     }
-    Err(Error::ConstraintViolation(format!(
-        "UNIQUE constraint failed: {}",
-        table.name
-    )))
+    Err(unique_error(table, conflicts))
 }
 
 pub(crate) fn ensure_unique_constraints(
@@ -800,13 +829,11 @@ pub(crate) fn ensure_unique_constraints(
     values: &[SqlValue],
     skip_rowid: Option<RowId>,
 ) -> Result<()> {
-    if collect_unique_conflicts(conn, session, tx, table, values, skip_rowid)?.is_empty() {
+    let conflicts = collect_unique_conflicts(conn, session, tx, table, values, skip_rowid)?;
+    if conflicts.is_empty() {
         Ok(())
     } else {
-        Err(Error::ConstraintViolation(format!(
-            "UNIQUE constraint failed: {}",
-            table.name
-        )))
+        Err(unique_error(table, &conflicts))
     }
 }
 

@@ -67,7 +67,7 @@ fn postgres_session_functions_are_unknown_in_the_sqlite_dialect() {
     ] {
         let err = error_of(&conn, sql);
         assert!(
-            err.contains("unsupported function"),
+            err.contains("no such function: "),
             "{sql}: expected an unknown-function error, got {err}"
         );
     }
@@ -75,7 +75,10 @@ fn postgres_session_functions_are_unknown_in_the_sqlite_dialect() {
     conn.execute("CREATE TABLE t(x INTEGER)").expect("create");
     conn.execute("INSERT INTO t VALUES (1)").expect("insert");
     let err = error_of(&conn, "SELECT pg_try_advisory_lock(x) FROM t");
-    assert!(err.contains("unsupported function"), "{err}");
+    assert!(
+        err.contains("no such function: pg_try_advisory_lock"),
+        "{err}"
+    );
 }
 
 #[test]

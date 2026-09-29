@@ -64,10 +64,10 @@ fn attach_then_detach_alias_round_trip() {
 fn detach_unknown_alias_errors() {
     let (_dir, conn) = open_redline();
     let err = conn.execute("DETACH DATABASE nope").unwrap_err();
-    let msg = format!("{err:?}");
-    assert!(
-        msg.contains("no such database") || msg.contains("UnknownTable"),
-        "expected unknown-database error, got: {msg}"
+    let msg = err.to_string();
+    assert_eq!(
+        msg, "no such database: nope",
+        "expected unknown-database error"
     );
 }
 
@@ -222,11 +222,9 @@ fn select_from_unknown_alias_errors() {
         .err()
         .or_else(|| conn.execute("SELECT * FROM nope.t").err())
         .expect("expected error for unknown alias");
-    let msg = format!("{err:?}");
-    assert!(
-        msg.contains("no such database") || msg.contains("UnknownTable"),
-        "expected unknown-database error, got: {msg}"
-    );
+    // sqlite3 reports an unattached qualifier as a missing table.
+    let msg = err.to_string();
+    assert_eq!(msg, "no such table: nope.t", "expected unknown-table error");
 }
 
 #[test]

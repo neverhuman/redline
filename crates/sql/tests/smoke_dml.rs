@@ -112,9 +112,9 @@ fn strict_boolean_and_uuid_columns_rejected_per_sqlite_parity() {
         .execute("CREATE TABLE t(flag BOOLEAN, ident UUID) STRICT")
         .expect_err("BOOLEAN/UUID rejected in STRICT");
     let msg = format!("{err}");
-    assert!(
-        msg.to_ascii_lowercase().contains("strict"),
-        "error should mention STRICT: {msg}"
+    assert_eq!(
+        msg, "unknown datatype for t.flag: \"BOOLEAN\"",
+        "sqlite3 names the first undeclarable column"
     );
     return;
 }

@@ -483,6 +483,10 @@ pub(crate) fn bind_union_all_query(
     // names since SQL columns are positional in set ops, and SQLite reports
     // the left side's names.
     let left_columns_for_names: Arc<[String]> = left.output_columns.clone();
+    super::order_by::check_compound_order_by(
+        ctx.order_by.as_ref(),
+        &[&left.output_columns, &right.output_columns],
+    )?;
 
     let order_by =
         super::order_by::bind_order_by(ctx.order_by, &left_columns_for_names, None, ctx.params)?;

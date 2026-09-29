@@ -24,7 +24,7 @@
       "id": "sql.dml-basic",
       "section": "SQL Surface",
       "feature": "`INSERT`, `UPDATE`, `DELETE` basics",
-      "status": "partial",
+      "status": "pass",
       "proof_kind": "semantic_match",
       "tests": [
         "crates/sql/tests/smoke_dml.rs::insert_select_populates_target_rows",
@@ -38,9 +38,7 @@
         "10547",
         "10548"
       ],
-      "open_subfeatures": [
-        "a UNIQUE or PRIMARY KEY violation is rejected with different error text (cases 10547, 10548)"
-      ],
+      "open_subfeatures": [],
       "owner": "sql-parser-planner-executor",
       "notes": "Cross-engine SQLLogicTest corpus covers representative DML."
     },
@@ -63,8 +61,7 @@
         "10582"
       ],
       "open_subfeatures": [
-        "SQLite metadata compatibility is not complete",
-        "duplicate column/table names and writes to sqlite_master are rejected with different error text (cases 10579-10582)"
+        "SQLite metadata compatibility is not complete"
       ],
       "owner": "sql-parser-planner-executor",
       "notes": "The official sqlite_parity corpus covers basic create/drop."
@@ -122,8 +119,7 @@
       ],
       "open_subfeatures": [
         "ADD COLUMN and DROP COLUMN variants are outside the covered subset",
-        "a CHECK on an added column is not visible to the next INSERT (case 10413)",
-        "DROP COLUMN refusals print different error text (cases 10418, 10425)"
+        "a CHECK on an added column is not visible to the next INSERT (case 10413)"
       ],
       "owner": "sql-parser-planner-executor",
       "notes": "The official sqlite_parity corpus covers rename of tables and columns."
@@ -183,7 +179,7 @@
         "10560"
       ],
       "open_subfeatures": [
-        "an unknown savepoint is rejected with different error text (case 10560)"
+        "ROLLBACK TO re-executes the statements journaled before the savepoint instead of undoing exactly, and refuses (failing the transaction) when one of them is not replay-safe"
       ],
       "owner": "sql-parser-planner-executor",
       "notes": "Nested savepoint behavior has focused coverage."
@@ -233,7 +229,7 @@
       "id": "sql.correlated-subqueries",
       "section": "SQL Surface",
       "feature": "Correlated subqueries",
-      "status": "partial",
+      "status": "pass",
       "proof_kind": "semantic_match",
       "tests": [
         "crates/sql/tests/differential_lab/query_shapes.rs::diff_subquery_matrix",
@@ -244,9 +240,7 @@
         "10502",
         "10585"
       ],
-      "open_subfeatures": [
-        "a scalar subquery returning more than one column is rejected with different error text (cases 10502, 10585)"
-      ],
+      "open_subfeatures": [],
       "owner": "sql-parser-planner-executor",
       "notes": "A7: thread-local outer-row stack resolves qualified outer-scope references; correlated `EXISTS` / `NOT EXISTS` and correlated scalar subqueries in projection covered against the rusqlite oracle."
     },
@@ -278,7 +272,7 @@
       "id": "sql.compound-select",
       "section": "SQL Surface",
       "feature": "Compound `SELECT` (`UNION`, `INTERSECT`, `EXCEPT`)",
-      "status": "partial",
+      "status": "pass",
       "proof_kind": "semantic_match",
       "tests": [
         "crates/sql/tests/parity_compound_select.rs::union_all_keeps_duplicates",
@@ -291,9 +285,7 @@
       "corpus_case_ids": [
         "10578"
       ],
-      "open_subfeatures": [
-        "an ORDER BY term outside a compound result is rejected with different error text (case 10578)"
-      ],
+      "open_subfeatures": [],
       "owner": "sql-parser-planner-executor",
       "notes": "A2: UNION / UNION ALL / INTERSECT / EXCEPT all wired through the parser and exec layers; column-arity and type-class mismatches return diagnostic errors that match SQLite's error class. Parameterized compound branches and trailing wrapper `ORDER BY` / `LIMIT` share stable parameter slots, and top-level integer literals in trailing `ORDER BY` resolve as 1-based output-column references (single-branch and compound), matching SQLite."
     },
@@ -319,7 +311,7 @@
       "id": "sql.views",
       "section": "SQL Surface",
       "feature": "Views",
-      "status": "partial",
+      "status": "pass",
       "proof_kind": "semantic_match",
       "tests": [
         "crates/sql/tests/parity_view.rs::create_select_drop_view_basic",
@@ -334,9 +326,7 @@
         "10572",
         "10573"
       ],
-      "open_subfeatures": [
-        "ALTER TABLE or DROP TABLE on a view is rejected with different error text (cases 10572, 10573)"
-      ],
+      "open_subfeatures": [],
       "owner": "sql-parser-planner-executor",
       "notes": "The official sqlite_parity corpus covers `CREATE [TEMP] VIEW [IF NOT EXISTS]` and `DROP VIEW [IF EXISTS]`. Views persist in the catalog (format_version 4) and expand at FROM-binding time; a statement that reads a view, a CTE or a derived table binds again at each execution, so a held or reset statement reads current rows (Q5-08). A view body is bound in its own scope, and parameters in `CREATE VIEW` are refused as in SQLite. DML on a view returns a SQLite-style \"cannot modify view\" error."
     },
@@ -368,7 +358,7 @@
         "trigger programs nest at most 8 deep, where SQLite allows 1000; the ninth fails its statement with \"too many levels of trigger recursion\", which the C API reports as SQLITE_MISUSE rather than SQLITE_ERROR",
         "a CASE ... END expression inside a trigger body fails to parse",
         "a dropped trigger's name cannot be used again: CREATE TRIGGER fails with \"object already exists\"",
-        "an unknown trigger and RAISE outside a trigger are rejected differently (cases 10561, 10570)"
+        "RAISE outside a trigger raises instead of being rejected (case 10570)"
       ],
       "owner": "sql-parser-planner-executor",
       "notes": "The official sqlite_parity corpus covers `CREATE TRIGGER {BEFORE|AFTER} {INSERT|UPDATE [OF col,...]|DELETE}` plus `DROP TRIGGER`, including `OLD`/`NEW` and `UPDATE OF`. `recursive_triggers` follows SQLite: when off, only a trigger that is already running is not fired again, so chains of distinct triggers run to any depth; when on, triggers nest up to the cap. A failed trigger fails its statement: outside an explicit transaction the statement changes nothing, and inside one the transaction must be rolled back."
@@ -429,7 +419,7 @@
       "id": "sql.foreign-keys",
       "section": "SQL Surface",
       "feature": "Foreign keys",
-      "status": "partial",
+      "status": "pass",
       "proof_kind": "semantic_match",
       "tests": [
         "crates/sql/tests/parity_fk_enforce.rs::insert_into_child_with_missing_parent_errors",
@@ -441,9 +431,7 @@
       "corpus_case_ids": [
         "10584"
       ],
-      "open_subfeatures": [
-        "a foreign key to a missing table is rejected with different error text (case 10584)"
-      ],
+      "open_subfeatures": [],
       "owner": "sql-parser-planner-executor",
       "notes": "A6-fk: PRAGMA-gated enforcement on INSERT/UPDATE/DELETE; ON DELETE/UPDATE {NO ACTION, RESTRICT, CASCADE, SET NULL, SET DEFAULT}; DEFERRABLE INITIALLY DEFERRED checked at COMMIT. Cascade depth bounded."
     },
@@ -481,8 +469,7 @@
       ],
       "open_subfeatures": [
         "cross-database INSERT/UPDATE/DELETE without a SELECT subquery",
-        "cross-database transaction semantics",
-        "a reused alias and a detached qualifier are rejected with different error text (cases 10384, 10389)"
+        "cross-database transaction semantics"
       ],
       "owner": "sql-parser-planner-executor",
       "notes": "Corpus cases 10372–10389 (category SQL_ATTACH) pass: file and in-memory ATTACH, DETACH, qualified table references, same-named tables in separate schemas, cross-database JOIN and `INSERT ... SELECT`, a transaction spanning the attached databases, `.databases`, `PRAGMA database_list` and per-database `user_version`, alias-qualified `UPDATE`/`DELETE`, and the error cases."
@@ -564,7 +551,7 @@
       "id": "expr.aggregates",
       "section": "Expressions And Functions",
       "feature": "Aggregate functions (`count`, `sum`, `total`, `min`, `max`)",
-      "status": "partial",
+      "status": "pass",
       "proof_kind": "semantic_match",
       "tests": [
         "crates/sql/tests/parity_agg_funcs.rs::total_vs_sum_null_difference",
@@ -576,9 +563,7 @@
       "corpus_case_ids": [
         "10586"
       ],
-      "open_subfeatures": [
-        "an aggregate misused in a WHERE clause is rejected with different error text (case 10586)"
-      ],
+      "open_subfeatures": [],
       "owner": "sql-parser-planner-executor",
       "notes": "Representative grouped and NULL behavior covered."
     },
@@ -806,7 +791,7 @@
       "id": "pragma.query-only",
       "section": "PRAGMAs",
       "feature": "`PRAGMA query_only`",
-      "status": "partial",
+      "status": "pass",
       "proof_kind": "semantic_match",
       "tests": [
         "crates/sql/tests/parity_pragma_tv.rs::pragma_query_only_round_trips_and_blocks_writes",
@@ -817,11 +802,9 @@
         "10253",
         "10568"
       ],
-      "open_subfeatures": [
-        "a write under query_only is rejected with different error text (cases 10253, 10568)"
-      ],
+      "open_subfeatures": [],
       "owner": "sql-parser-planner-executor",
-      "notes": "When ON, blocks every write-side statement with a message containing `query_only`."
+      "notes": "When ON, blocks every write-side statement with SQLite's `attempt to write a readonly database` (SQLITE_READONLY)."
     },
     {
       "id": "pragma.unknown-names",

@@ -342,7 +342,8 @@ fn parse_prepared_template_impl(conn: &Connection, sql: &str) -> Result<Prepared
                 Ok(statements) => statements,
                 Err(_) => {
                     let pg_dialect = sqlparser::dialect::PostgreSqlDialect {};
-                    Parser::parse_sql(&pg_dialect, &sql_for_parser).map_err(|_| first_err)?
+                    Parser::parse_sql(&pg_dialect, &sql_for_parser)
+                        .map_err(|_| crate::sqlite_errors::parser_error(first_err))?
                 }
             }
         }
