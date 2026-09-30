@@ -28,6 +28,14 @@ pub struct ObserveSnapshot {
     pub join_prefix_clones: u64,
     /// Wake-ups of threads waiting on a buffer frame after a page load or write.
     pub frame_wakeups: u64,
+    /// Successful buffer-pool page pins, including resident and cold loads.
+    pub heap_page_pins: u64,
+    /// Buffer-frame condition-variable notifications after a load or write.
+    pub frame_notifies: u64,
+    /// Row IDs copied from the relation directory into scan vectors.
+    pub directory_entries_copied: u64,
+    /// Signals sent by WAL producers to the writer condition variable.
+    pub wal_writer_wakeups: u64,
 }
 
 impl ObserveSnapshot {
@@ -56,6 +64,14 @@ impl ObserveSnapshot {
                 .join_prefix_clones
                 .saturating_sub(earlier.join_prefix_clones),
             frame_wakeups: self.frame_wakeups.saturating_sub(earlier.frame_wakeups),
+            heap_page_pins: self.heap_page_pins.saturating_sub(earlier.heap_page_pins),
+            frame_notifies: self.frame_notifies.saturating_sub(earlier.frame_notifies),
+            directory_entries_copied: self
+                .directory_entries_copied
+                .saturating_sub(earlier.directory_entries_copied),
+            wal_writer_wakeups: self
+                .wal_writer_wakeups
+                .saturating_sub(earlier.wal_writer_wakeups),
         }
     }
 }
@@ -72,6 +88,10 @@ struct ObserveCounters {
     sql_row_decodes: AtomicU64,
     join_prefix_clones: AtomicU64,
     frame_wakeups: AtomicU64,
+    heap_page_pins: AtomicU64,
+    frame_notifies: AtomicU64,
+    directory_entries_copied: AtomicU64,
+    wal_writer_wakeups: AtomicU64,
 }
 
 static OBSERVE: ObserveCounters = ObserveCounters {
@@ -86,6 +106,10 @@ static OBSERVE: ObserveCounters = ObserveCounters {
     sql_row_decodes: AtomicU64::new(0),
     join_prefix_clones: AtomicU64::new(0),
     frame_wakeups: AtomicU64::new(0),
+    heap_page_pins: AtomicU64::new(0),
+    frame_notifies: AtomicU64::new(0),
+    directory_entries_copied: AtomicU64::new(0),
+    wal_writer_wakeups: AtomicU64::new(0),
 };
 
 pub fn snapshot() -> ObserveSnapshot {
@@ -101,6 +125,10 @@ pub fn snapshot() -> ObserveSnapshot {
         sql_row_decodes: OBSERVE.sql_row_decodes.load(Ordering::Relaxed),
         join_prefix_clones: OBSERVE.join_prefix_clones.load(Ordering::Relaxed),
         frame_wakeups: OBSERVE.frame_wakeups.load(Ordering::Relaxed),
+        heap_page_pins: OBSERVE.heap_page_pins.load(Ordering::Relaxed),
+        frame_notifies: OBSERVE.frame_notifies.load(Ordering::Relaxed),
+        directory_entries_copied: OBSERVE.directory_entries_copied.load(Ordering::Relaxed),
+        wal_writer_wakeups: OBSERVE.wal_writer_wakeups.load(Ordering::Relaxed),
     }
 }
 
@@ -176,6 +204,34 @@ pub fn add_frame_wakeup() {
 }
 
 #[inline]
+pub fn add_heap_page_pin() {
+    add(&OBSERVE.heap_page_pins, |s| &mut s.heap_page_pins, 1);
+}
+
+#[inline]
+pub fn add_frame_notify() {
+    add(&OBSERVE.frame_notifies, |s| &mut s.frame_notifies, 1);
+}
+
+#[inline]
+pub fn add_directory_entries_copied(n: u64) {
+    add(
+        &OBSERVE.directory_entries_copied,
+        |s| &mut s.directory_entries_copied,
+        n,
+    );
+}
+
+#[inline]
+pub fn add_wal_writer_wakeup() {
+    add(
+        &OBSERVE.wal_writer_wakeups,
+        |s| &mut s.wal_writer_wakeups,
+        1,
+    );
+}
+
+#[inline]
 pub fn add_join_prefix_clone() {
     add(
         &OBSERVE.join_prefix_clones,
@@ -213,6 +269,10 @@ mod this_thread {
                 sql_row_decodes: 0,
                 join_prefix_clones: 0,
                 frame_wakeups: 0,
+                heap_page_pins: 0,
+                frame_notifies: 0,
+                directory_entries_copied: 0,
+                wal_writer_wakeups: 0,
             })
         };
     }
@@ -249,6 +309,10 @@ mod tests {
         add_sql_row_decode();
         add_join_prefix_clone();
         add_frame_wakeup();
+        add_heap_page_pin();
+        add_frame_notify();
+        add_directory_entries_copied(5);
+        add_wal_writer_wakeup();
     }
 
     fn each(checksum: u64, frames: u64, wait_ns: u64) -> ObserveSnapshot {
@@ -264,6 +328,10 @@ mod tests {
             sql_row_decodes: 1,
             join_prefix_clones: 1,
             frame_wakeups: 1,
+            heap_page_pins: 1,
+            frame_notifies: 1,
+            directory_entries_copied: 5,
+            wal_writer_wakeups: 1,
         }
     }
 
@@ -285,6 +353,13 @@ mod tests {
             (total.sql_row_decodes, part.sql_row_decodes),
             (total.join_prefix_clones, part.join_prefix_clones),
             (total.frame_wakeups, part.frame_wakeups),
+            (total.heap_page_pins, part.heap_page_pins),
+            (total.frame_notifies, part.frame_notifies),
+            (
+                total.directory_entries_copied,
+                part.directory_entries_copied,
+            ),
+            (total.wal_writer_wakeups, part.wal_writer_wakeups),
         ];
         for (total_count, part_count) in pairs {
             assert!(total_count >= part_count, "{total:?} misses {part:?}");

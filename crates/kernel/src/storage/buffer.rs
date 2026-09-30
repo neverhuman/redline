@@ -273,7 +273,9 @@ impl BufferPool {
     }
 
     pub fn pin(&self, page_id: PageId) -> Result<PageGuard> {
-        self.inner.pin(page_id)
+        let guard = self.inner.pin(page_id)?;
+        crate::observe::add_heap_page_pin();
+        Ok(guard)
     }
 
     /// Push `page_id` onto the prefetch worker queue. Returns
@@ -541,6 +543,7 @@ impl Inner {
                     .map_err(|_| Error::CorruptPage("buffer frame poisoned"))?;
                 state.page = Some(page);
                 crate::observe::add_frame_wakeup();
+                crate::observe::add_frame_notify();
                 frame.ready.notify_all();
                 drop(state);
                 return Ok(PageGuard { page_id, frame });
@@ -866,6 +869,7 @@ impl Inner {
             self.resident.fetch_sub(1, Ordering::Relaxed);
         }
         crate::observe::add_frame_wakeup();
+        crate::observe::add_frame_notify();
         frame.ready.notify_all();
         Ok(())
     }
@@ -1005,11 +1009,13 @@ impl Inner {
                 }
                 self.stats.writes.fetch_add(1, Ordering::Relaxed);
                 crate::observe::add_frame_wakeup();
+                crate::observe::add_frame_notify();
                 frame.ready.notify_all();
                 Ok(true)
             }
             Err(err) => {
                 crate::observe::add_frame_wakeup();
+                crate::observe::add_frame_notify();
                 frame.ready.notify_all();
                 Err(err)
             }

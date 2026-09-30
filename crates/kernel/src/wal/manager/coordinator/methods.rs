@@ -175,6 +175,7 @@ impl WalCoordinator {
             encoded_len as u64,
         )?;
         state.write_requested = true;
+        crate::observe::add_wal_writer_wakeup();
         self.shared.cvar.notify_all();
         Ok((reserved, append))
     }
@@ -201,6 +202,7 @@ impl WalCoordinator {
             encoded_len as u64,
         )?;
         state.write_requested = true;
+        crate::observe::add_wal_writer_wakeup();
         self.shared.cvar.notify_all();
         Ok(append)
     }
@@ -230,6 +232,7 @@ impl WalCoordinator {
 
             if target_lsn > state.flush_requested_lsn {
                 state.flush_requested_lsn = target_lsn;
+                crate::observe::add_wal_writer_wakeup();
                 self.shared.cvar.notify_all();
             }
 
@@ -259,6 +262,7 @@ impl WalCoordinator {
             }
             check_wal_failure(&state)?;
             state.write_requested = true;
+            crate::observe::add_wal_writer_wakeup();
             self.shared.cvar.notify_all();
             state = self
                 .shared
@@ -343,6 +347,7 @@ impl WalCoordinator {
         )?;
         if combined_semantic_delta.is_none() {
             state.write_requested = true;
+            crate::observe::add_wal_writer_wakeup();
             self.shared.cvar.notify_all();
         }
         Ok(append)
@@ -375,6 +380,7 @@ impl WalCoordinator {
                 return Ok(state);
             }
             state.write_requested = true;
+            crate::observe::add_wal_writer_wakeup();
             self.shared.cvar.notify_all();
             state = self
                 .shared
