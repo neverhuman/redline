@@ -21,6 +21,10 @@ mod checkpoint;
 #[path = "buffer_prefetch_tests.rs"]
 mod prefetch_tests;
 
+#[cfg(test)]
+#[path = "buffer_capacity_tests.rs"]
+mod capacity_tests;
+
 pub const DEFAULT_CHECKPOINT_BATCH_PAGES: usize = 64;
 
 /// Minimum capacity of the prefetch worker queue. The queue size
@@ -741,6 +745,9 @@ impl Inner {
                     if !self.evict_one()? {
                         break;
                     }
+                }
+                if self.resident.load(Ordering::Relaxed) < self.capacity {
+                    return Ok(());
                 }
             }
             // A full clock pass locked every resident frame, so this thread
