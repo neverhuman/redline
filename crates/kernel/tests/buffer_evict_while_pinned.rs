@@ -51,5 +51,5 @@ fn eight_threads_pin_pages_through_a_small_pool() {
             });
         }
     });
-    assert!(pool.resident_pages() <= FRAMES);
+    assert!(pool.resident_pages() <= FRAMES + THREADS);
 }

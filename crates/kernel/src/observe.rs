@@ -26,8 +26,7 @@ pub struct ObserveSnapshot {
     pub relation_gets: u64,
     pub sql_row_decodes: u64,
     pub join_prefix_clones: u64,
-    /// Wake-ups of threads waiting on a buffer frame (a page load or write
-    /// finished, or a page was unpinned).
+    /// Wake-ups of threads waiting on a buffer frame after a page load or write.
     pub frame_wakeups: u64,
 }
 
