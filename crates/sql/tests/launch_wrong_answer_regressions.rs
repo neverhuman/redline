@@ -13,6 +13,8 @@ mod index_covering_class;
 mod index_epoch_upgrade;
 #[path = "launch_wrong_answer/index_numeric_keys.rs"]
 mod index_numeric_keys;
+#[path = "launch_wrong_answer/index_point_order.rs"]
+mod index_point_order;
 #[path = "launch_wrong_answer/lab.rs"]
 mod lab;
 #[path = "launch_wrong_answer/new_01_order_by_ordinal.rs"]

@@ -1,7 +1,7 @@
 //! Unique point lookups agree with a scan and with SQLite (shard 10, #6).
 //!
 //! Commit f5714d855 answers `WHERE unique_key = value` from the unique index
-//! instead of the routed full scan (`has_unique_point_probe`). Its test
+//! instead of the routed full scan (now `exec::select_route_gate`). Its test
 //! covered one INTEGER key. This matrix runs point lookups over every kind
 //! of unique index -- plain, inline UNIQUE, NOCASE and RTRIM columns, a
 //! NOCASE index on a BINARY column, composite, partial, expression, TEXT
