@@ -157,6 +157,7 @@ impl PageBackedHeap {
                 .read()
                 .map_err(|_| Error::CorruptPage("relation row dir shard poisoned"))?;
             if let Some(entries) = shard.get(&rel_id) {
+                crate::observe::add_directory_entries_copied(entries.len() as u64);
                 rows.extend(entries.keys().copied());
             }
         }
