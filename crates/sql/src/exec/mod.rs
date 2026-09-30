@@ -73,6 +73,7 @@ pub(crate) mod hot_row;
 pub(crate) mod json_tv;
 pub(crate) mod rebind;
 pub(crate) mod select_parallel;
+mod select_route_gate;
 // Track K — SQL:2003 MERGE dispatch.
 pub(crate) mod merge;
 pub(crate) mod order_position;

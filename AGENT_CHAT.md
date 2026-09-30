@@ -1217,3 +1217,17 @@ Two things worth knowing if you are measuring locally:
   actually builds it shows 0 of 2445, with 4 capability-gated skips.
 
 — claude
+
+2026-09-30 01:19 UTC — Codex took over the v5.1.1 performance program per Jepson. Canonical checkout: `perf/x3a-index-gate`; board claim `c-1348` covers this log. PR #13 (X1b) was eligible, approved and green at `a6f4fbcbf`, then rebase-merged as `dc3a1a8da`. Next: #17, #18, #15, X2, X3a in that order. I will keep this handoff and the external Codex handoff file current. — codex
+
+2026-09-30 01:42 UTC — PR #17 (B3b scoreboard host load/noise) rebased without a patch change (`9b16657a3` → `c1366c2bb`), reached 30 successful checks plus the conditional durability job skipped, held neverhumanbot approval on that exact head, and rebase-merged as `e3965d930`. Board claim `c-1349` released. Next: rebase and land #18. — codex
+
+2026-09-30 01:44 UTC — Took over PR #18 (X1c) under board claim `c-1351` after releasing Claude's `c-1329` with its acceptance proof. Independently reviewed schema lock acquisition and transaction release. Rebased #18 to `337708410` on main `e3965d930`; code patch is unchanged, and its exact-head concurrent schema test passes 1/1. CI is running; approval and merge follow a green required check. — codex
+
+2026-09-30 02:08 UTC — PR #18 (X1c schema lock, fixes #16) was independently reviewed on rebased head `337708410`, approved by eligible neverhumanbot, and rebase-merged as `a133f2296` after 30 successful checks, 1 conditional skip and `RedlineDB/required` success. Board claim `c-1351` released. Next: #15 K1 rebase/review/merge. — codex
+
+2026-09-30 02:39 UTC — Took over #15 K1 under board claim `c-1360`. Rebased its four existing commits onto main `a133f2296` in `.agent/sandbox/rebase`; only `CHANGELOG.md` conflicted, and both notes were preserved. Exact rebased head is `2fb66ed`; its two acceptance/stress tests and `just fast` pass. `just pr-ci` is running in the clean clone before the force-with-lease push. — codex
+
+2026-09-30 02:55 UTC — #15 K1 at `2fb66ed` passed `just pr-ci` in the clean sandbox, including the packaged ABI probe, official evidence, installer checks, and audit. Pushed the rebased branch with a lease against prior head `622e46c`; GitHub CI is running on `2fb66ed`, and the stale approval needs renewal on this exact head. — codex
+
+2026-09-30 04:26 UTC — PR #15 (K1) merged at approved head `2fb66ed` as main `2352bf72c` after `RedlineDB/required` passed. The optional review nits remain only in local commit `948b718af`; they were not pushed. PR #19 (X2 IPK point probe) was rebased on that main, passed focused tests, `just fast`, and clean exact-head `just pr-ci`, then merged at approved head `fa311a6b2` as main `0e3e57968` after 30 successful checks and 1 conditional skip. X3a is now the only exec lane: existing branch `perf/x3a-index-gate` rebased onto `0e3e57968` with its code patch unchanged. Board claim `c-1385` covers the X3a files and this log. — codex
