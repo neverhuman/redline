@@ -12,7 +12,7 @@
   <!-- sqlite-parity-badge:begin -->
   <a href="#sqlite-parity-status"><img src="https://img.shields.io/badge/SQLite%20SQL%2FCLI%20corpus-2440%2F2445%20%C2%B7%205%20failed%20%C2%B7%200%20skipped%20%C2%B7%203.53.1-red" alt="SQLite SQL/CLI corpus: 2440/2445 cases passed, 5 failed, 0 skipped against the SQLite 3.53.1 shell; 13 declared deviations; not full SQLite compatibility"></a><!-- sqlite-parity-badge:end -->
   <a href="#postgresql-sql-shell-corpus"><img src="https://img.shields.io/badge/PostgreSQL%2016.15-SQL--shell%20corpus-blue" alt="PostgreSQL 16.15 SQL-shell corpus: counts in the block below; no wire protocol"></a>
-  <a href="docs/releases/v5.1.0.md"><img src="https://img.shields.io/badge/version-5.1.0-blue" alt="version 5.1.0"></a>
+  <a href="docs/releases/v5.1.1.md"><img src="https://img.shields.io/badge/version-5.1.1-blue" alt="version 5.1.1"></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-Apache--2.0-blue" alt="license Apache-2.0"></a>
   <a href="rust-toolchain.toml"><img src="https://img.shields.io/badge/rust-1.95-orange" alt="rust 1.95"></a>
 </p>
@@ -24,14 +24,14 @@ connections in one process can write at the same time. To share a database
 between processes, run `redlinedb-server` in one of them.
 
 > [!IMPORTANT]
-> **v5.1.0 is an experimental release.** Read this before you depend on it.
+> **v5.1.1 is an experimental release.** Read this before you depend on it.
 >
 > - **Not a replacement for SQLite.** The SQL and shell behavior are measured against the sqlite3 3.53.1 shell on a fixed corpus. Failing cases, if any, are listed with reasons in [`known-failures.json`](metadata/sqlite_parity/known-failures.json); the badge has the count.
-> - **Its own file format.** A database is a directory (`data.redline`, `schema.redline`, `wal/`). RedlineDB cannot open SQLite database files, and SQLite cannot open RedlineDB databases. The first time v5.1.0 opens a database written by v4, it rebuilds every index; if a `UNIQUE` index would then hold two rows with one key, the open fails and changes nothing. Do not open the database with v4 afterwards: v4 refuses it when it has an index. Databases written before v4 have not been tested with v5.1.0. Back up before upgrading.
+> - **Its own file format.** A database is a directory (`data.redline`, `schema.redline`, `wal/`). RedlineDB cannot open SQLite database files, and SQLite cannot open RedlineDB databases. v5.1.1 opens v5.1.0 databases without a migration. The first v5-series open of a v4 database rebuilds every index; if a `UNIQUE` index would then hold two rows with one key, the open fails and changes nothing. Do not open the database with v4 afterwards: v4 refuses it when it has an index. Databases written before v4 have not been tested with v5.1.1. Back up before upgrading.
 > - **The C ABI is an experimental subset.** `libredlinedb.so.5` exports RedlineDB's native `rldb_*` API and part of the `sqlite3_*` API. It is not a replacement `libsqlite3`.
 > - **PostgreSQL support is a SQL-shell corpus only.** There is no PostgreSQL wire protocol, TLS, roles or SQLSTATE.
-> - **Durability scope.** In the default `Strict` mode, a committed transaction survives a crash of the RedlineDB process on ext4 on a local NVMe SSD (Linux 6.8.0) ([receipt](benchmark-results/durability/v5.1.0-strict-process-kill.json)). Power loss and operating-system crashes are not claimed. See [docs/manual/durability.md](docs/manual/durability.md).
-> - **Slower than SQLite today.** On the per-process CLI benchmark in the [version table](#versions-over-time), RedlineDB takes longer than SQLite on the median case.
+> - **Durability scope.** In the default `Strict` mode, a committed transaction survives a crash of the RedlineDB process on ext4 on a local NVMe SSD (Linux 6.8.0) ([receipt](benchmark-results/durability/v5.1.1-strict-process-kill.json)). Power loss and operating-system crashes are not claimed. See [docs/manual/durability.md](docs/manual/durability.md).
+> - **Measured performance.** The [engine throughput](#engine-throughput) table measures work inside one process; the [version table](#versions-over-time) includes CLI startup and currently ends at v5.0.0.
 
 ## Compatibility qualification
 
@@ -63,7 +63,7 @@ newer on Intel and Apple Silicon. They contain the `redlinedb` shell, the
 `redlinedb-server` binary, the native library and C headers. Rust is not needed.
 
 ```bash quickstart
-curl -fsSL https://raw.githubusercontent.com/neverhuman/redline/v5.1.0/install.sh | VERSION=v5.1.0 bash
+curl -fsSL https://raw.githubusercontent.com/neverhuman/redline/v5.1.1/install.sh | VERSION=v5.1.1 bash
 export PATH="$HOME/.local/bin:$PATH"
 ```
 
@@ -126,7 +126,7 @@ your `Cargo.lock`; the Rust API may still change between releases
 
 ```toml
 [dependencies]
-redlinedb = { git = "https://github.com/neverhuman/redline", tag = "v5.1.0" }
+redlinedb = { git = "https://github.com/neverhuman/redline", tag = "v5.1.1" }
 ```
 
 This is `crates/redlinedb/examples/readme.rs`; `cargo run -p redlinedb --example readme`
@@ -160,7 +160,7 @@ Install Rust 1.95, a C/C++ compiler and pkg-config
 ```bash
 git clone https://github.com/neverhuman/redline
 cd redline
-git checkout v5.1.0
+git checkout v5.1.1
 ./scripts/build-from-source.sh
 ./scripts/install-from-source.sh
 ```
@@ -243,6 +243,14 @@ Measured 2026-09-28 on AMD Ryzen Threadripper PRO 3995WX 64-Cores (128 CPUs, Lin
 
 Older published figures, most of which cannot be reproduced, are kept with
 their caveats in [docs/performance-history.md](docs/performance-history.md).
+
+## What's new in v5.1.1
+
+Full notes: [docs/releases/v5.1.1.md](docs/releases/v5.1.1.md) and [CHANGELOG.md](CHANGELOG.md). The database format and C ABI major version are unchanged from v5.1.0; automatic rowid values now follow a per-table sequence.
+
+- **Silent row replacement fixed.** A delete in one table could lower the rowid counter shared by all tables. A later insert into another table could then reuse a live rowid and replace its row. Each table now allocates its own rowids, starting at 1.
+- **Concurrent writes and schema changes serialize correctly.** Inserts and key-moving updates protect the rowid they write, while schema changes hold their lock through the transaction. Rolled-back deletes also leave live rowids protected.
+- **Less work on common paths.** Named rowid conflicts probe one row, indexed reads reuse a row loaded during visibility recheck, and statements create spill directories only when needed. The [engine throughput](#engine-throughput) table is generated from committed raw measurements.
 
 ## What's new in v5.1.0
 

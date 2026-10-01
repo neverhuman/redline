@@ -249,6 +249,10 @@
       "command": "bash scripts/test-sqlite-parity-report-audit.sh",
       "purpose": "stub the report-only Jankurai audit and detect source-tree writes"
     },
+    "scripts/test-release-prep-v511.sh": {
+      "command": "bash scripts/test-release-prep-v511.sh",
+      "purpose": "verify the v5.1.1 workspace and release-document contract"
+    },
     "scripts/just/run.sh": {
       "command": "rtk bash -n scripts/just/run.sh && rtk just official-evidence-guard && rtk just redline-testing-official",
       "purpose": "verify just lane dispatch guards official evidence and runs the official external suite",
@@ -421,6 +425,10 @@
     "docs/": {
       "command": "just score",
       "purpose": "verify agent-readable documentation remains routed"
+    },
+    "docs/releases/v5.1.1.md": {
+      "command": "bash scripts/test-release-prep-v511.sh",
+      "purpose": "verify v5.1.1 release notes, versioned documents, and performance markers"
     },
     "docs/beyond-sqlite-gaps.md": {
       "command": "rtk cargo test -p redlinedb-sql --test beyond_sqlite_manifest --quiet --locked",

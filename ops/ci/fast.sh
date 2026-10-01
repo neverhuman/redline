@@ -56,6 +56,7 @@ run_preflight() {
         scripts/test-launch-claims.sh \
         scripts/test-release-version.sh \
         scripts/parity/test-lint-sqlite-parity-ledger.sh
+    bash scripts/test-release-prep-v511.sh
     bash ops/ci/tests/main-protection.sh
     bash scripts/check-public-hygiene.sh
     bash scripts/release/test-package-layout.sh
