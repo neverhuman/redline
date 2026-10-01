@@ -189,6 +189,14 @@
       "command": "rtk bash scripts/ci-local.sh required",
       "purpose": "verify repository automation through the canonical host-required lane"
     },
+    "scripts/just/sqlite-report-audit.sh": {
+      "command": "bash scripts/test-sqlite-parity-report-audit.sh",
+      "purpose": "report audit writes only ignored target scratch files and rejects source-tree outputs"
+    },
+    "scripts/test-sqlite-parity-report-audit.sh": {
+      "command": "bash scripts/test-sqlite-parity-report-audit.sh",
+      "purpose": "stub the report-only Jankurai audit and detect source-tree writes"
+    },
     "tips/": {
       "command": "rtk bash scripts/ci-local.sh required",
       "purpose": "verify archived guidance through the canonical host-required lane"

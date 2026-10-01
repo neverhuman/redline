@@ -30,6 +30,7 @@ sqlite_parity_warmup="${REDLINEDB_SQLITE_PARITY_WARMUP:-1}"
 sqlite_jankurai_comparison_json="benchmark-results/sqlite-parity/latest/jankurai-comparison.json"
 sqlite_jankurai_comparison_csv="benchmark-results/sqlite-parity/latest/jankurai-comparison.csv"
 redlinedb_audit_policy="agent/audit-policy.toml"
+redlinedb_report_score_json=".jankurai/repo-score.json"
 
 ensure_sqlite_parity_reference() {
   if [ -n "${REDLINEDB_SQLITE_PARITY_SQLITE_BIN:-}" ]; then
@@ -79,7 +80,7 @@ run_sqlite_jankurai_compare() {
   redline_testing_bin="$(ci_install_redline_testing)"
   load_redline_testing_provenance "$redline_testing_bin"
   "$redline_testing_bin" jankurai-compare \
-    --redlinedb-score .jankurai/repo-score.json \
+    --redlinedb-score "$redlinedb_report_score_json" \
     --sqlite-score target/sqlite-jankurai/repo-score.json \
     --sqlite-ref "$sqlite_ref" \
     --updated-date "$updated_date" \
@@ -98,7 +99,7 @@ sqlite_parity_report_args() {
     --out-dir benchmark-results/sqlite-parity/latest
     --readme README.md
     --no-readme-latency
-    --jankurai-score .jankurai/repo-score.json
+    --jankurai-score "$redlinedb_report_score_json"
     --updated-date "$updated_date"
     --expected-repetitions "$sqlite_parity_repetitions"
     --expected-warmup "$sqlite_parity_warmup"
@@ -455,7 +456,7 @@ case "$lane" in
   sqlite-parity-report-update)
     updated_date="${REDLINEDB_SQLITE_PARITY_UPDATED_DATE:-$(date -u +%F)}"
     export REDLINEDB_SQLITE_PARITY_UPDATED_DATE="$updated_date"
-    "$0" score
+    redlinedb_report_score_json="$(bash scripts/just/sqlite-report-audit.sh)"
     run_sqlite_jankurai_compare "$updated_date"
     run_redline_testing_official
     redline_testing_bin="$(ci_install_redline_testing)"

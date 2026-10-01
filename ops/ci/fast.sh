@@ -36,6 +36,7 @@ run_preflight() {
     bash scripts/ci-doctor.sh --profile core
     bash scripts/test-ci-doctor.sh
     bash scripts/test-docs-quickstart.sh --static
+    bash scripts/test-sqlite-parity-report-audit.sh
     # The root invocation only reaches the root workspace. Each subrepo is its
     # own cargo workspace, so `cargo fmt --check` here reports clean while the
     # `components (<name>)` jobs run fmt inside the subrepo and fail -- a full

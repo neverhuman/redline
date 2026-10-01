@@ -122,6 +122,8 @@
     "rustfmt.toml": "workspace",
     "schemas/coverage-*.schema.json": "agent",
     "scripts/": "tools",
+    "scripts/just/sqlite-report-audit.sh": "tools",
+    "scripts/test-sqlite-parity-report-audit.sh": "tools",
     "scripts/bench/": "bench-harness",
     "scripts/parity/": "sqlite-parity-symbol-diff-d6",
     "tips/": "standard",
