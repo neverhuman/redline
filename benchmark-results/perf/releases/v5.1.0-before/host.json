@@ -1,0 +1,14 @@
+{
+  "schema": "redline-scoreboard-host-v1",
+  "cpu_model": "AMD Ryzen Threadripper PRO 3995WX 64-Cores",
+  "logical_cpus": 128,
+  "kernel": "Linux 6.8.0-134-generic x86_64",
+  "pinned_cpus": "2-5",
+  "governor": "schedutil",
+  "boost": "1",
+  "transparent_hugepages": "always [madvise] never",
+  "memory_bytes": 134838870016,
+  "normal_dir_fs": "tmpfs",
+  "strict_dir_fs": "ext4",
+  "strict_dir_device": "/dev/nvme1n1p2"
+}
