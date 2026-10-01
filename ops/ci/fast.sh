@@ -142,6 +142,8 @@ run_test_stage() {
             ;;
         bench)
             cargo test -p redlinedb-bench --quiet --locked
+            cargo test -p redlinedb-scoreboard --lib --locked \
+                tests::the_readme_block_matches_its_bundle -- --exact
             ;;
         *)
             printf 'unknown fast test stage: %s\n' "$1" >&2

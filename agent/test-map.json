@@ -121,6 +121,10 @@
       "command": "rtk bash scripts/ci-local.sh required",
       "purpose": "verify benchmark evidence through the canonical host-required lane"
     },
+    "benchmark-results/perf/releases/": {
+      "command": "cargo test -p redlinedb-scoreboard --lib --locked tests::the_readme_block_matches_its_bundle -- --exact",
+      "purpose": "verify the generated engine-throughput README block and derived summary against raw release scoreboard records"
+    },
     "contracts/": {
       "command": "rtk bash scripts/ci-local.sh required",
       "purpose": "verify public contracts through the canonical host-required lane"

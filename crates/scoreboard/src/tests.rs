@@ -118,10 +118,8 @@ fn the_readme_block_matches_its_bundle() {
     let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
     let readme = root.join("README.md");
     let text = std::fs::read_to_string(&readme).expect("read README.md");
-    // Before the first bundle is published the README has no block.
-    let Some(bundle) = crate::render::bundle_of(&text) else {
-        return;
-    };
+    let bundle = crate::render::bundle_of(&text)
+        .expect("README.md must contain a generated engine-throughput block");
     let summary = crate::summary::write_or_check(&root.join(&bundle), true)
         .expect("summary.json matches the bundle's raw records");
     crate::render::render_into(&summary, &bundle, &readme, true)
