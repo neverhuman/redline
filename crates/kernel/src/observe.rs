@@ -28,11 +28,11 @@ pub struct ObserveSnapshot {
     pub join_prefix_clones: u64,
     /// Wake-ups of threads waiting on a buffer frame after a page load or write.
     pub frame_wakeups: u64,
-    /// Successful buffer-pool page pins, including resident and cold loads.
+    /// Successful buffer-pool page pins, including prefetches and cold loads.
     pub heap_page_pins: u64,
     /// Buffer-frame condition-variable notifications after a load or write.
     pub frame_notifies: u64,
-    /// Row IDs copied from the relation directory into scan vectors.
+    /// Row IDs copied from the relation directory into result vectors.
     pub directory_entries_copied: u64,
     /// Signals sent by WAL producers to the writer condition variable.
     pub wal_writer_wakeups: u64,

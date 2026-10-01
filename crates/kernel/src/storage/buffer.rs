@@ -273,9 +273,7 @@ impl BufferPool {
     }
 
     pub fn pin(&self, page_id: PageId) -> Result<PageGuard> {
-        let guard = self.inner.pin(page_id)?;
-        crate::observe::add_heap_page_pin();
-        Ok(guard)
+        self.inner.pin(page_id)
     }
 
     /// Push `page_id` onto the prefetch worker queue. Returns
@@ -512,6 +510,7 @@ impl Inner {
                 state.pin_count += 1;
                 state.usage_count = state.usage_count.saturating_add(1).min(CLOCK_MAX_USAGE);
                 drop(state);
+                crate::observe::add_heap_page_pin();
                 return Ok(PageGuard { page_id, frame });
             }
 
@@ -546,6 +545,7 @@ impl Inner {
                 crate::observe::add_frame_notify();
                 frame.ready.notify_all();
                 drop(state);
+                crate::observe::add_heap_page_pin();
                 return Ok(PageGuard { page_id, frame });
             }
         }
