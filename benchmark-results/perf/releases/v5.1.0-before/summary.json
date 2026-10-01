@@ -1,0 +1,771 @@
+{
+  "schema": "redline-scoreboard-summary-v1",
+  "bundle": "v5.1.0-before",
+  "labels": [
+    "v5.1.0"
+  ],
+  "rows": 20000,
+  "runs": 3,
+  "reps": 5,
+  "publishable": true,
+  "blockers": [],
+  "sqlite_version": "sqlite 3.50.2",
+  "normal_dir_fs": "tmpfs",
+  "raw": [
+    {
+      "path": "v5.1.0/run-1-normal.jsonl",
+      "sha256": "8fe8026a2c9dac70f8def7e9c23558a8a0875f85864fed09115e0bec1cb25018"
+    },
+    {
+      "path": "v5.1.0/run-1-strict.jsonl",
+      "sha256": "aed1db43bc6c63a464e152397aaff7ea7df502ed12f5a739cc141aa3f27966f7"
+    },
+    {
+      "path": "v5.1.0/run-2-normal.jsonl",
+      "sha256": "bc4cb0b2da7dc1620106b0877e623983f13f6de42d4cd50a05c151bf0fb185ac"
+    },
+    {
+      "path": "v5.1.0/run-2-strict.jsonl",
+      "sha256": "d07b9cb5bfb1d3925049adce609999a859001ea2805192260354790d303a0901"
+    },
+    {
+      "path": "v5.1.0/run-3-normal.jsonl",
+      "sha256": "4201761e635050d332a6b455b826bf7b13f2ed72ff067ea59953b2bd47ba8e1c"
+    },
+    {
+      "path": "v5.1.0/run-3-strict.jsonl",
+      "sha256": "69a50834988668b2578fac3a81727a1cc49197bbdf8bca809cac10cd0d1e4302"
+    }
+  ],
+  "workloads": [
+    {
+      "pair": "normal",
+      "id": "insert_autocommit",
+      "unit": "txn",
+      "summary": "single-row INSERT, one transaction each",
+      "throughput": {
+        "sqlite@v5.1.0": {
+          "median": 230038.09890994147,
+          "min": 230037.33160836005,
+          "max": 230575.03338150046
+        },
+        "v5.1.0": {
+          "median": 358.43699981931263,
+          "min": 357.7526485766569,
+          "max": 360.28794430122474
+        }
+      },
+      "vs_sqlite": {
+        "v5.1.0": {
+          "median": 0.0015581636325365327,
+          "min": 0.0015515671550819351,
+          "max": 0.0015662151085747123
+        }
+      },
+      "speedup": {},
+      "digest_agrees": true
+    },
+    {
+      "pair": "normal",
+      "id": "insert_batch100",
+      "unit": "row",
+      "summary": "INSERT, 100 rows per transaction",
+      "throughput": {
+        "sqlite@v5.1.0": {
+          "median": 1821239.8454495866,
+          "min": 1741154.716396367,
+          "max": 1832570.8311533376
+        },
+        "v5.1.0": {
+          "median": 318.09926545445677,
+          "min": 315.85023351934166,
+          "max": 318.66095396408264
+        }
+      },
+      "vs_sqlite": {
+        "v5.1.0": {
+          "median": 0.00017358088432208616,
+          "min": 0.0001734259407449828,
+          "max": 0.00018301702368162253
+        }
+      },
+      "speedup": {},
+      "digest_agrees": true
+    },
+    {
+      "pair": "normal",
+      "id": "insert_bulk_1txn",
+      "unit": "row",
+      "summary": "INSERT of N rows into an empty indexed table, one transaction",
+      "throughput": {
+        "sqlite@v5.1.0": {
+          "median": 1161347.3859463958,
+          "min": 1147337.5945069147,
+          "max": 1165799.6808739954
+        },
+        "v5.1.0": {
+          "median": 189.08945401084273,
+          "min": 183.37127021149718,
+          "max": 191.0538153378139
+        }
+      },
+      "vs_sqlite": {
+        "v5.1.0": {
+          "median": 0.00016281902925777155,
+          "min": 0.00015982329097331087,
+          "max": 0.0001638821990366146
+        }
+      },
+      "speedup": {},
+      "digest_agrees": true
+    },
+    {
+      "pair": "normal",
+      "id": "point_pk_prepared",
+      "unit": "stmt",
+      "summary": "SELECT by INTEGER PRIMARY KEY, prepared",
+      "throughput": {
+        "sqlite@v5.1.0": {
+          "median": 867754.8129792917,
+          "min": 853662.7497233513,
+          "max": 873393.1095222732
+        },
+        "v5.1.0": {
+          "median": 176546.10941644452,
+          "min": 163889.02158209047,
+          "max": 176881.93993251168
+        }
+      },
+      "vs_sqlite": {
+        "v5.1.0": {
+          "median": 0.20252271056874058,
+          "min": 0.19198333491206265,
+          "max": 0.20345160496465914
+        }
+      },
+      "speedup": {},
+      "digest_agrees": true
+    },
+    {
+      "pair": "normal",
+      "id": "point_pk_sql_text",
+      "unit": "stmt",
+      "summary": "SELECT by INTEGER PRIMARY KEY, a new SQL string each time",
+      "throughput": {
+        "sqlite@v5.1.0": {
+          "median": 348141.63648119115,
+          "min": 346055.31289291877,
+          "max": 348776.23834921693
+        },
+        "v5.1.0": {
+          "median": 48096.899245331275,
+          "min": 47416.57714120549,
+          "max": 48316.27119911428
+        }
+      },
+      "vs_sqlite": {
+        "v5.1.0": {
+          "median": 0.13790188079605814,
+          "min": 0.13702022588474977,
+          "max": 0.13878337474214933
+        }
+      },
+      "speedup": {},
+      "digest_agrees": true
+    },
+    {
+      "pair": "normal",
+      "id": "range_pk_sum_100",
+      "unit": "row",
+      "summary": "sum over a 100-row rowid range",
+      "throughput": {
+        "sqlite@v5.1.0": {
+          "median": 15944482.587190012,
+          "min": 15831153.779236777,
+          "max": 16016724.022555392
+        },
+        "v5.1.0": {
+          "median": 5707.446293209903,
+          "min": 5583.533932500938,
+          "max": 5765.580060483507
+        }
+      },
+      "vs_sqlite": {
+        "v5.1.0": {
+          "median": 0.00035634292538052405,
+          "min": 0.00035269279866537444,
+          "max": 0.0003616034593129816
+        }
+      },
+      "speedup": {},
+      "digest_agrees": true
+    },
+    {
+      "pair": "normal",
+      "id": "range_pk_rows_100",
+      "unit": "row",
+      "summary": "100-row rowid range, three columns read",
+      "throughput": {
+        "sqlite@v5.1.0": {
+          "median": 6371426.649078131,
+          "min": 6239025.554050425,
+          "max": 6455005.320860886
+        },
+        "v5.1.0": {
+          "median": 4901.262433221603,
+          "min": 4782.942625234488,
+          "max": 4921.158627461474
+        }
+      },
+      "vs_sqlite": {
+        "v5.1.0": {
+          "median": 0.0007692566678030825,
+          "min": 0.0007409664884050941,
+          "max": 0.0007887703912779486
+        }
+      },
+      "speedup": {},
+      "digest_agrees": true
+    },
+    {
+      "pair": "normal",
+      "id": "index_count",
+      "unit": "stmt",
+      "summary": "count(*) by a secondary index",
+      "throughput": {
+        "sqlite@v5.1.0": {
+          "median": 239917.65546229223,
+          "min": 233178.90788116844,
+          "max": 243899.78289626676
+        },
+        "v5.1.0": {
+          "median": 19335.200620021104,
+          "min": 19061.662264366238,
+          "max": 19445.4198158994
+        }
+      },
+      "vs_sqlite": {
+        "v5.1.0": {
+          "median": 0.08059098686490795,
+          "min": 0.07972708948318231,
+          "max": 0.0817469403110866
+        }
+      },
+      "speedup": {},
+      "digest_agrees": true
+    },
+    {
+      "pair": "normal",
+      "id": "index_rows",
+      "unit": "stmt",
+      "summary": "rows by a secondary index, two columns read",
+      "throughput": {
+        "sqlite@v5.1.0": {
+          "median": 138707.3594851449,
+          "min": 138513.41749002275,
+          "max": 139304.90751686494
+        },
+        "v5.1.0": {
+          "median": 20345.389765807515,
+          "min": 20025.04283797214,
+          "max": 20362.722312871632
+        }
+      },
+      "vs_sqlite": {
+        "v5.1.0": {
+          "median": 0.1468034745124855,
+          "min": 0.14374972996229735,
+          "max": 0.1468838913549513
+        }
+      },
+      "speedup": {},
+      "digest_agrees": true
+    },
+    {
+      "pair": "normal",
+      "id": "full_scan_sum",
+      "unit": "row",
+      "summary": "sum over a filtered full scan",
+      "throughput": {
+        "sqlite@v5.1.0": {
+          "median": 18859651.19075123,
+          "min": 18727622.83166901,
+          "max": 19095054.800897773
+        },
+        "v5.1.0": {
+          "median": 1050600.1385195272,
+          "min": 1031115.3704883109,
+          "max": 1051219.0724778757
+        }
+      },
+      "vs_sqlite": {
+        "v5.1.0": {
+          "median": 0.05505852930488657,
+          "min": 0.055051901313655914,
+          "max": 0.05570623379475551
+        }
+      },
+      "speedup": {},
+      "digest_agrees": true
+    },
+    {
+      "pair": "normal",
+      "id": "group_by",
+      "unit": "row",
+      "summary": "GROUP BY over the whole table",
+      "throughput": {
+        "sqlite@v5.1.0": {
+          "median": 4349664.292909874,
+          "min": 4311121.572766128,
+          "max": 4355413.343244318
+        },
+        "v5.1.0": {
+          "median": 1002277.2072240533,
+          "min": 990014.9893219458,
+          "max": 1003743.5955721658
+        }
+      },
+      "vs_sqlite": {
+        "v5.1.0": {
+          "median": 0.23012217859383785,
+          "min": 0.22964209489613777,
+          "max": 0.2307634631041085
+        }
+      },
+      "speedup": {},
+      "digest_agrees": true
+    },
+    {
+      "pair": "normal",
+      "id": "top10",
+      "unit": "row",
+      "summary": "ORDER BY ... LIMIT 10 over the whole table",
+      "throughput": {
+        "sqlite@v5.1.0": {
+          "median": 18117304.108913984,
+          "min": 18008290.296520907,
+          "max": 18157424.50733006
+        },
+        "v5.1.0": {
+          "median": 1078368.3958347028,
+          "min": 1056161.8388047991,
+          "max": 1080596.0628396003
+        }
+      },
+      "vs_sqlite": {
+        "v5.1.0": {
+          "median": 0.05951262869926124,
+          "min": 0.058648645785593714,
+          "max": 0.059521460221232884
+        }
+      },
+      "speedup": {},
+      "digest_agrees": true
+    },
+    {
+      "pair": "normal",
+      "id": "join_point",
+      "unit": "stmt",
+      "summary": "join of one account to its events",
+      "throughput": {
+        "sqlite@v5.1.0": {
+          "median": 224757.94131615103,
+          "min": 224631.09116686528,
+          "max": 225980.01884673358
+        },
+        "v5.1.0": {
+          "median": 558.1254284322529,
+          "min": 552.4765564390818,
+          "max": 563.9220743503347
+        }
+      },
+      "vs_sqlite": {
+        "v5.1.0": {
+          "median": 0.002484631248207997,
+          "min": 0.0024580958216820128,
+          "max": 0.0024954510457528703
+        }
+      },
+      "speedup": {},
+      "digest_agrees": true
+    },
+    {
+      "pair": "normal",
+      "id": "join_group_by_city",
+      "unit": "row",
+      "summary": "join of every event to its account, grouped",
+      "throughput": {
+        "sqlite@v5.1.0": {
+          "median": 3513810.240543151,
+          "min": 3475414.052141637,
+          "max": 3530781.084687726
+        },
+        "v5.1.0": {
+          "median": 194680.25685412242,
+          "min": 192508.38414921,
+          "max": 195211.39993971676
+        }
+      },
+      "vs_sqlite": {
+        "v5.1.0": {
+          "median": 0.055391496167365016,
+          "min": 0.0551380139931107,
+          "max": 0.05555547584423391
+        }
+      },
+      "speedup": {},
+      "digest_agrees": true
+    },
+    {
+      "pair": "normal",
+      "id": "update_pk_autocommit",
+      "unit": "txn",
+      "summary": "UPDATE by INTEGER PRIMARY KEY, one transaction each",
+      "throughput": {
+        "sqlite@v5.1.0": {
+          "median": 207150.86870270423,
+          "min": 205719.89775309642,
+          "max": 207806.50056138926
+        },
+        "v5.1.0": {
+          "median": 87.39890163080467,
+          "min": 84.42763075607569,
+          "max": 88.07832408374145
+        }
+      },
+      "vs_sqlite": {
+        "v5.1.0": {
+          "median": 0.0004205782850618077,
+          "min": 0.00041040089791122264,
+          "max": 0.0004251892576426914
+        }
+      },
+      "speedup": {},
+      "digest_agrees": true
+    },
+    {
+      "pair": "normal",
+      "id": "update_pk_1txn",
+      "unit": "row",
+      "summary": "UPDATE by INTEGER PRIMARY KEY, one transaction",
+      "throughput": {
+        "sqlite@v5.1.0": {
+          "median": 1027065.2227499055,
+          "min": 1025391.2508491521,
+          "max": 1056281.8667035662
+        },
+        "v5.1.0": {
+          "median": 91.07136561468798,
+          "min": 90.46496586129848,
+          "max": 91.41371269059259
+        }
+      },
+      "vs_sqlite": {
+        "v5.1.0": {
+          "median": 0.00008881621092365427,
+          "min": 0.00008564472108531091,
+          "max": 0.00008900477853377009
+        }
+      },
+      "speedup": {},
+      "digest_agrees": true
+    },
+    {
+      "pair": "normal",
+      "id": "update_indexed_1txn",
+      "unit": "row",
+      "summary": "UPDATE of an indexed column, one transaction",
+      "throughput": {
+        "sqlite@v5.1.0": {
+          "median": 539919.7787192779,
+          "min": 537785.190847864,
+          "max": 546578.7585829946
+        },
+        "v5.1.0": {
+          "median": 89.52381090997916,
+          "min": 89.22632785097011,
+          "max": 89.92453643015376
+        }
+      },
+      "vs_sqlite": {
+        "v5.1.0": {
+          "median": 0.0001652584909236337,
+          "min": 0.0001645225596824932,
+          "max": 0.0001664676016251717
+        }
+      },
+      "speedup": {},
+      "digest_agrees": true
+    },
+    {
+      "pair": "normal",
+      "id": "delete_pk_1txn",
+      "unit": "row",
+      "summary": "DELETE by INTEGER PRIMARY KEY, one transaction",
+      "throughput": {
+        "sqlite@v5.1.0": {
+          "median": 2830491.7554851393,
+          "min": 2801991.6556688496,
+          "max": 2832572.3155712164
+        },
+        "v5.1.0": {
+          "median": 496.7305290953743,
+          "min": 492.9020318183778,
+          "max": 498.23622296932626
+        }
+      },
+      "vs_sqlite": {
+        "v5.1.0": {
+          "median": 0.00017589532321219908,
+          "min": 0.0001754926606420148,
+          "max": 0.00017591131323362903
+        }
+      },
+      "speedup": {},
+      "digest_agrees": true
+    },
+    {
+      "pair": "normal",
+      "id": "open_first_read",
+      "unit": "open",
+      "summary": "open a checkpointed database and read one row",
+      "throughput": {
+        "sqlite@v5.1.0": {
+          "median": 2222.6222942351847,
+          "min": 2176.2406748087083,
+          "max": 2230.325739074192
+        },
+        "v5.1.0": {
+          "median": 13.444240248842132,
+          "min": 13.370864458477316,
+          "max": 13.472466549145443
+        }
+      },
+      "vs_sqlite": {
+        "v5.1.0": {
+          "median": 0.006061518677324968,
+          "min": 0.006027926779172102,
+          "max": 0.006144019185585995
+        }
+      },
+      "speedup": {},
+      "digest_agrees": true
+    },
+    {
+      "pair": "normal",
+      "id": "open_after_updates",
+      "unit": "open",
+      "summary": "open after 5,000 updates left in the log and read one row",
+      "throughput": {
+        "sqlite@v5.1.0": {
+          "median": 134.22635018956788,
+          "min": 132.98079238732836,
+          "max": 136.38573705239054
+        },
+        "v5.1.0": {
+          "median": 0.182405710246073,
+          "min": 0.17884094257447772,
+          "max": 0.1824122472662695
+        }
+      },
+      "vs_sqlite": {
+        "v5.1.0": {
+          "median": 0.0013448629637697912,
+          "min": 0.0013374730467321416,
+          "max": 0.0013589411467156889
+        }
+      },
+      "speedup": {},
+      "digest_agrees": true
+    },
+    {
+      "pair": "strict",
+      "id": "insert_autocommit",
+      "unit": "txn",
+      "summary": "single-row INSERT, one transaction each",
+      "throughput": {
+        "sqlite@v5.1.0": {
+          "median": 185.52679684434636,
+          "min": 184.86096732537777,
+          "max": 186.3471110476186
+        },
+        "v5.1.0": {
+          "median": 100.62000218084597,
+          "min": 100.48723432212022,
+          "max": 101.00213732824646
+        }
+      },
+      "vs_sqlite": {
+        "v5.1.0": {
+          "median": 0.542347541661404,
+          "min": 0.5392476103181552,
+          "max": 0.5463681099886837
+        }
+      },
+      "speedup": {},
+      "digest_agrees": true
+    },
+    {
+      "pair": "strict",
+      "id": "insert_batch100",
+      "unit": "row",
+      "summary": "INSERT, 100 rows per transaction",
+      "throughput": {
+        "sqlite@v5.1.0": {
+          "median": 18610.91135399591,
+          "min": 17594.887059541637,
+          "max": 18787.221625099086
+        },
+        "v5.1.0": {
+          "median": 307.98903688692064,
+          "min": 307.87943636375195,
+          "max": 309.0484618859088
+        }
+      },
+      "vs_sqlite": {
+        "v5.1.0": {
+          "median": 0.0166057672301767,
+          "min": 0.016393538280054024,
+          "max": 0.01749823316977702
+        }
+      },
+      "speedup": {},
+      "digest_agrees": true
+    },
+    {
+      "pair": "strict",
+      "id": "insert_bulk_1txn",
+      "unit": "row",
+      "summary": "INSERT of N rows into an empty indexed table, one transaction",
+      "throughput": {
+        "sqlite@v5.1.0": {
+          "median": 704166.8368403189,
+          "min": 703997.247089165,
+          "max": 705621.2647717843
+        },
+        "v5.1.0": {
+          "median": 188.91700638218032,
+          "min": 188.84400259473674,
+          "max": 189.09869798513856
+        }
+      },
+      "vs_sqlite": {
+        "v5.1.0": {
+          "median": 0.0002683490697773325,
+          "min": 0.00026762799255463716,
+          "max": 0.00026854246478525903
+        }
+      },
+      "speedup": {},
+      "digest_agrees": true
+    },
+    {
+      "pair": "strict",
+      "id": "update_pk_autocommit",
+      "unit": "txn",
+      "summary": "UPDATE by INTEGER PRIMARY KEY, one transaction each",
+      "throughput": {
+        "sqlite@v5.1.0": {
+          "median": 187.5641467740781,
+          "min": 187.4440991555022,
+          "max": 190.56072568231826
+        },
+        "v5.1.0": {
+          "median": 58.45443179654538,
+          "min": 58.406141642969416,
+          "max": 58.472131910211594
+        }
+      },
+      "vs_sqlite": {
+        "v5.1.0": {
+          "median": 0.3115923195561154,
+          "min": 0.30674962843075093,
+          "max": 0.3117447172920609
+        }
+      },
+      "speedup": {},
+      "digest_agrees": true
+    },
+    {
+      "pair": "strict",
+      "id": "update_pk_1txn",
+      "unit": "row",
+      "summary": "UPDATE by INTEGER PRIMARY KEY, one transaction",
+      "throughput": {
+        "sqlite@v5.1.0": {
+          "median": 153409.52673161004,
+          "min": 150990.5280621936,
+          "max": 155766.3454972311
+        },
+        "v5.1.0": {
+          "median": 90.96602147264235,
+          "min": 90.49302639133418,
+          "max": 91.14290829216614
+        }
+      },
+      "vs_sqlite": {
+        "v5.1.0": {
+          "median": 0.0005898787925319119,
+          "min": 0.0005839902142036154,
+          "max": 0.0006036332839012525
+        }
+      },
+      "speedup": {},
+      "digest_agrees": true
+    },
+    {
+      "pair": "strict",
+      "id": "update_indexed_1txn",
+      "unit": "row",
+      "summary": "UPDATE of an indexed column, one transaction",
+      "throughput": {
+        "sqlite@v5.1.0": {
+          "median": 131904.62161477507,
+          "min": 131792.364293073,
+          "max": 133359.04495720108
+        },
+        "v5.1.0": {
+          "median": 89.80500113263032,
+          "min": 89.72773983415132,
+          "max": 89.86306792461504
+        }
+      },
+      "vs_sqlite": {
+        "v5.1.0": {
+          "median": 0.0006802471265654321,
+          "min": 0.0006738430674383938,
+          "max": 0.0006814127784590512
+        }
+      },
+      "speedup": {},
+      "digest_agrees": true
+    },
+    {
+      "pair": "strict",
+      "id": "delete_pk_1txn",
+      "unit": "row",
+      "summary": "DELETE by INTEGER PRIMARY KEY, one transaction",
+      "throughput": {
+        "sqlite@v5.1.0": {
+          "median": 183410.14856038624,
+          "min": 121198.67917679434,
+          "max": 185645.13820445136
+        },
+        "v5.1.0": {
+          "median": 497.3347084485506,
+          "min": 495.82669586869724,
+          "max": 498.0715541050273
+        }
+      },
+      "vs_sqlite": {
+        "v5.1.0": {
+          "median": 0.00271561610965623,
+          "min": 0.002670830492326938,
+          "max": 0.004103466405958773
+        }
+      },
+      "speedup": {},
+      "digest_agrees": true
+    }
+  ]
+}

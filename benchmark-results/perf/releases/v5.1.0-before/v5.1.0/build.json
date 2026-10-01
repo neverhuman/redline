@@ -1,0 +1,35 @@
+{
+  "schema_version": "redline-scoreboard-build-v1",
+  "label": "v5.1.0",
+  "engine_ref": "v5.1.0",
+  "engine_commit": "a3ad8cb33d7f155c53b4ff6436d0c98eb8a4e5aa",
+  "engine_commit_date": "2026-09-29T04:56:14-06:00",
+  "harness_ref": "origin/main",
+  "harness_commit": "2f73e4c43de63a21e2954f0dfaa6c5d5b17017ec",
+  "harness_tree": "02ef85c5c91800f2e95815cc26aec4f56fb3f7a4",
+  "engines": {
+    "redlinedb": "5.1.0",
+    "sqlite": "3.50.2",
+    "sqlite_source_id": "2025-06-28 14:00:48 2af157d77fb1304a74176eaee7fbc7c7e932d946bf25325e9c26c91db19e3079"
+  },
+  "cargo_lock_delta": "+[[package]]\n+name = \"redlinedb-scoreboard\"\n+version = \"5.1.0\"\n+dependencies = [\n+ \"anyhow\",\n+ \"clap\",\n+ \"libc\",\n+ \"mimalloc\",\n+ \"redlinedb\",\n+ \"redlinedb-kernel\",\n+ \"rusqlite\",\n+ \"serde\",\n+ \"serde_json\",\n+ \"sha2 0.10.9\",\n+ \"tempfile\",\n+]\n+",
+  "rustc_verbose_version": [
+    "rustc 1.95.0 (59807616e 2026-04-14)",
+    "binary: rustc",
+    "commit-hash: 59807616e1fa2540724bfbac14d7976d7e4a3860",
+    "commit-date: 2026-04-14",
+    "host: x86_64-unknown-linux-gnu",
+    "release: 1.95.0",
+    "LLVM version: 22.1.2"
+  ],
+  "cargo_version": "cargo 1.95.0 (f2d3ce0bd 2026-03-21)",
+  "cargo_command": "cargo build --release --offline -p redlinedb-scoreboard",
+  "profile": "release",
+  "rustflags": "",
+  "pgo": false,
+  "failpoints": false,
+  "profile_release": "[profile.release]\nopt-level = 3\nlto = \"fat\"\ncodegen-units = 1\npanic = \"abort\"\nstrip = \"symbols\"\ndebug = false\ndebug-assertions = false\noverflow-checks = false\nincremental = false\n\n# Local CPU specialization requires an explicit RUSTFLAGS override.",
+  "binary_sha256": "ab17e5283cdda0ea7d223791fdf037d493831ed514157cf69924b31fb41e841c",
+  "built_at_utc": "2026-10-01T06:26:37Z",
+  "sandbox": "standalone git clone --no-local under .agent/sandbox, removed after the build"
+}
