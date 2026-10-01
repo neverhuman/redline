@@ -16,8 +16,12 @@ pub mod redline;
 pub mod render;
 pub mod run;
 pub mod sqlite;
+mod strict;
+mod strict_summary;
 pub mod summary;
 pub mod workloads;
 
+#[cfg(test)]
+mod strict_tests;
 #[cfg(test)]
 mod tests;

@@ -47,6 +47,10 @@ pub struct BundleManifest {
     pub runs: u32,
     #[serde(default = "default_reps")]
     pub reps: u32,
+    #[serde(default)]
+    pub strict_reps: Option<u32>,
+    #[serde(default)]
+    pub strict_method: Option<String>,
     pub pairs: Vec<Pair>,
 }
 
@@ -62,6 +66,10 @@ pub struct Summary {
     pub rows: u64,
     pub runs: u32,
     pub reps: u32,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub strict_reps: Option<u32>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub strict_method: Option<String>,
     pub publishable: bool,
     pub blockers: Vec<String>,
     pub sqlite_version: Option<String>,
@@ -111,20 +119,24 @@ pub struct Speedup {
 }
 
 #[derive(Debug, Deserialize)]
-struct Record {
-    status: String,
-    label: String,
+pub(crate) struct Record {
+    pub(crate) status: String,
+    pub(crate) label: String,
     #[serde(default)]
-    with: String,
-    run: u32,
-    pair: String,
-    workload: String,
+    pub(crate) with: String,
+    pub(crate) run: u32,
+    pub(crate) pair: String,
+    pub(crate) workload: String,
+    #[serde(default)]
+    pub(crate) rep: Option<u32>,
+    #[serde(default)]
+    pub(crate) seq: Option<u64>,
     #[serde(default)]
     rows: u64,
     #[serde(default)]
-    ops: u64,
+    pub(crate) ops: u64,
     #[serde(default)]
-    elapsed_ns: u64,
+    pub(crate) elapsed_ns: u64,
     #[serde(default)]
     digest: i64,
     #[serde(default)]
@@ -179,7 +191,7 @@ fn sha256_file(path: &Path) -> Result<String> {
     Ok(format!("{:x}", Sha256::digest(&bytes)))
 }
 
-fn median(values: &mut [f64]) -> Option<f64> {
+pub(crate) fn median(values: &mut [f64]) -> Option<f64> {
     if values.is_empty() {
         return None;
     }
@@ -217,6 +229,29 @@ pub fn summarize(bundle: &Path) -> Result<Summary> {
         );
     }
     let mut blockers = BTreeSet::new();
+    let paired_strict = manifest.strict_method.as_deref() == Some(crate::strict::METHOD);
+    if manifest.strict_reps.is_some() && manifest.strict_method.is_none() {
+        blockers.insert("Strict repetition metadata has no method".to_owned());
+    }
+    if let Some(method) = &manifest.strict_method {
+        if !paired_strict {
+            blockers.insert(format!("unknown Strict method {method}"));
+        }
+        if !manifest.pairs.contains(&Pair::Strict) {
+            blockers.insert("Strict method recorded without a Strict pair".to_owned());
+        }
+    }
+    if paired_strict
+        && (manifest
+            .strict_reps
+            .is_none_or(|reps| reps < crate::strict::MIN_REPS)
+            || !(1..=2).contains(&manifest.labels.len()))
+    {
+        blockers.insert(format!(
+            "paired Strict needs one or two versions and at least {} repetitions",
+            crate::strict::MIN_REPS
+        ));
+    }
     let mut seen = BTreeSet::new();
     for label in &manifest.labels {
         if label == SQLITE || !seen.insert(label) {
@@ -380,6 +415,19 @@ pub fn summarize(bundle: &Path) -> Result<Summary> {
     let sqlite_version = versions
         .get(SQLITE)
         .and_then(|names| names.iter().next().cloned());
+    if paired_strict {
+        let mut sequences = BTreeSet::new();
+        for record in records.iter().filter(|r| r.pair == "strict") {
+            if let Some(seq) = record.seq
+                && !sequences.insert((record.run, seq))
+            {
+                blockers.insert(format!(
+                    "Strict run {} repeats global sequence {seq}",
+                    record.run
+                ));
+            }
+        }
+    }
 
     let mut workloads = Vec::new();
     for pair in &manifest.pairs {
@@ -387,7 +435,20 @@ pub fn summarize(bundle: &Path) -> Result<Summary> {
         for entry in selected(&None, *pair)? {
             // A run counts only with the repetitions the protocol asks for:
             // all of them, or 3 when one took over 10 s.
-            let needed = manifest.reps.min(3) as usize;
+            let paired = paired_strict && *pair == Pair::Strict;
+            let strict_stats =
+                paired.then(|| crate::strict_summary::analyze(&records, &manifest, entry.id));
+            if let Some(stats) = &strict_stats {
+                blockers.extend(stats.blockers.iter().cloned());
+            }
+            let needed = if paired {
+                manifest
+                    .strict_reps
+                    .unwrap_or(crate::strict::MIN_REPS)
+                    .max(crate::strict::MIN_REPS)
+            } else {
+                manifest.reps.min(3)
+            } as usize;
             let mut short = Vec::new();
             let mut per_run = |series: &str| -> BTreeMap<u32, f64> {
                 let mut out = BTreeMap::new();
@@ -437,6 +498,9 @@ pub fn summarize(bundle: &Path) -> Result<Summary> {
                         ratios.insert(*run, value / sqlite);
                     }
                 }
+                if let Some(stats) = &strict_stats {
+                    ratios = stats.vs_sqlite.get(label).cloned().unwrap_or_default();
+                }
                 vs_sqlite.insert(label.clone(), figure(&ratios));
                 let beside_figure = figure(&beside);
                 if let Some(m) = beside_figure.median {
@@ -452,6 +516,7 @@ pub fn summarize(bundle: &Path) -> Result<Summary> {
             let low = sqlite_medians.iter().copied().reduce(f64::min);
             let high = sqlite_medians.iter().copied().reduce(f64::max);
             if let (Some(low), Some(high)) = (low, high)
+                && !paired
                 && low > 0.0
                 && (high - low) / low > SQLITE_DRIFT
                 && entry.unit != "open"
@@ -460,6 +525,14 @@ pub fn summarize(bundle: &Path) -> Result<Summary> {
                     "{pair_name} {}: SQLite differed {:.0}% between versions' runs; the host was not steady",
                     entry.id,
                     (high - low) / low * 100.0
+                ));
+            }
+            if let Some(stats) = &strict_stats
+                && stats.control_drift > SQLITE_DRIFT
+            {
+                blockers.insert(format!(
+                    "strict {}: adjacent SQLite controls differed {:.0}% (largest run median); the host was not steady",
+                    entry.id, stats.control_drift * 100.0
                 ));
             }
             let mut speedup = BTreeMap::new();
@@ -536,6 +609,8 @@ pub fn summarize(bundle: &Path) -> Result<Summary> {
         rows: manifest.rows,
         runs: manifest.runs,
         reps: manifest.reps,
+        strict_reps: manifest.strict_reps,
+        strict_method: manifest.strict_method,
         publishable: blockers.is_empty(),
         blockers: blockers.into_iter().collect(),
         sqlite_version,

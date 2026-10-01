@@ -126,7 +126,12 @@ pub fn run(args: &RunArgs) -> Result<()> {
 }
 
 /// The store directory of an engine's image, built by a child if missing.
-fn ensure_image(exe: &Path, args: &RunArgs, engine: Engine, kind: ImageKind) -> Result<PathBuf> {
+pub(crate) fn ensure_image(
+    exe: &Path,
+    args: &RunArgs,
+    engine: Engine,
+    kind: ImageKind,
+) -> Result<PathBuf> {
     let owner = match engine {
         Engine::Redline => format!("redline-{}", args.label),
         Engine::Sqlite => format!("sqlite-{}", rusqlite::version()),
@@ -174,13 +179,13 @@ fn ensure_image(exe: &Path, args: &RunArgs, engine: Engine, kind: ImageKind) -> 
     }
 }
 
-enum Outcome {
+pub(crate) enum Outcome {
     Measured(Box<Measured>),
     Failed(String),
     TimedOut,
 }
 
-fn run_child(
+pub(crate) fn run_child(
     exe: &Path,
     args: &RunArgs,
     engine: Engine,
@@ -278,7 +283,7 @@ fn wait_with_budget(command: &mut Command, budget: Duration) -> Result<Option<i3
 }
 
 #[allow(clippy::too_many_arguments)]
-fn record_line(
+pub(crate) fn record_line(
     args: &RunArgs,
     engine: Engine,
     workload: &Workload,
