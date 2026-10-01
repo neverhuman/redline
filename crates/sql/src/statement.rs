@@ -834,6 +834,9 @@ pub(crate) enum SelectRuntimeSource {
         rowids: Vec<RowId>,
         cursor: usize,
     },
+    LoadedRows {
+        rows: std::vec::IntoIter<crate::exec::expr::scalar::row::TableRow>,
+    },
     SqliteSchema {
         rows: Vec<SqliteSchemaRow>,
         cursor: usize,

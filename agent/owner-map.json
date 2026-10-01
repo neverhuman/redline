@@ -33,6 +33,8 @@
     "benchmark-results/": "redline-testing",
     "contracts/": "contracts",
     "crates/": "tools",
+    "crates/sql/src/exec/index_recheck.rs": "tools",
+    "crates/sql/src/exec/select_loaded_rows.rs": "tools",
     "db/": "storage",
     "deny.toml": "ops",
     "docs/": "docs",

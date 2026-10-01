@@ -43,6 +43,7 @@ pub(crate) mod index_dml;
 pub(crate) mod index_integrity;
 pub(crate) mod index_partial;
 pub(crate) mod index_predicate;
+mod index_recheck;
 mod join_probe;
 pub(crate) mod policy;
 pub(crate) mod reindex;
@@ -72,6 +73,7 @@ pub(crate) mod fk;
 pub(crate) mod hot_row;
 pub(crate) mod json_tv;
 pub(crate) mod rebind;
+mod select_loaded_rows;
 pub(crate) mod select_parallel;
 mod select_route_gate;
 // Track K — SQL:2003 MERGE dispatch.
@@ -86,9 +88,8 @@ pub(crate) mod table_valued;
 pub(crate) mod trigger;
 pub(crate) mod view;
 pub(crate) mod window;
-// Phase 6 M1 scaffolding: Morsel/ColumnBatch/Bitmap/BytesArena types.
-// Operator wiring lands in M2-M8; module stays under `pub(crate)` so the
-// existing tuple path is unaffected. See `docs/phase6-morsel-vector.md`.
+// Phase 6 morsel types; operator wiring is in `docs/phase6-morsel-vector.md`.
+// The module remains crate-visible while the tuple path is active.
 pub(crate) mod morsel;
 #[allow(unused_imports)]
 use morsel as _morsel_scaffold_marker;
@@ -1882,9 +1883,7 @@ fn step_select_runtime_inner(
             Ok(true)
         }
         SelectRuntimeSource::StaticRows { rows, cursor } => {
-            // Covering scans materialise every row and leave LIMIT/OFFSET
-            // on the runtime. Honor both here. Producers that already
-            // sliced the batch set limit to usize::MAX and offset to 0.
+            // Apply LIMIT/OFFSET unless the producer already sliced the rows.
             while *cursor < rows.len() {
                 let row = rows[*cursor].clone();
                 *cursor += 1;
@@ -1904,6 +1903,23 @@ fn step_select_runtime_inner(
             finish_select_runtime(conn, runtime)?;
             *current_row = None;
             Ok(true)
+        }
+        SelectRuntimeSource::LoadedRows { rows } => {
+            let done = select_loaded_rows::step(
+                rows,
+                &runtime.selection,
+                &runtime.projection,
+                bindings,
+                &mut runtime.seen,
+                runtime.offset,
+                &mut runtime.yielded,
+                runtime.limit,
+                current_row,
+            )?;
+            if done {
+                finish_select_runtime(conn, runtime)?;
+            }
+            Ok(done)
         }
         SelectRuntimeSource::Table {
             table,

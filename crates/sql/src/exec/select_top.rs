@@ -447,17 +447,27 @@ fn build_select_runtime(
                         // executor can satisfy them, but a lagging
                         // schema snapshot can still exist.
                         if index_access::open_handle(conn.engine(), tx, &matched.index).is_some() {
-                            let rowids = index_access::execute_index_probe(
+                            let rows = index_access::execute_index_probe_rows(
                                 conn.engine(),
                                 tx,
                                 table,
                                 &matched.index,
                                 &matched.probe,
+                                conn.query_memory().work_mem_bytes / 4,
                             )?;
-                            SelectRuntimeSource::Table {
-                                table: Arc::clone(table),
-                                rowids,
-                                cursor: 0,
+                            match rows {
+                                super::index_recheck::SelectProbeRows::Loaded { rows, .. } => {
+                                    SelectRuntimeSource::LoadedRows {
+                                        rows: rows.into_iter(),
+                                    }
+                                }
+                                super::index_recheck::SelectProbeRows::RowIds(rowids) => {
+                                    SelectRuntimeSource::Table {
+                                        table: Arc::clone(table),
+                                        rowids,
+                                        cursor: 0,
+                                    }
+                                }
                             }
                         } else {
                             visible_table_scan(conn, tx, table, plan, bindings)?
@@ -765,6 +775,7 @@ fn build_select_runtime(
     // sqlparser AST nodes, so the saving compounds on complex queries.
     let (selection, projection) = match &source {
         SelectRuntimeSource::Table { .. }
+        | SelectRuntimeSource::LoadedRows { .. }
         | SelectRuntimeSource::SqliteSchema { .. }
         | SelectRuntimeSource::SqliteSequence { .. }
         | SelectRuntimeSource::Empty => (plan.selection.clone(), plan.projection.clone()),
@@ -856,20 +867,26 @@ fn table_rows_for_select(
         index_access::try_match_index_access(conn.engine(), table, selection, bindings)
         && index_access::open_handle(conn.engine(), tx, &matched.index).is_some()
     {
-        let rowids = index_access::execute_index_probe(
+        let probed = index_access::execute_index_probe_rows(
             conn.engine(),
             tx,
             table,
             &matched.index,
             &matched.probe,
+            conn.query_memory().work_mem_bytes / 4,
         )?;
-        let mut rows = Vec::with_capacity(rowids.len());
-        for rowid in rowids {
-            if let Some(row) = load_table_row_by_rowid(conn.engine(), tx, table, rowid)? {
-                rows.push(row);
+        return match probed {
+            super::index_recheck::SelectProbeRows::Loaded { rows, .. } => Ok(rows),
+            super::index_recheck::SelectProbeRows::RowIds(rowids) => {
+                let mut rows = Vec::with_capacity(rowids.len());
+                for rowid in rowids {
+                    if let Some(row) = load_table_row_by_rowid(conn.engine(), tx, table, rowid)? {
+                        rows.push(row);
+                    }
+                }
+                Ok(rows)
             }
-        }
-        return Ok(rows);
+        };
     }
 
     collect_table_rows(conn.engine(), tx, table)

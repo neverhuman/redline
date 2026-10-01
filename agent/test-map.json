@@ -129,6 +129,14 @@
       "command": "rtk bash scripts/ci-local.sh required",
       "purpose": "verify Rust product code through the canonical host-required lane"
     },
+    "crates/sql/src/exec/index_recheck.rs": {
+      "command": "cargo test -p redlinedb-sql --test perf_gate_index_literal",
+      "purpose": "verify point and range index rechecks retain each loaded SQL row"
+    },
+    "crates/sql/src/exec/select_loaded_rows.rs": {
+      "command": "cargo test -p redlinedb-sql --test perf_gate_index_literal",
+      "purpose": "verify indexed SELECT projection reuses loaded rows"
+    },
     "db/": {
       "command": "rtk bash scripts/ci-local.sh required",
       "purpose": "verify database fixtures through the canonical host-required lane"
