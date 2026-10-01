@@ -39,8 +39,8 @@ use super::index_batch::{
     execute_index_range_scan_ordered_desc as batch_range_ordered_desc,
     execute_index_range_scan_streaming as batch_range_streaming,
 };
+use super::index_recheck::{RecheckSink, SelectProbeRows, load_visible_row};
 use super::policy::{ActiveExecBatchPolicy, ExecBatchPolicy};
-use super::tail::load_table_row_by_rowid;
 
 pub(crate) use super::index_batch::{OutputColumnSource, covering_column_source};
 
@@ -466,6 +466,17 @@ pub(crate) fn execute_index_point_lookup(
     index: &IndexDef,
     key: &[u8],
 ) -> Result<Vec<RowId>> {
+    execute_index_point_lookup_into(engine, tx, table, index, key, usize::MAX)
+}
+
+fn execute_index_point_lookup_into<S: RecheckSink>(
+    engine: &Engine,
+    tx: &mut Txn,
+    table: &Arc<TableDef>,
+    index: &IndexDef,
+    key: &[u8],
+    max_loaded_bytes: usize,
+) -> Result<S> {
     let Some(handle) = open_handle(engine, tx, index) else {
         // Defensive: if the planner advertised an index that the kernel
         // does not have a physical handle for, we must not crash —
@@ -474,22 +485,22 @@ pub(crate) fn execute_index_point_lookup(
         // `meta_page_id` for every new index), but a paranoid early
         // return here keeps the executor safe under outdated catalog
         // snapshots.
-        return Ok(Vec::new());
+        return Ok(S::with_capacity(0, max_loaded_bytes));
     };
     let counters = engine.phase11_counters();
     let snapshot = tx.snapshot().clone();
     let view = SnapshotView::visible(engine.tx_status(), &snapshot, Some(tx.id()));
     let mut cursor = RawPointCursor::open_with_counters(&handle, key, view, Some(&*counters))?;
     let mut batch: Vec<IndexRowRef> = Vec::with_capacity(MAX_BATCH);
-    let mut out = Vec::new();
+    let mut out = S::with_capacity(MAX_BATCH, max_loaded_bytes);
     loop {
         batch.clear();
         match cursor.next_rowid_batch(&mut batch, MAX_BATCH)? {
             CursorYield::End => break,
             CursorYield::Batch(_) => {
                 for entry in &batch {
-                    if visible_in_relation(engine, tx, table, entry.row_id)? {
-                        out.push(entry.row_id);
+                    if let Some(row) = load_visible_row(engine, tx, table, entry.row_id)? {
+                        out.push_row(row);
                     }
                 }
             }
@@ -512,7 +523,7 @@ pub(crate) fn execute_index_range_scan_streaming(
     end: &[u8],
     limit: Option<usize>,
 ) -> Result<Vec<RowId>> {
-    batch_range_streaming(engine, tx, table, index, start, end, limit)
+    batch_range_streaming(engine, tx, table, index, start, end, limit, usize::MAX)
 }
 
 /// Run a visible range scan (half-open `[start, end)`) and return
@@ -526,7 +537,7 @@ pub(crate) fn execute_index_range_scan(
     start: &[u8],
     end: &[u8],
 ) -> Result<Vec<RowId>> {
-    batch_range_streaming(engine, tx, table, index, start, end, None)
+    batch_range_streaming(engine, tx, table, index, start, end, None, usize::MAX)
 }
 
 /// Convenience: run the supplied probe and return its rowids. Lets
@@ -542,6 +553,26 @@ pub(crate) fn execute_index_probe(
         IndexProbe::Point { key } => execute_index_point_lookup(engine, tx, table, index, key),
         IndexProbe::Range { start, end } => {
             execute_index_range_scan(engine, tx, table, index, start, end)
+        }
+    }
+}
+
+/// The SELECT runtime retains rows already loaded by the visibility recheck.
+/// Other probe callers continue to use the rowid-returning API above.
+pub(super) fn execute_index_probe_rows(
+    engine: &Engine,
+    tx: &mut Txn,
+    table: &Arc<TableDef>,
+    index: &IndexDef,
+    probe: &IndexProbe,
+    max_loaded_bytes: usize,
+) -> Result<SelectProbeRows> {
+    match probe {
+        IndexProbe::Point { key } => {
+            execute_index_point_lookup_into(engine, tx, table, index, key, max_loaded_bytes)
+        }
+        IndexProbe::Range { start, end } => {
+            batch_range_streaming(engine, tx, table, index, start, end, None, max_loaded_bytes)
         }
     }
 }
@@ -643,19 +674,6 @@ pub(crate) fn open_handle(
 ) -> Option<Arc<redlinedb_kernel::index::BtreeIndex>> {
     index.meta_page_id?;
     engine.index_handle_for_tx(tx, index.index_id)
-}
-
-pub(super) fn visible_in_relation(
-    engine: &Engine,
-    tx: &mut Txn,
-    table: &Arc<TableDef>,
-    rowid: RowId,
-) -> Result<bool> {
-    // The visibility check runs through the tx's snapshot. We don't
-    // need the tuple bytes here, only "did get_for_relation see a live
-    // row" — load_table_row_by_rowid does the right table_id check
-    // already, so we reuse it for parity with TableScan reads.
-    Ok(load_table_row_by_rowid(engine, tx, table, rowid)?.is_some())
 }
 
 fn flatten_top_level_and(expr: &Expr) -> Vec<&Expr> {

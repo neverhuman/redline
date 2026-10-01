@@ -1,6 +1,6 @@
 use super::super::*;
 
-#[derive(Clone)]
+#[derive(Debug, Clone)]
 pub(crate) struct TableRow {
     pub(crate) rowid: RowId,
     pub(crate) values: Vec<SqlValue>,

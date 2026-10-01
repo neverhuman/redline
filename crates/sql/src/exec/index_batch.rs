@@ -18,7 +18,8 @@ use redlinedb_kernel::index::{
 use crate::error::Result;
 use crate::value::SqlValue;
 
-use super::index_access::{MAX_BATCH, open_handle, visible_in_relation};
+use super::index_access::{MAX_BATCH, open_handle};
+use super::index_recheck::{RecheckSink, load_visible_row};
 
 /// Phase 11 W1-C: streaming range scan with batched cursor consumption,
 /// per-heap-page grouped recheck, and optional early-stop after `limit`
@@ -33,7 +34,7 @@ use super::index_access::{MAX_BATCH, open_handle, visible_in_relation};
 ///
 /// Telemetry: bumps `Phase11Counters::heap_rechecks` ONCE per batch
 /// (rather than per row).
-pub(super) fn execute_index_range_scan_streaming(
+pub(super) fn execute_index_range_scan_streaming<S: RecheckSink>(
     engine: &Engine,
     tx: &mut Txn,
     table: &Arc<TableDef>,
@@ -41,9 +42,10 @@ pub(super) fn execute_index_range_scan_streaming(
     start: &[u8],
     end: &[u8],
     limit: Option<usize>,
-) -> Result<Vec<RowId>> {
+    max_loaded_bytes: usize,
+) -> Result<S> {
     let Some(handle) = open_handle(engine, tx, index) else {
-        return Ok(Vec::new());
+        return Ok(S::with_capacity(0, max_loaded_bytes));
     };
     let counters = engine.phase11_counters();
     // Snapshot is taken once at the top so the cursor's borrow does
@@ -55,10 +57,7 @@ pub(super) fn execute_index_range_scan_streaming(
     let owner = Some(tx.id());
     let snapshot = tx.snapshot().clone();
     let range = KeyRange::half_open(start, end);
-    let mut out: Vec<RowId> = match limit {
-        Some(n) => Vec::with_capacity(n.min(MAX_BATCH)),
-        None => Vec::new(),
-    };
+    let mut out = S::with_capacity(limit.map_or(0, |n| n.min(MAX_BATCH)), max_loaded_bytes);
     let mut batch: Vec<IndexRowRef> = Vec::with_capacity(MAX_BATCH);
     // Phase 5 WS-A4: hand the cursor a reusable per-statement entry
     // buffer / bump arena so the open-time `load_current_leaf` reuses
@@ -221,13 +220,13 @@ pub(super) fn execute_index_range_scan_ordered_desc(
 /// `limit` short-circuits on the *visible* row count: if the caller is
 /// after `LIMIT n` and we already have `n`, we stop the batch walk
 /// immediately so the next outer iteration breaks.
-fn process_recheck_batch(
+fn process_recheck_batch<S: RecheckSink>(
     engine: &Engine,
     tx: &mut Txn,
     table: &Arc<TableDef>,
     batch: &[IndexRowRef],
     limit: Option<usize>,
-    out: &mut Vec<RowId>,
+    out: &mut S,
 ) -> Result<()> {
     let mut groups: HashMap<u64, Vec<IndexRowRef>> = HashMap::with_capacity(8);
     for entry in batch {
@@ -247,8 +246,8 @@ fn process_recheck_batch(
             {
                 return Ok(());
             }
-            if visible_in_relation(engine, tx, table, entry.row_id)? {
-                out.push(entry.row_id);
+            if let Some(row) = load_visible_row(engine, tx, table, entry.row_id)? {
+                out.push_row(row);
             }
         }
     }
