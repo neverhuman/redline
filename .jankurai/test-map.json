@@ -78,6 +78,11 @@
       "command": "rtk just sqlite-parity-report-check",
       "purpose": "verify committed benchmark-results artifacts remain bound to official-evidence.processed.json"
     },
+    "benchmark-results/perf/releases/": {
+      "command": "rtk cargo test -p redlinedb-scoreboard --lib --locked tests::the_readme_block_matches_its_bundle -- --exact",
+      "purpose": "verify a publishable scoreboard summary and the generated README block against the committed raw measurements",
+      "proof_lane": "fast"
+    },
     "paper/data/loc_comparison.csv": {
       "command": "rtk just sqlite-parity-report-check",
       "purpose": "verify the generated paper LOC comparison stays in sync with the committed official evidence artifact",

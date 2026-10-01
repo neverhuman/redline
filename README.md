@@ -177,7 +177,20 @@ embedding the engine. It was written against v4.1.0 and updated for v5.0.0
 where the release changed what it describes; where it differs from the
 generated blocks in this README, the blocks are the measurement.
 
+## Engine throughput
+
+This table measures work inside a single process on the calling thread. The
+normal pair uses a memory-backed filesystem; the strict pair and its disk
+syncs are included in the linked raw bundle.
+
+<!-- engine-throughput:begin -->
+<!-- engine-throughput:end -->
+
 ## Versions over time
+
+This is the **startup-inclusive CLI latency** table: each case launches a new
+RedlineDB or SQLite shell. It measures a different cost from the in-process
+engine throughput table above.
 
 Every row is a release build of the commit shown, re-run on today's corpus
 against SQLite. The v5.0.0 row was measured at `55637d088`; nothing the
@@ -361,6 +374,9 @@ changes narrow. Change generated README blocks only through their renderers:
 `just sqlite-parity-report-update` for the SQLite badge and report,
 `redline-testing check-postgres … --readme README.md` for the PostgreSQL block
 (`ops/ci/sqlite-parity-report.sh update` runs both), and
+`redline-scoreboard render --bundle benchmark-results/perf/releases/… --target README.md`
+for the engine throughput block after `summarize --check` reports a publishable
+bundle, and
 `redline-testing version-history --bundle … --readme README.md` for the version
 table. Official SQLite, memory, RQL and PostgreSQL evidence is produced only by
 `subrepos/redline-testing`; engine-local tests are regression checks.
