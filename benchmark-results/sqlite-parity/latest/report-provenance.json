@@ -5,42 +5,42 @@
   "note": null,
   "measurement": {
     "runner": {
-      "path": "/home/ubuntu/redlineDB/.agent/sandbox/release/target/release/redline-testing",
-      "sha256": "224a0b0fa949128725ab2da4685bf247897926f4dbf8d5135899c52417eae4d0",
+      "path": "/home/ubuntu/redlineDB/target/release/redline-testing",
+      "sha256": "1141674f29de34ee3d5efbf07074b0c35e63a5858e8a235bb2052a3bdbbdf309",
       "version": "redline-testing 1.0.1"
     },
     "target": {
-      "path": "/home/ubuntu/redlineDB/.agent/sandbox/release/target/release/redlinedb",
-      "sha256": "f4c63963903b02420edffd0d484aa2bd9df332b6e22f16b6012c1e8a1de2f5e3",
-      "version": "redlinedb v5.1.0 (tested against SQLite 3.53.1)"
+      "path": "/home/ubuntu/redlineDB/target/release/redlinedb",
+      "sha256": "3ab3174ce6af8fb765a35868cbb3ada6c595d8fddf398755335d47ea45d86ee9",
+      "version": "redlinedb v5.1.1 (tested against SQLite 3.53.1)"
     },
     "sqlite": {
-      "path": "/home/ubuntu/redlineDB/.agent/sandbox/release/target/sqlite-reference/3.53.1/bin/sqlite3",
-      "sha256": "5efb87ca1598e970cbf9ba48047146577b15a353af21f128f23df7b780e446e7",
+      "path": "/home/ubuntu/redlineDB/target/sqlite-reference/3.53.1/bin/sqlite3",
+      "sha256": "fd3bdd25217a849f8f4fa295fb78199cfd69b0c4d47ba8d8c32a1aa328bd147e",
       "version": "3.53.1 2026-05-05 10:34:17 c88b22011a54b4f6fbd149e9f8e4de77658ce58143a1af0e3785e4e6475127e9 (64-bit)"
     },
     "run": {
-      "source_commit": "083e5efa3bbafa1e5dd2b2959cbe36d6acff9471",
-      "source_tree": "4eb671682ccdb23ffc97f93adf87a6e05cf84288",
-      "source_inputs_sha256": "db02c7d2de1279752321e35a43c5124e716cebd0113f29e4753aece7c7260015",
+      "source_commit": "af4fc74cc3280582c4e6bd0583fe503c83118c48",
+      "source_tree": "bdce9577e6b00fb23fe6ea8ecef427fd44734756",
+      "source_inputs_sha256": "68c39b219fdbeb0f60b140becf78b3ea376a1f3186ecb91ee0b3d10b81d96529",
       "source_dirty": false,
       "corpus_sha256": "542cf3afd9c5322b50fd0673b035eeaa91c64400363c384adfef6dbdaa7537c3",
       "assertion_policy_sha256": "f9df5af05e652444c49b456143d874e4b728d52fa8bc026bd7236aad26424a2e",
       "oracle_build_stamp": "36ca143645cf76997d07b66e9244c636b8ccdec64a1d50558259c4e415e6558b\n-O2 -DSQLITE_ENABLE_BYTECODE_VTAB -DSQLITE_ENABLE_COLUMN_METADATA -DSQLITE_ENABLE_DBPAGE_VTAB -DSQLITE_ENABLE_DBSTAT_VTAB -DSQLITE_ENABLE_DESERIALIZE -DSQLITE_ENABLE_EXPLAIN_COMMENTS -DSQLITE_ENABLE_FTS5 -DSQLITE_ENABLE_MATH_FUNCTIONS -DSQLITE_ENABLE_OFFSET_SQL_FUNC -DSQLITE_ENABLE_PERCENTILE -DSQLITE_ENABLE_PREUPDATE_HOOK -DSQLITE_ENABLE_RTREE -DSQLITE_ENABLE_VFSTRACE -DSQLITE_ENABLE_SESSION -DSQLITE_ENABLE_STMT_SCANSTATUS -DSQLITE_ENABLE_UPDATE_DELETE_LIMIT -DSQLITE_ENABLE_UNKNOWN_SQL_FUNCTION -DSQLITE_HAVE_ZLIB=1"
     },
-    "elapsed_ns": 11948016483
+    "elapsed_ns": 25098330787
   },
   "parent_run_provenance": {
     "path": "benchmark-results/sqlite-parity/latest/run-provenance.json",
-    "sha256": "560a0c51dce628facc2fe9372e63bc61d18b5a6563a819d43f5fa35616a5d7e4",
+    "sha256": "c4a48e355ccdc476b233e353769e2fc902ce1e68d4022965f174261eb0a43fae",
     "retained": true
   },
-  "run_evidence_sha256": "c1b5daab170d9c05cb29ac8d94a0481b9ad86b138d809509b2b62ae451b56954",
-  "processed_evidence_sha256": "a69e86e878ac1089fd05ad5225bb7eec63b782eec0094fde4d0ab3e69d03d011",
-  "raw_sha256": "e27920cdd01374ffc9f709842909532506848fb2fb0e25c0684b6614d74bd08c",
+  "run_evidence_sha256": "02925611d9776d719f38668a804be2722da441d92cb7436935da8f71834e1854",
+  "processed_evidence_sha256": "48c16188cb95ee836f30b139242a38cef428437d5ebe0d967db41e0ec4307c54",
+  "raw_sha256": "f52d9ec8712330ddabf39a4d65def46de5e8257954cfdbd2f1f5f00c1a9ae196",
   "renderer": {
     "version": "redline-testing 1.0.1",
-    "binary_sha256": "224a0b0fa949128725ab2da4685bf247897926f4dbf8d5135899c52417eae4d0"
+    "binary_sha256": "1141674f29de34ee3d5efbf07074b0c35e63a5858e8a235bb2052a3bdbbdf309"
   },
   "command_line": [
     "redline-testing",
@@ -62,7 +62,7 @@
     "--jankurai-score",
     ".jankurai/repo-score.json",
     "--updated-date",
-    "2026-09-29",
+    "2026-10-01",
     "--expected-repetitions",
     "3",
     "--expected-warmup",
@@ -72,13 +72,13 @@
     "--run-provenance",
     "benchmark-results/sqlite-parity/latest/run-provenance.json"
   ],
-  "updated_date": "2026-09-29",
+  "updated_date": "2026-10-01",
   "output_file_hashes": {
     "README.md#sqlite-parity-badge": "c7fa8d2bd04bc6e279e840d2c17425b8fbd69ea2cde2bc7f29bf1cb37d77db82",
-    "README.md#sqlite-parity-report": "c7ec6bbdc556200ca17d1e2f1828261f476ad560b4c65510b6f359dba1f2fa69",
-    "manifest.json": "52ddd2d6b12833e598a3501c4a191782f69571ae6ae2453f038abbb7dace45aa",
-    "ranked.csv": "37f0e7c03419a628d5fb1417fa715e610a479ef00a84e26ff202f8a9e17a382d",
-    "raw.jsonl": "e27920cdd01374ffc9f709842909532506848fb2fb0e25c0684b6614d74bd08c",
-    "summary.json": "0f4a7c48ccbfb7c89fcdcbffa0fa37699b22537911ccc48b167360b0c299124e"
+    "README.md#sqlite-parity-report": "edf25d67948ba1c73caee6ab02da877ee95d606b16182f0e118683da25df4b72",
+    "manifest.json": "5c65576300fe483a818962e66f53603591d86cfcd3fd5e247524561932abd798",
+    "ranked.csv": "9536d56737a42d9441c4874fc2a965a3facf7189827198389074323f59d470f8",
+    "raw.jsonl": "f52d9ec8712330ddabf39a4d65def46de5e8257954cfdbd2f1f5f00c1a9ae196",
+    "summary.json": "200ee639ae045109c762527226a2e6e70efab0bddf7c11e7d16d256a324421ec"
   }
 }

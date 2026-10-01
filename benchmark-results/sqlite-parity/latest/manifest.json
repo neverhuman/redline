@@ -21,7 +21,7 @@
     "--jankurai-score",
     ".jankurai/repo-score.json",
     "--updated-date",
-    "2026-09-29",
+    "2026-10-01",
     "--expected-repetitions",
     "3",
     "--expected-warmup",

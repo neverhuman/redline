@@ -1,0 +1,25 @@
+{
+  "schema": "redline-durability-raw-custody-v1",
+  "source_commit": "af4fc74cc3280582c4e6bd0583fe503c83118c48",
+  "receipt": {
+    "path": "v5.1.1-strict-process-kill.json",
+    "sha256": "063a00bd38a226a88ab8d46f663f1b0243c96c9e199d540b22b8c4b639dca81e"
+  },
+  "archive": {
+    "path": "v5.1.1-strict-process-kill-raw.tar.gz",
+    "sha256": "7d92300bf535f3ca6d467087630d26e521626c5d23e03098cd1ad7d5b3fdf1aa",
+    "bytes": 1726499
+  },
+  "inventory": {
+    "path": "v5.1.1-strict-process-kill-raw.sha256",
+    "sha256": "37da200807babda48253dbadadf0e4b196c7e2534fdb2e8988eae4e4ae497650",
+    "files": 160
+  },
+  "scenarios": {
+    "planned": 20,
+    "run": 20,
+    "passed": 20,
+    "failed": 0,
+    "faults_observed": 20
+  }
+}
