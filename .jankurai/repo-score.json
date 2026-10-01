@@ -1,16 +1,16 @@
 {
-  "report_fingerprint": "sha256:fea398218da51ac9c85039a58cec5d61a9ec5c0880b12167ca5593556e46a105",
-  "input_fingerprint": "sha256:88ffc19cbf12eebc29028ce09db4ecb67c0371ffe4988e30f9d7c580782b3b74",
+  "report_fingerprint": "sha256:0f8cab05e7ba36f761588df99216e8086c63af56800163fdc764778d605d9fe5",
+  "input_fingerprint": "sha256:b65a4ce05d290d2aefb4817866b505d1fbd122db0ff78edbe6114010dd032586",
   "policy_fingerprint": "sha256:a709fa6bbfe5c3197979cc12ca5bb1dd81019d911b9d064f91eca62ff4fe46cb",
   "manifest_fingerprints": {
-    "owner_map": "sha256:b9f007b4b35007a543a40ffeed77f4279f737e12db9ad15f43b7b330e41ab9b5",
-    "test_map": "sha256:d434fc5b049ff254858fddb0da76364a67a1f67725340d5e64a805b46098edce",
-    "generated_zones": "sha256:8e2274072cd899cc1fd5a857a242bf53197d3387ef98fdb053205e4b93b09690",
+    "owner_map": "sha256:94c73757605e72e187d61b2870be6c2db24f1996fda8b6d8f392bb6842b6686b",
+    "test_map": "sha256:b8b76a499efde8bf45befd2175e216a64e8f3793d53da765b67a661ecacecd7c",
+    "generated_zones": "sha256:6c1754b67cceaf4f66a3a36bcefb1fb15d9d60307ad6572f29fe83cc62f29fb7",
     "boundaries": "sha256:39f4f2fc80401bd10b3db201e1a8c065a5ba7a77567cf9bd9f3b6069eb40e8be",
     "proof_lanes": "sha256:e4ca90ddeecc9310c1085d5a323c7d4dbb7361eccae57bf655912b91b230bf7c"
   },
   "dirty_worktree": false,
-  "generated_at": "1790678064",
+  "generated_at": "1790891626",
   "schema_url": "schemas/repo-score.schema.json",
   "standard": "jankurai",
   "standard_version": "0.9.0",
@@ -24,9 +24,9 @@
   "conformance_decision": "pass",
   "conformance_blockers": [],
   "repo": ".",
-  "run_id": "1790678064",
-  "started_at": "1790678064",
-  "elapsed_ms": 30077,
+  "run_id": "1790891626",
+  "started_at": "1790891626",
+  "elapsed_ms": 29831,
   "scope": {
     "mode": "full",
     "paths": []
@@ -34,26 +34,26 @@
   "score": 86,
   "raw_score": 86,
   "decision": {
-    "status": "advisory",
+    "status": "pass",
     "minimum_score": 85,
     "passed": true,
     "hard_findings": 0,
-    "soft_findings": 10,
+    "soft_findings": 12,
     "ratchet": {
-      "baseline_score": 86,
+      "baseline_score": 85,
       "allowed_drop": 0,
       "passed": true,
-      "score_delta": 0,
-      "baseline_report_fingerprint": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
-      "baseline_input_fingerprint": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
-      "baseline_policy_fingerprint": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+      "score_delta": 1,
+      "baseline_report_fingerprint": "sha256:ba49467b01a8ce13274526565327854fe5b0ea5e2f702fa6f9713da8749e4104",
+      "baseline_input_fingerprint": "sha256:4778b1bb7a0688d9bf55767c6bd402b815c86fe39c54dda5126e428d58a2cda8",
+      "baseline_policy_fingerprint": "sha256:a709fa6bbfe5c3197979cc12ca5bb1dd81019d911b9d064f91eca62ff4fe46cb",
       "new_caps": [],
       "new_hard_findings": [],
       "policy_changed": false
     }
   },
   "git": {
-    "head": "083e5efa",
+    "head": "af4fc74c",
     "base": null,
     "changed_files": 0,
     "mode": "full",
@@ -70,7 +70,7 @@
       "medium",
       "low"
     ],
-    "mode": "advisory",
+    "mode": "ratchet",
     "standard_version": "0.9.0",
     "auditor_version": "1.6.11",
     "schema_version": "1.9.0",
@@ -329,7 +329,8 @@
         "jankurai audit lane found in CI",
         "web e2e lane present or no web surface",
         "rendered UX QA lane present or no web surface",
-        "Rust property/integration tests present or no Rust surface"
+        "Rust property/integration tests present or no Rust surface",
+        "proofbind artifact found: surfaces=0 missing=0 high_or_critical_missing=0 verdict=pass"
       ],
       "notes": []
     },
@@ -344,7 +345,7 @@
         "security lane present",
         "canonical security lane wrapper present",
         "agent-readiness audit gate found in CI",
-        "rust bad-behavior advisory signals: 5324",
+        "rust bad-behavior advisory signals: 5449",
         "ci bad-behavior advisory signals: 2",
         "git bad-behavior advisory signals: 1",
         "gittools bad-behavior advisory signals: 1",
@@ -358,12 +359,12 @@
       "score": 45,
       "weighted_points": 5.4,
       "evidence": [
-        "largest authored code file: crates/sql/src/exec/mod.rs (1982 LOC)",
+        "largest authored code file: crates/sql/src/exec/mod.rs (1999 LOC)",
         "code file exceeds 500 LOC",
         "code file exceeds 1000 LOC",
         "most code files stay under 300 LOC",
-        "copy-code advisory classes found: 197 (advisory only, no score impact)",
-        "rust bad-behavior advisory signals: 5324",
+        "copy-code advisory classes found: 196 (advisory only, no score impact)",
+        "rust bad-behavior advisory signals: 5449",
         "ci bad-behavior advisory signals: 2",
         "git bad-behavior advisory signals: 1",
         "gittools bad-behavior advisory signals: 1",
@@ -1038,7 +1039,23 @@
       "rust-witness"
     ]
   },
-  "security_evidence": {},
+  "security_evidence": {
+    "artifact": {
+      "path": "target/jankurai/security/evidence.json",
+      "envelope_exit_code": 0,
+      "elapsed_ms": 47622,
+      "wrapper_strict": true,
+      "profile": "ci",
+      "commands_ran": 1,
+      "commands_skipped": 0,
+      "commands_failed": 0,
+      "required_commands_skipped": 0,
+      "required_commands_failed": 0,
+      "blocking_commands": [],
+      "generated_at": "1790891541",
+      "git_head": "af4fc74cc3280582c4e6bd0583fe503c83118c48"
+    }
+  },
   "boundaries": {
     "artifact": {
       "path": "agent/boundaries.toml",
@@ -1056,7 +1073,7 @@
   "copy_code": {
     "schema_version": "1.1.0",
     "generated_by": "jankurai copy-code",
-    "generated_at": "2026-09-29T10:33:55.471155356+00:00",
+    "generated_at": "2026-10-01T21:53:17.261288018+00:00",
     "repo": ".",
     "auditor_version": "1.6.11",
     "status": "review",
@@ -1094,20 +1111,20 @@
       ]
     },
     "summary": {
-      "files_scanned": 4129,
-      "files_considered": 562,
-      "active_files": 562,
+      "files_scanned": 4186,
+      "files_considered": 583,
+      "active_files": 583,
       "exact_file_classes": 0,
       "hard_classes": 0,
-      "warning_classes": 197,
+      "warning_classes": 196,
       "hard_instances": 0,
-      "warning_instances": 551,
-      "duplicate_lines": 426,
-      "duplicate_tokens": 1320,
-      "duplicate_bytes": 12044,
-      "total_redundant_lines": 697,
-      "total_redundant_tokens": 1990,
-      "total_redundant_bytes": 18706
+      "warning_instances": 549,
+      "duplicate_lines": 425,
+      "duplicate_tokens": 1316,
+      "duplicate_bytes": 12010,
+      "total_redundant_lines": 696,
+      "total_redundant_tokens": 1987,
+      "total_redundant_bytes": 18682
     },
     "classes": [
       {
@@ -1388,57 +1405,57 @@
           {
             "path": "crates/kernel/src/catalog/stats/wire.rs",
             "language": "rust",
-            "start_line": 162,
-            "end_line": 163,
+            "start_line": 163,
+            "end_line": 164,
             "unit_name": "write_opt_value"
           },
           {
             "path": "crates/kernel/src/catalog/stats/wire.rs",
             "language": "rust",
-            "start_line": 173,
-            "end_line": 174,
+            "start_line": 174,
+            "end_line": 175,
             "unit_name": "write_value"
           },
           {
             "path": "crates/kernel/src/catalog/store.rs",
             "language": "rust",
-            "start_line": 1172,
-            "end_line": 1173,
+            "start_line": 1176,
+            "end_line": 1177,
             "unit_name": "write_opt_str"
           },
           {
             "path": "crates/kernel/src/catalog/store.rs",
             "language": "rust",
-            "start_line": 1182,
-            "end_line": 1183,
+            "start_line": 1186,
+            "end_line": 1187,
             "unit_name": "write_opt_u16"
           },
           {
             "path": "crates/kernel/src/catalog/store.rs",
             "language": "rust",
-            "start_line": 1192,
-            "end_line": 1193,
+            "start_line": 1196,
+            "end_line": 1197,
             "unit_name": "write_opt_u64"
           },
           {
             "path": "crates/kernel/src/catalog/store.rs",
             "language": "rust",
-            "start_line": 1202,
-            "end_line": 1203,
+            "start_line": 1206,
+            "end_line": 1207,
             "unit_name": "write_opt_value"
           },
           {
             "path": "crates/kernel/src/catalog/store.rs",
             "language": "rust",
-            "start_line": 1212,
-            "end_line": 1213,
+            "start_line": 1216,
+            "end_line": 1217,
             "unit_name": "write_value"
           },
           {
             "path": "crates/kernel/src/catalog/store.rs",
             "language": "rust",
-            "start_line": 1235,
-            "end_line": 1236,
+            "start_line": 1239,
+            "end_line": 1240,
             "unit_name": "write_opt_expr"
           },
           {
@@ -1486,8 +1503,8 @@
           {
             "path": "crates/sql/src/exec/index_access.rs",
             "language": "rust",
-            "start_line": 1193,
-            "end_line": 1194,
+            "start_line": 1185,
+            "end_line": 1186,
             "unit_name": "sql_value_to_explain"
           },
           {
@@ -2957,15 +2974,15 @@
           {
             "path": "crates/sql/src/exec/mod.rs",
             "language": "rust",
-            "start_line": 1772,
-            "end_line": 1777,
+            "start_line": 1774,
+            "end_line": 1779,
             "unit_name": "step_select_runtime"
           },
           {
             "path": "crates/sql/src/exec/mod.rs",
             "language": "rust",
-            "start_line": 1787,
-            "end_line": 1792,
+            "start_line": 1789,
+            "end_line": 1794,
             "unit_name": "step_select_runtime_inner"
           }
         ]
@@ -3665,7 +3682,7 @@
       "hard classes are limited to exact active-source file matches and substantial exact same-name units",
       "warning classes include same-body different-name units and token/block duplication",
       "tests, fixtures, stories, config, Docker, and migrations are omitted unless --include-tests is set",
-      "showing the top 50 classes and omitting 147 lower-ranked classes"
+      "showing the top 50 classes and omitting 146 lower-ranked classes"
     ]
   },
   "profile_structure": {
@@ -3951,7 +3968,7 @@
       "problem": "`Code shape and semantic surface` scored 45 below the standard floor of 85",
       "agent_fix": "split large or ambiguous authored code into smaller semantic modules with focused tests",
       "evidence": [
-        "largest authored code file: crates/sql/src/exec/mod.rs (1982 LOC)",
+        "largest authored code file: crates/sql/src/exec/mod.rs (1999 LOC)",
         "code file exceeds 500 LOC",
         "code file exceeds 1000 LOC",
         "most code files stay under 300 LOC"
@@ -3961,7 +3978,7 @@
       "confidence": 0.76,
       "evidence_kind": "repository-scan",
       "rerun_command": "just fast",
-      "fingerprint": "sha256:a6799ba6d33539eab601c52c4e0fafda7561a24223c675844d45c55e922c7cf2",
+      "fingerprint": "sha256:1ba7c5742d110afc7d2d951403e801be15d76d2309b1423d50f99f74148bc4f4",
       "rule_id": "HLT-001-DEAD-MARKER",
       "tlr": "Entropy",
       "lane": "fast",
@@ -4042,6 +4059,52 @@
     {
       "severity": "medium",
       "category": "copy-code",
+      "path": "crates/bench/src/fuzz/normalize.rs",
+      "problem": "enum `Outcome` has 2 divergent definitions across modules where one consistent definition is expected",
+      "agent_fix": "define `Outcome` once in a shared module and import it everywhere, or reconcile the diverging definitions so one canonical shape is used; redundant variety lets the copies drift apart",
+      "evidence": [
+        "enum `Outcome` is defined with diverging shapes in 2 modules (crates/bench/src/fuzz/normalize.rs:50, crates/scoreboard/src/run.rs:182)"
+      ],
+      "check_id": "HLT-046-UNNECESSARY-VARIETY:copy-code",
+      "hardness": "soft",
+      "confidence": 0.88,
+      "evidence_kind": "repository-scan",
+      "rerun_command": "cargo run -p jankurai -- copy-code . --json target/jankurai/copy-code.json --md target/jankurai/copy-code.md",
+      "fingerprint": "sha256:4af306ac2a4ada273d5c4808f22858836789503e988f0dca4f4c83c7ebc5816e",
+      "rule_id": "HLT-046-UNNECESSARY-VARIETY",
+      "tlr": "Maintainability entropy",
+      "lane": "copy-code",
+      "docs_url": "agent/JANKURAI_STANDARD.md#jankurai-pillar-variety-and-canonical-shape",
+      "owner": "tools",
+      "line": 50,
+      "matched_term": "unnecessary-variety"
+    },
+    {
+      "severity": "medium",
+      "category": "copy-code",
+      "path": "crates/bench/src/qps.rs",
+      "problem": "enum `Engine` has 2 divergent definitions across modules where one consistent definition is expected",
+      "agent_fix": "define `Engine` once in a shared module and import it everywhere, or reconcile the diverging definitions so one canonical shape is used; redundant variety lets the copies drift apart",
+      "evidence": [
+        "enum `Engine` is defined with diverging shapes in 2 modules (crates/bench/src/qps.rs:39, crates/scoreboard/src/pair.rs:40)"
+      ],
+      "check_id": "HLT-046-UNNECESSARY-VARIETY:copy-code",
+      "hardness": "soft",
+      "confidence": 0.88,
+      "evidence_kind": "repository-scan",
+      "rerun_command": "cargo run -p jankurai -- copy-code . --json target/jankurai/copy-code.json --md target/jankurai/copy-code.md",
+      "fingerprint": "sha256:76d12f9e8749787cd30f3ce5bfbe599be61d60ba8294fb72f736293c6761b692",
+      "rule_id": "HLT-046-UNNECESSARY-VARIETY",
+      "tlr": "Maintainability entropy",
+      "lane": "copy-code",
+      "docs_url": "agent/JANKURAI_STANDARD.md#jankurai-pillar-variety-and-canonical-shape",
+      "owner": "tools",
+      "line": 39,
+      "matched_term": "unnecessary-variety"
+    },
+    {
+      "severity": "medium",
+      "category": "copy-code",
       "path": "crates/kernel/src/error.rs",
       "problem": "enum `Error` has 2 divergent definitions across modules where one consistent definition is expected",
       "agent_fix": "define `Error` once in a shared module and import it everywhere, or reconcile the diverging definitions so one canonical shape is used; redundant variety lets the copies drift apart",
@@ -4092,14 +4155,14 @@
       "problem": "enum `Step` has 2 divergent definitions across modules where one consistent definition is expected",
       "agent_fix": "define `Step` once in a shared module and import it everywhere, or reconcile the diverging definitions so one canonical shape is used; redundant variety lets the copies drift apart",
       "evidence": [
-        "enum `Step` is defined with diverging shapes in 2 modules (crates/redlinedb/src/iter.rs:13, crates/sql/src/statement.rs:893)"
+        "enum `Step` is defined with diverging shapes in 2 modules (crates/redlinedb/src/iter.rs:13, crates/sql/src/statement.rs:896)"
       ],
       "check_id": "HLT-046-UNNECESSARY-VARIETY:copy-code",
       "hardness": "soft",
       "confidence": 0.88,
       "evidence_kind": "repository-scan",
       "rerun_command": "cargo run -p jankurai -- copy-code . --json target/jankurai/copy-code.json --md target/jankurai/copy-code.md",
-      "fingerprint": "sha256:e297ba16da13c28db635cdc0fb6c48ce85369732c19dfae28233d697f9921556",
+      "fingerprint": "sha256:d712fb218ba27a9a94284722f9126fff6abfd382c86b89878d66a3d92ee3cae8",
       "rule_id": "HLT-046-UNNECESSARY-VARIETY",
       "tlr": "Maintainability entropy",
       "lane": "copy-code",
@@ -4218,6 +4281,26 @@
       "owner": "tools",
       "task": "define `Cell` once in a shared module and import it everywhere, or reconcile the diverging definitions so one canonical shape is used; redundant variety lets the copies drift apart",
       "why": "enum `Cell` has 2 divergent definitions across modules where one consistent definition is expected"
+    },
+    {
+      "path": "crates/bench/src/fuzz/normalize.rs",
+      "priority": "medium",
+      "rule_id": "HLT-046-UNNECESSARY-VARIETY",
+      "tlr": "Maintainability entropy",
+      "lane": "copy-code",
+      "owner": "tools",
+      "task": "define `Outcome` once in a shared module and import it everywhere, or reconcile the diverging definitions so one canonical shape is used; redundant variety lets the copies drift apart",
+      "why": "enum `Outcome` has 2 divergent definitions across modules where one consistent definition is expected"
+    },
+    {
+      "path": "crates/bench/src/qps.rs",
+      "priority": "medium",
+      "rule_id": "HLT-046-UNNECESSARY-VARIETY",
+      "tlr": "Maintainability entropy",
+      "lane": "copy-code",
+      "owner": "tools",
+      "task": "define `Engine` once in a shared module and import it everywhere, or reconcile the diverging definitions so one canonical shape is used; redundant variety lets the copies drift apart",
+      "why": "enum `Engine` has 2 divergent definitions across modules where one consistent definition is expected"
     },
     {
       "path": "crates/kernel/src/error.rs",
