@@ -40,6 +40,8 @@ enum Command {
         #[arg(long)]
         check: bool,
     },
+    /// Pair Strict versions per repetition, with their SQLite controls adjacent.
+    StrictPair(crate::strict::Args),
     /// Measure every selected workload and append one record per repetition.
     Run {
         /// Label for the RedlineDB records (the version under test).
@@ -151,6 +153,7 @@ pub fn main() -> Result<()> {
                 render::render_into(&summary, &bundle, file, check)?;
             }
         }
+        Command::StrictPair(args) => crate::strict::run(&args)?,
         Command::Run {
             label,
             run,

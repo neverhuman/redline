@@ -159,6 +159,42 @@ target/scoreboard/candidate/redline-scoreboard render \
 order from run to run, and waits for a quiet host: no CI job and low load.
 SQLite runs beside each version and serves as the control group.
 
+For new Strict bundles, versions are interleaved within every workload and
+repetition. With two versions the order is engine A, SQLite A, SQLite B,
+engine B; A/B swap each repetition and run. Thus every engine has its own
+back-to-back control, and the two SQLite controls are adjacent in one disk
+phase. Both versions complete seven repetitions by default (`--strict-reps`,
+minimum seven), even when a case exceeds ten seconds. Raw `rep` and global
+`seq` identities prove the pairing; missing, duplicate, nonadjacent or
+shortened pairs block publication. One or two versions are supported.
+
+Strict drift is measured per adjacent control pair. If their throughputs
+are S_A and S_B, the pair gap is `max(S_A,S_B)/min(S_A,S_B)-1`. For each
+workload take the median gap of all repetitions in each run, then the
+largest run median. A value above 0.10 blocks publication. This keeps the
+10% limit, tolerates isolated fsync outliers, and refuses a systematically
+drifted run. The engine/SQLite ratio is likewise a per-run median of
+same-repetition ratios. Absolute throughputs remain medians of per-run
+medians; version speedups remain medians of run-wise throughput ratios.
+
+Jepson approved this Strict-only method correction on 2026-10-01 after
+complete old-method bundles showed bimodal ext4 fsync controls despite
+passing CPU/load checks. On xBabe0, the database directory and Docker share
+`/dev/nvme1n1p2`; container filesystem churn continued during the long
+baseline Strict window and the much shorter candidate window. Preserved
+off-root archives contain the rejected measurements:
+
+- `v5.1.1-vs-v5.1.0-rerun7-control-drift-20261001.tar.gz`, SHA-256
+  `d221bf4673d0d74cc3f919863685442b9e0d7f3c641cd566898e41da8e9469d3`.
+- `v5.1.1-vs-v5.1.0-rerun10-control-drift-final-20261001T2000.tar.gz`,
+  SHA-256 `0e3edd911be46f6c36963d72002b60d413a2f582163d8a792c941df6aca7550d`.
+
+Legacy bundles retain their recorded method and checks. Normal's tmpfs
+method, repetition policy, 10% aggregate SQLite drift limit, three runs,
+20,000-row scale and load/runner gates are unchanged. New Strict bundles
+record `strict_method=paired-repetition-v1` and `strict_reps`; controls from
+old and new methods are never mixed.
+
 `redline-scoreboard summarize` blocks publication when any of these holds:
 - fewer than three runs;
 - any version, or the SQLite beside it, missing a workload of a pair in any
@@ -171,8 +207,9 @@ SQLite runs beside each version and serves as the control group.
 - a run that started on a busy host, or saw a CI job or load at or above
   `--max-loadavg` at any time (sampled every 10 seconds);
 - the normal pair not on tmpfs;
-- SQLite beside different versions differing by more than 10%. Open times,
-  a few milliseconds each, are exempt from this last check.
+- Normal (and legacy Strict) SQLite medians beside different versions
+  differing by more than 10%. Open times, a few milliseconds each, are
+  exempt. New Strict bundles use the paired drift check above.
 
 A speedup is beyond noise only when both of these hold:
 - the two versions' run ranges do not overlap;

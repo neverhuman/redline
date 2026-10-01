@@ -17,7 +17,7 @@
 # The normal pair runs on tmpfs; the strict pair needs a real disk.
 #
 # Usage: scripts/perf/scoreboard-bench.sh --bundle <name> [--runs 3] [--rows 20000]
-#          [--pairs normal,strict] [--reps 5] [--cpus 2-5] [--max-loadavg 16] [--max-wait-s 1800]
+#          [--pairs normal,strict] [--reps 5] [--strict-reps 7] [--cpus 2-5] [--max-loadavg 16] [--max-wait-s 1800]
 #          [--normal-dir /dev/shm/scoreboard] [--strict-dir <dir on disk>]
 #          <label>=<binary> ...
 
@@ -32,7 +32,7 @@ die() {
   exit 2
 }
 
-bundle="" runs=3 rows=20000 pairs=normal reps=5 cpus=2-5 max_loadavg=16 max_wait_s=1800
+bundle="" runs=3 rows=20000 pairs=normal reps=5 strict_reps=7 cpus=2-5 max_loadavg=16 max_wait_s=1800
 normal_dir=/dev/shm/scoreboard strict_dir="$repo_root/target/scoreboard-strict"
 labels=() binaries=()
 while [ $# -gt 0 ]; do
@@ -42,6 +42,7 @@ while [ $# -gt 0 ]; do
     --rows) rows="${2:?}"; shift 2 ;;
     --pairs) pairs="${2:?}"; shift 2 ;;
     --reps) reps="${2:?}"; shift 2 ;;
+    --strict-reps) strict_reps="${2:?}"; shift 2 ;;
     --cpus) cpus="${2:?}"; shift 2 ;;
     --max-loadavg) max_loadavg="${2:?}"; shift 2 ;;
     --max-wait-s) max_wait_s="${2:?}"; shift 2 ;;
@@ -51,7 +52,7 @@ while [ $# -gt 0 ]; do
     *) die "unknown argument $1" ;;
   esac
 done
-for number in "$runs" "$rows" "$reps" "$max_wait_s"; do
+for number in "$runs" "$rows" "$reps" "$strict_reps" "$max_wait_s"; do
   [[ "$number" =~ ^[1-9][0-9]*$|^0$ ]] || die "not a whole number: $number"
 done
 [ "$runs" -ge 1 ] && [ "$rows" -ge 10 ] && [ "$reps" -ge 1 ] || die "--runs, --rows and --reps must be at least 1, 10 and 1"
@@ -92,6 +93,8 @@ fstype() { findmnt -n -o FSTYPE -T "$1" 2>/dev/null || echo unknown; }
 mkdir -p "$normal_dir"
 [ "$(fstype "$normal_dir")" = tmpfs ] || die "the normal pair measures no device cost; $normal_dir is not on tmpfs"
 case ",$pairs," in *,strict,*)
+  [ "$strict_reps" -ge 7 ] || die "--strict-reps must be at least 7"
+  [ "${#labels[@]}" -le 2 ] || die "paired Strict supports one or two versions"
   mkdir -p "$strict_dir"
   [ "$(fstype "$strict_dir")" != tmpfs ] || die "the strict pair syncs to disk; $strict_dir is on tmpfs"
 esac
@@ -177,6 +180,43 @@ for run in $(seq 1 "$runs"); do
   for pair in "${pair_list[@]}"; do
     base="$normal_dir/$bundle"
     [ "$pair" = strict ] && base="$strict_dir/$bundle"
+    if [ "$pair" = strict ]; then
+      wait_quiet
+      before_jobs="$(runner_jobs)" before_load="$(loadavg)" started="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+      host_sample="$base/host-sample"
+      mkdir -p "$base"
+      sample_host "$host_sample" &
+      sampler=$!
+      versions=()
+      for i in "${!labels[@]}"; do
+        versions+=(--version "${labels[$i]}=${binaries[$i]}")
+      done
+      printf '==> run %s pair strict: paired versions (%s repetitions)\n' "$run" "$strict_reps"
+      # Retain raw evidence even if an image/protocol check later refuses it.
+      measured=1
+      taskset -c "$cpus" "${binaries[$((n - 1))]}" strict-pair "${versions[@]}" \
+        --run "$run" --rows "$rows" --reps "$strict_reps" \
+        --image-store "$base/images" --work-root "$base/work" --out "$out"
+      kill "$sampler" 2>/dev/null || true
+      wait "$sampler" 2>/dev/null || true
+      if ! read -r most_jobs most_load < "$host_sample" || [ -z "${most_load:-}" ]; then
+        most_jobs=1 most_load="$max_loadavg"
+      fi
+      # Both versions share this complete interleaved disk/host window.
+      for label in "${labels[@]}"; do
+        jq -n -c --arg label "$label" --argjson run "$run" --arg pair strict --arg started "$started" \
+          --arg finished "$(date -u +%Y-%m-%dT%H:%M:%SZ)" --argjson waited_out "$waited_out" \
+          --argjson jobs_before "$before_jobs" --argjson jobs_after "$(runner_jobs)" \
+          --argjson jobs_max "$most_jobs" --arg load_max "$most_load" \
+          --arg load_before "$before_load" --arg load_after "$(loadavg)" --arg max_load "$max_loadavg" \
+          '{label: $label, run: $run, pair: $pair, started_utc: $started, finished_utc: $finished,
+            waited_out: $waited_out, runner_jobs_before: $jobs_before, runner_jobs_after: $jobs_after,
+            runner_jobs_max: $jobs_max, loadavg_before: ($load_before | tonumber),
+            loadavg_after: ($load_after | tonumber), loadavg_max: ($load_max | tonumber),
+            max_loadavg: ($max_load | tonumber)}' >> "$out/runs.jsonl"
+      done
+      continue
+    fi
     for step in $(seq 0 $((n - 1))); do
       i=$(( (step + run - 1) % n ))
       label="${labels[$i]}" bin="${binaries[$i]}"
@@ -216,13 +256,15 @@ for i in "${!labels[@]}"; do
   cp "$(dirname "${binaries[$i]}")/build.json" "$out/${labels[$i]}/build.json"
 done
 jq -n --arg bundle "$bundle" --argjson labels "$(printf '%s\n' "${labels[@]}" | jq -R . | jq -s -c .)" \
-  --argjson rows "$rows" --argjson runs "$runs" --argjson reps "$reps" \
+  --argjson rows "$rows" --argjson runs "$runs" --argjson reps "$reps" --argjson strict_reps "$strict_reps" \
   --argjson pairs "$(printf '%s\n' "${pair_list[@]}" | jq -R . | jq -s -c .)" \
   --arg cpus "$cpus" --arg harness "$harness" --arg sqlite "$sqlite" \
   --arg created "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
   '{schema: "redline-scoreboard-bundle-v1", bundle: $bundle, labels: $labels, rows: $rows,
     runs: $runs, reps: $reps, pairs: $pairs, pinned_cpus: $cpus, harness_tree: $harness,
-    sqlite_source_id: $sqlite, created_utc: $created}' > "$out/bundle.json"
+    sqlite_source_id: $sqlite, created_utc: $created}
+    + (if ($pairs | index("strict")) != null
+       then {strict_reps: $strict_reps, strict_method: "paired-repetition-v1"} else {} end)' > "$out/bundle.json"
 
 # The measurements are complete: keep the bundle even if summarizing fails.
 measured=1
