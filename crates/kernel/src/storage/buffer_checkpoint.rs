@@ -149,6 +149,7 @@ impl Inner {
             .map_err(|_| Error::CorruptPage("buffer frame poisoned"))?;
         state.write_in_progress = false;
         crate::observe::add_frame_wakeup();
+        crate::observe::add_frame_notify();
         frame.ready.notify_all();
         write_result?;
         // Nothing could change the page while it was being written: a writer
