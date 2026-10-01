@@ -48,6 +48,8 @@
     "rust-toolchain.toml": "workspace",
     "rustfmt.toml": "workspace",
     "scripts/": "ops",
+    "scripts/just/sqlite-report-audit.sh": "ops",
+    "scripts/test-sqlite-parity-report-audit.sh": "ops",
     "tips/": "docs",
     "tools/": "tools",
     "PUBLIC_MONOREPO.toml": "workspace",
