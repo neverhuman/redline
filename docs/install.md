@@ -28,7 +28,7 @@ it writes anything; build from source there.
 ### Quick start
 
 ```bash quickstart
-curl -fsSL https://raw.githubusercontent.com/neverhuman/redline/v5.1.0/install.sh | VERSION=v5.1.0 bash
+curl -fsSL https://raw.githubusercontent.com/neverhuman/redline/v5.1.1/install.sh | VERSION=v5.1.1 bash
 export PATH="$HOME/.local/bin:$PATH"
 ```
 
@@ -62,7 +62,7 @@ The installer never installs, replaces or aliases a `sqlite3` command.
 
 | Variable | Meaning |
 |---|---|
-| `VERSION` | Release tag, for example `v5.1.0`. Without it the installer asks GitHub for the latest release and stops if there is none. |
+| `VERSION` | Release tag, for example `v5.1.1`. Without it the installer asks GitHub for the latest release and stops if there is none. |
 | `PREFIX` | Installation root, default `~/.local`. Paths with spaces work. |
 | `REDLINEDB_SHA256` | Also require this archive digest (from the release's `.sha256` file). |
 | `REDLINEDB_VERIFY_ATTESTATION=1` | Also run `gh attestation verify` against the release workflow of `neverhuman/redline`. Needs an authenticated GitHub CLI. |
@@ -71,8 +71,8 @@ The installer never installs, replaces or aliases a `sqlite3` command.
 | `REDLINEDB_LOCK_TIMEOUT` | Seconds to wait for another installer on the same prefix, default 300. |
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/neverhuman/redline/v5.1.0/install.sh |
-  VERSION=v5.1.0 PREFIX="$HOME/redline install" REDLINEDB_SHA256=<sha256 from the release> bash
+curl -fsSL https://raw.githubusercontent.com/neverhuman/redline/v5.1.1/install.sh |
+  VERSION=v5.1.1 PREFIX="$HOME/redline install" REDLINEDB_SHA256=<sha256 from the release> bash
 ```
 
 Before anything under `PREFIX` is written, the installer requires the archive
@@ -87,8 +87,8 @@ who can upload a release asset can upload a matching checksum and provenance.
 ## Where the files go
 
 ```text
-PREFIX/lib/redlinedb/versions/v5.1.0/{bin,lib,include,share}   one directory per version
-PREFIX/lib/redlinedb/current  -> versions/v5.1.0               the active version
+PREFIX/lib/redlinedb/versions/v5.1.1/{bin,lib,include,share}   one directory per version
+PREFIX/lib/redlinedb/current  -> versions/v5.1.1               the active version
 PREFIX/lib/redlinedb/previous -> versions/<the one before>
 PREFIX/bin/redlinedb          -> ../lib/redlinedb/current/bin/redlinedb (also redlinedb-server, redlinedb-cli)
 PREFIX/lib/libredlinedb.so.5  -> redlinedb/current/lib/libredlinedb.so.5 (macOS: libredlinedb.5.dylib)
@@ -124,7 +124,7 @@ installed keeps it and changes nothing.
 To go back to the version that was active before:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/neverhuman/redline/v5.1.0/install.sh | REDLINEDB_ROLLBACK=1 bash
+curl -fsSL https://raw.githubusercontent.com/neverhuman/redline/v5.1.1/install.sh | REDLINEDB_ROLLBACK=1 bash
 ```
 
 Rollback validates the previous version the same way, then swaps `current`
@@ -185,7 +185,7 @@ C compiler and pkg-config. `scripts/ci-doctor.sh --profile core` checks them.
 ```bash
 git clone https://github.com/neverhuman/redline
 cd redline
-git checkout v5.1.0
+git checkout v5.1.1
 ./scripts/build-from-source.sh
 ./scripts/install-from-source.sh
 ```
@@ -206,7 +206,7 @@ RedlineDB is not published on crates.io. Depend on a release tag and commit
 
 ```toml
 [dependencies]
-redlinedb = { git = "https://github.com/neverhuman/redline", tag = "v5.1.0" }
+redlinedb = { git = "https://github.com/neverhuman/redline", tag = "v5.1.1" }
 ```
 
 The Rust API is not stable yet and may change between releases; see

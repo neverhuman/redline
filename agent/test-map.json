@@ -153,6 +153,10 @@
       "command": "rtk bash scripts/ci-local.sh required",
       "purpose": "verify documentation through the canonical host-required lane"
     },
+    "docs/releases/v5.1.1.md": {
+      "command": "bash scripts/test-release-prep-v511.sh",
+      "purpose": "verify v5.1.1 release notes, versioned documents, and performance markers"
+    },
     "install.sh": {
       "command": "rtk bash scripts/ci-local.sh required",
       "purpose": "verify installation automation through the canonical host-required lane"
@@ -200,6 +204,10 @@
     "scripts/test-sqlite-parity-report-audit.sh": {
       "command": "bash scripts/test-sqlite-parity-report-audit.sh",
       "purpose": "stub the report-only Jankurai audit and detect source-tree writes"
+    },
+    "scripts/test-release-prep-v511.sh": {
+      "command": "bash scripts/test-release-prep-v511.sh",
+      "purpose": "verify the v5.1.1 workspace and release-document contract"
     },
     "tips/": {
       "command": "rtk bash scripts/ci-local.sh required",

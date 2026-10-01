@@ -2,6 +2,14 @@
 
 ## [Unreleased]
 
+## [5.1.1] - 2026-10-01
+
+This release fixes silent row replacement caused by a shared rowid counter,
+changes automatic rowid numbering to per-table sequences, and reduces work on
+write and indexed-read paths. The database format and C ABI major version are
+unchanged from v5.1.0. See [release notes](docs/releases/v5.1.1.md) for the
+behavior change, measured evidence, and known limitations.
+
 ### Fixed
 
 - **A row could be silently replaced.** Rowids came from one counter shared
@@ -68,6 +76,14 @@
   connection's insert). `sqlite_sequence` is not yet kept across a reopen,
   so after one an `AUTOINCREMENT` table can reuse a rowid deleted before
   it, as in v5.1.0.
+- **Indexed reads reuse visibility-checked rows.** Point and batched range
+  probes carry a row already loaded to check index visibility into SELECT
+  projection, avoiding a second relation read for matching rows while
+  keeping the existing rowid probe API for other callers. Broad scans keep
+  a bounded row buffer and fall back to rowids.
+- **Kernel work is observable.** Buffer, directory, and WAL counters expose
+  the work done by common paths for regression checks; they do not change
+  database behavior.
 
 ## [5.1.0] - 2026-09-29
 
