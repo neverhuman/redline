@@ -40,10 +40,14 @@ while (($#)); do
 done
 ((${#claims[@]})) || claims=(durability.strict.process-kill)
 
+# A receipt carries schema_version. Custody inventories and other JSON
+# beside the receipts do not, and the verifier rejects them as receipts.
 receipts=()
 if [[ -d $receipts_dir ]]; then
   while IFS= read -r receipt; do
-    receipts+=("$receipt")
+    if jq -e 'has("schema_version")' "$receipt" >/dev/null 2>&1; then
+      receipts+=("$receipt")
+    fi
   done < <(find "$receipts_dir" -maxdepth 1 -type f -name '*.json' | LC_ALL=C sort)
 fi
 ((${#receipts[@]})) ||
