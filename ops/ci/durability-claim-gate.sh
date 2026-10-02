@@ -64,9 +64,15 @@ if [ ${#claims[@]} -eq 0 ]; then
 fi
 printf 'durability-claim-gate: claims: %s\n' "${claims[*]}"
 
+# A receipt carries schema_version. Custody inventories and other JSON
+# beside the receipts do not, and the verifier rejects them as receipts.
 receipts=()
 if [ -d "$receipts_dir" ]; then
-    mapfile -t receipts < <(find "$receipts_dir" -type f -name '*.json' | sort)
+    while IFS= read -r receipt; do
+        if jq -e 'has("schema_version")' "$receipt" >/dev/null 2>&1; then
+            receipts+=("$receipt")
+        fi
+    done < <(find "$receipts_dir" -type f -name '*.json' | LC_ALL=C sort)
 fi
 if [ ${#receipts[@]} -eq 0 ]; then
     printf 'durability-claim-gate: README.md/docs claim %s, but %s holds no receipt\n' \
