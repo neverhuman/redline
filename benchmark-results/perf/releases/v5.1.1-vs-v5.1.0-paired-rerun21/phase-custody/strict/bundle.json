@@ -1,0 +1,20 @@
+{
+  "schema": "redline-scoreboard-bundle-v1",
+  "bundle": "v5.1.1-vs-v5.1.0-paired-rerun20-strict",
+  "labels": [
+    "v5.1.0",
+    "v5.1.1"
+  ],
+  "rows": 20000,
+  "runs": 3,
+  "reps": 5,
+  "pairs": [
+    "strict"
+  ],
+  "pinned_cpus": "2-5",
+  "harness_tree": "bb1434a80ca0390401eb628d2785e8387c5f346e",
+  "sqlite_source_id": "2025-06-28 14:00:48 2af157d77fb1304a74176eaee7fbc7c7e932d946bf25325e9c26c91db19e3079",
+  "created_utc": "2026-10-02T17:57:26Z",
+  "strict_reps": 7,
+  "strict_method": "paired-repetition-v1"
+}
