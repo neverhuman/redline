@@ -42,8 +42,9 @@ run missing "$work/does-not-exist"
 [[ $status != 0 ]] || fail "missing: accepted a missing receipts directory"
 
 mkdir -p "$work/receipts"
-printf '{"receipt":"b"}\n' > "$work/receipts/b.json"
-printf '{"receipt":"a"}\n' > "$work/receipts/a.json"
+printf '{"schema_version":1,"receipt":"b"}\n' > "$work/receipts/b.json"
+printf '{"schema_version":1,"receipt":"a"}\n' > "$work/receipts/a.json"
+printf '{"schema":"redline-durability-raw-custody-v1"}\n' > "$work/receipts/custody.json"
 printf 'notes\n' > "$work/receipts/notes.txt"
 
 # A failed verification fails the job and leaves nothing to upload.
@@ -61,6 +62,8 @@ expected=$(printf '%s\n' durability-evidence-verify --repo "$root" --at HEAD \
   fail "passed: verifier arguments were: $(tr '\n' ' ' < "$work/bench.args" 2>/dev/null)"
 [[ -f $work/out-passed/receipts/a.json && -f $work/out-passed/receipts/b.json ]] || fail "passed: receipts not handed on"
 [[ ! -e $work/out-passed/receipts/notes.txt ]] || fail "passed: a non-receipt file was handed on"
+[[ ! -e $work/out-passed/receipts/custody.json ]] || fail "passed: a custody inventory was handed on as a receipt"
+grep -q custody.json "$work/bench.args" && fail "passed: the verifier was given the custody inventory"
 grep -qF 'stand-in verifier' "$work/out-passed/verify.log" || fail "passed: the verifier's output was not kept"
 [[ $(cat "$work/out-passed/claims.txt") == durability.strict.process-kill ]] || fail "passed: claims.txt"
 [[ $(cat "$work/out-passed/commit.txt") == "$(git -C "$root" rev-parse HEAD)" ]] || fail "passed: commit.txt"
