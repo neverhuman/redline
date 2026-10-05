@@ -275,6 +275,7 @@ jobs:
         with:
           ref: ${{ github.ref }}
           persist-credentials: false
+      - run: bash ops/ci/ensure-rust.sh
       - name: Install ripgrep
         run: bash ops/ci/apt-install.sh ripgrep
       - name: Guard official evidence boundary
