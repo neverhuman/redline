@@ -4,9 +4,9 @@
 //! - The aggregate and the light jobs run on the self-hosted runners for
 //!   trusted events (fork pull requests stay on GitHub-hosted runners), so a
 //!   stalled GitHub-hosted queue cannot hold `RedlineDB/required`. Only
-//!   `durability-receipt` (release tags) and the `packages-cross.yml` matrix
-//!   (macOS, Linux arm64) stay hosted, and they are outside the required
-//!   aggregate.
+//!   `durability-receipt` and native macOS packaging stay hosted for release
+//!   tags. Linux ARM64 cross-builds and QEMU archive checks run on X64;
+//!   ordinary CI skips native macOS rather than waiting on its hosted queue.
 //! - Self-hosted jobs check the pinned toolchain offline
 //!   (`ops/ci/ensure-rust.sh`) instead of fetching the channel manifest with
 //!   dtolnay/rust-toolchain in every job; tool downloads retry and cache the
@@ -141,55 +141,89 @@ fn linux_x86_64_packaging_runs_on_self_hosted_runners_for_every_event() {
 }
 
 #[test]
-fn macos_and_linux_arm64_packaging_is_outside_the_required_aggregate() {
-    // packages-cross.yml builds macOS and Linux arm64 on hosted runners for
-    // pushes, tags and dispatches only. ci.yml calls it as packaging-cross,
-    // which RedlineDB/required deliberately does not need.
-    let cross = read(".github/workflows/packages-cross.yml");
+fn arm64_packaging_uses_self_hosted_cross_build_and_macos_is_release_only() {
+    // An optional root runs this acceptance against parent workflow fixtures
+    // without moving HEAD or mutating the canonical source checkout.
+    let workflow = |path: &str| match std::env::var_os("CI_PACKAGING_WORKFLOW_ROOT") {
+        Some(root) => std::fs::read_to_string(std::path::PathBuf::from(root).join(path))
+            .expect("packaging workflow fixture"),
+        None => read(path),
+    };
+    let cross = workflow(".github/workflows/packages-cross.yml");
     assert!(
-        cross.contains("  group: packages-cross-${{ github.event_name }}-${{ github.ref }}\n"),
-        "packages-cross.yml's concurrency group must include the event"
+        !cross.contains("ubuntu-22.04-arm"),
+        "ARM64 packaging must not wait on a GitHub-hosted ARM64 runner"
     );
-    for id in ["build", "runtime"] {
+    for id in ["build-arm64", "runtime-arm64"] {
         let body = job(&cross, id);
         assert!(
-            body.contains("    if: github.event_name != 'pull_request'\n"),
-            "packages-cross.yml job {id} must skip pull requests"
+            is_self_hosted(&body),
+            "packages-cross.yml job {id} must run on self-hosted X64"
         );
         assert!(
-            !is_self_hosted(&body),
-            "packages-cross.yml job {id} names a self-hosted runner"
-        );
-        assert!(
-            body.contains("ubuntu-22.04-arm")
-                && body.contains("macos-15-intel")
-                && body.contains("macos-15"),
-            "packages-cross.yml job {id} must cover linux-arm64 and both macOS platforms"
-        );
-        assert!(
-            !body.contains("ubuntu-22.04,") && !body.contains("linux-x86_64"),
-            "packages-cross.yml job {id} must not package linux-x86_64"
+            body.contains("bash ops/ci/arm64-packages.sh"),
+            "packages-cross.yml job {id} must build or exercise real ARM64 artifacts"
         );
     }
-    let ci = read(".github/workflows/ci.yml");
+    for id in ["build-macos", "runtime-macos"] {
+        let body = job(&cross, id);
+        assert!(!is_self_hosted(&body));
+        assert!(
+            body.contains("    if: inputs.tag != ''\n"),
+            "native macOS must skip ordinary CI, while remaining mandatory on release tags"
+        );
+        assert!(body.contains("macos-15-intel") && body.contains("macos-15"));
+        assert!(
+            !body.contains("continue-on-error"),
+            "release checks must fail closed"
+        );
+    }
+    let ci = workflow(".github/workflows/ci.yml");
     let packaging_cross = job(&ci, "packaging-cross");
+    assert!(packaging_cross.contains("uses: ./.github/workflows/packages-cross.yml\n"));
     assert!(
-        packaging_cross.contains("uses: ./.github/workflows/packages-cross.yml\n"),
-        "ci.yml must call packages-cross.yml"
-    );
-    assert!(
-        packaging_cross.contains("    if: github.event_name != 'pull_request'\n"),
-        "ci.yml packaging-cross must skip pull requests"
+        packaging_cross
+            .contains("github.event.pull_request.head.repo.full_name == github.repository")
     );
     let required = job(&ci, "required");
-    let needs_line = required
-        .lines()
-        .find(|line| line.trim().starts_with("needs:"))
-        .expect("required lists needs");
     assert!(
-        !needs_line.contains("packaging-cross"),
-        "RedlineDB/required must not wait on packaging-cross"
+        required
+            .lines()
+            .any(|line| line.trim().starts_with("needs:") && line.contains("packaging-cross"))
     );
+    let package = read("scripts/package-release.sh");
+    for needle in [
+        "export CARGO_BUILD_TARGET=$package_target",
+        "artifact_dir=$CARGO_TARGET_DIR${package_target:+/$package_target}",
+        "host=${package_target:-",
+    ] {
+        assert!(
+            package.contains(needle),
+            "cross-packaging must select target artifacts and the target dependency graph: {needle}"
+        );
+    }
+    let dockerfile = read("ops/ci/arm64-packages.Dockerfile");
+    assert!(dockerfile.contains("FROM --platform=$BUILDPLATFORM rust:"));
+    assert!(dockerfile.contains("REDLINE_PACKAGE_TARGET=aarch64-unknown-linux-gnu"));
+    assert!(dockerfile.contains("COPY --from=packages / /workspace/target/packages/"));
+    let mirror = read("ops/ci/pr-ci.sh");
+    assert!(mirror.contains("timeout 5400 bash ops/ci/arm64-packages.sh build"));
+    assert!(mirror.contains("timeout 2700 bash ops/ci/arm64-packages.sh runtime"));
+    for command in [
+        "test-package-licenses.sh",
+        "test-package-ffi.sh",
+        "packages.sh installer",
+        "packages.sh runtime",
+        "packages.sh native-install",
+        "packages.sh quickstart",
+        "packages.sh published-check",
+    ] {
+        assert!(
+            dockerfile.contains(command),
+            "ARM64 archive gate missing {command}"
+        );
+    }
+    run_shell_test("ops/ci/tests/arm64-packages.sh");
 }
 
 #[test]
@@ -204,12 +238,10 @@ fn required_waits_for_every_merge_gate_job() {
         .split(',')
         .map(|id| id.trim().to_string())
         .collect();
-    // packaging-cross (hosted macOS / arm64) is intentionally outside the
-    // merge gate so a stalled GitHub-hosted queue cannot hold it.
     let others: BTreeSet<String> = jobs(&ci)
         .into_iter()
         .map(|(id, _)| id)
-        .filter(|id| id != "required" && id != "packaging-cross")
+        .filter(|id| id != "required")
         .collect();
     assert_eq!(
         needs, others,

@@ -625,6 +625,22 @@
     "install.sh": {
       "command": "bash -n install.sh",
       "purpose": "verify the install script has valid syntax"
+    },
+    "ops/ci/arm64-packages.sh": {
+      "command": "cargo test --locked -p redlinedb-bench --test ci_workflow_routing",
+      "purpose": "verify ARM64 target routing, private BuildKit cache and archive-only runtime gates"
+    },
+    "ops/ci/arm64-packages.Dockerfile": {
+      "command": "just pr-ci",
+      "purpose": "cross-build real ARM64 archives and execute their FFI, installer and quickstart checks under QEMU"
+    },
+    "ops/ci/arm64-packages.Dockerfile.dockerignore": {
+      "command": "just pr-ci",
+      "purpose": "verify exact Git provenance without sending local build caches"
+    },
+    "ops/ci/tests/arm64-packages.sh": {
+      "command": "bash ops/ci/tests/arm64-packages.sh",
+      "purpose": "verify helper command and builder isolation fixtures"
     }
   },
   "workspace": "jankurai"

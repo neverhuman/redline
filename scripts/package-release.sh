@@ -20,7 +20,19 @@ case "$(uname -s)/$(uname -m)" in
   Darwin/arm64) platform=macos-arm64 ;;
   *) printf 'unsupported packaging platform\n' >&2; exit 1 ;;
 esac
+package_target=${REDLINE_PACKAGE_TARGET:-}
+if [[ -n $package_target ]]; then
+  # Cross-compilation must select both the archive label and Cargo's output
+  # directory; relabelling native x86_64 binaries as arm64 is never sufficient.
+  [[ $platform == linux-x86_64 && $package_target == aarch64-unknown-linux-gnu ]] || {
+    printf 'unsupported cross-packaging target: %s from %s\n' "$package_target" "$platform" >&2
+    exit 64
+  }
+  platform=linux-arm64
+  export CARGO_BUILD_TARGET=$package_target
+fi
 export CARGO_TARGET_DIR=${CARGO_TARGET_DIR:-$root/target}
+artifact_dir=$CARGO_TARGET_DIR${package_target:+/$package_target}
 output=${OUTPUT_DIR:-$root/target/packages}
 mkdir -p "$output"
 output=$(cd "$output" && pwd)
@@ -41,14 +53,14 @@ for package in "${release_packages[@]}"; do
   cp LICENSE NOTICE "$stage/$package/$share/"
   printf '%s\n' "$TAG" > "$stage/$package/$share/VERSION"
 done
-./scripts/install-from-source.sh --tree "$stage/redlinedb"
+CARGO_TARGET_DIR=$artifact_dir ./scripts/install-from-source.sh --tree "$stage/redlinedb"
 install -m 644 contracts/c-abi/sqlite3.h "$stage/redlinedb/include/"
-install -m 755 "$CARGO_TARGET_DIR/release/redline-web" "$stage/redline-web/bin/"
-install -m 755 "$CARGO_TARGET_DIR/release/redline-testing" "$CARGO_TARGET_DIR/release/redlinedb-client-smoke" "$stage/redline-testing/bin/"
+install -m 755 "$artifact_dir/release/redline-web" "$stage/redline-web/bin/"
+install -m 755 "$artifact_dir/release/redline-testing" "$artifact_dir/release/redlinedb-client-smoke" "$stage/redline-testing/bin/"
 cp -R subrepos/redline-testing/{corpus,metadata,schemas,templates} "$stage/redline-testing/share/redlinedb/"
 source_tree=$(git rev-parse 'HEAD^{tree}')
 # Licence collection follows the dependency graph of this build's platform.
-host=$(rustc -vV | sed -n 's/^host: //p')
+host=${package_target:-$(rustc -vV | sed -n 's/^host: //p')}
 for package in "${release_packages[@]}"; do
   share=$(package_share "$package")
   case "$package" in

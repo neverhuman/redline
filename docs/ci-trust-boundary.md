@@ -3,21 +3,19 @@
 The repository is public, and anyone can open a pull request from a fork. CI
 uses two kinds of runner:
 
-- **GitHub-hosted** (`ubuntu-24.04`, and the `packages-cross.yml` matrix): a
-  fresh virtual machine for every job, discarded afterwards. The
-  `packages-cross.yml` `build` and `runtime` matrix (Linux arm64, macOS) runs
-  here for pushes to `main`, release tags and dispatches, and is skipped on
-  pull requests; `durability-receipt` runs here on a release tag's run; and
-  every `ci.yml` job runs here for a fork pull request. Hosted packaging is
-  intentionally outside `RedlineDB/required`, so a stalled hosted queue cannot
-  hold the merge gate.
+- **GitHub-hosted** (`ubuntu-24.04`, `macos-15-intel`, `macos-15`): a fresh
+  virtual machine for every job, discarded afterwards. Native macOS packaging
+  and `durability-receipt` run here only for release tags. Ordinary CI skips
+  macOS, so hosted capacity cannot hold main or pull-request CI. Fork pull
+  requests use hosted runners; the ARM64 packaging workflow is skipped there.
 - **Self-hosted** (`redline-xbabe1`, `redline-xbabe3`, labels
   `[self-hosted, Linux, X64]`): long-lived hosts for every other trusted
   `ci.yml` job: the heavy jobs (`preflight`, the `tests` shards, `parity`,
   `components (integration)`), the light jobs (`lint`,
   `official-evidence-guard`, `typecheck`, `test`, `components`, `security`,
   `audit`), `RedlineDB/required`, Linux x86_64 packaging (`packages.yml`
-  `build-linux`, `runtime-linux` for every event), and the parity report bot.
+  `build-linux`, `runtime-linux` for every event), ARM64 cross-compilation and
+  emulated archive checks (`packages-cross.yml`), and the parity report bot.
   Every job runs as the
   runner's host user and shares `$RUNNER_TOOL_CACHE/redlinedb-cargo`
   (registry, git and advisory caches, cargo-installed tools) and the user's
@@ -33,8 +31,8 @@ So code from a fork must never run on a self-hosted runner.
 
 | Event | Class | Runs on |
 | --- | --- | --- |
-| `push` to `main`, release tags, `workflow_dispatch` | trusted | `ci.yml` self-hosted (incl. Linux x86_64 packaging); macOS/arm64 packaging and `durability-receipt` hosted |
-| `pull_request` from a branch of this repository | trusted | self-hosted (packaging: Linux x86_64 only; no macOS/arm64) |
+| `push` to `main`, release tags, `workflow_dispatch` | trusted | self-hosted, including both Linux architectures; native macOS and `durability-receipt` hosted only for tags |
+| `pull_request` from a branch of this repository | trusted | self-hosted, including both Linux architectures; macOS skipped |
 | `pull_request` from a fork (head repository is not this one, or was deleted) | untrusted | GitHub-hosted only |
 
 Pushing a branch here needs write access, and write access can already change
@@ -57,7 +55,7 @@ the workflow files; actionlint (security lane) checks their syntax.
    the `packages.yml` it calls) either runs on hosted runners or uses
    `runs-on: ${{ (<fork test>) && 'ubuntu-24.04' || fromJSON('["self-hosted","Linux","X64"]') }}`.
    `crates/bench/tests/ci_workflow_routing.rs` pins which jobs are hosted and
-   that `RedlineDB/required` needs every merge-gate job (not `packaging-cross`).
+   that `RedlineDB/required` needs every merge-gate job, including ARM64 packaging.
 2. **Cargo home.** Each self-hosted job's first step picks `CARGO_HOME`: a
    fork job gets `$RUNNER_TEMP/cargo-home`, which the runner empties for every
    job; trusted jobs keep the shared `$RUNNER_TOOL_CACHE/redlinedb-cargo`, so
@@ -182,6 +180,22 @@ Run this after deploying the hook, and again after any runner change.
 
 ## Known limits
 
+- ARM64 compiles with the pinned Rust toolchain and an ARM64 GNU linker on
+  Linux X64, with the target dependency graph and target artifact directory.
+  BuildKit's bundled QEMU then executes archive, dynamic/static FFI, installer,
+  quickstart and publication-check tests in a fresh ARM64 stage. Its private
+  reusable cache uses `/mnt/fast-scratch` when available; no host binfmt, global
+  builder switch, container pause or service change is needed. The helper
+  rejects a noncanonical repository ID before invoking Docker, preserving the
+  native packaging authority check across the container boundary. Emulation is
+  bounded to 45 minutes per archive-check job (cross-compilation: 90 minutes).
+  This preserves every installer failure-injection and archive-layout check.
+  Emulation is
+  not native ARM hardware qualification: tagged releases still run the four
+  native post-publication installers. Both macOS targets remain hosted because
+  signing, dylib load identity and native execution require macOS; they are
+  non-blocking for ordinary CI by being skipped, while tagged release builds
+  still require their archives and native checks.
 - The hosted path of the heavy jobs (preflight, the test shards except
   kernel, `components (integration)` with Playwright) runs only for fork pull
   requests and has not run on real CI yet; the first fork pull request, or
