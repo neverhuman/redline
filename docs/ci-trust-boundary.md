@@ -5,17 +5,20 @@ uses two kinds of runner:
 
 - **GitHub-hosted** (`ubuntu-24.04`, and the `packages.yml` matrix): a fresh
   virtual machine for every job, discarded afterwards. The `packages.yml`
-  matrix (Linux x86_64 and arm64, macOS) and `durability-receipt` (a release
-  tag's run) run here for every event, and every `ci.yml` job runs here for a
-  fork pull request. `RedlineDB/required` still needs the packaging matrix:
-  while GitHub-hosted runners are unavailable it stays queued, and so does the
-  required check.
+  `build` and `runtime` matrix (Linux x86_64 on the ubuntu-22.04 release
+  baseline, Linux arm64, macOS) runs here for pushes to `main`, release tags
+  and dispatches, and is skipped on pull requests; `durability-receipt` runs
+  here on a release tag's run; and every `ci.yml` job runs here for a fork
+  pull request. A push or tag run's `RedlineDB/required` still needs the
+  hosted matrix; a pull request's does not.
 - **Self-hosted** (`redline-xbabe1`, `redline-xbabe3`, labels
   `[self-hosted, Linux, X64]`): long-lived hosts for every other trusted
   `ci.yml` job: the heavy jobs (`preflight`, the `tests` shards, `parity`,
   `components (integration)`), the light jobs (`lint`,
   `official-evidence-guard`, `typecheck`, `test`, `components`, `security`,
-  `audit`), `RedlineDB/required`, and the parity report bot. Every job runs as the
+  `audit`), `RedlineDB/required`, a pull request's Linux x86_64 packaging
+  (`packages.yml` `build-linux`, `runtime-linux`), and the parity report bot.
+  Every job runs as the
   runner's host user and shares `$RUNNER_TOOL_CACHE/redlinedb-cargo`
   (registry, git and advisory caches, cargo-installed tools) and the user's
   home directory. `ops/ci/apt-install.sh` calls `sudo` when a package is
@@ -31,7 +34,7 @@ So code from a fork must never run on a self-hosted runner.
 | Event | Class | Runs on |
 | --- | --- | --- |
 | `push` to `main`, release tags, `workflow_dispatch` | trusted | `ci.yml` self-hosted; packaging and `durability-receipt` hosted |
-| `pull_request` from a branch of this repository | trusted | `ci.yml` self-hosted; packaging hosted |
+| `pull_request` from a branch of this repository | trusted | self-hosted (packaging: Linux x86_64 only) |
 | `pull_request` from a fork (head repository is not this one, or was deleted) | untrusted | GitHub-hosted only |
 
 Pushing a branch here needs write access, and write access can already change

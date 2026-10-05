@@ -17,8 +17,15 @@ concurrency:
   cancel-in-progress: false
 permissions:
   contents: read
+# Runners: on a pull request only Linux x86_64 is packaged, by build-linux and
+# runtime-linux on the self-hosted runners (fork pull requests: hosted
+# ubuntu-24.04), so a stalled GitHub-hosted queue does not hold
+# RedlineDB/required. Pushes to main, release tags and dispatches run the
+# hosted matrix below on every platform (Linux x86_64 on ubuntu-22.04 for the
+# release glibc baseline, Linux arm64, macOS); a pull request skips it.
 jobs:
   build:
+    if: github.event_name != 'pull_request'
     env:
       OUTPUT_DIR: ${{ github.workspace }}/dist/release-packages
     strategy:
@@ -52,6 +59,7 @@ jobs:
           if-no-files-found: error
   runtime:
     needs: build
+    if: github.event_name != 'pull_request'
     strategy:
       fail-fast: false
       matrix:
@@ -69,6 +77,83 @@ jobs:
       - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
         with: {name: 'packages-${{ matrix.platform }}', path: target/packages}
       - name: Run archives in a fresh runner without building
+        run: bash ops/ci/packages.sh runtime
+      - name: Install the candidate with install.sh and link a C program against it
+        run: bash ops/ci/packages.sh native-install
+      - name: Run the documented quick start against the candidate
+        run: bash ops/ci/packages.sh quickstart
+      - name: Run the post-publication check against the candidate
+        run: bash ops/ci/packages.sh published-check
+  build-linux:
+    name: build (linux-x86_64, pull request)
+    if: github.event_name == 'pull_request'
+    env:
+      OUTPUT_DIR: ${{ github.workspace }}/dist/release-packages
+    runs-on: ${{ (github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name != github.repository) && 'ubuntu-24.04' || fromJSON('["self-hosted","Linux","X64"]') }}
+    timeout-minutes: 90
+    steps:
+      - name: Unlock leftover workspace files and choose CARGO_HOME
+        env:
+          UNTRUSTED_PR: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name != github.repository }}
+        run: |
+          if [ -n "${GITHUB_WORKSPACE}" ] && [ -d "${GITHUB_WORKSPACE}" ]; then
+            chmod -R u+rwx "${GITHUB_WORKSPACE}" || true
+          fi
+          if [ "${UNTRUSTED_PR}" = true ]; then
+            cargo_home="${RUNNER_TEMP}/cargo-home"
+          else
+            cargo_home="${RUNNER_TOOL_CACHE}/redlinedb-cargo"
+          fi
+          mkdir -p "${cargo_home}/bin"
+          echo "CARGO_HOME=${cargo_home}" >> "${GITHUB_ENV}"
+          echo "${cargo_home}/bin" >> "${GITHUB_PATH}"
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          persist-credentials: false
+      - run: bash ops/ci/ensure-rust.sh
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with: {node-version: '22'}
+      - uses: swatinem/rust-cache@42dc69e1aa15d09112580998cf2ef0119e2e91ae
+        with: {key: packages-linux-x86_64}
+      - run: bash ops/ci/apt-install.sh build-essential pkg-config
+      - name: Package all distributions
+        env: {TAG: '${{ inputs.tag }}'}
+        run: bash ops/ci/packages.sh build
+      - run: bash ops/ci/packages.sh smoke
+      - run: bash ops/ci/packages.sh installer
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: packages-linux-x86_64
+          path: ${{ env.OUTPUT_DIR }}/*
+          if-no-files-found: error
+  runtime-linux:
+    name: runtime (linux-x86_64, pull request)
+    needs: build-linux
+    if: github.event_name == 'pull_request'
+    runs-on: ${{ (github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name != github.repository) && 'ubuntu-24.04' || fromJSON('["self-hosted","Linux","X64"]') }}
+    timeout-minutes: 15
+    steps:
+      - name: Unlock leftover workspace files and choose CARGO_HOME
+        env:
+          UNTRUSTED_PR: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name != github.repository }}
+        run: |
+          if [ -n "${GITHUB_WORKSPACE}" ] && [ -d "${GITHUB_WORKSPACE}" ]; then
+            chmod -R u+rwx "${GITHUB_WORKSPACE}" || true
+          fi
+          if [ "${UNTRUSTED_PR}" = true ]; then
+            cargo_home="${RUNNER_TEMP}/cargo-home"
+          else
+            cargo_home="${RUNNER_TOOL_CACHE}/redlinedb-cargo"
+          fi
+          mkdir -p "${cargo_home}/bin"
+          echo "CARGO_HOME=${cargo_home}" >> "${GITHUB_ENV}"
+          echo "${cargo_home}/bin" >> "${GITHUB_PATH}"
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          persist-credentials: false
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+        with: {name: packages-linux-x86_64, path: target/packages}
+      - name: Run archives without building
         run: bash ops/ci/packages.sh runtime
       - name: Install the candidate with install.sh and link a C program against it
         run: bash ops/ci/packages.sh native-install

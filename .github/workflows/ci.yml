@@ -30,9 +30,10 @@ concurrency:
 # jobs (lint, official-evidence-guard, typecheck, test, components, security,
 # audit), so a stalled GitHub-hosted queue cannot hold the merge gate. They
 # check the pinned toolchain offline with ops/ci/ensure-rust.sh instead of
-# downloading it in every job. Only durability-receipt (release tags) and the
-# packaging matrix (packages.yml: Linux x86_64/arm64 and macOS images) stay on
-# GitHub-hosted runners; RedlineDB/required still needs both.
+# downloading it in every job. On a pull request packaging builds only Linux
+# x86_64, on the self-hosted runners too. durability-receipt (release tags) and
+# the hosted packaging matrix (packages.yml: Linux x86_64 on ubuntu-22.04,
+# Linux arm64, macOS; pushes, tags and dispatches only) stay GitHub-hosted.
 #
 # Trust boundary (docs/ci-trust-boundary.md): a pull request from a fork runs
 # on GitHub-hosted runners with a job-local CARGO_HOME, never on the

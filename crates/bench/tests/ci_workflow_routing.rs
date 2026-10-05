@@ -108,6 +108,39 @@ fn the_aggregate_and_the_light_jobs_run_on_self_hosted_runners() {
 }
 
 #[test]
+fn pull_requests_package_linux_x86_64_on_self_hosted_runners_only() {
+    // The hosted packaging matrix (Linux arm64, macOS, and Linux x86_64 on
+    // the ubuntu-22.04 release baseline) runs on pushes, tags and dispatches;
+    // a pull request packages Linux x86_64 on the self-hosted runners, so
+    // RedlineDB/required does not wait on GitHub-hosted capacity.
+    let packages = read(".github/workflows/packages.yml");
+    for id in ["build", "runtime"] {
+        let body = job(&packages, id);
+        assert!(
+            body.contains("    if: github.event_name != 'pull_request'\n"),
+            "packages.yml job {id} must skip pull requests"
+        );
+        assert!(
+            !is_self_hosted(&body),
+            "packages.yml job {id} names a self-hosted runner"
+        );
+    }
+    for id in ["build-linux", "runtime-linux"] {
+        let body = job(&packages, id);
+        assert!(
+            body.contains("    if: github.event_name == 'pull_request'\n"),
+            "packages.yml job {id} must run only for pull requests"
+        );
+        assert!(
+            is_self_hosted(&body),
+            "packages.yml job {id} must use the self-hosted runners"
+        );
+    }
+    assert!(job(&packages, "build-linux").contains("name: packages-linux-x86_64\n"));
+    assert!(job(&packages, "runtime-linux").contains("needs: build-linux\n"));
+}
+
+#[test]
 fn required_waits_for_every_other_job() {
     let ci = read(".github/workflows/ci.yml");
     let required = job(&ci, "required");
