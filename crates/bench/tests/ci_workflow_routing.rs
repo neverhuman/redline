@@ -1,9 +1,11 @@
 //! CI-04: `RedlineDB/required` must be reachable while the self-hosted
 //! runners' links to github.com and static.rust-lang.org are flaky.
 //!
-//! - The aggregate and the light jobs run on GitHub-hosted runners, so the
-//!   aggregate never takes a self-hosted slot (it still waits for the
-//!   self-hosted jobs it needs).
+//! - The aggregate and the light jobs run on the self-hosted runners for
+//!   trusted events (fork pull requests stay on GitHub-hosted runners), so a
+//!   stalled GitHub-hosted queue cannot hold `RedlineDB/required`. Only
+//!   `durability-receipt` (release tags) and the `packages.yml` matrix stay
+//!   hosted.
 //! - Self-hosted jobs check the pinned toolchain offline
 //!   (`ops/ci/ensure-rust.sh`) instead of fetching the channel manifest with
 //!   dtolnay/rust-toolchain in every job; tool downloads retry and cache the
@@ -21,9 +23,12 @@ mod workflow_text;
 use workflow_text::{checkout_steps, job, jobs, read, run_shell_test, steps_using, workflows};
 
 /// Jobs of ci.yml that run on GitHub-hosted runners for every event.
-const HOSTED_JOBS: &[&str] = &[
+const HOSTED_JOBS: &[&str] = &["durability-receipt"];
+
+/// Light jobs of ci.yml that run on the self-hosted runners for trusted
+/// events (ci_trust_boundary.rs pins the exact fork-aware `runs-on`).
+const SELF_HOSTED_LIGHT_JOBS: &[&str] = &[
     "required",
-    "durability-receipt",
     "lint",
     "official-evidence-guard",
     "typecheck",
@@ -63,8 +68,19 @@ fn a_push_and_a_dispatch_on_one_ref_do_not_cancel_each_other() {
 }
 
 #[test]
-fn the_aggregate_and_the_light_jobs_run_on_hosted_runners() {
+fn the_aggregate_and_the_light_jobs_run_on_self_hosted_runners() {
     let ci = read(".github/workflows/ci.yml");
+    for id in SELF_HOSTED_LIGHT_JOBS {
+        let body = job(&ci, id);
+        assert!(
+            is_self_hosted(&body),
+            "ci.yml job {id} must run on the self-hosted runners for trusted events"
+        );
+        assert!(
+            !body.lines().any(|line| line.trim() == "runs-on: ubuntu-24.04"),
+            "ci.yml job {id} must not be pinned to a GitHub-hosted runner"
+        );
+    }
     for id in HOSTED_JOBS {
         let body = job(&ci, id);
         assert!(

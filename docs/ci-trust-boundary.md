@@ -4,18 +4,18 @@ The repository is public, and anyone can open a pull request from a fork. CI
 uses two kinds of runner:
 
 - **GitHub-hosted** (`ubuntu-24.04`, and the `packages.yml` matrix): a fresh
-  virtual machine for every job, discarded afterwards. `RedlineDB/required`,
-  `lint`, `official-evidence-guard`, `typecheck`, `test`, `components`
-  (testing, central, web, release-tools), `security` and `audit` run here for
-  every event (and `durability-receipt` on a release tag's run), so the
-  aggregate never takes a self-hosted slot and the light jobs do not depend on
-  the self-hosted runners' links to github.com (CI-04).
-  `RedlineDB/required` still needs the self-hosted jobs: while no self-hosted
-  runner is up they stay queued, and so does the required check.
+  virtual machine for every job, discarded afterwards. The `packages.yml`
+  matrix (Linux x86_64 and arm64, macOS) and `durability-receipt` (a release
+  tag's run) run here for every event, and every `ci.yml` job runs here for a
+  fork pull request. `RedlineDB/required` still needs the packaging matrix:
+  while GitHub-hosted runners are unavailable it stays queued, and so does the
+  required check.
 - **Self-hosted** (`redline-xbabe1`, `redline-xbabe3`, labels
-  `[self-hosted, Linux, X64]`): long-lived hosts for the heavy jobs:
-  `preflight`, the `tests` shards, `parity`, `components (integration)` and
-  the parity report bot. Every job runs as the
+  `[self-hosted, Linux, X64]`): long-lived hosts for every other trusted
+  `ci.yml` job: the heavy jobs (`preflight`, the `tests` shards, `parity`,
+  `components (integration)`), the light jobs (`lint`,
+  `official-evidence-guard`, `typecheck`, `test`, `components`, `security`,
+  `audit`), `RedlineDB/required`, and the parity report bot. Every job runs as the
   runner's host user and shares `$RUNNER_TOOL_CACHE/redlinedb-cargo`
   (registry, git and advisory caches, cargo-installed tools) and the user's
   home directory. `ops/ci/apt-install.sh` calls `sudo` when a package is
@@ -30,8 +30,8 @@ So code from a fork must never run on a self-hosted runner.
 
 | Event | Class | Runs on |
 | --- | --- | --- |
-| `push` to `main`, release tags, `workflow_dispatch` | trusted | heavy jobs self-hosted, the rest hosted |
-| `pull_request` from a branch of this repository | trusted | heavy jobs self-hosted, the rest hosted |
+| `push` to `main`, release tags, `workflow_dispatch` | trusted | `ci.yml` self-hosted; packaging and `durability-receipt` hosted |
+| `pull_request` from a branch of this repository | trusted | `ci.yml` self-hosted; packaging hosted |
 | `pull_request` from a fork (head repository is not this one, or was deleted) | untrusted | GitHub-hosted only |
 
 Pushing a branch here needs write access, and write access can already change
@@ -184,8 +184,9 @@ Run this after deploying the hook, and again after any runner change.
   requests and has not run on real CI yet; the first fork pull request, or
   the canary, is its first run. They may need longer timeouts there.
 - `cargo-audit` and `cargo-deny` are built with
-  `cargo install --locked --version …` on the hosted `security` and `audit`
-  runners, so no shared cache supplies them.
+  `cargo install --locked --version …` in the `security` and `audit` jobs;
+  on the self-hosted runners the shared trusted `CARGO_HOME` keeps the pinned
+  build, and a fork's hosted run builds its own.
 - Until the host work above is done, a maintainer who approves a fork run
   that edits the workflows, on a host without the hook, lets that code run
   as the runner user with that user's credentials.
