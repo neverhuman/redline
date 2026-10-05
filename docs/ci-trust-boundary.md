@@ -3,21 +3,21 @@
 The repository is public, and anyone can open a pull request from a fork. CI
 uses two kinds of runner:
 
-- **GitHub-hosted** (`ubuntu-24.04`, and the `packages.yml` matrix): a fresh
-  virtual machine for every job, discarded afterwards. The `packages.yml`
-  `build` and `runtime` matrix (Linux x86_64 on the ubuntu-22.04 release
-  baseline, Linux arm64, macOS) runs here for pushes to `main`, release tags
-  and dispatches, and is skipped on pull requests; `durability-receipt` runs
-  here on a release tag's run; and every `ci.yml` job runs here for a fork
-  pull request. A push or tag run's `RedlineDB/required` still needs the
-  hosted matrix; a pull request's does not.
+- **GitHub-hosted** (`ubuntu-24.04`, and the `packages-cross.yml` matrix): a
+  fresh virtual machine for every job, discarded afterwards. The
+  `packages-cross.yml` `build` and `runtime` matrix (Linux arm64, macOS) runs
+  here for pushes to `main`, release tags and dispatches, and is skipped on
+  pull requests; `durability-receipt` runs here on a release tag's run; and
+  every `ci.yml` job runs here for a fork pull request. Hosted packaging is
+  intentionally outside `RedlineDB/required`, so a stalled hosted queue cannot
+  hold the merge gate.
 - **Self-hosted** (`redline-xbabe1`, `redline-xbabe3`, labels
   `[self-hosted, Linux, X64]`): long-lived hosts for every other trusted
   `ci.yml` job: the heavy jobs (`preflight`, the `tests` shards, `parity`,
   `components (integration)`), the light jobs (`lint`,
   `official-evidence-guard`, `typecheck`, `test`, `components`, `security`,
-  `audit`), `RedlineDB/required`, a pull request's Linux x86_64 packaging
-  (`packages.yml` `build-linux`, `runtime-linux`), and the parity report bot.
+  `audit`), `RedlineDB/required`, Linux x86_64 packaging (`packages.yml`
+  `build-linux`, `runtime-linux` for every event), and the parity report bot.
   Every job runs as the
   runner's host user and shares `$RUNNER_TOOL_CACHE/redlinedb-cargo`
   (registry, git and advisory caches, cargo-installed tools) and the user's
@@ -33,8 +33,8 @@ So code from a fork must never run on a self-hosted runner.
 
 | Event | Class | Runs on |
 | --- | --- | --- |
-| `push` to `main`, release tags, `workflow_dispatch` | trusted | `ci.yml` self-hosted; packaging and `durability-receipt` hosted |
-| `pull_request` from a branch of this repository | trusted | self-hosted (packaging: Linux x86_64 only) |
+| `push` to `main`, release tags, `workflow_dispatch` | trusted | `ci.yml` self-hosted (incl. Linux x86_64 packaging); macOS/arm64 packaging and `durability-receipt` hosted |
+| `pull_request` from a branch of this repository | trusted | self-hosted (packaging: Linux x86_64 only; no macOS/arm64) |
 | `pull_request` from a fork (head repository is not this one, or was deleted) | untrusted | GitHub-hosted only |
 
 Pushing a branch here needs write access, and write access can already change
@@ -57,7 +57,7 @@ the workflow files; actionlint (security lane) checks their syntax.
    the `packages.yml` it calls) either runs on hosted runners or uses
    `runs-on: ${{ (<fork test>) && 'ubuntu-24.04' || fromJSON('["self-hosted","Linux","X64"]') }}`.
    `crates/bench/tests/ci_workflow_routing.rs` pins which jobs are hosted and
-   that `RedlineDB/required` needs every other job.
+   that `RedlineDB/required` needs every merge-gate job (not `packaging-cross`).
 2. **Cargo home.** Each self-hosted job's first step picks `CARGO_HOME`: a
    fork job gets `$RUNNER_TEMP/cargo-home`, which the runner empties for every
    job; trusted jobs keep the shared `$RUNNER_TOOL_CACHE/redlinedb-cargo`, so

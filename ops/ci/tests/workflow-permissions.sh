@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
-# Tests for ops/ci/check-workflow-permissions.sh: a ci.yml or packages.yml
-# permission request beyond release-build.yml's acceptance grant is refused,
-# in each YAML form, and requests within it pass.
+# Tests for ops/ci/check-workflow-permissions.sh: a ci.yml, packages.yml or
+# packages-cross.yml permission request beyond release-build.yml's acceptance
+# grant is refused, in each YAML form, and requests within it pass.
 #
 # Usage: bash ops/ci/tests/workflow-permissions.sh
 set -euo pipefail
@@ -36,6 +36,7 @@ jobs:
       id-token: write
 YAML
   printf 'name: packages\npermissions:\n  contents: read\njobs:\n  build:\n    runs-on: ubuntu-24.04\n' > "$dir/packages.yml"
+  printf 'name: packages-cross\npermissions:\n  contents: read\njobs:\n  build:\n    runs-on: ubuntu-24.04\n' > "$dir/packages-cross.yml"
   printf 'name: ci\njobs:\n%s\n' "$2" > "$dir/ci.yml"
 }
 expect_pass() {
@@ -94,6 +95,15 @@ if bash "$check" "$work/packages-write" > "$work/packages-write.log" 2>&1; then
   fail 'packages-write: accepted'
 fi
 grep -qF 'packages.yml:' "$work/packages-write.log" || fail "packages-write: $(cat "$work/packages-write.log")"
+
+# packages-cross.yml is held to the same grant.
+fixture packages-cross-write '  a:
+    runs-on: ubuntu-24.04'
+printf '  release:\n    permissions:\n      contents: write\n' >> "$work/packages-cross-write/packages-cross.yml"
+if bash "$check" "$work/packages-cross-write" > "$work/packages-cross-write.log" 2>&1; then
+  fail 'packages-cross-write: accepted'
+fi
+grep -qF 'packages-cross.yml:' "$work/packages-cross-write.log" || fail "packages-cross-write: $(cat "$work/packages-cross-write.log")"
 
 # The grant is read from release-build.yml: widening it there widens the check.
 fixture wider-grant '  a:
