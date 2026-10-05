@@ -4,8 +4,9 @@
 //! - The aggregate and the light jobs run on the self-hosted runners for
 //!   trusted events (fork pull requests stay on GitHub-hosted runners), so a
 //!   stalled GitHub-hosted queue cannot hold `RedlineDB/required`. Only
-//!   `durability-receipt` (release tags) and the `packages.yml` matrix stay
-//!   hosted.
+//!   `durability-receipt` (release tags) and the `packages-cross.yml` matrix
+//!   (macOS, Linux arm64) stay hosted, and they are outside the required
+//!   aggregate.
 //! - Self-hosted jobs check the pinned toolchain offline
 //!   (`ops/ci/ensure-rust.sh`) instead of fetching the channel manifest with
 //!   dtolnay/rust-toolchain in every job; tool downloads retry and cache the
@@ -65,6 +66,11 @@ fn a_push_and_a_dispatch_on_one_ref_do_not_cancel_each_other() {
         packages.contains("  group: packages-${{ github.event_name }}-${{ github.ref }}\n"),
         "packages.yml's concurrency group must include the event"
     );
+    let cross = read(".github/workflows/packages-cross.yml");
+    assert!(
+        cross.contains("  group: packages-cross-${{ github.event_name }}-${{ github.ref }}\n"),
+        "packages-cross.yml's concurrency group must include the event"
+    );
 }
 
 #[test]
@@ -108,28 +114,15 @@ fn the_aggregate_and_the_light_jobs_run_on_self_hosted_runners() {
 }
 
 #[test]
-fn pull_requests_package_linux_x86_64_on_self_hosted_runners_only() {
-    // The hosted packaging matrix (Linux arm64, macOS, and Linux x86_64 on
-    // the ubuntu-22.04 release baseline) runs on pushes, tags and dispatches;
-    // a pull request packages Linux x86_64 on the self-hosted runners, so
-    // RedlineDB/required does not wait on GitHub-hosted capacity.
+fn linux_x86_64_packaging_runs_on_self_hosted_runners_for_every_event() {
+    // packages.yml is Linux x86_64 only, on the self-hosted runners for every
+    // event, so RedlineDB/required never waits on GitHub-hosted capacity.
     let packages = read(".github/workflows/packages.yml");
-    for id in ["build", "runtime"] {
-        let body = job(&packages, id);
-        assert!(
-            body.contains("    if: github.event_name != 'pull_request'\n"),
-            "packages.yml job {id} must skip pull requests"
-        );
-        assert!(
-            !is_self_hosted(&body),
-            "packages.yml job {id} names a self-hosted runner"
-        );
-    }
     for id in ["build-linux", "runtime-linux"] {
         let body = job(&packages, id);
         assert!(
-            body.contains("    if: github.event_name == 'pull_request'\n"),
-            "packages.yml job {id} must run only for pull requests"
+            !body.contains("    if: "),
+            "packages.yml job {id} must run for every event"
         );
         assert!(
             is_self_hosted(&body),
@@ -138,10 +131,69 @@ fn pull_requests_package_linux_x86_64_on_self_hosted_runners_only() {
     }
     assert!(job(&packages, "build-linux").contains("name: packages-linux-x86_64\n"));
     assert!(job(&packages, "runtime-linux").contains("needs: build-linux\n"));
+    let ids: Vec<String> = jobs(&packages).into_iter().map(|(id, _)| id).collect();
+    for hosted in ["build", "runtime"] {
+        assert!(
+            !ids.iter().any(|id| id == hosted),
+            "packages.yml still has the hosted {hosted} job; it belongs in packages-cross.yml"
+        );
+    }
 }
 
 #[test]
-fn required_waits_for_every_other_job() {
+fn macos_and_linux_arm64_packaging_is_outside_the_required_aggregate() {
+    // packages-cross.yml builds macOS and Linux arm64 on hosted runners for
+    // pushes, tags and dispatches only. ci.yml calls it as packaging-cross,
+    // which RedlineDB/required deliberately does not need.
+    let cross = read(".github/workflows/packages-cross.yml");
+    assert!(
+        cross.contains("  group: packages-cross-${{ github.event_name }}-${{ github.ref }}\n"),
+        "packages-cross.yml's concurrency group must include the event"
+    );
+    for id in ["build", "runtime"] {
+        let body = job(&cross, id);
+        assert!(
+            body.contains("    if: github.event_name != 'pull_request'\n"),
+            "packages-cross.yml job {id} must skip pull requests"
+        );
+        assert!(
+            !is_self_hosted(&body),
+            "packages-cross.yml job {id} names a self-hosted runner"
+        );
+        assert!(
+            body.contains("ubuntu-22.04-arm")
+                && body.contains("macos-15-intel")
+                && body.contains("macos-15"),
+            "packages-cross.yml job {id} must cover linux-arm64 and both macOS platforms"
+        );
+        assert!(
+            !body.contains("ubuntu-22.04,") && !body.contains("linux-x86_64"),
+            "packages-cross.yml job {id} must not package linux-x86_64"
+        );
+    }
+    let ci = read(".github/workflows/ci.yml");
+    let packaging_cross = job(&ci, "packaging-cross");
+    assert!(
+        packaging_cross.contains("uses: ./.github/workflows/packages-cross.yml\n"),
+        "ci.yml must call packages-cross.yml"
+    );
+    assert!(
+        packaging_cross.contains("    if: github.event_name != 'pull_request'\n"),
+        "ci.yml packaging-cross must skip pull requests"
+    );
+    let required = job(&ci, "required");
+    let needs_line = required
+        .lines()
+        .find(|line| line.trim().starts_with("needs:"))
+        .expect("required lists needs");
+    assert!(
+        !needs_line.contains("packaging-cross"),
+        "RedlineDB/required must not wait on packaging-cross"
+    );
+}
+
+#[test]
+fn required_waits_for_every_merge_gate_job() {
     let ci = read(".github/workflows/ci.yml");
     let required = job(&ci, "required");
     let needs: BTreeSet<String> = required
@@ -152,14 +204,20 @@ fn required_waits_for_every_other_job() {
         .split(',')
         .map(|id| id.trim().to_string())
         .collect();
+    // packaging-cross (hosted macOS / arm64) is intentionally outside the
+    // merge gate so a stalled GitHub-hosted queue cannot hold it.
     let others: BTreeSet<String> = jobs(&ci)
         .into_iter()
         .map(|(id, _)| id)
-        .filter(|id| id != "required")
+        .filter(|id| id != "required" && id != "packaging-cross")
         .collect();
     assert_eq!(
         needs, others,
-        "RedlineDB/required must need every other ci.yml job"
+        "RedlineDB/required must need every merge-gate ci.yml job"
+    );
+    assert!(
+        jobs(&ci).into_iter().any(|(id, _)| id == "packaging-cross"),
+        "ci.yml must define packaging-cross"
     );
 }
 

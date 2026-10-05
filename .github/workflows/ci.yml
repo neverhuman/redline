@@ -26,14 +26,14 @@ concurrency:
 # for target/release and target/redline-testing.
 #
 # Runners (CI-04): every trusted job runs on the self-hosted runners
-# (labels self-hosted, Linux, X64), including RedlineDB/required and the light
+# (labels self-hosted, Linux, X64), including RedlineDB/required, the light
 # jobs (lint, official-evidence-guard, typecheck, test, components, security,
-# audit), so a stalled GitHub-hosted queue cannot hold the merge gate. They
-# check the pinned toolchain offline with ops/ci/ensure-rust.sh instead of
-# downloading it in every job. On a pull request packaging builds only Linux
-# x86_64, on the self-hosted runners too. durability-receipt (release tags) and
-# the hosted packaging matrix (packages.yml: Linux x86_64 on ubuntu-22.04,
-# Linux arm64, macOS; pushes, tags and dispatches only) stay GitHub-hosted.
+# audit), and Linux x86_64 packaging (packages.yml), so a stalled GitHub-hosted
+# queue cannot hold the merge gate. They check the pinned toolchain offline
+# with ops/ci/ensure-rust.sh instead of downloading it in every job.
+# durability-receipt (release tags) and the hosted macOS / Linux arm64 matrix
+# (packages-cross.yml; pushes, tags and dispatches only) stay GitHub-hosted
+# and are not part of what RedlineDB/required waits on.
 #
 # Trust boundary (docs/ci-trust-boundary.md): a pull request from a fork runs
 # on GitHub-hosted runners with a job-local CARGO_HOME, never on the
@@ -47,11 +47,11 @@ concurrency:
 # in this workflow pushes.
 #
 # Permissions: release-build.yml calls this workflow (and through it
-# packages.yml) with contents: read and attestations: read. No job here or in
-# packages.yml may ask for more: GitHub refuses to start the whole tag run,
-# whatever the job's `if:` says. A job that needs more gets its own workflow,
-# as report-merge.yml does. The preflight enforces this with
-# ops/ci/check-workflow-permissions.sh.
+# packages.yml and packages-cross.yml) with contents: read and attestations:
+# read. No job here or in those package workflows may ask for more: GitHub
+# refuses to start the whole tag run, whatever the job's `if:` says. A job
+# that needs more gets its own workflow, as report-merge.yml does. The
+# preflight enforces this with ops/ci/check-workflow-permissions.sh.
 
 jobs:
   preflight:
@@ -592,6 +592,16 @@ jobs:
     permissions:
       contents: read
 
+  # macOS and Linux arm64 only; skipped on pull_request inside packages-cross.yml.
+  # Intentionally not listed in RedlineDB/required's needs.
+  packaging-cross:
+    if: github.event_name != 'pull_request'
+    uses: ./.github/workflows/packages-cross.yml
+    with:
+      tag: ${{ inputs.tag || '' }}
+    permissions:
+      contents: read
+
   required:
     name: RedlineDB/required
     if: always()
@@ -613,6 +623,7 @@ jobs:
             exit 1
           fi
           # durability-receipt runs only for a release tag; without one its
-          # skip is expected. Every other job must succeed.
+          # skip is expected. packaging-cross is not in needs (hosted macOS /
+          # arm64 must not hold the merge gate). Every listed job must succeed.
           echo "$RESULTS" | jq -e --arg tag "$RELEASE_TAG" \
             'to_entries | length > 0 and all(.value.result == "success" or ($tag == "" and .key == "durability-receipt" and .value.result == "skipped"))'

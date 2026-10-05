@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
-# No job of ci.yml or packages.yml may ask for more token permissions than
-# release-build.yml grants its acceptance job, which calls ci.yml (and through
-# it packages.yml) as a reusable workflow. GitHub checks a called workflow's
+# No job of ci.yml, packages.yml or packages-cross.yml may ask for more token
+# permissions than release-build.yml grants its acceptance job, which calls
+# ci.yml (and through it the package workflows) as a reusable workflow. GitHub checks a called workflow's
 # permissions when the run starts, whatever a job's `if:` says, so one job
 # asking for more (such as `contents: write`) makes every tag push fail
 # before anything runs. Jobs that need more belong in their own workflow
@@ -61,7 +61,7 @@ allowed() {
 }
 
 violations=0
-for workflow in ci.yml packages.yml; do
+for workflow in ci.yml packages.yml packages-cross.yml; do
   [[ -f $dir/$workflow ]] || { printf 'missing workflow %s\n' "$workflow" >&2; exit 1; }
   while read -r line job scope level; do
     if [[ $scope == '*' || $scope == '?' ]] || ! allowed "$scope" "$level"; then
@@ -72,4 +72,4 @@ for workflow in ci.yml packages.yml; do
   done < <(entries "$dir/$workflow")
 done
 ((violations == 0)) || { printf '%d permission request(s) exceed what release-build.yml grants ci.yml\n' "$violations" >&2; exit 1; }
-printf 'ci.yml and packages.yml stay within the acceptance grant.\n'
+printf 'ci.yml, packages.yml and packages-cross.yml stay within the acceptance grant.\n'
