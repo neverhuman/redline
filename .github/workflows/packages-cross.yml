@@ -1,11 +1,6 @@
 name: packages-cross
-# Called by ci.yml for pushes to main, release tags and workflow_dispatch /
-# workflow_call. Never on pull_request. macOS and Linux arm64 packaging stays
-# GitHub-hosted; it is intentionally outside RedlineDB/required so a stalled
-# hosted queue cannot hold the merge gate. Release acceptance still waits on
-# the whole ci.yml reusable workflow, which includes this job.
-# Permissions: no more than contents: read and attestations: read
-# (ops/ci/check-workflow-permissions.sh).
+# ARM64 is cross-compiled on Linux X64 and exercised under private BuildKit QEMU.
+# Native macOS jobs are release-only: ordinary CI never queues a hosted runner.
 on:
   workflow_call:
     inputs:
@@ -19,23 +14,81 @@ concurrency:
 permissions:
   contents: read
 jobs:
-  build:
-    if: github.event_name != 'pull_request'
-    env:
-      OUTPUT_DIR: ${{ github.workspace }}/dist/release-packages
+  build-arm64:
+    name: build (linux-arm64, cross)
+    runs-on: ${{ (github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name != github.repository) && 'ubuntu-24.04' || fromJSON('["self-hosted","Linux","X64"]') }}
+    timeout-minutes: 90
+    steps:
+      - name: Unlock leftover workspace files and choose CARGO_HOME
+        env:
+          UNTRUSTED_PR: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name != github.repository }}
+        run: |
+          if [ -n "${GITHUB_WORKSPACE}" ] && [ -d "${GITHUB_WORKSPACE}" ]; then
+            chmod -R u+rwx "${GITHUB_WORKSPACE}" || true
+          fi
+          if [ "${UNTRUSTED_PR}" = true ]; then
+            cargo_home="${RUNNER_TEMP}/cargo-home"
+          else
+            cargo_home="${RUNNER_TOOL_CACHE}/redlinedb-cargo"
+          fi
+          mkdir -p "${cargo_home}/bin"
+          echo "CARGO_HOME=${cargo_home}" >> "${GITHUB_ENV}"
+          echo "${cargo_home}/bin" >> "${GITHUB_PATH}"
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with: {persist-credentials: false}
+      - name: Cross-compile ARM64 distributions
+        env:
+          TAG: ${{ inputs.tag }}
+          OUTPUT_DIR: ${{ github.workspace }}/dist/release-packages
+        run: bash ops/ci/arm64-packages.sh build
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: packages-linux-arm64
+          path: dist/release-packages/*
+          if-no-files-found: error
+  runtime-arm64:
+    name: runtime (linux-arm64, emulated)
+    needs: build-arm64
+    runs-on: ${{ (github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name != github.repository) && 'ubuntu-24.04' || fromJSON('["self-hosted","Linux","X64"]') }}
+    timeout-minutes: 45
+    steps:
+      - name: Unlock leftover workspace files and choose CARGO_HOME
+        env:
+          UNTRUSTED_PR: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name != github.repository }}
+        run: |
+          if [ -n "${GITHUB_WORKSPACE}" ] && [ -d "${GITHUB_WORKSPACE}" ]; then
+            chmod -R u+rwx "${GITHUB_WORKSPACE}" || true
+          fi
+          if [ "${UNTRUSTED_PR}" = true ]; then
+            cargo_home="${RUNNER_TEMP}/cargo-home"
+          else
+            cargo_home="${RUNNER_TOOL_CACHE}/redlinedb-cargo"
+          fi
+          mkdir -p "${cargo_home}/bin"
+          echo "CARGO_HOME=${cargo_home}" >> "${GITHUB_ENV}"
+          echo "${cargo_home}/bin" >> "${GITHUB_PATH}"
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with: {persist-credentials: false}
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+        with: {name: packages-linux-arm64, path: target/packages}
+      - name: Check ARM64 archives, FFI, installer and quickstart under QEMU
+        run: bash ops/ci/arm64-packages.sh runtime
+  build-macos:
+    # Non-blocking in ordinary CI (skipped); native checks remain mandatory
+    # for release tags, including signing, dylib identity and installer checks.
+    if: inputs.tag != ''
+    env: {OUTPUT_DIR: '${{ github.workspace }}/dist/release-packages'}
     strategy:
       fail-fast: false
       matrix:
         include:
-          - {os: ubuntu-22.04-arm, platform: linux-arm64}
           - {os: macos-15-intel, platform: macos-x86_64}
           - {os: macos-15, platform: macos-arm64}
     runs-on: ${{ matrix.os }}
     timeout-minutes: 90
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
-        with:
-          persist-credentials: false
+        with: {persist-credentials: false}
       - uses: dtolnay/rust-toolchain@3c5f7ea28cd621ae0bf5283f0e981fb97b8a7af9
         with: {toolchain: 1.95.0}
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
@@ -51,29 +104,27 @@ jobs:
           name: packages-${{ matrix.platform }}
           path: ${{ env.OUTPUT_DIR }}/*
           if-no-files-found: error
-  runtime:
-    needs: build
-    if: github.event_name != 'pull_request'
+  runtime-macos:
+    needs: build-macos
+    if: inputs.tag != ''
     strategy:
       fail-fast: false
       matrix:
         include:
-          - {os: ubuntu-22.04-arm, platform: linux-arm64}
           - {os: macos-15-intel, platform: macos-x86_64}
           - {os: macos-15, platform: macos-arm64}
     runs-on: ${{ matrix.os }}
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
-        with:
-          persist-credentials: false
+        with: {persist-credentials: false}
       - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
         with: {name: 'packages-${{ matrix.platform }}', path: target/packages}
       - name: Run archives in a fresh runner without building
         run: bash ops/ci/packages.sh runtime
-      - name: Install the candidate with install.sh and link a C program against it
+      - name: Install the candidate through install.sh and link a C consumer
         run: bash ops/ci/packages.sh native-install
-      - name: Run the documented quick start against the candidate
+      - name: Run the documented quickstart without development tools
         run: bash ops/ci/packages.sh quickstart
-      - name: Run the post-publication check against the candidate
+      - name: Run the release post-publication check against the candidate
         run: bash ops/ci/packages.sh published-check

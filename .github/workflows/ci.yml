@@ -31,9 +31,9 @@ concurrency:
 # audit), and Linux x86_64 packaging (packages.yml), so a stalled GitHub-hosted
 # queue cannot hold the merge gate. They check the pinned toolchain offline
 # with ops/ci/ensure-rust.sh instead of downloading it in every job.
-# durability-receipt (release tags) and the hosted macOS / Linux arm64 matrix
-# (packages-cross.yml; pushes, tags and dispatches only) stay GitHub-hosted
-# and are not part of what RedlineDB/required waits on.
+# Linux arm64 packaging also runs on Linux X64 (cross-compile plus QEMU).
+# Hosted macOS packaging is release-only; ordinary CI skips it. The tagged
+# release still requires native macOS archives and checks on both platforms.
 #
 # Trust boundary (docs/ci-trust-boundary.md): a pull request from a fork runs
 # on GitHub-hosted runners with a job-local CARGO_HOME, never on the
@@ -592,10 +592,9 @@ jobs:
     permissions:
       contents: read
 
-  # macOS and Linux arm64 only; skipped on pull_request inside packages-cross.yml.
-  # Intentionally not listed in RedlineDB/required's needs.
+  # ARM64 runs for trusted events, including PRs; native macOS is tag-only.
   packaging-cross:
-    if: github.event_name != 'pull_request'
+    if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
     uses: ./.github/workflows/packages-cross.yml
     with:
       tag: ${{ inputs.tag || '' }}
@@ -605,7 +604,7 @@ jobs:
   required:
     name: RedlineDB/required
     if: always()
-    needs: [preflight, tests, parity, official-evidence-guard, test, lint, typecheck, components, components-integration, audit, security, packaging, durability-receipt]
+    needs: [preflight, tests, parity, official-evidence-guard, test, lint, typecheck, components, components-integration, audit, security, packaging, packaging-cross, durability-receipt]
     # jq only; it starts after every job it needs has finished.
     runs-on: ${{ (github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name != github.repository) && 'ubuntu-24.04' || fromJSON('["self-hosted","Linux","X64"]') }}
     timeout-minutes: 5
@@ -623,7 +622,7 @@ jobs:
             exit 1
           fi
           # durability-receipt runs only for a release tag; without one its
-          # skip is expected. packaging-cross is not in needs (hosted macOS /
-          # arm64 must not hold the merge gate). Every listed job must succeed.
+          # skip is expected. packaging-cross checks ARM64 on self-hosted X64;
+          # its macOS jobs skip without a tag. Every listed job must succeed.
           echo "$RESULTS" | jq -e --arg tag "$RELEASE_TAG" \
             'to_entries | length > 0 and all(.value.result == "success" or ($tag == "" and .key == "durability-receipt" and .value.result == "skipped"))'

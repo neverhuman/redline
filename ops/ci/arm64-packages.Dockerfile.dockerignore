@@ -1,0 +1,9 @@
+# Keep .git for exact commit/tree provenance. Do not send local build caches.
+**/target
+**/node_modules
+dist
+.agent
+.claude
+**/*.log
+**/.env
+**/.env.*

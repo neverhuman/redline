@@ -61,6 +61,10 @@
     "docs/migration/": "release",
     ".dockerignore": "workspace",
     ".gitleaks.toml": "security",
-    ".gitleaksignore": "security"
+    ".gitleaksignore": "security",
+    "ops/ci/arm64-packages.sh": "ops",
+    "ops/ci/arm64-packages.Dockerfile": "ops",
+    "ops/ci/arm64-packages.Dockerfile.dockerignore": "ops",
+    "ops/ci/tests/arm64-packages.sh": "ops"
   }
 }
