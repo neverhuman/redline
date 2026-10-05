@@ -25,16 +25,14 @@ concurrency:
 # so cargo and scripts share $PWD/target; artifact uploads and parity look
 # for target/release and target/redline-testing.
 #
-# Runners (CI-04): RedlineDB/required and the light jobs (lint,
-# official-evidence-guard, typecheck, test, components except integration,
-# security, audit) run on GitHub-hosted ubuntu-24.04 for every event, so the
-# aggregate never waits for a free self-hosted slot and the light jobs do not
-# depend on the self-hosted runners' flaky links to github.com. The aggregate
-# still needs every self-hosted job: while no self-hosted runner is up those
-# stay queued and so does RedlineDB/required. The heavy jobs (preflight, the test shards,
-# parity, components (integration)) run on the self-hosted runners and check
-# the pinned toolchain offline with ops/ci/ensure-rust.sh instead of
-# downloading it in every job.
+# Runners (CI-04): every trusted job runs on the self-hosted runners
+# (labels self-hosted, Linux, X64), including RedlineDB/required and the light
+# jobs (lint, official-evidence-guard, typecheck, test, components, security,
+# audit), so a stalled GitHub-hosted queue cannot hold the merge gate. They
+# check the pinned toolchain offline with ops/ci/ensure-rust.sh instead of
+# downloading it in every job. Only durability-receipt (release tags) and the
+# packaging matrix (packages.yml: Linux arm64 and macOS images) stay on
+# GitHub-hosted runners; RedlineDB/required still needs both.
 #
 # Trust boundary (docs/ci-trust-boundary.md): a pull request from a fork runs
 # on GitHub-hosted runners with a job-local CARGO_HOME, never on the
@@ -252,11 +250,26 @@ jobs:
             target/redline-testing/**
 
   official-evidence-guard:
-    runs-on: ubuntu-24.04
+    runs-on: ${{ (github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name != github.repository) && 'ubuntu-24.04' || fromJSON('["self-hosted","Linux","X64"]') }}
     timeout-minutes: 10
     permissions:
       contents: read
     steps:
+      - name: Unlock leftover workspace files and choose CARGO_HOME
+        env:
+          UNTRUSTED_PR: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name != github.repository }}
+        run: |
+          if [ -n "${GITHUB_WORKSPACE}" ] && [ -d "${GITHUB_WORKSPACE}" ]; then
+            chmod -R u+rwx "${GITHUB_WORKSPACE}" || true
+          fi
+          if [ "${UNTRUSTED_PR}" = true ]; then
+            cargo_home="${RUNNER_TEMP}/cargo-home"
+          else
+            cargo_home="${RUNNER_TOOL_CACHE}/redlinedb-cargo"
+          fi
+          mkdir -p "${cargo_home}/bin"
+          echo "CARGO_HOME=${cargo_home}" >> "${GITHUB_ENV}"
+          echo "${cargo_home}/bin" >> "${GITHUB_PATH}"
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
         with:
           ref: ${{ github.ref }}
@@ -270,19 +283,32 @@ jobs:
   # CLI on every platform (build-from-source.sh --all), so the build and cli
   # jobs that repeated `cargo build --release -p redlinedb-cli` are gone.
   test:
-    runs-on: ubuntu-24.04
+    runs-on: ${{ (github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name != github.repository) && 'ubuntu-24.04' || fromJSON('["self-hosted","Linux","X64"]') }}
     timeout-minutes: 45
     permissions:
       contents: read
       attestations: read
     steps:
+      - name: Unlock leftover workspace files and choose CARGO_HOME
+        env:
+          UNTRUSTED_PR: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name != github.repository }}
+        run: |
+          if [ -n "${GITHUB_WORKSPACE}" ] && [ -d "${GITHUB_WORKSPACE}" ]; then
+            chmod -R u+rwx "${GITHUB_WORKSPACE}" || true
+          fi
+          if [ "${UNTRUSTED_PR}" = true ]; then
+            cargo_home="${RUNNER_TEMP}/cargo-home"
+          else
+            cargo_home="${RUNNER_TOOL_CACHE}/redlinedb-cargo"
+          fi
+          mkdir -p "${cargo_home}/bin"
+          echo "CARGO_HOME=${cargo_home}" >> "${GITHUB_ENV}"
+          echo "${cargo_home}/bin" >> "${GITHUB_PATH}"
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
         with:
           ref: ${{ github.ref }}
           persist-credentials: false
-      - uses: dtolnay/rust-toolchain@3c5f7ea28cd621ae0bf5283f0e981fb97b8a7af9
-        with:
-          toolchain: 1.95.0
+      - run: bash ops/ci/ensure-rust.sh
       - uses: swatinem/rust-cache@42dc69e1aa15d09112580998cf2ef0119e2e91ae
       - name: Install system packages
         run: |
@@ -293,37 +319,62 @@ jobs:
           cargo test --locked -p redlinedb-cli
 
   lint:
-    runs-on: ubuntu-24.04
+    runs-on: ${{ (github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name != github.repository) && 'ubuntu-24.04' || fromJSON('["self-hosted","Linux","X64"]') }}
     timeout-minutes: 15
     permissions:
       contents: read
       attestations: read
     steps:
+      - name: Unlock leftover workspace files and choose CARGO_HOME
+        env:
+          UNTRUSTED_PR: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name != github.repository }}
+        run: |
+          if [ -n "${GITHUB_WORKSPACE}" ] && [ -d "${GITHUB_WORKSPACE}" ]; then
+            chmod -R u+rwx "${GITHUB_WORKSPACE}" || true
+          fi
+          if [ "${UNTRUSTED_PR}" = true ]; then
+            cargo_home="${RUNNER_TEMP}/cargo-home"
+          else
+            cargo_home="${RUNNER_TOOL_CACHE}/redlinedb-cargo"
+          fi
+          mkdir -p "${cargo_home}/bin"
+          echo "CARGO_HOME=${cargo_home}" >> "${GITHUB_ENV}"
+          echo "${cargo_home}/bin" >> "${GITHUB_PATH}"
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
         with:
           ref: ${{ github.ref }}
           persist-credentials: false
-      - uses: dtolnay/rust-toolchain@3c5f7ea28cd621ae0bf5283f0e981fb97b8a7af9
-        with:
-          toolchain: 1.95.0
-          components: rustfmt
+      - run: bash ops/ci/ensure-rust.sh
       - name: rustfmt
         run: cargo fmt --check
 
   typecheck:
-    runs-on: ubuntu-24.04
+    runs-on: ${{ (github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name != github.repository) && 'ubuntu-24.04' || fromJSON('["self-hosted","Linux","X64"]') }}
     timeout-minutes: 30
     permissions:
       contents: read
       attestations: read
     steps:
+      - name: Unlock leftover workspace files and choose CARGO_HOME
+        env:
+          UNTRUSTED_PR: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name != github.repository }}
+        run: |
+          if [ -n "${GITHUB_WORKSPACE}" ] && [ -d "${GITHUB_WORKSPACE}" ]; then
+            chmod -R u+rwx "${GITHUB_WORKSPACE}" || true
+          fi
+          if [ "${UNTRUSTED_PR}" = true ]; then
+            cargo_home="${RUNNER_TEMP}/cargo-home"
+          else
+            cargo_home="${RUNNER_TOOL_CACHE}/redlinedb-cargo"
+          fi
+          mkdir -p "${cargo_home}/bin"
+          echo "CARGO_HOME=${cargo_home}" >> "${GITHUB_ENV}"
+          echo "${cargo_home}/bin" >> "${GITHUB_PATH}"
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
         with:
           ref: ${{ github.ref }}
           persist-credentials: false
-      - uses: dtolnay/rust-toolchain@3c5f7ea28cd621ae0bf5283f0e981fb97b8a7af9
-        with:
-          toolchain: 1.95.0
+      - run: bash ops/ci/ensure-rust.sh
       - uses: swatinem/rust-cache@42dc69e1aa15d09112580998cf2ef0119e2e91ae
       - name: Install system packages
         run: |
@@ -336,16 +387,30 @@ jobs:
       fail-fast: false
       matrix:
         lane: [testing, central, web, release-tools]
-    runs-on: ubuntu-24.04
+    runs-on: ${{ (github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name != github.repository) && 'ubuntu-24.04' || fromJSON('["self-hosted","Linux","X64"]') }}
     timeout-minutes: 60
     permissions:
       contents: read
     steps:
+      - name: Unlock leftover workspace files and choose CARGO_HOME
+        env:
+          UNTRUSTED_PR: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name != github.repository }}
+        run: |
+          if [ -n "${GITHUB_WORKSPACE}" ] && [ -d "${GITHUB_WORKSPACE}" ]; then
+            chmod -R u+rwx "${GITHUB_WORKSPACE}" || true
+          fi
+          if [ "${UNTRUSTED_PR}" = true ]; then
+            cargo_home="${RUNNER_TEMP}/cargo-home"
+          else
+            cargo_home="${RUNNER_TOOL_CACHE}/redlinedb-cargo"
+          fi
+          mkdir -p "${cargo_home}/bin"
+          echo "CARGO_HOME=${cargo_home}" >> "${GITHUB_ENV}"
+          echo "${cargo_home}/bin" >> "${GITHUB_PATH}"
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
         with:
           persist-credentials: false
-      - uses: dtolnay/rust-toolchain@3c5f7ea28cd621ae0bf5283f0e981fb97b8a7af9
-        with: {toolchain: 1.95.0, components: rustfmt}
+      - run: bash ops/ci/ensure-rust.sh
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
         with: {node-version: '22'}
       - uses: swatinem/rust-cache@42dc69e1aa15d09112580998cf2ef0119e2e91ae
@@ -394,16 +459,30 @@ jobs:
 
   audit:
     needs: security
-    runs-on: ubuntu-24.04
+    runs-on: ${{ (github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name != github.repository) && 'ubuntu-24.04' || fromJSON('["self-hosted","Linux","X64"]') }}
     timeout-minutes: 45
     permissions: {contents: read}
     steps:
+      - name: Unlock leftover workspace files and choose CARGO_HOME
+        env:
+          UNTRUSTED_PR: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name != github.repository }}
+        run: |
+          if [ -n "${GITHUB_WORKSPACE}" ] && [ -d "${GITHUB_WORKSPACE}" ]; then
+            chmod -R u+rwx "${GITHUB_WORKSPACE}" || true
+          fi
+          if [ "${UNTRUSTED_PR}" = true ]; then
+            cargo_home="${RUNNER_TEMP}/cargo-home"
+          else
+            cargo_home="${RUNNER_TOOL_CACHE}/redlinedb-cargo"
+          fi
+          mkdir -p "${cargo_home}/bin"
+          echo "CARGO_HOME=${cargo_home}" >> "${GITHUB_ENV}"
+          echo "${cargo_home}/bin" >> "${GITHUB_PATH}"
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
         with:
           fetch-depth: 0
           persist-credentials: false
-      - uses: dtolnay/rust-toolchain@3c5f7ea28cd621ae0bf5283f0e981fb97b8a7af9
-        with: {toolchain: 1.95.0}
+      - run: bash ops/ci/ensure-rust.sh
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
         with: {node-version: '22'}
       - uses: swatinem/rust-cache@42dc69e1aa15d09112580998cf2ef0119e2e91ae
@@ -427,17 +506,31 @@ jobs:
         with: {name: jankurai-tool-evidence, path: target/jankurai, if-no-files-found: warn}
 
   security:
-    runs-on: ubuntu-24.04
+    runs-on: ${{ (github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name != github.repository) && 'ubuntu-24.04' || fromJSON('["self-hosted","Linux","X64"]') }}
     timeout-minutes: 45
     permissions: {contents: read}
     steps:
+      - name: Unlock leftover workspace files and choose CARGO_HOME
+        env:
+          UNTRUSTED_PR: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name != github.repository }}
+        run: |
+          if [ -n "${GITHUB_WORKSPACE}" ] && [ -d "${GITHUB_WORKSPACE}" ]; then
+            chmod -R u+rwx "${GITHUB_WORKSPACE}" || true
+          fi
+          if [ "${UNTRUSTED_PR}" = true ]; then
+            cargo_home="${RUNNER_TEMP}/cargo-home"
+          else
+            cargo_home="${RUNNER_TOOL_CACHE}/redlinedb-cargo"
+          fi
+          mkdir -p "${cargo_home}/bin"
+          echo "CARGO_HOME=${cargo_home}" >> "${GITHUB_ENV}"
+          echo "${cargo_home}/bin" >> "${GITHUB_PATH}"
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
         with:
           # The receipt's gitleaks scan covers the whole history.
           fetch-depth: 0
           persist-credentials: false
-      - uses: dtolnay/rust-toolchain@3c5f7ea28cd621ae0bf5283f0e981fb97b8a7af9
-        with: {toolchain: 1.95.0}
+      - run: bash ops/ci/ensure-rust.sh
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
         with: {node-version: '22'}
       - uses: swatinem/rust-cache@42dc69e1aa15d09112580998cf2ef0119e2e91ae
@@ -501,9 +594,8 @@ jobs:
     name: RedlineDB/required
     if: always()
     needs: [preflight, tests, parity, official-evidence-guard, test, lint, typecheck, components, components-integration, audit, security, packaging, durability-receipt]
-    # Hosted and jq only, so it never takes a self-hosted slot; it still
-    # waits for the self-hosted jobs it needs.
-    runs-on: ubuntu-24.04
+    # jq only; it starts after every job it needs has finished.
+    runs-on: ${{ (github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name != github.repository) && 'ubuntu-24.04' || fromJSON('["self-hosted","Linux","X64"]') }}
     timeout-minutes: 5
     permissions: {contents: read}
     steps:
