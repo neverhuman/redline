@@ -77,7 +77,9 @@ fn the_aggregate_and_the_light_jobs_run_on_self_hosted_runners() {
             "ci.yml job {id} must run on the self-hosted runners for trusted events"
         );
         assert!(
-            !body.lines().any(|line| line.trim() == "runs-on: ubuntu-24.04"),
+            !body
+                .lines()
+                .any(|line| line.trim() == "runs-on: ubuntu-24.04"),
             "ci.yml job {id} must not be pinned to a GitHub-hosted runner"
         );
     }
