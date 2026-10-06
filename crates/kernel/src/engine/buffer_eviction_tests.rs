@@ -32,6 +32,20 @@ use crate::txn::Isolation;
 use crate::wal::{WalConfig, flushed_all_through, reset_flushed_all_through};
 use crate::{Error, Result};
 
+/// A scratch directory on tmpfs when the host has one (`/dev/shm`), for
+/// the tests that commit hundreds of times with checkpoints. They check
+/// write order through hooks and recovered contents, not that a device kept
+/// what was synced, and on a busy shared disk their syncs alone took minutes
+/// (about 100 s each, against 1-5 s on tmpfs). Elsewhere, the default
+/// temporary directory.
+pub(super) fn scratch_dir() -> TempDir {
+    let shm = std::path::Path::new("/dev/shm");
+    shm.is_dir()
+        .then(|| tempfile::Builder::new().tempdir_in(shm).ok())
+        .flatten()
+        .unwrap_or_else(|| TempDir::new().unwrap())
+}
+
 pub(super) const SMALL_POOL: usize = 16;
 const PAGE_SIZE: usize = 4096;
 /// 1 KiB rows fill about 40 heap pages of 4 KiB, well past `SMALL_POOL`.
@@ -169,7 +183,7 @@ fn buffer_eviction_checkpoints_a_pool_full_of_dirty_index_pages_in_every_durabil
     // of such leaves has nothing to evict. Eviction asks for a checkpoint,
     // which writes them as one cut, instead of failing the insert.
     for durability in EVERY_DURABILITY {
-        let temp = TempDir::new().unwrap();
+        let temp = scratch_dir();
         let engine = Engine::create(temp.path(), config(durability, SMALL_POOL)).unwrap();
         engine.enable_pool_pressure_checkpoints().unwrap();
         let index_id = create_indexed_table(&engine);
