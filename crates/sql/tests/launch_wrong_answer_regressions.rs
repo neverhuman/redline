@@ -45,6 +45,8 @@ mod q5_05_synthetic_affinity;
 mod q5_05_text_ops;
 #[path = "launch_wrong_answer/reindex.rs"]
 mod reindex;
+#[path = "launch_wrong_answer/rowid_range_bounds.rs"]
+mod rowid_range_bounds;
 #[path = "launch_wrong_answer/sum_overflow.rs"]
 mod sum_overflow;
 #[path = "launch_wrong_answer/window_frames.rs"]

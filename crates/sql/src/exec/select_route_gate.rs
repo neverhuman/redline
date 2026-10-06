@@ -36,10 +36,27 @@ pub(super) fn routed_scan_table<'a>(
     let hint = plan.table_hint.as_ref();
     if rowid_point_preempts_route(table, &plan.selection, bindings, hint)?
         || index_point_in_rowid_order(engine, table, &plan.selection, bindings, hint)
+        || rowid_range_preempts_route(engine, table, &plan.selection, bindings, hint)?
     {
         return Ok(None);
     }
     Ok(Some(table))
+}
+
+/// A rowid range reads only the rows in it, in rowid order, the scan's
+/// order. It runs when no index answers the query, so only then does it
+/// take the scan's place; an index range would return another order.
+fn rowid_range_preempts_route(
+    engine: &Engine,
+    table: &Arc<TableDef>,
+    selection: &Option<Expr>,
+    bindings: &[Option<SqlValue>],
+    hint: Option<&TableAccessHint>,
+) -> Result<bool> {
+    if hint.is_some() || !super::bounds_rowid(table, selection, bindings)? {
+        return Ok(false);
+    }
+    Ok(try_match_index_access_hinted(engine, table, selection, bindings, hint).is_none())
 }
 
 /// An integer primary-key equality returns at most one row. NOT INDEXED

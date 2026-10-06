@@ -540,6 +540,27 @@ where
     let Some(expr) = selection else {
         return Ok(None);
     };
+    let Expr::BinaryOp { left, op, right } = expr else {
+        return Ok(None);
+    };
+    if !matches!(op, BinaryOperator::Eq) {
+        return Ok(None);
+    }
+    let expr_rowid = if let Some(value) = rowid_eq_side(table, left, right, bindings, &eval_value)?
+    {
+        value
+    } else if let Some(value) = rowid_eq_side(table, right, left, bindings, &eval_value)? {
+        value
+    } else {
+        return Ok(None);
+    };
+    Ok(Some(expr_rowid))
+}
+
+/// Whether `expr` names `table`'s rowid: its rowid alias column, or
+/// `rowid`, `_rowid_` or `oid` when no column of that name shadows it,
+/// bare or qualified by the table's name.
+pub(crate) fn names_rowid(table: &TableDef, expr: &Expr) -> bool {
     let rowid_col = |name: &str| {
         // SQLite shadowing: if the table has a real column whose name
         // matches `name`, that column wins over the rowid alias. So
@@ -554,24 +575,14 @@ where
         }
         table.is_public_rowid_name(name) || table.rowid_alias_column_name_matches(name)
     };
-    let Expr::BinaryOp { left, op, right } = expr else {
-        return Ok(None);
-    };
-    if !matches!(op, BinaryOperator::Eq) {
-        return Ok(None);
+    match expr {
+        Expr::Identifier(ident) => rowid_col(&ident.value),
+        Expr::CompoundIdentifier(parts) => parts.last().is_some_and(|ident| {
+            rowid_col(&ident.value)
+                && rowid_qualifier_matches_table(table, &parts[..parts.len() - 1])
+        }),
+        _ => false,
     }
-    let expr_rowid = if let Some(value) =
-        rowid_eq_side(table, left, right, bindings, &rowid_col, &eval_value)?
-    {
-        value
-    } else if let Some(value) =
-        rowid_eq_side(table, right, left, bindings, &rowid_col, &eval_value)?
-    {
-        value
-    } else {
-        return Ok(None);
-    };
-    Ok(Some(expr_rowid))
 }
 
 fn rowid_eq_side<F>(
@@ -579,26 +590,12 @@ fn rowid_eq_side<F>(
     ident_side: &Expr,
     value_side: &Expr,
     bindings: &[Option<SqlValue>],
-    rowid_col: &impl Fn(&str) -> bool,
     eval_value: &F,
 ) -> Result<Option<RowId>>
 where
     F: Fn(&Expr, &[Option<SqlValue>]) -> Result<SqlValue>,
 {
-    let name = match ident_side {
-        Expr::Identifier(ident) if rowid_col(&ident.value) => Some(ident.value.as_str()),
-        Expr::CompoundIdentifier(parts) => parts.last().and_then(|ident| {
-            if rowid_col(&ident.value)
-                && rowid_qualifier_matches_table(table, &parts[..parts.len() - 1])
-            {
-                Some(ident.value.as_str())
-            } else {
-                None
-            }
-        }),
-        _ => None,
-    };
-    if name.is_none() {
+    if !names_rowid(table, ident_side) {
         return Ok(None);
     }
     match eval_value(value_side, bindings)? {
