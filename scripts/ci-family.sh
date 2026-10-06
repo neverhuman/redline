@@ -26,7 +26,13 @@ case "${1:-all}" in
   integration)
     ./scripts/build-from-source.sh --all
     bash scripts/test-binaries.sh "$root/target/release"
-    (cd subrepos/redline-web/apps/web; npx --no-install playwright install chromium; REDLINE_WEB_TARGET_BIN="$root/target/release/redlinedb" npx --no-install playwright test)
+    (
+      cd subrepos/redline-web/apps/web
+      # Reuse this checkout's cache without contending with other repositories.
+      export PLAYWRIGHT_BROWSERS_PATH="${PLAYWRIGHT_BROWSERS_PATH:-$root/target/playwright-browsers}"
+      npx --no-install playwright install chromium
+      REDLINE_WEB_TARGET_BIN="$root/target/release/redlinedb" npx --no-install playwright test
+    )
     ;;
   parity) bash ops/ci/parity.sh ;;
   packaging)

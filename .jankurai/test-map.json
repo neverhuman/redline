@@ -641,6 +641,10 @@
     "ops/ci/tests/arm64-packages.sh": {
       "command": "bash ops/ci/tests/arm64-packages.sh",
       "purpose": "verify helper command and builder isolation fixtures"
+    },
+    "scripts/test-playwright-isolation.sh": {
+      "command": "bash scripts/test-playwright-isolation.sh",
+      "purpose": "verify checkout-local Playwright cache isolation, overrides, failure propagation and preservation of unrelated installer locks"
     }
   },
   "workspace": "jankurai"
