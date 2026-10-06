@@ -264,6 +264,34 @@
     "scripts/test-playwright-isolation.sh": {
       "command": "bash scripts/test-playwright-isolation.sh",
       "purpose": "verify checkout-local Playwright cache isolation, overrides, failure propagation and preservation of unrelated installer locks"
+    },
+    "ops/ci/pr-ci.sh": {
+      "command": "bash ops/ci/tests/arm64-packages.sh && just pr-ci",
+      "purpose": "verify exact container source before expensive proof lanes, then run every existing local required gate"
+    },
+    "ops/ci/package-build-custody.sh": {
+      "command": "bash ops/ci/tests/package-build-custody.sh",
+      "purpose": "refuse mismatched checkout and archive source SHA/tree before packaging or runtime qualification"
+    },
+    "ops/ci/tests/package-build-custody.sh": {
+      "command": "bash ops/ci/tests/package-build-custody.sh",
+      "purpose": "refuse mismatched checkout and archive source SHA/tree before packaging or runtime qualification"
+    },
+    "crates/bench/src/recover/child.rs": {
+      "command": "cargo test --locked -p redlinedb-bench --test recover_ready --test recover_oracle",
+      "purpose": "verify READY implies a committed-and-ledgered first transaction before starting the unchanged crash window; preserve complete recovery oracle checks"
+    },
+    "crates/bench/tests/recover_ready.rs": {
+      "command": "cargo test --locked -p redlinedb-bench --test recover_ready --test recover_oracle",
+      "purpose": "verify READY implies a committed-and-ledgered first transaction before starting the unchanged crash window; preserve complete recovery oracle checks"
+    },
+    "crates/bench/tests/support/recover_ready_delay.c": {
+      "command": "cargo test --locked -p redlinedb-bench --test recover_ready --test recover_oracle",
+      "purpose": "deterministically verify READY follows the first committed, ledgered recovery unit without changing the kill window"
+    },
+    "metadata/ci/main-red-2026-10-06/": {
+      "command": "bash ops/ci/tests/arm64-packages.sh && cargo test --locked -p redlinedb-bench --test recover_ready --test recover_oracle",
+      "purpose": "verify the source custody and READY contracts diagnosed by the committed raw controls; diagnostic parity runs are explicitly filtered"
     }
   }
 }

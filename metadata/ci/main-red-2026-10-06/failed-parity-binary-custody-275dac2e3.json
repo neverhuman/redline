@@ -1,0 +1,19 @@
+{
+  "at": "2026-10-06T20:44:32.530551+00:00",
+  "head": "275dac2e3e75d72138131d85aaaacdf22909344e",
+  "tree": "7404bc9b9003a744acd5b72c97b024cfa21f8a73",
+  "scope": "Failed parity attempt, not qualification: official processed product remains old0aa; preserve matching current raw CLI/runner before diagnostics or later compilation.",
+  "officialQualificationFailed": "BEYOND-CASE-20049 target timeout5s",
+  "cli": {
+    "path": "target/review/main-red/275dac2e3-failed-parity-redlinedb",
+    "sha256": "b229b56103bb9d75955c886ff22aabcbc89b93ef30cd734901704a79d9ec0729",
+    "bytes": 11482256
+  },
+  "runner": {
+    "path": "target/review/main-red/275dac2e3-failed-parity-redline-testing",
+    "sha256": "0fe89b4c5d26c535bd1fe89dc0621515495e3456844d0122111f79eb10c277f4",
+    "bytes": 15426840
+  },
+  "rawSha256": "612e9186624c102cdc28a60be4ae1fc2a0c84ff43e791e52a81d25fc0948bb0a",
+  "rawRecords": 9780
+}

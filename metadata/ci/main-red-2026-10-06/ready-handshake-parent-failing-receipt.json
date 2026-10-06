@@ -1,0 +1,50 @@
+{
+  "at": "2026-10-06T17:47:50.217715+00:00",
+  "parentCustody": {
+    "sourceHead": "141247e96c509fa1b7a2d5d2865cf27d2d14b5ea",
+    "sourceTree": "db6994a46d5d32f8b03dc5910cf55ffe17e9238e",
+    "sourceBindingReceiptSha256": "88880df52fc0fa24b22522f1bcb136d69426333b203fe60ee37eb255880541de",
+    "binary": "target/review/main-red/parent141-redlinedb-bench",
+    "sha256": "f7f19d8d2419b63530e015a0b2e3dfbb8c6011a2ffb01ec82d837521af7de842",
+    "sourceInputs": {
+      "crates/bench/src/recover.rs": "980c81264751445929bfd913bc23d99f8fabadf9016e82fed64140f04ab7ba49",
+      "crates/bench/src/recover/harness.rs": "dd1bdc9e00f4e6b838a74017f1da5b134310ae4d43cd0433e5284423ddfc546c",
+      "crates/bench/tests/recover_oracle.rs": "0d389921f41e8441a978b827813e9c8e10e9357de0551bf5256911199d218246",
+      "crates/sql/tests/parity_oracle.rs": "7b1774f5db5001a4812dec1c9c9909b1f07a49c3d2a705e34a36a0739625b37c",
+      "Cargo.lock": "20afd62b65fc7d9c271cfd9e2d54e1e224e7c316dcd6e0b4ab50da13aa26e989"
+    }
+  },
+  "testSourceSha256": "8a9c6a0739f595bdec48d8aba2a9bbfc64f7275c23f419e8eebc81e54e6343d7",
+  "delaySourceSha256": "15d17f062fbf2718313bd77ac24f36d36ba1f6f70fe65425890c757b856eac57",
+  "commands": [
+    {
+      "label": "ready-handshake-parent-compile",
+      "argv": [
+        "rustc",
+        "--edition=2024",
+        "--test",
+        "/home/ubuntu/redlineDB/crates/bench/tests/recover_ready.rs",
+        "--extern",
+        "tempfile=/home/ubuntu/redlineDB/target/debug/deps/libtempfile-8d0494a68fa8fd20.rlib",
+        "-L",
+        "dependency=/home/ubuntu/redlineDB/target/debug/deps",
+        "-o",
+        "/home/ubuntu/redlineDB/target/review/main-red/parent-ready-handshake"
+      ],
+      "exit": 0,
+      "rawLog": "target/review/main-red/ready-handshake-parent-compile.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "label": "ready-handshake-parent-run",
+      "argv": [
+        "/home/ubuntu/redlineDB/target/review/main-red/parent-ready-handshake",
+        "--test-threads=1",
+        "--nocapture"
+      ],
+      "exit": 101,
+      "rawLog": "target/review/main-red/ready-handshake-parent-run.log",
+      "sha256": "6560f7bc02169e45a5523426c993515e7a419598acaca876c7c81e3a9191d266"
+    }
+  ]
+}

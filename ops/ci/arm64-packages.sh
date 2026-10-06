@@ -15,9 +15,10 @@ if [[ $repository_id != "$REDLINE_REPO_ID" ]]; then
   exit 1
 fi
 case ${1:-} in
+  check-sources) stage=source-verified; output=${OUTPUT_DIR:-$root/target/ci/arm64-source} ;;
   build) stage=archives; output=${OUTPUT_DIR:-$root/dist/release-packages} ;;
   runtime) stage=verified; output=$root/target/ci/arm64-runtime ;;
-  *) printf 'usage: arm64-packages.sh build|runtime\n' >&2; exit 64 ;;
+  *) printf 'usage: arm64-packages.sh check-sources|build|runtime\n' >&2; exit 64 ;;
 esac
 builder=${REDLINE_ARM64_BUILDER:-redline-packages-arm64}
 if ! docker buildx inspect "$builder" >/dev/null 2>&1; then
@@ -42,6 +43,9 @@ mkdir -p "$output" "$packages"
 output=$(cd "$output" && pwd)
 packages=$(cd "$packages" && pwd)
 tag=${TAG:-$(bash ops/ci/release-version.sh dev-tag)}
+source_sha=$(git rev-parse HEAD)
+source_tree=$(git rev-parse 'HEAD^{tree}')
 docker buildx build --builder "$builder" --platform linux/arm64 --progress plain \
   --file ops/ci/arm64-packages.Dockerfile --target "$stage" --build-arg "TAG=$tag" \
+  --build-arg "SOURCE_SHA=$source_sha" --build-arg "SOURCE_TREE=$source_tree" \
   --build-context "packages=$packages" --output "type=local,dest=$output" .

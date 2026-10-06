@@ -15,12 +15,24 @@ RUN ln -s ../lib/node_modules/npm/bin/npm-cli.js /usr/local/bin/npm && ln -s ../
 WORKDIR /workspace
 COPY . .
 RUN git config --global --add safe.directory /workspace
-FROM build-tools AS build
+FROM build-tools AS source-bound
+ARG SOURCE_SHA
+ARG SOURCE_TREE
+RUN bash ops/ci/package-build-custody.sh checkout "$SOURCE_SHA" "$SOURCE_TREE" && mkdir /source-verified && printf '%s %s\n' "$SOURCE_SHA" "$SOURCE_TREE" > /source-verified/source-identity
+FROM scratch AS source-verified
+COPY --from=source-bound /source-verified/ /
+
+FROM source-bound AS build
 ARG TAG
-ENV OUTPUT_DIR=/packages REDLINE_PACKAGE_TARGET=aarch64-unknown-linux-gnu
-RUN --mount=type=cache,id=redline-arm64-cargo,target=/usr/local/cargo/registry --mount=type=cache,id=redline-arm64-git,target=/usr/local/cargo/git --mount=type=cache,id=redline-arm64-target,target=/workspace/target bash ops/ci/packages.sh build
+ARG SOURCE_SHA
+ARG SOURCE_TREE
+ENV OUTPUT_DIR=/packages/${SOURCE_SHA} REDLINE_PACKAGE_TARGET=aarch64-unknown-linux-gnu
+# Hold the target cache until staging finishes, not just while Cargo runs:
+# another checkout otherwise replaces release binaries between build and cp.
+RUN --mount=type=cache,id=redline-arm64-cargo,target=/usr/local/cargo/registry --mount=type=cache,id=redline-arm64-git,target=/usr/local/cargo/git --mount=type=cache,id=redline-arm64-target,target=/workspace/target,sharing=locked bash ops/ci/package-build-custody.sh checkout "$SOURCE_SHA" "$SOURCE_TREE" && bash ops/ci/packages.sh build && bash ops/ci/package-build-custody.sh archives "$OUTPUT_DIR" "$SOURCE_SHA" "$SOURCE_TREE"
 FROM scratch AS archives
-COPY --from=build /packages/ /
+ARG SOURCE_SHA
+COPY --from=build /packages/${SOURCE_SHA}/ /
 
 # A fresh target-platform stage reads downloaded archives, never build output.
 FROM ubuntu:22.04@sha256:5ec03bb3441e8b0bf3b4f9cd4629a1ae763010dc3035bb8da3ae6cf026486401 AS runtime-tools
@@ -35,8 +47,10 @@ WORKDIR /workspace
 COPY . .
 RUN git config --global --add safe.directory /workspace
 FROM runtime-tools AS runtime
+ARG SOURCE_SHA
+ARG SOURCE_TREE
 COPY --from=packages / /workspace/target/packages/
 ENV OUTPUT_DIR=/workspace/target/packages
-RUN test "$(uname -m)" = aarch64 && bash scripts/test-package-licenses.sh && bash scripts/test-package-ffi.sh && bash ops/ci/packages.sh installer && bash ops/ci/packages.sh runtime && bash ops/ci/packages.sh native-install && bash ops/ci/packages.sh quickstart && bash ops/ci/packages.sh published-check && mkdir /verified && touch /verified/arm64-runtime-passed
+RUN test "$(uname -m)" = aarch64 && bash ops/ci/package-build-custody.sh checkout "$SOURCE_SHA" "$SOURCE_TREE" && bash ops/ci/package-build-custody.sh archives /workspace/target/packages "$SOURCE_SHA" "$SOURCE_TREE" && bash ops/ci/packages.sh runtime && bash scripts/test-package-licenses.sh && bash scripts/test-package-ffi.sh && bash ops/ci/packages.sh installer && bash ops/ci/packages.sh native-install && bash ops/ci/packages.sh quickstart && bash ops/ci/packages.sh published-check && mkdir /verified && touch /verified/arm64-runtime-passed
 FROM scratch AS verified
 COPY --from=runtime /verified/ /

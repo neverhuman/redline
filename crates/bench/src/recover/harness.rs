@@ -19,8 +19,8 @@ use crate::engine::engine_name;
 use super::observe;
 use super::oracle::{self, AckLedger, RecoveredState, RecoveryVerdict, Workload};
 
-/// The line a child prints on stdout once its schema is set up and its
-/// ack log exists. The kill timer starts only after this line.
+/// The line a child prints after committing and recording its first unit.
+/// The kill timer starts only after this line.
 pub const READY_LINE: &str = "READY";
 /// How long the parent waits for READY before calling the run failed.
 const READY_TIMEOUT: Duration = Duration::from_secs(120);

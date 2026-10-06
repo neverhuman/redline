@@ -66,6 +66,13 @@
     "ops/ci/arm64-packages.Dockerfile": "ops",
     "ops/ci/arm64-packages.Dockerfile.dockerignore": "ops",
     "ops/ci/tests/arm64-packages.sh": "ops",
-    "scripts/test-playwright-isolation.sh": "ops"
+    "scripts/test-playwright-isolation.sh": "ops",
+    "ops/ci/package-build-custody.sh": "ops",
+    "ops/ci/pr-ci.sh": "ops",
+    "ops/ci/tests/package-build-custody.sh": "ops",
+    "crates/bench/src/recover/child.rs": "tools",
+    "crates/bench/tests/recover_ready.rs": "tools",
+    "crates/bench/tests/support/recover_ready_delay.c": "tools",
+    "metadata/ci/main-red-2026-10-06/": "ops"
   }
 }

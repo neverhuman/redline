@@ -2,6 +2,8 @@
 set -euo pipefail
 root=$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)
 cd "$root"
+# Verify the real container context before running the expensive proof lanes.
+OUTPUT_DIR="$root/target/ci/arm64-source" timeout 900 bash ops/ci/arm64-packages.sh check-sources
 bash scripts/ci-family.sh all
 bash ops/ci/install-github-tools.sh
 target/ci/tools/jankurai security run . --strict --profile ci --script ops/ci/security-family.sh --out target/jankurai/security/evidence.json

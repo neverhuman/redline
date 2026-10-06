@@ -1,0 +1,6 @@
+{
+  "time": "2026-10-06T20:05:28.808815+00:00",
+  "pid": 385566,
+  "container": "ff68065b76f6b742c347ff8d8199437e910c3944616965cbb1fc35872e4ea291",
+  "reason": "Owned Docker rm client blocked 105 seconds; read-only Docker inspect independently timed out after eight seconds. Terminate only owned cleanup client so wrapper records cleanup failure and restores target. Pending owned-container custody remains until Docker API responds."
+}

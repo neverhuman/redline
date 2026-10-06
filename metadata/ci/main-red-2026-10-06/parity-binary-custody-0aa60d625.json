@@ -1,0 +1,24 @@
+{
+  "head": "0aa60d6255483379d7c2493678f032aa4e61faaf",
+  "tree": "172324a8eb598ee595990797d7355a6a6e3fd1b7",
+  "capturedAt": "2026-10-06T19:23:22.278030+00:00",
+  "records": 9780,
+  "rawSha256": "84074dbf5982f5f8ba98b9f0d5f4d050c7f8029826910a82165c0f565d4d1619",
+  "passedCases": 2440,
+  "declaredFailedCases": [
+    "00076",
+    "00133",
+    "00140",
+    "00209",
+    "10229"
+  ],
+  "skippedCases": 0,
+  "cli": {
+    "path": "target/review/main-red/0aa60d625-parity-redlinedb",
+    "sha256": "b229b56103bb9d75955c886ff22aabcbc89b93ef30cd734901704a79d9ec0729"
+  },
+  "runner": {
+    "path": "target/review/main-red/0aa60d625-parity-redline-testing",
+    "sha256": "0fe89b4c5d26c535bd1fe89dc0621515495e3456844d0122111f79eb10c277f4"
+  }
+}

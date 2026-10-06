@@ -1,0 +1,110 @@
+{
+  "startedAt": "2026-10-06T17:44:19.566572+00:00",
+  "builder": "redline-packages-arm64",
+  "purpose": "Own tiny BuildKit fixture, distinct cache IDs; no production caches, pruning or services changed",
+  "phases": [
+    {
+      "phase": "sha-bound-locked",
+      "cacheId": "redline-owner-custody-49ca0af12c614fa09e41e41f48dab542",
+      "dockerfileSha256": "2e769155cb703ee294845594c135c58341e8d0e32f3faf6207bc38f9ae457fb8",
+      "builds": [
+        {
+          "side": "A",
+          "expected": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "observed": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "matches": true,
+          "exit": 0,
+          "argv": [
+            "docker",
+            "buildx",
+            "build",
+            "--builder",
+            "redline-packages-arm64",
+            "--platform",
+            "linux/amd64",
+            "--no-cache-filter",
+            "fixture",
+            "--progress",
+            "plain",
+            "--file",
+            "/home/ubuntu/redlineDB/target/review/main-red/cache-race-sha-bound/sha-bound-locked.Dockerfile",
+            "--build-arg",
+            "SOURCE_SHA=aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+            "--build-arg",
+            "PAUSE=10",
+            "--output",
+            "type=local,dest=/home/ubuntu/redlineDB/target/review/main-red/cache-race-sha-bound/sha-bound-locked-A",
+            "/home/ubuntu/redlineDB/target/review/main-red/cache-race-sha-bound"
+          ],
+          "rawLog": "target/review/main-red/cache-race-sha-bound/sha-bound-locked-A.log",
+          "logSha256": "e4c177a339afc70ad748aa9a989f24e2ab0b3de537507f13c434b531e419ecef",
+          "binarySha256": "0e61945557162bc4ea4c8eae7b8c12675302aa1963e21adcb2923c41dc61f10d"
+        },
+        {
+          "side": "B",
+          "expected": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+          "observed": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+          "matches": true,
+          "exit": 0,
+          "argv": [
+            "docker",
+            "buildx",
+            "build",
+            "--builder",
+            "redline-packages-arm64",
+            "--platform",
+            "linux/amd64",
+            "--no-cache-filter",
+            "fixture",
+            "--progress",
+            "plain",
+            "--file",
+            "/home/ubuntu/redlineDB/target/review/main-red/cache-race-sha-bound/sha-bound-locked.Dockerfile",
+            "--build-arg",
+            "SOURCE_SHA=bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+            "--build-arg",
+            "PAUSE=0",
+            "--output",
+            "type=local,dest=/home/ubuntu/redlineDB/target/review/main-red/cache-race-sha-bound/sha-bound-locked-B",
+            "/home/ubuntu/redlineDB/target/review/main-red/cache-race-sha-bound"
+          ],
+          "rawLog": "target/review/main-red/cache-race-sha-bound/sha-bound-locked-B.log",
+          "logSha256": "55db865de8996cfd63729f71f19ddf46e15cb884c23fe78d1d7c74cc635dbaa1",
+          "binarySha256": "ae740b86edd094617bbf906efe54a27311cd93225fae3a46384a239a3a870371"
+        }
+      ]
+    }
+  ],
+  "priming": [
+    {
+      "phase": "sha-bound-locked",
+      "argv": [
+        "docker",
+        "buildx",
+        "build",
+        "--builder",
+        "redline-packages-arm64",
+        "--platform",
+        "linux/amd64",
+        "--no-cache-filter",
+        "fixture",
+        "--progress",
+        "plain",
+        "--file",
+        "/home/ubuntu/redlineDB/target/review/main-red/cache-race-sha-bound/sha-bound-locked.Dockerfile",
+        "--build-arg",
+        "SOURCE_SHA=cccccccccccccccccccccccccccccccccccccccc",
+        "--build-arg",
+        "PAUSE=0",
+        "--output",
+        "type=local,dest=/home/ubuntu/redlineDB/target/review/main-red/cache-race-sha-bound/sha-bound-locked-prime",
+        "/home/ubuntu/redlineDB/target/review/main-red/cache-race-sha-bound"
+      ],
+      "exit": 0,
+      "rawLog": "target/review/main-red/cache-race-sha-bound/sha-bound-locked-prime.log",
+      "sha256": "2c1878a8a295fef72b6665f105321a4ab9e426e9305f37b1f1c6e1e4dfdf04a2"
+    }
+  ],
+  "shaBoundExportResult": true,
+  "finishedAt": "2026-10-06T17:44:38.321390+00:00"
+}
