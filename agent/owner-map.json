@@ -65,6 +65,7 @@
     "ops/ci/arm64-packages.sh": "ops",
     "ops/ci/arm64-packages.Dockerfile": "ops",
     "ops/ci/arm64-packages.Dockerfile.dockerignore": "ops",
-    "ops/ci/tests/arm64-packages.sh": "ops"
+    "ops/ci/tests/arm64-packages.sh": "ops",
+    "scripts/test-playwright-isolation.sh": "ops"
   }
 }
