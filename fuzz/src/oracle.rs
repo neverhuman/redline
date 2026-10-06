@@ -96,7 +96,96 @@ pub fn sort_rows(rows: &mut [Vec<SqlValue>]) {
 
 pub fn skips_filesystem(sql: &str) -> bool {
     let lower = sql.to_ascii_lowercase();
-    lower.contains("attach") || lower.contains("load_extension") || lower.contains("vacuum into")
+    // ATTACH and LOAD_EXTENSION stay substring checks, including inside
+    // identifiers and string literals. The single-space `vacuum into`
+    // substring also stays, so a quoted copy of that spelling is still skipped.
+    if lower.contains("attach") || lower.contains("load_extension") || lower.contains("vacuum into")
+    {
+        return true;
+    }
+    // A newline, a comment, or a schema name between the keywords does not
+    // contain that substring. SQLite still writes the INTO path. Skip any
+    // statement whose tokens reach INTO after VACUUM and before `;`. INTO
+    // inside a comment or a quoted identifier does not count. This excludes
+    // more than the substring: `VACUUM main INTO 'path'` and `VACUUM\nINTO`
+    // are skipped too.
+    vacuum_statement_reaches_into(sql)
+}
+
+fn vacuum_statement_reaches_into(sql: &str) -> bool {
+    let bytes = sql.as_bytes();
+    let mut index = 0usize;
+    let mut saw_vacuum = false;
+    while index < bytes.len() {
+        match bytes[index] {
+            b' ' | b'\t' | b'\n' | b'\r' | 0x0c => index += 1,
+            b'-' if index + 1 < bytes.len() && bytes[index + 1] == b'-' => {
+                index += 2;
+                while index < bytes.len() && bytes[index] != b'\n' {
+                    index += 1;
+                }
+            }
+            b'/' if index + 1 < bytes.len() && bytes[index + 1] == b'*' => {
+                index += 2;
+                while index + 1 < bytes.len() && !(bytes[index] == b'*' && bytes[index + 1] == b'/')
+                {
+                    index += 1;
+                }
+                if index + 1 < bytes.len() {
+                    index += 2;
+                } else {
+                    break;
+                }
+            }
+            b'\'' | b'"' | b'`' => {
+                let quote = bytes[index];
+                index += 1;
+                while index < bytes.len() {
+                    if bytes[index] == quote {
+                        if index + 1 < bytes.len() && bytes[index + 1] == quote {
+                            index += 2;
+                            continue;
+                        }
+                        index += 1;
+                        break;
+                    }
+                    index += 1;
+                }
+            }
+            b'[' => {
+                index += 1;
+                while index < bytes.len() && bytes[index] != b']' {
+                    index += 1;
+                }
+                if index < bytes.len() {
+                    index += 1;
+                }
+            }
+            b';' => {
+                saw_vacuum = false;
+                index += 1;
+            }
+            b'A'..=b'Z' | b'a'..=b'z' | b'_' => {
+                let start = index;
+                index += 1;
+                while index < bytes.len() && is_sql_ident_continue(bytes[index]) {
+                    index += 1;
+                }
+                let word = &sql[start..index];
+                if word.eq_ignore_ascii_case("vacuum") {
+                    saw_vacuum = true;
+                } else if saw_vacuum && word.eq_ignore_ascii_case("into") {
+                    return true;
+                }
+            }
+            _ => index += 1,
+        }
+    }
+    false
+}
+
+fn is_sql_ident_continue(byte: u8) -> bool {
+    byte.is_ascii_alphanumeric() || byte == b'_' || byte == b'$'
 }
 
 /// `?N` is stored by resizing a vector to `N` (`ParamLayout::push_numbered`).
