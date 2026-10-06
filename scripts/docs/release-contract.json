@@ -1,0 +1,429 @@
+{
+  "schema": "redline.docs-release/v1",
+  "releases": {
+    "v5.1.1": {
+      "commit": "9277455d5ad008252053a81d18add39b8cdc8f7b",
+      "archives": {
+        "linux-x86_64": "8f20c6b17dc2fdb00b066a397012f9983cc220be3a24224d7d232ab1ee5e51e1",
+        "linux-arm64": "b12cf41a099d977f187bdfe07c3a77ac2bd4e9875d5fd4282a3c83d0fdd50262",
+        "macos-x86_64": "632cc07e30255a49049c80ad7aa27cd06578176997e671c12f7212e3b9e77768",
+        "macos-arm64": "1e15b72833fc6cb2582a5dedf770b21055bc0d0de2a820e3719aaf344c8c6088"
+      }
+    },
+    "v5.1.0": {
+      "commit": "a3ad8cb33d7f155c53b4ff6436d0c98eb8a4e5aa",
+      "archives": {
+        "linux-x86_64": "ec916bb4336f4389f585de7c1c7439d71f27578022cad6dd3a7c9b0b443f06c9",
+        "linux-arm64": "bbc609d0adafba00e45d4be1e83c37a3498f78ea5182ba566ca71de25f1e43b7",
+        "macos-x86_64": "a83f58a38cb51b012140c4f253f6b6626ba44f609715871e2a537e19d8bb0bd5",
+        "macos-arm64": "09c97327dc7bb8618036b6028d0cc59d05142c7d2f8ef376110441838bd50485"
+      }
+    }
+  },
+  "cliBinarySha256LinuxX64": "bd4e668d7cf182dcb3bcd2b952771cea30671ba841d073f2410e79be4716e451",
+  "help": [
+    {
+      "args": [
+        "--version"
+      ],
+      "stdout": "redlinedb v5.1.1 (tested against SQLite 3.53.1)\n",
+      "exit": 0
+    },
+    {
+      "args": [
+        "--help"
+      ],
+      "stdout": "Usage: sqlite3 [OPTIONS] [FILENAME [SQL]]\nFILENAME is the name of an SQLite database.\nOPTIONS include:\n   -bail                stop after hitting an error\n   -batch               force batch I/O\n   -csv                 set output mode to 'csv'\n   -column              set output mode to 'column'\n   -box                 set output mode to 'box'\n   -html                set output mode to 'html'\n   -ascii               set output mode to 'ascii'\n   -append              append output to files where supported\n   -echo                print inputs before execution\n   -escape T            ctrl-char escape; T is one of: symbol, ascii, off\n   -ifexists            refuse to create a missing database\n   -[no]header          turn headers on or off\n   -heap N MIN          set heap configuration\n   -help                show this message\n   -json                set output mode to 'json'\n   -interactive         enable interactive shell mode\n   -lookaside N M       set lookaside configuration\n   -line                set output mode to 'line'\n   -list                set output mode to 'list'\n   -mmap N              set mmap size\n   -newline SEP         set output row separator. Default: '\\n'\n   -nullvalue TEXT      set text used for NULL values\n   -nofollow            do not follow symlinks when opening\n   -pagecache N M       set page cache configuration\n   -readonly            open the database read-only\n   -rql                 read Redline Query Language JSON from stdin\n   -stats               show shell stats\n   -separator SEP       set output column separator. Default: '|'\n   -unsafe-testing      enable unsafe testing helpers\n   -utf8                request UTF-8 mode\n   -no-utf8             disable UTF-8 mode\n   -vfs NAME            select a virtual file system\n   -zip                  open a ZIP archive\n   .crlf ON|OFF         toggle CRLF row separators\n   .dbinfo              show basic database information\n   .dbtotxt             render database contents as text\n   .recover             recover database contents as SQL\n   -version             show RedlineDB and SQLite compatibility version\n",
+      "exit": 0
+    },
+    {
+      "args": [
+        "-batch",
+        ":memory:",
+        ".help"
+      ],
+      "stdout": ".bail on|off            Stop after hitting an error\n.exit                   Exit this program\n.help                   Show this message\n.print STRING...        Print literal STRING\n.quit                   Exit this program\n.show                   Show the current values for various settings\n.version                Show source, library and compiler versions\n",
+      "exit": 0
+    },
+    {
+      "args": [
+        "stats",
+        "--help"
+      ],
+      "stdout": "redlinedb backup SRC DST [--logical|--physical]\nredlinedb restore BACKUP DST [--target-lsn N|--target-csn N|--latest]\nredlinedb archive-check DB [--json]\nredlinedb replication-slot create|drop|list DB NAME [--physical|--logical] [--json]\nredlinedb stream-wal DB SLOT\nredlinedb stream-logical DB SLOT [--ndjson]\nredlinedb stats DB [--json]\nredlinedb DB SQL\n",
+      "exit": 0
+    },
+    {
+      "args": [
+        "backup",
+        "--help"
+      ],
+      "stdout": "redlinedb backup SRC DST [--logical|--physical]\nredlinedb restore BACKUP DST [--target-lsn N|--target-csn N|--latest]\nredlinedb archive-check DB [--json]\nredlinedb replication-slot create|drop|list DB NAME [--physical|--logical] [--json]\nredlinedb stream-wal DB SLOT\nredlinedb stream-logical DB SLOT [--ndjson]\nredlinedb stats DB [--json]\nredlinedb DB SQL\n",
+      "exit": 0
+    },
+    {
+      "args": [
+        "restore",
+        "--help"
+      ],
+      "stdout": "redlinedb backup SRC DST [--logical|--physical]\nredlinedb restore BACKUP DST [--target-lsn N|--target-csn N|--latest]\nredlinedb archive-check DB [--json]\nredlinedb replication-slot create|drop|list DB NAME [--physical|--logical] [--json]\nredlinedb stream-wal DB SLOT\nredlinedb stream-logical DB SLOT [--ndjson]\nredlinedb stats DB [--json]\nredlinedb DB SQL\n",
+      "exit": 0
+    },
+    {
+      "args": [
+        "archive-check",
+        "--help"
+      ],
+      "stdout": "redlinedb backup SRC DST [--logical|--physical]\nredlinedb restore BACKUP DST [--target-lsn N|--target-csn N|--latest]\nredlinedb archive-check DB [--json]\nredlinedb replication-slot create|drop|list DB NAME [--physical|--logical] [--json]\nredlinedb stream-wal DB SLOT\nredlinedb stream-logical DB SLOT [--ndjson]\nredlinedb stats DB [--json]\nredlinedb DB SQL\n",
+      "exit": 0
+    },
+    {
+      "args": [
+        "replication-slot",
+        "--help"
+      ],
+      "stdout": "redlinedb backup SRC DST [--logical|--physical]\nredlinedb restore BACKUP DST [--target-lsn N|--target-csn N|--latest]\nredlinedb archive-check DB [--json]\nredlinedb replication-slot create|drop|list DB NAME [--physical|--logical] [--json]\nredlinedb stream-wal DB SLOT\nredlinedb stream-logical DB SLOT [--ndjson]\nredlinedb stats DB [--json]\nredlinedb DB SQL\n",
+      "exit": 0
+    },
+    {
+      "args": [
+        "stream-wal",
+        "--help"
+      ],
+      "stdout": "redlinedb backup SRC DST [--logical|--physical]\nredlinedb restore BACKUP DST [--target-lsn N|--target-csn N|--latest]\nredlinedb archive-check DB [--json]\nredlinedb replication-slot create|drop|list DB NAME [--physical|--logical] [--json]\nredlinedb stream-wal DB SLOT\nredlinedb stream-logical DB SLOT [--ndjson]\nredlinedb stats DB [--json]\nredlinedb DB SQL\n",
+      "exit": 0
+    },
+    {
+      "args": [
+        "stream-logical",
+        "--help"
+      ],
+      "stdout": "redlinedb backup SRC DST [--logical|--physical]\nredlinedb restore BACKUP DST [--target-lsn N|--target-csn N|--latest]\nredlinedb archive-check DB [--json]\nredlinedb replication-slot create|drop|list DB NAME [--physical|--logical] [--json]\nredlinedb stream-wal DB SLOT\nredlinedb stream-logical DB SLOT [--ndjson]\nredlinedb stats DB [--json]\nredlinedb DB SQL\n",
+      "exit": 0
+    },
+    {
+      "args": [
+        "--no-shellzero",
+        "-batch",
+        ":memory:",
+        ".help"
+      ],
+      "stdout": ".bail on|off            Stop after hitting an error\n.changes on|off         Show number of rows changed by SQL\n.crlf on|off            Toggle CRLF row separators\n.databases              List names and files of attached databases\n.dbinfo                 Show basic database information\n.dbtotxt                Render database contents as text\n.dump ?TABLE?           Render database content as SQL\n.echo on|off            Turn command echo on or off\n.eqp on|off             Enable / disable automatic EXPLAIN QUERY PLAN\n.exit                   Exit this program\n.expert                 Query planner advice (no-op here)\n.explain on|off|auto    Toggle EXPLAIN output mode\n.auth                   Show authorizer status (no-op here)\n.headers on|off         Turn display of headers on or off\n.help                   Show this message\n.import FILE TABLE      Import data from FILE into TABLE\n.lint                   Run lint checks (no-op here)\n.indexes ?TABLE?        List indexes\n.limit ?OPT? ?N?        Inspect or set SQLITE_LIMIT values\n.mode MODE              Set output mode\n.nullvalue STRING       Use STRING in place of NULL\n.once ?FILE?            Redirect the next single query to FILE\n.output ?FILE?          Send output to FILENAME or stdout\n.parameter CMD ...      set|unset|list|clear named SQL parameters\n.print STRING...        Print literal STRING\n.quit                   Exit this program\n.read FILENAME          Execute SQL from FILENAME\n.recover                Recover database contents as SQL\n.scanstats              Query scan statistics (no-op here)\n.restore FILE           Restore content of database from FILE\n.save FILE              Write in-memory database into FILE\n.stats                  Show database stats (no-op here)\n.schema ?TABLE?         Show CREATE statements\n.fullschema ?TABLE?     Show CREATE statements plus sqlite_master\n.vfsname                Show the active VFS name (no-op here)\n.separator SEP          Change separator string\n.show                   Show the current values for various settings\n.tables ?TABLE?         List names of tables matching PATTERN\n.timer on|off           Turn SQL timer on or off\n.width N1 N2 ...        Set minimum column widths for column mode\n",
+      "exit": 0
+    }
+  ],
+  "serverHelp": {
+    "exit": 0,
+    "stdout": "redlinedb-server --database FILE --listen HOST:PORT\n",
+    "stderr": ""
+  },
+  "cliOptions": [
+    {
+      "args": [
+        "-bail"
+      ],
+      "stdout": "1\n"
+    },
+    {
+      "args": [
+        "-batch"
+      ],
+      "stdout": "1\n"
+    },
+    {
+      "args": [
+        "-csv"
+      ],
+      "stdout": "1\r\n"
+    },
+    {
+      "args": [
+        "-column"
+      ],
+      "stdout": "1\n-\n1\n"
+    },
+    {
+      "args": [
+        "-box"
+      ],
+      "stdout": "\u256d\u2500\u2500\u2500\u256e\n\u2502 1 \u2502\n\u255e\u2550\u2550\u2550\u2561\n\u2502 1 \u2502\n\u2570\u2500\u2500\u2500\u256f\n"
+    },
+    {
+      "args": [
+        "-html"
+      ],
+      "stdout": "<TR>\n<TH>1\n</TR>\n<TR>\n<TD>1\n</TR>\n"
+    },
+    {
+      "args": [
+        "-ascii"
+      ],
+      "stdout": "1\u001e"
+    },
+    {
+      "args": [
+        "-echo"
+      ],
+      "stdout": "SELECT 1;\n1\n"
+    },
+    {
+      "args": [
+        "-header"
+      ],
+      "stdout": "1\n1\n"
+    },
+    {
+      "args": [
+        "-noheader"
+      ],
+      "stdout": "1\n"
+    },
+    {
+      "args": [
+        "-json"
+      ],
+      "stdout": "[{\"1\":1}]\n"
+    },
+    {
+      "args": [
+        "-line"
+      ],
+      "stdout": "1: 1\n"
+    },
+    {
+      "args": [
+        "-list"
+      ],
+      "stdout": "1\n"
+    },
+    {
+      "args": [
+        "-markdown"
+      ],
+      "stdout": "| 1 |\n|---|\n| 1 |\n"
+    },
+    {
+      "args": [
+        "-quote"
+      ],
+      "stdout": "1\n"
+    },
+    {
+      "args": [
+        "-nullvalue",
+        "NULL"
+      ],
+      "stdout": "1\n"
+    },
+    {
+      "args": [
+        "-newline",
+        "!"
+      ],
+      "stdout": "1!"
+    },
+    {
+      "args": [
+        "-safe"
+      ],
+      "stdout": "1\n"
+    },
+    {
+      "args": [
+        "-nonce",
+        "123"
+      ],
+      "stdout": "1\n"
+    },
+    {
+      "args": [
+        "-table"
+      ],
+      "stdout": "+---+\n| 1 |\n+---+\n| 1 |\n+---+\n"
+    },
+    {
+      "args": [
+        "-tabs"
+      ],
+      "stdout": "1\n"
+    },
+    {
+      "args": [
+        "-tcl"
+      ],
+      "stdout": "1\n"
+    },
+    {
+      "args": [
+        "-separator",
+        ";"
+      ],
+      "stdout": "1\n"
+    },
+    {
+      "args": [
+        "-cmd",
+        "SELECT 2;"
+      ],
+      "stdout": "2\n1\n"
+    },
+    {
+      "args": [
+        "-mmap",
+        "4096"
+      ],
+      "stdout": "1\n"
+    },
+    {
+      "args": [
+        "-lookaside",
+        "16",
+        "32"
+      ],
+      "stdout": "1\n"
+    },
+    {
+      "args": [
+        "-pagecache",
+        "4096",
+        "10"
+      ],
+      "stdout": "Page cache size increased to 1296 to accommodate the 272-byte headers\n1\n"
+    },
+    {
+      "args": [
+        "-stats"
+      ],
+      "stdout": "1\nMemory Used: 0 (max 0) bytes\n"
+    },
+    {
+      "args": [
+        "-error-exit",
+        "3"
+      ],
+      "stdout": "1\n"
+    },
+    {
+      "args": [
+        "-heap",
+        "1000000"
+      ],
+      "stdout": "1\n"
+    },
+    {
+      "args": [
+        "-maxsize",
+        "4096"
+      ],
+      "stdout": "1\n"
+    },
+    {
+      "args": [
+        "-append"
+      ],
+      "stdout": "1\n"
+    },
+    {
+      "args": [
+        "-vfs",
+        "nonexistent"
+      ],
+      "stdout": "1\n"
+    },
+    {
+      "args": [
+        "-utf8"
+      ],
+      "stdout": "1\n"
+    },
+    {
+      "args": [
+        "-no-utf8"
+      ],
+      "stdout": "1\n"
+    },
+    {
+      "args": [
+        "-no-rowid-in-view"
+      ],
+      "stdout": "1\n"
+    },
+    {
+      "args": [
+        "-memtrace"
+      ],
+      "stdout": "1\n"
+    },
+    {
+      "args": [
+        "-pcachetrace"
+      ],
+      "stdout": "1\n"
+    },
+    {
+      "args": [
+        "-vfstrace"
+      ],
+      "stdout": "trace.enabled_for(\"unix\")\n1\n"
+    },
+    {
+      "args": [
+        "-unsafe-testing"
+      ],
+      "stdout": "1\n"
+    },
+    {
+      "args": [
+        "-shellzero"
+      ],
+      "stdout": "1\n"
+    },
+    {
+      "args": [
+        "-no-shellzero"
+      ],
+      "stdout": "1\n"
+    },
+    {
+      "args": [
+        "-escape",
+        "on"
+      ],
+      "stdout": "1\n"
+    }
+  ],
+  "qualification": {
+    "sourceInputsSha256": "c293f3b7ed8a9dc6ade3dce29147fc041517515fff9cd2501a33d32ce207d065",
+    "acceptanceManifestSha256": "69a1b3e3b5f3271b48e506a7811338108def5e819d6d08a3fe5738068402914d",
+    "runs": [
+      {
+        "conclusion": "cancelled",
+        "headSha": "97b1e36c5746b6921789c52409fcc33f92a27736",
+        "status": "completed",
+        "id": 37058828370,
+        "tag": "v5.1.1-rc.1"
+      },
+      {
+        "conclusion": "failure",
+        "headSha": "810ea3410b9b2fff05077e17a027eb17a797303a",
+        "status": "completed",
+        "id": 37063949030,
+        "tag": "v5.1.1-rc.2"
+      },
+      {
+        "conclusion": "success",
+        "headSha": "9277455d5ad008252053a81d18add39b8cdc8f7b",
+        "status": "completed",
+        "id": 37069402770,
+        "tag": "v5.1.1-rc.3"
+      },
+      {
+        "tag": "v5.1.1",
+        "id": 37071604124,
+        "headSha": "9277455d5ad008252053a81d18add39b8cdc8f7b",
+        "status": "completed",
+        "conclusion": "success"
+      }
+    ]
+  }
+}

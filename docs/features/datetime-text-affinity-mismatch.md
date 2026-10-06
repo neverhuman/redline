@@ -1,4 +1,10 @@
-# Bug: Datetime Text Stored in Integer Column Causes `value is not integer` on Read
+# Datetime text affinity: historical defect, resolved in the shipped API
+
+> The published v5.1.1 source handles `Value::Text` in
+> `SystemTime::try_from` through its always-on datetime parser. No `chrono`
+> feature is required for that conversion. The failure and proposed fix
+> below describe the older branch, not an outstanding v5.1.1 defect. SQL
+> affinity can still leave non-numeric text in an INTEGER column.
 
 ## Summary
 

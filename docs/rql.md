@@ -1,7 +1,8 @@
 # RQL
 
-RQL is the Redline Query Language. In v0.1 it is an additive, default-off typed
-relational IR for RedlineDB, not an alternate SQL keyword syntax.
+RQL is the Redline Query Language. In v5.1.1 it is an opt-in typed
+relational frontend for RedlineDB. It is always compiled into the API;
+callers select it through the Rust entry points or `--rql`.
 
 SQL remains the compatibility frontend. RQL callers submit a `RqlProgram` or
 `RqlStatement` through Rust APIs, or JSON through `redlinedb --rql <db>`.
@@ -73,26 +74,22 @@ the generated RQL target input, producing the same JSONL evidence format used
 by the existing benchmark/report pipeline. The official lane
 (`just redline-testing-official`) runs it with the other suites.
 
-In the v5.0.0 official evidence (`55637d088`, 2026-09-28),
-`rql_phase1` passed 1183 of 1385 cases, failed
-0, and skipped 202. Every skip is declared in advance
-in
-[`scope-policy.json`](../subrepos/redline-testing/corpus/sqlite_parity/scope-policy.json),
-with a reason and an expiry date, and a skip that is not listed there fails its
-case. The skips are of three kinds:
+<!-- rql-coverage:begin -->
+<!-- Generated from committed official evidence and scope policy; do not edit by hand. -->
+The `rql_phase1` suite passed 1183 of 1385 cases, failed 0,
+and skipped 202. Every skip is declared in advance:
 
-- 105 cases the phase-1 rewriter cannot parse or lower to RQL
-  (for example table constraints, savepoints, views, the JSON `->` and `->>`
-  operators, and derived tables).
-- 77 cases where RQL's output is known to differ from
-  SQLite's (reason "known RQL/SQLite runtime-output divergence for phase-1",
-  for example 10514 `AVG_DISTINCT_BASIC` and 11001 `MATH_ACOS_0_0`). These are
-  declared as skips, not failures, so the pass count does not show them as
-  wrong answers.
-- 20 expected-error cases, which the suite does not
-  run through RQL.
+- 105 cases the phase-1 rewriter cannot parse or lower.
+- 77 known differences between RQL and SQLite output.
+- 20 expected-error cases the suite does not run through RQL.
 
-These counts are a snapshot of that evidence; no renderer keeps them current.
+Evidence source: `af4fc74cc3280582c4e6bd0583fe503c83118c48`. A skip is not a pass.
+<!-- rql-coverage:end -->
+
+The scope policy records reasons and expiry dates for every skipped case.
+Unsupported table constraints, savepoints, views and some operators are
+rewriter exclusions; known output divergences and expected-error cases are
+reported separately. These exclusions do not establish support.
 
 ## Historical v4.0.1 local run
 

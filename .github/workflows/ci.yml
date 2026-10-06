@@ -95,7 +95,15 @@ jobs:
       # pre-push gate) run the same command set. The preflight stage is
       # isolated here and the test shards fan out below so no single job
       # exceeds the GitHub timeout.
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with: {node-version: '22'}
       - run: CI_FAST_STAGE=preflight bash ops/ci/fast.sh
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        if: always()
+        with:
+          name: documentation-checks
+          path: target/docs-check/
+          if-no-files-found: warn
 
   tests:
     strategy:

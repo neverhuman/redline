@@ -17,13 +17,13 @@ Keep one dialect per database file. A connection opened under the Postgres diale
 
 ## Types that differ by dialect
 
-**Booleans.** In the Postgres dialect they render as `t` and `f`. SQLite-shaped callers often see integers. If you parse output, branch on the dialect instead of accepting both.
+**Booleans.** PostgreSQL predicate values can render as `t` and `f`, while literal and stored boolean values can render as `1` and `0`. The dialect variable alone does not establish one representation. The [known-limitations example](../known-limitations.md#sql-and-result-shapes) checks both forms.
 
 **Enums.** Order is the order of the labels in `CREATE TYPE`, from first to last. Sorting an enum column alphabetically in the client will disagree with `ORDER BY` in the engine.
 
 **Ranges.** `int4range(1, 10)` contains every integer from 1 up to and excluding 10. A predicate copied from a closed-interval library will be off by one at the upper bound.
 
-**Citext.** Equality between `::citext` values ignores case, and the text keeps its original letters. If you strip case yourself before insert, you have thrown away the spelling citext was keeping. Declare the column `TEXT` and cast in the comparison: a column declared `citext` is refused in the Postgres dialect, because it would compare with case.
+**Citext.** After `CREATE EXTENSION citext` in the session, equality between `::citext` values ignores case, and the text keeps its original letters. If you strip case yourself before insert, you have thrown away the spelling citext was keeping. Declare the column `TEXT` and cast in the comparison: a column declared `citext` is refused in the Postgres dialect, because it would compare with case.
 
 **JSON.** SQLite JSON functions that the parity corpus covers are available in the SQLite dialect. Postgres JSON rendering is only as compatible as the cases that have left the open list. When a JSON test fails, compare the text. Key order and whitespace are the usual cause.
 
@@ -51,8 +51,9 @@ These are the ones that look portable and are not, on this commit:
 
 In Rust, pass values through `Params`. The statement text stays constant.
 
-```rust
+```rust doctest
 conn.execute("INSERT INTO note (body) VALUES (?)", params![body])?;
+// prints: hello
 ```
 
 The exact placeholder style follows the SQL parser's SQLite-shaped parameter rules (`?`, and the numbered forms the corpus accepts). If a snippet from Postgres uses `$1`, try it under the Postgres dialect and keep the value in a parameter either way. Building the value into the string with `format!` is how a note body becomes a second statement.
@@ -79,5 +80,61 @@ Scripts that diff output should set the shell the way the corpus does:
 ```
 
 Without that preamble, a correct row can look like a mismatch. The engine did not change. The printer did.
+
+## Executable examples
+
+These examples run against the published v5.1.1 binary in the
+[documentation check](../documentation-checks.md). Each block starts with a
+fresh database. PostgreSQL blocks set `REDLINEDB_RESULT_DIALECT=postgres`.
+
+```sql doctest postgres
+CREATE TYPE mood AS ENUM('meh', 'sad');
+CREATE TABLE feelings (value mood);
+INSERT INTO feelings VALUES('sad'), ('meh');
+SELECT value FROM feelings ORDER BY value;
+-- prints: meh
+-- prints: sad
+```
+
+```sql doctest postgres
+SELECT int4range(1, 10) @> 9, int4range(1, 10) @> 10;
+-- prints: t|f
+```
+
+```sql doctest postgres
+CREATE EXTENSION citext;
+SELECT 'Ada'::citext = 'ada'::citext;
+-- prints: t
+```
+
+```sql doctest postgres
+CREATE DOMAIN positive_int AS INTEGER CHECK (VALUE > 0);
+SELECT 5::positive_int;
+-- prints: 5
+```
+
+```sql doctest postgres error
+CREATE DOMAIN positive_int AS INTEGER CHECK (VALUE > 0);
+SELECT (-5)::positive_int;
+-- error: violates check constraint
+```
+
+```sql doctest
+CREATE TABLE t(x INTEGER, doubled INTEGER GENERATED ALWAYS AS (x * 2));
+INSERT INTO t(x) VALUES(3), (1);
+SELECT x, doubled, row_number() OVER (ORDER BY x) FROM t ORDER BY x;
+-- prints: 1|2|1
+-- prints: 3|6|2
+```
+
+```sql doctest
+WITH RECURSIVE numbers(n) AS (SELECT 1 UNION ALL SELECT n+1 FROM numbers WHERE n<3)
+SELECT n FROM numbers ORDER BY n;
+SELECT json_extract('{"answer":42}', '$.answer');
+-- prints: 1
+-- prints: 2
+-- prints: 3
+-- prints: 42
+```
 
 Next: [Transactions and durability](07-transactions.md), then [Embed it](08-embed.md).

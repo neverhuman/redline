@@ -48,13 +48,19 @@ A release install keeps each version in `PREFIX/lib/redlinedb/versions/<tag>/` (
 
 | Package | What it is |
 | --- | --- |
-| `redlinedb-v5.0.0-<platform>.tar.gz` | Engine, CLI, server, FFI (what the installer installs) |
-| `redline-testing-v5.0.0-<platform>.tar.gz` | The conformance runner |
-| `redline-web-v5.0.0-<platform>.tar.gz` | The web console |
+| `redlinedb-v5.1.1-<platform>.tar.gz` | Engine, CLI, server, FFI (what the installer installs) |
+| `redline-testing-v5.1.1-<platform>.tar.gz` | The conformance runner |
+| `redline-web-v5.1.1-<platform>.tar.gz` | The web console |
 
 Each package carries dependency notices, an SBOM, and build provenance naming the repository, tag, and commit it was built from; for an installed version they are in `PREFIX/lib/redlinedb/current/share/redlinedb/`, and the web and testing archives keep theirs in `share/redlinedb/components/<package>/`. The installer verifies the checksum and the provenance before it writes anything. `REDLINEDB_SHA256` makes it also require the digest you pass, and `REDLINEDB_VERIFY_ATTESTATION=1` checks the GitHub build attestation.
 
 ## Upgrading
+
+For v5.1.0 to v5.1.1, follow the [upgrade note](../upgrade-v5.1.1.md):
+the format stays the same, but automatic rowids become per-table and a
+physical backup does not recover rows the old bug already overwrote.
+
+The following index migration is the historical 4.x to 5.0 transition.
 
 Read the release notes before you point a new binary at an old directory, and take a physical backup with the old binary first (`backup SRC DST --physical`, which every 4.x release has).
 
@@ -64,4 +70,4 @@ The first time v5.0.0 opens a directory written by RedlineDB 4.x, it rebuilds ev
 
 ## Logs and quiet mode
 
-The library writes a one-line notice to stderr the first time `REDLINEDB_DEFAULT_DURABILITY` selects a mode other than the default. `REDLINEDB_QUIET_DURABILITY=1` turns that notice off. Leave it visible in development so a benchmark environment does not quietly become the production environment.
+The library writes a one-line notice to stderr the first time `REDLINEDB_DEFAULT_DURABILITY` selects a mode other than the default. The presence of `REDLINEDB_QUIET_DURABILITY`, even value `0`, turns that notice off. Leave it visible in development so a benchmark environment does not quietly become the production environment.

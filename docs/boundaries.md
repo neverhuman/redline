@@ -44,14 +44,12 @@ can detect new violations.
    into `redlinedb-kernel` or `redlinedb-sql` directly; doing so
    bypasses the boundary contracts.
 
-## Errors cross boundaries via `DomainError`
+## Optional structured error conversion
 
-When a failure crosses a crate boundary, the lower crate
-escalates its typed error into
-`redlinedb_domain::DomainError` (see
-`crates/domain/src/error.rs`). The escalation site is the only
-place a `Box<dyn Error + Send + Sync>` may appear in product
-code; everywhere else, errors stay typed inside their crate.
+`redlinedb_domain::DomainError` is an optional helper for attaching repair
+context to an error (see `crates/domain/src/error.rs`). It is not the
+universal cross-crate error representation: kernel, SQL, facade and FFI
+retain their own typed errors and explicit conversions.
 
 The canonical example is
 `crates/kernel/src/error.rs::Error::into_domain` for
@@ -71,6 +69,7 @@ the resulting `DomainError`.
 
 - `cargo build --workspace --locked` — catches dependency cycles
   and back-edges.
-- `jankurai audit . --policy agent/audit-policy.toml --mode advisory` — catches path-based
-  violations and reports them under the `boundaries` category.
-- `just fast` — runs both as part of the default proof lane.
+- An ad hoc audit must use ignored scratch output and no source history:
+  `jankurai audit . --policy agent/audit-policy.toml --mode advisory --json target/docs-audit/repo-score.json --md target/docs-audit/repo-score.md --no-score-history`.
+- `just fast` runs format, size, compile and test checks. The audit is part
+  of the wider `just pr-ci` gate, not the fast lane.

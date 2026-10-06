@@ -1,0 +1,7 @@
+{
+  "schema": "redline.docs-issues/v1",
+  "repository": "neverhuman/redline",
+  "capturedAt": "2026-10-06T01:11:37.707Z",
+  "endpoint": "https://api.github.com/repos/neverhuman/redline/issues?state=open&per_page=100",
+  "issues": []
+}

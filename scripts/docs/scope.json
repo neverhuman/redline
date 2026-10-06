@@ -1,0 +1,340 @@
+{
+  "schema": "redline.docs-scope/v1",
+  "documents": {
+    "CHANGELOG.md": {
+      "kind": "historical",
+      "reason": "Dated historical evidence, prior release or superseded design; not current v5.1.1 capability."
+    },
+    "CONTRIBUTING.md": {
+      "kind": "current",
+      "reason": "Current user/contributor guidance audited against v5.1.1 and repository helpers."
+    },
+    "README.md": {
+      "kind": "current",
+      "reason": "Current user/contributor guidance audited against v5.1.1 and repository helpers."
+    },
+    "docs/PHASE10_HANDOFF.md": {
+      "kind": "peer-owned",
+      "reason": "Owner assigned performance and post-release audit to Grok/Claude; this plan is not a docs-check runtime pass."
+    },
+    "docs/RELEASING.md": {
+      "kind": "current",
+      "reason": "Current user/contributor guidance audited against v5.1.1 and repository helpers."
+    },
+    "docs/VE0X_NATIVE_FEATURE_REQUEST.md": {
+      "kind": "design",
+      "reason": "Consumer feature request, not shipped behavior or deployment instruction."
+    },
+    "docs/WORKPLAN_CLAUDE.md": {
+      "kind": "peer-owned",
+      "reason": "Owner assigned performance and post-release audit to Grok/Claude; this plan is not a docs-check runtime pass."
+    },
+    "docs/WORKPLAN_slam.md": {
+      "kind": "peer-owned",
+      "reason": "Owner assigned performance and post-release audit to Grok/Claude; this plan is not a docs-check runtime pass."
+    },
+    "docs/agent-native-standard.md": {
+      "kind": "current",
+      "reason": "Current user/contributor guidance audited against v5.1.1 and repository helpers."
+    },
+    "docs/api-stability.md": {
+      "kind": "current",
+      "reason": "Current user/contributor guidance audited against v5.1.1 and repository helpers."
+    },
+    "docs/architecture.md": {
+      "kind": "current",
+      "reason": "Current user/contributor guidance audited against v5.1.1 and repository helpers."
+    },
+    "docs/architecture/ENGINEERING_SPEC.md": {
+      "kind": "historical",
+      "reason": "Dated historical evidence, prior release or superseded design; not current v5.1.1 capability."
+    },
+    "docs/architecture/README.md": {
+      "kind": "current",
+      "reason": "Current user/contributor guidance audited against v5.1.1 and repository helpers."
+    },
+    "docs/archive/AGENT_CHAT.full-through-2026-05-28T1355Z.md": {
+      "kind": "historical",
+      "reason": "Dated historical evidence, prior release or superseded design; not current v5.1.1 capability."
+    },
+    "docs/archive/index.md": {
+      "kind": "historical",
+      "reason": "Dated historical evidence, prior release or superseded design; not current v5.1.1 capability."
+    },
+    "docs/archive/planning/EXTERNAL_REVIEW_SUPERPROMPT.md": {
+      "kind": "historical",
+      "reason": "Dated historical evidence, prior release or superseded design; not current v5.1.1 capability."
+    },
+    "docs/archive/planning/branch_recovery_ledger.md": {
+      "kind": "historical",
+      "reason": "Dated historical evidence, prior release or superseded design; not current v5.1.1 capability."
+    },
+    "docs/archive/planning/speed_up_workplan_FINAL.md": {
+      "kind": "historical",
+      "reason": "Dated historical evidence, prior release or superseded design; not current v5.1.1 capability."
+    },
+    "docs/archive/planning/speed_up_workplan_pending.md": {
+      "kind": "historical",
+      "reason": "Dated historical evidence, prior release or superseded design; not current v5.1.1 capability."
+    },
+    "docs/archive/planning/super_tasks.md": {
+      "kind": "historical",
+      "reason": "Dated historical evidence, prior release or superseded design; not current v5.1.1 capability."
+    },
+    "docs/audit-enum-boundaries.md": {
+      "kind": "current",
+      "reason": "Current user/contributor guidance audited against v5.1.1 and repository helpers."
+    },
+    "docs/audit-rubric.md": {
+      "kind": "current",
+      "reason": "Current user/contributor guidance audited against v5.1.1 and repository helpers."
+    },
+    "docs/beyond-postgres-skips.md": {
+      "kind": "current",
+      "reason": "Current user/contributor guidance audited against v5.1.1 and repository helpers."
+    },
+    "docs/beyond-sqlite-gaps.md": {
+      "kind": "current",
+      "reason": "Current user/contributor guidance audited against v5.1.1 and repository helpers."
+    },
+    "docs/boundaries.md": {
+      "kind": "current",
+      "reason": "Current user/contributor guidance audited against v5.1.1 and repository helpers."
+    },
+    "docs/ci-trust-boundary.md": {
+      "kind": "current",
+      "reason": "Current user/contributor guidance audited against v5.1.1 and repository helpers."
+    },
+    "docs/cli.md": {
+      "kind": "current",
+      "reason": "Current user/contributor guidance audited against v5.1.1 and repository helpers."
+    },
+    "docs/compatibility/abi-safety.md": {
+      "kind": "current",
+      "reason": "Current user/contributor guidance audited against v5.1.1 and repository helpers."
+    },
+    "docs/contributing/tooling.md": {
+      "kind": "current",
+      "reason": "Current user/contributor guidance audited against v5.1.1 and repository helpers."
+    },
+    "docs/decisions/README.md": {
+      "kind": "current",
+      "reason": "Current user/contributor guidance audited against v5.1.1 and repository helpers."
+    },
+    "docs/documentation-checks.md": {
+      "kind": "current",
+      "reason": "Current user/contributor guidance audited against v5.1.1 and repository helpers."
+    },
+    "docs/exceptions/README.md": {
+      "kind": "current",
+      "reason": "Current user/contributor guidance audited against v5.1.1 and repository helpers."
+    },
+    "docs/exceptions/ffi-c-header.md": {
+      "kind": "current",
+      "reason": "Current user/contributor guidance audited against v5.1.1 and repository helpers."
+    },
+    "docs/exceptions/ffi-unsafe-blocks.md": {
+      "kind": "current",
+      "reason": "Current user/contributor guidance audited against v5.1.1 and repository helpers."
+    },
+    "docs/exceptions/fuzz-parity.md": {
+      "kind": "current",
+      "reason": "Current user/contributor guidance audited against v5.1.1 and repository helpers."
+    },
+    "docs/features/datetime-text-affinity-mismatch.md": {
+      "kind": "historical",
+      "reason": "Dated historical evidence, prior release or superseded design; not current v5.1.1 capability."
+    },
+    "docs/ide-integrations.md": {
+      "kind": "current",
+      "reason": "Current user/contributor guidance audited against v5.1.1 and repository helpers."
+    },
+    "docs/install.md": {
+      "kind": "current",
+      "reason": "Current user/contributor guidance audited against v5.1.1 and repository helpers."
+    },
+    "docs/install_redlinedb.md": {
+      "kind": "current",
+      "reason": "Current user/contributor guidance audited against v5.1.1 and repository helpers."
+    },
+    "docs/issues/redline-jansu-issues.md": {
+      "kind": "historical",
+      "reason": "Dated historical evidence, prior release or superseded design; not current v5.1.1 capability."
+    },
+    "docs/known-limitations.md": {
+      "kind": "current",
+      "reason": "Current user/contributor guidance audited against v5.1.1 and repository helpers."
+    },
+    "docs/language-bad-behavior.md": {
+      "kind": "current",
+      "reason": "Current user/contributor guidance audited against v5.1.1 and repository helpers."
+    },
+    "docs/launch/v5.0.0-evidence.md": {
+      "kind": "historical",
+      "reason": "Dated historical evidence, prior release or superseded design; not current v5.1.1 capability."
+    },
+    "docs/manual/01-why-redlinedb.md": {
+      "kind": "current",
+      "reason": "Current user/contributor guidance audited against v5.1.1 and repository helpers."
+    },
+    "docs/manual/02-start-here.md": {
+      "kind": "current",
+      "reason": "Current user/contributor guidance audited against v5.1.1 and repository helpers."
+    },
+    "docs/manual/03-for-agents.md": {
+      "kind": "current",
+      "reason": "Current user/contributor guidance audited against v5.1.1 and repository helpers."
+    },
+    "docs/manual/04-sqlite-coverage.md": {
+      "kind": "current",
+      "reason": "Current user/contributor guidance audited against v5.1.1 and repository helpers."
+    },
+    "docs/manual/05-postgres-coverage.md": {
+      "kind": "current",
+      "reason": "Current user/contributor guidance audited against v5.1.1 and repository helpers."
+    },
+    "docs/manual/06-sql-you-will-write.md": {
+      "kind": "current",
+      "reason": "Current user/contributor guidance audited against v5.1.1 and repository helpers."
+    },
+    "docs/manual/07-transactions.md": {
+      "kind": "current",
+      "reason": "Current user/contributor guidance audited against v5.1.1 and repository helpers."
+    },
+    "docs/manual/08-embed.md": {
+      "kind": "current",
+      "reason": "Current user/contributor guidance audited against v5.1.1 and repository helpers."
+    },
+    "docs/manual/09-operate.md": {
+      "kind": "current",
+      "reason": "Current user/contributor guidance audited against v5.1.1 and repository helpers."
+    },
+    "docs/manual/10-limits.md": {
+      "kind": "current",
+      "reason": "Current user/contributor guidance audited against v5.1.1 and repository helpers."
+    },
+    "docs/manual/README.md": {
+      "kind": "current",
+      "reason": "Current user/contributor guidance audited against v5.1.1 and repository helpers."
+    },
+    "docs/manual/appendix-coverage.md": {
+      "kind": "current",
+      "reason": "Current user/contributor guidance audited against v5.1.1 and repository helpers."
+    },
+    "docs/manual/durability.md": {
+      "kind": "current",
+      "reason": "Current user/contributor guidance audited against v5.1.1 and repository helpers."
+    },
+    "docs/migration/README.md": {
+      "kind": "historical",
+      "reason": "Dated historical evidence, prior release or superseded design; not current v5.1.1 capability."
+    },
+    "docs/migration/RELEASE_NOTES.md": {
+      "kind": "historical",
+      "reason": "Dated historical evidence, prior release or superseded design; not current v5.1.1 capability."
+    },
+    "docs/migration/github-authority.md": {
+      "kind": "historical",
+      "reason": "Dated historical evidence, prior release or superseded design; not current v5.1.1 capability."
+    },
+    "docs/parity-closure-2026-09.md": {
+      "kind": "historical",
+      "reason": "Dated historical evidence, prior release or superseded design; not current v5.1.1 capability."
+    },
+    "docs/performance-history.md": {
+      "kind": "historical",
+      "reason": "Dated historical evidence, prior release or superseded design; not current v5.1.1 capability."
+    },
+    "docs/performance.md": {
+      "kind": "peer-owned",
+      "reason": "Owner assigned performance and post-release audit to Grok/Claude; this plan is not a docs-check runtime pass."
+    },
+    "docs/phase6-morsel-vector.md": {
+      "kind": "peer-owned",
+      "reason": "Owner assigned performance and post-release audit to Grok/Claude; this plan is not a docs-check runtime pass."
+    },
+    "docs/release.md": {
+      "kind": "current",
+      "reason": "Current user/contributor guidance audited against v5.1.1 and repository helpers."
+    },
+    "docs/releases/v5.0.0.md": {
+      "kind": "historical",
+      "reason": "Dated historical evidence, prior release or superseded design; not current v5.1.1 capability."
+    },
+    "docs/releases/v5.1.0.md": {
+      "kind": "historical",
+      "reason": "Dated historical evidence, prior release or superseded design; not current v5.1.1 capability."
+    },
+    "docs/releases/v5.1.1.md": {
+      "kind": "current",
+      "reason": "Current user/contributor guidance audited against v5.1.1 and repository helpers."
+    },
+    "docs/rql.md": {
+      "kind": "current",
+      "reason": "Current user/contributor guidance audited against v5.1.1 and repository helpers."
+    },
+    "docs/security-capabilities.md": {
+      "kind": "current",
+      "reason": "Current user/contributor guidance audited against v5.1.1 and repository helpers."
+    },
+    "docs/security-scans.md": {
+      "kind": "current",
+      "reason": "Current user/contributor guidance audited against v5.1.1 and repository helpers."
+    },
+    "docs/sqlite-parity.md": {
+      "kind": "current",
+      "reason": "Current user/contributor guidance audited against v5.1.1 and repository helpers."
+    },
+    "docs/testing.md": {
+      "kind": "current",
+      "reason": "Current user/contributor guidance audited against v5.1.1 and repository helpers."
+    },
+    "docs/upgrade-v5.1.1.md": {
+      "kind": "current",
+      "reason": "Current user/contributor guidance audited against v5.1.1 and repository helpers."
+    }
+  },
+  "nonExecutable": {
+    "README.md#sha256=1aaaccf406d81c6bc96fcf10d923df90a3f8c9f798acbb573ed387312bca437d": "Dependency declaration checked for the pinned release tag; building is a separate lane.",
+    "README.md#sha256=0d8ece2e0bff252a94ece535ed6a37b064e657def6b6de7f334c3d0ce572023e": "Operator/build template: shell syntax parsed, but credentials, publication, installation or maintenance action is not executed here.",
+    "README.md#sha256=1256e72c686f1904885dec2372873d48b96f4ceb65cff9e459a6eb398c957f5f": "Operator/build template: shell syntax parsed, but credentials, publication, installation or maintenance action is not executed here.",
+    "docs/api-stability.md#sha256=1aaaccf406d81c6bc96fcf10d923df90a3f8c9f798acbb573ed387312bca437d": "Dependency declaration checked for the pinned release tag; building is a separate lane.",
+    "docs/audit-rubric.md#sha256=eb2bd8b7b37dbd60507b4d99da9b712268a0b88b118ddb8cf47342a78a5500b5": "Operator/build template: shell syntax parsed, but credentials, publication, installation or maintenance action is not executed here.",
+    "docs/boundaries.md#sha256=fbfcc426a8d7ef77d085c39b99e520eb84398c2b6c376b95d382a9feb7a3ff6e": "Diagram, transcript, layout or settings preamble; not a standalone executable.",
+    "docs/ci-trust-boundary.md#sha256=924b332a272553da0476c641764d23f13f7066fa17046437757a8d83d424b9c8": "Diagram, transcript, layout or settings preamble; not a standalone executable.",
+    "docs/ci-trust-boundary.md#sha256=8afb33ad2046bc3784e2d80ed3931e3ce0b6006285c6e35a619d5f4dfdb450c2": "Operator/build template: shell syntax parsed, but credentials, publication, installation or maintenance action is not executed here.",
+    "docs/ci-trust-boundary.md#sha256=1da16848601b87d97772bb60434df69966115886c5bc0f80b388b89e5cc7cdc3": "Workflow illustration; live workflow syntax and permissions have CI tests.",
+    "docs/ci-trust-boundary.md#sha256=4e5424739531cfb76b1e24800de532e74e3d0f2fc4af37396fa4372907b2f5ee": "Operator/build template: shell syntax parsed, but credentials, publication, installation or maintenance action is not executed here.",
+    "docs/install.md#sha256=9443dd4309650d74ac2642c38575981f21ff0b14a2131ac5bce8245dda82cf10": "Operator/build template: shell syntax parsed, but credentials, publication, installation or maintenance action is not executed here.",
+    "docs/install.md#sha256=2ecf008a67aad75f577c5921652bd9a622ab286bd190134b92f378d9d6b328bc": "Diagram, transcript, layout or settings preamble; not a standalone executable.",
+    "docs/install.md#sha256=1cad5779f462cfefcae9ac425ddf3f0325d8a7a430eb19632daf8bf746758730": "Operator/build template: shell syntax parsed, but credentials, publication, installation or maintenance action is not executed here.",
+    "docs/install.md#sha256=6a06af234db217f7872130b44139cf2efbbe2bbd05d4195c9962f93679cc1aaa": "Operator/build template: shell syntax parsed, but credentials, publication, installation or maintenance action is not executed here.",
+    "docs/install.md#sha256=0d8ece2e0bff252a94ece535ed6a37b064e657def6b6de7f334c3d0ce572023e": "Operator/build template: shell syntax parsed, but credentials, publication, installation or maintenance action is not executed here.",
+    "docs/install.md#sha256=1aaaccf406d81c6bc96fcf10d923df90a3f8c9f798acbb573ed387312bca437d": "Dependency declaration checked for the pinned release tag; building is a separate lane.",
+    "docs/install.md#sha256=0d6a633e8a29d5a4205bd4b19b9e8527b3ccf5e11e6d7ac237ba55023dd74c9b": "Operator/build template: shell syntax parsed, but credentials, publication, installation or maintenance action is not executed here.",
+    "docs/language-bad-behavior.md#sha256=eb2bd8b7b37dbd60507b4d99da9b712268a0b88b118ddb8cf47342a78a5500b5": "Operator/build template: shell syntax parsed, but credentials, publication, installation or maintenance action is not executed here.",
+    "docs/manual/02-start-here.md#sha256=4a586c3b3d3c96ea0fbb6b8ed550ce1579b3d726a67b039387706d2e2171231c": "Operator/build template: shell syntax parsed, but credentials, publication, installation or maintenance action is not executed here.",
+    "docs/manual/02-start-here.md#sha256=0d8ece2e0bff252a94ece535ed6a37b064e657def6b6de7f334c3d0ce572023e": "Operator/build template: shell syntax parsed, but credentials, publication, installation or maintenance action is not executed here.",
+    "docs/manual/02-start-here.md#sha256=a9777a1f58072ad17dcc48f5c00a961dedd482547907b77499d5bed7941c08f4": "Dependency declaration checked for the pinned release tag; building is a separate lane.",
+    "docs/manual/04-sqlite-coverage.md#sha256=e5ad451df91d5fb7671863da67bdcfb06ffeafcd865e72ec1752e78d48a569d9": "Operator/build template: shell syntax parsed, but credentials, publication, installation or maintenance action is not executed here.",
+    "docs/manual/05-postgres-coverage.md#sha256=9f1e6708b5285c0c13afa627ec2bb5a03765ede330e1b2361d35a383e16655e1": "Operator/build template: shell syntax parsed, but credentials, publication, installation or maintenance action is not executed here.",
+    "docs/manual/06-sql-you-will-write.md#sha256=9f0c0c68e66b94047454d03288c6421661ed3003afb93017d69d3c94949080fa": "Diagram, transcript, layout or settings preamble; not a standalone executable.",
+    "docs/manual/08-embed.md#sha256=1ca94d19ecca16ed0ee0877348415afe9b9314f4e797c5df704ac15408d3ed9b": "Operator/build template: shell syntax parsed, but credentials, publication, installation or maintenance action is not executed here.",
+    "docs/manual/08-embed.md#sha256=0d473f4a8b2a38b5700688ba96da8c43a03a09f4b4c7dd6d989cba8a9f171ed6": "Operator/build template: shell syntax parsed, but credentials, publication, installation or maintenance action is not executed here.",
+    "docs/manual/09-operate.md#sha256=4633c7c2f2d9b8e1565efb39e2406efe0258401d47569a7146cde79717bb3f70": "Operator/build template: shell syntax parsed, but credentials, publication, installation or maintenance action is not executed here.",
+    "docs/manual/durability.md#sha256=edadcc9d0edd8834fd4788d495ef9e9b733d79200829177bf6757b6b3e30cbbc": "Operator/build template: shell syntax parsed, but credentials, publication, installation or maintenance action is not executed here.",
+    "docs/release.md#sha256=bc0df98132bb80318b069d4c8a9b3303ca0db3673bba18904e1b4016a319c666": "Operator/build template: shell syntax parsed, but credentials, publication, installation or maintenance action is not executed here.",
+    "docs/releases/v5.1.1.md#sha256=506b68e5e7b617e5cb467db9eb378a9c31b0839ed5dd5901fe68475d18e585e0": "Operator/build template: shell syntax parsed, but credentials, publication, installation or maintenance action is not executed here.",
+    "docs/releases/v5.1.1.md#sha256=80c51e216fb32e696e55df3f4f081e5c200cbf6ad2624c5bdfbdae195eaf5be9": "Operator/build template: shell syntax parsed, but credentials, publication, installation or maintenance action is not executed here.",
+    "docs/rql.md#sha256=6bf98d49ae581ce1839fbcf7d083058d956db35d2dfd470b14f8096b95d47188": "Operator/build template: shell syntax parsed, but credentials, publication, installation or maintenance action is not executed here.",
+    "docs/testing.md#sha256=d76d4a67a166545924e1892266e63d5729473e0b012015d90e5be1ea5e621173": "Operator/build template: shell syntax parsed, but credentials, publication, installation or maintenance action is not executed here.",
+    "docs/testing.md#sha256=e5ad451df91d5fb7671863da67bdcfb06ffeafcd865e72ec1752e78d48a569d9": "Operator/build template: shell syntax parsed, but credentials, publication, installation or maintenance action is not executed here.",
+    "docs/testing.md#sha256=269fafaf3e62b52adb88f9e55adb5e859b0b67196eb5d1caa7ea1efff8c28cc1": "Operator/build template: shell syntax parsed, but credentials, publication, installation or maintenance action is not executed here.",
+    "docs/testing.md#sha256=0920bf20adb41221eed323a32720b77e1f6f4bf9d5460ada86218a2b22b73a94": "Operator/build template: shell syntax parsed, but credentials, publication, installation or maintenance action is not executed here.",
+    "docs/testing.md#sha256=5c7bc5980d615cad1e221df6600006499d77327f994c95b181d88715189fc082": "Operator/build template: shell syntax parsed, but credentials, publication, installation or maintenance action is not executed here.",
+    "docs/testing.md#sha256=9bfe7bb5587e3d4ee86154793848158ba48296a40d3d7da8028cacec3bb3491d": "Operator/build template: shell syntax parsed, but credentials, publication, installation or maintenance action is not executed here.",
+    "docs/testing.md#sha256=1f875ba34e3f32f86c4481c25ce1d7fbfb226978a8d2a18fec8b24b542d92459": "Operator/build template: shell syntax parsed, but credentials, publication, installation or maintenance action is not executed here.",
+    "docs/testing.md#sha256=f9b5112f5cf2ba3fda2d3e54b94c26b143c2373a2d6a14aecebd94e8022738c1": "Operator/build template: shell syntax parsed, but credentials, publication, installation or maintenance action is not executed here.",
+    "docs/testing.md#sha256=61f34771346906ca8dec6ac80c511e0e62616721d65831f6b7714fbae8577f31": "Operator/build template: shell syntax parsed, but credentials, publication, installation or maintenance action is not executed here."
+  }
+}

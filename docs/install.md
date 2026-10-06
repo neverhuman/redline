@@ -70,9 +70,12 @@ The installer never installs, replaces or aliases a `sqlite3` command.
 | `REDLINEDB_MIGRATE_LEGACY=1` | Move files of an earlier flat installation aside instead of refusing (below). |
 | `REDLINEDB_LOCK_TIMEOUT` | Seconds to wait for another installer on the same prefix, default 300. |
 
+Replace the quoted checksum placeholder below with the digest from that
+platform's release `.sha256` file before running it.
+
 ```bash
 curl -fsSL https://raw.githubusercontent.com/neverhuman/redline/v5.1.1/install.sh |
-  VERSION=v5.1.1 PREFIX="$HOME/redline install" REDLINEDB_SHA256=<sha256 from the release> bash
+  VERSION=v5.1.1 PREFIX="$HOME/redline install" REDLINEDB_SHA256="<sha256 from the release>" bash
 ```
 
 Before anything under `PREFIX` is written, the installer requires the archive
@@ -211,7 +214,7 @@ redlinedb = { git = "https://github.com/neverhuman/redline", tag = "v5.1.1" }
 
 The Rust API is not stable yet and may change between releases; see
 [api-stability.md](api-stability.md). The embedding example in the
-[README](../README.md#embedded-use) is `crates/redlinedb/examples/readme.rs`,
+[README](../README.md#embed-it-in-rust) is `crates/redlinedb/examples/readme.rs`,
 built in CI by `cargo build --locked -p redlinedb --example readme`.
 
 ## C library

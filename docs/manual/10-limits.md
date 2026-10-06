@@ -1,6 +1,9 @@
 # Limits
 
-This page is the one to hand to someone who is about to promise RedlineDB as a drop-in. It describes v5.0.0, and it copies no SQLite counts: those are in the generated README blocks.
+This page is the one to hand to someone who is about to promise RedlineDB as a drop-in. It describes v5.1.1, and it copies no SQLite counts: those are in the generated README blocks.
+
+The [known-limitations page](../known-limitations.md) collects current
+release-binary probes, GitHub issue status and generated parity exclusions.
 
 ## The file
 
@@ -12,11 +15,11 @@ The README badge and the block under `sqlite-parity-report:begin` give the commi
 
 `soundex()` is absent, matching a reference build that was not compiled with it. `UPDATE` and `DELETE` with `ORDER BY` ... `LIMIT` are syntax errors, matching a reference parser that was not generated with that grammar.
 
-Latency against SQLite is measured separately on a quiet host (the README's Versions over time table), not in the conformance report, which runs every case at once on a shared host. Measure the queries you run before you quote a speedup.
+Latency and throughput against SQLite are measured separately on a quiet host (the README's current Engine throughput and historical Versions over time tables), not in the conformance report, which runs every case at once on a shared host. Measure the queries you run before you quote a speedup.
 
 The C ABI uses `sqlite3_*` names for the calls it implements. A symbol existing is not a promise that every SQLite C flag and every SQLite authorizer hook exists. `docs/security-capabilities.md` lists which hooks and flags are enforced, which are refused with an error, and which are not implemented; read it before relying on the authorizer, `sqlite3_trace_v2` or function flags. Read `crates/ffi` and `docs/boundaries.md` for the surface you are linking.
 
-A few SQLite behaviours differ outside the corpus; the release notes (`docs/releases/v5.0.0.md`, Known limitations) list them. Among them: a failed statement inside an explicit transaction ends the whole transaction, `INSTEAD OF UPDATE` and `INSTEAD OF DELETE` triggers are not supported, and `INSERT ... SELECT` does not fire `AFTER INSERT` triggers.
+A few SQLite behaviours differ outside the corpus; the current [known limitations](../known-limitations.md) list them. Among them: a failed statement inside an explicit transaction ends the whole transaction, `INSTEAD OF UPDATE` and `INSTEAD OF DELETE` triggers are not supported, and `INSERT ... SELECT` does not fire `AFTER INSERT` triggers.
 
 ## Postgres
 
@@ -48,7 +51,7 @@ Do not plan a migration on the hope that every query gets faster. Measure the qu
 
 ## Process model
 
-One `Database` value owns the file for writing. Other agents in the same process take connections or pool checkouts. Other operating-system processes talk to `redlinedb-server` and its `RLDB` protocol, or they wait their turn. The server protocol is version 1, framed JSON, magic `RLDB`. It does not authenticate clients. `redlinedb-server` requires `--database` and `--listen`. Pass a localhost address until you have put your own authentication in front of it.
+One process normally owns a directory for writing; handles inside that process can share its engine. The [owner-lock exceptions](09-operate.md#one-writer-process-many-connections) require separate care. Other agents in the same process take connections or pool checkouts. Other operating-system processes talk to `redlinedb-server` and its `RLDB` protocol, or they wait their turn. The server protocol is version 1, framed JSON, magic `RLDB`. It does not authenticate clients. `redlinedb-server` requires `--database` and `--listen`. Pass a localhost address until you have put your own authentication in front of it.
 
 ## What a later commit can change
 

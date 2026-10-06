@@ -31,9 +31,9 @@ BIN
 chmod +x "$core/cargo"
 contributor=$work/contributor
 for name in just git jq curl; do tool "$contributor" "$name" ''; done
+tool "$contributor" node 'v22.12.0'
+tool "$contributor" npm '10.9.0'
 required=$work/required
-tool "$required" node 'v22.12.0'
-tool "$required" npm '10.9.0'
 tool "$required" cargo-deny 'cargo-deny 0.19.8'
 tool "$required" gitleaks '8.21.2'
 
@@ -45,7 +45,7 @@ doctor() {
   local vars=()
   while [[ $# -gt 0 && $1 != -- ]]; do vars+=("$1"); shift; done
   shift
-  env -i HOME="$work/home" PATH="$path:$work/base" PLAYWRIGHT_BROWSERS_PATH="$work/browsers" ${vars[@]+"${vars[@]}"} \
+  env -i PATH="$path:$work/base" PLAYWRIGHT_BROWSERS_PATH="$work/browsers" ${vars[@]+"${vars[@]}"} \
     bash "$root/scripts/ci-doctor.sh" "$@" > "$work/$label.log" 2>&1 || status=$?
   [[ $status == "$expected" ]] || fail "$label: exit $status, expected $expected: $(tail -n 3 "$work/$label.log")"
 }
@@ -65,6 +65,14 @@ expect_line core-old-rust '^FAIL rustc +expected=1\.95\.0 actual=1\.94\.0'
 doctor contributor-ok 0 "$contributor:$core" -- --profile contributor
 expect_line contributor-ok '^PASS cargo-nextest +0\.9\.133'
 expect_line contributor-ok '^PASS rtk +absent'
+expect_line contributor-ok '^PASS node +v22\.12\.0'
+rm "$contributor/node"
+doctor contributor-no-node 1 "$contributor:$core" -- --profile contributor
+expect_line contributor-no-node '^FAIL node +missing'
+tool "$contributor" node 'v20.18.0'
+doctor contributor-old-node 1 "$contributor:$core" -- --profile contributor
+expect_line contributor-old-node '^FAIL node +expected=22\.x actual=v20\.18\.0'
+tool "$contributor" node 'v22.12.0'
 doctor unknown-profile 64 "$core" -- --profile everything
 # The required profile stops before checking anything on other platforms.
 printf '#!/bin/sh\ncase "$1" in -s) echo Darwin ;; -m) echo arm64 ;; esac\n' > "$work/darwin-uname"

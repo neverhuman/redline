@@ -1,8 +1,10 @@
 # SQLite Parity Traceability Ledger
 
 This ledger records RedlineDB's current SQLite-facing compatibility status.
-The reference oracle is the SQLite library bundled with `rusqlite` in the test
-harness. RedlineDB-side parity tests are local regression checks only; they do
+The official reference is SQLite 3.53.1 built by
+`scripts/sqlite/build-reference.sh` with the stamped configuration below.
+Some engine-local regression tests use the library bundled with `rusqlite`;
+those tests are not the official conformance producer. RedlineDB-side parity tests are local regression checks only; they do
 not produce SQLite parity coverage, benchmark, report, sentinel, or proof
 evidence artifacts.
 
@@ -129,8 +131,8 @@ run (`--sqlite-known-failures`) and `evidence_processor` both require each
 suite's failed cases to be exactly that list: an unlisted failure fails the
 run, and so does a listed case that passes, which leaves the file in the commit
 whose raw result shows the pass. A feature row below whose feature has a
-listed failure (for example 10560 for savepoints, 10253 and 10568 for
-`PRAGMA query_only`, 10584 for foreign keys) names that case and is not
+listed failure (for example 00076 for EXPLAIN bytecode, 00133 for `.auth`,
+00140 for `.expert`, 00209 for `-interactive`, or 10229 for `-pcachetrace`) names that case and is not
 `pass`.
 
 Skips are listed the same way; there is no skip budget.
@@ -290,7 +292,7 @@ and writes the provenance sidecar consumed by the evidence processor. The source
 manifest records `local-bin` to distinguish this checkout build from older release
 artifacts. This is the normal GitHub CI path after consolidation.
 
-All four declared suites are required: `sqlite_parity`, `sqlite_parity_memory`,
+All four declared suites are required: `sqlite_parity`, `memory`,
 `rql_phase1`, and `beyond_sqlite`. Missing evidence and baseline regressions fail.
 Historical release-download support remains for historical report verification;
 it is not required to build or validate the current checkout. The retired engine

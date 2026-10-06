@@ -35,8 +35,8 @@ dependency.
 ## On-disk surfaces
 
 - Page file: `crates/kernel/src/storage/page_file.rs`. Checksummed
-  per page; corruption produces `Error::InvalidChecksum`, which
-  escalates to `DomainError` via `Error::into_domain`.
+  per page; corruption produces `Error::InvalidChecksum`. Callers can
+  explicitly attach repair context through `Error::into_domain`.
 - WAL: `crates/kernel/src/wal/`. Group commit lanes, semantic
   combiner, archive/retention.
 - Catalog: `crates/kernel/src/catalog/`.
@@ -47,11 +47,11 @@ dependency.
 
 - Build: `rtk cargo build --workspace`.
 - Default proof: `just fast` (fmt + file-size + check + test).
-- Wider proof: `just check`, `just security`, lane-specific commands
+- Wider proof: `just pr-ci`, `just security`, lane-specific commands
   in `.jankurai/proof-lanes.toml`.
-- Failure repair: read the `DomainError` displayed by the failing
-  test or run; follow `docs_url` and `repair_hint` to the named
-  proof lane.
+- Failure repair: preserve the actual typed error and failing command.
+  When an explicit `DomainError` conversion supplied `docs_url` and
+  `repair_hint`, use those fields to select the next proof lane.
 
 ## Where to start (agent router)
 

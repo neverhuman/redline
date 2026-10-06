@@ -11,8 +11,8 @@ required profile.
 | Profile | Lanes | Tools |
 |---|---|---|
 | `core` | `./scripts/build-from-source.sh`, `cargo test -p <crate> --locked` | Rust 1.95.0 (rustup reads `rust-toolchain.toml`), a C compiler, pkg-config |
-| `contributor` | `just fast`, `just clippy`, `just medium`, `./scripts/check_file_sizes.sh` | core, plus just, cargo-nextest 0.9.133, git, jq and curl. rtk is optional; the `just` lanes run commands directly without it. |
-| `required` | `just required` (= `just pr-ci`), `just security`, `just redline-testing-official` | contributor, plus Node 22 and npm, Playwright's Chromium, Docker (or `REDLINE_TESTING_POSTGRES_URL`) for the PostgreSQL 16.15 lane, the pinned jankurai 1.6.11 (`bash ops/ci/install-github-tools.sh`), cargo-audit 0.22.1, cargo-deny 0.19.8 and gitleaks 8.21.2. Linux x86_64 only; CI runs it for every pull request. |
+| `contributor` | `just fast`, `just clippy`, `just medium`, `./scripts/check_file_sizes.sh` | core, plus Node 22, just, cargo-nextest 0.9.133, git, jq and curl. rtk is optional; the `just` lanes run commands directly without it. |
+| `required` | `just required` (= `just pr-ci`), `just security`, `just redline-testing-official` | contributor, plus Playwright's Chromium, Docker (or `REDLINE_TESTING_POSTGRES_URL`) for the PostgreSQL 16.15 lane, the pinned jankurai 1.6.11 (`bash ops/ci/install-github-tools.sh`), cargo-audit 0.22.1, cargo-deny 0.19.8 and gitleaks 8.21.2. Linux x86_64 only; CI runs it for every pull request. |
 
 Running a release package needs none of these; see [docs/install.md](docs/install.md).
 Jankurai and the audit lanes are described in

@@ -292,3 +292,8 @@ commands = [
     "rtk cargo deny check",
     "rtk gitleaks detect --source .",
 ]
+
+[[lane]]
+command = "bash scripts/check-docs.sh"
+name = "docs-accuracy"
+purpose = "published v5.1.1 help, executable examples, upgrade/configuration checks and generated documentation drift"

@@ -3,9 +3,10 @@
 Every change in this repo is validated through a named *proof lane* —
 a deterministic recipe an agent can rerun without re-discovering it.
 Lanes are declared in `.jankurai/proof-lanes.toml`; this doc indexes them,
-records the budgets/kill-switches that bound the long-running ones,
-and points at the structured error surface that produces machine-
-readable repair receipts.
+distinguishes budget policy from implemented stop controls, and indexes
+the optional structured error helpers and recorded proof receipts.
+
+<a id="proof-lanes"></a>
 
 ## Proof-lane index
 
@@ -16,7 +17,7 @@ readable repair receipts.
 | `test`                               | Fast workspace test proof.                                                                            |
 | `verify`                             | Alias for the root validation gate.                                                                   |
 | `fast`                               | Workspace fmt, file-size policy, type-check, and full unit/integration test sweep. Uses `scripts/sccache_wrapper.sh`, which falls back cleanly when local `sccache` is absent. Quick iteration lane, not the pre-push gate. |
-| `pr-ci`                              | Complete local engine/component/conformance/security/audit/package gates through `scripts/ci-local.sh pr-ci`; GitHub adds four native packaging targets. |
+| `pr-ci`                              | Complete local engine/component/conformance/security/audit/package gates through `scripts/ci-local.sh pr-ci`; GitHub adds Linux ARM64 cross-build/emulation; macOS packaging is required for tags. Local PostgreSQL needs `REDLINE_TESTING_POSTGRES_URL`. |
 | `fast-check`                         | Workspace compile proof for the default health lane.                                                  |
 | `fast-test`                          | Workspace test proof for the default health lane.                                                     |
 | `hygiene`                            | Format and file-size only; cheapest pre-commit gate.                                                  |
@@ -35,7 +36,7 @@ readable repair receipts.
 | `sql-check`                          | Targeted `redlinedb-sql` compile proof.                                                               |
 | `sql-test`                           | Targeted `redlinedb-sql` test proof.                                                                   |
 | `beyond-sqlite-manifest`             | Verifies the beyond-SQLite backlog ranking, source tips, owners, and proof-lane routing.               |
-| `beyond-postgres-reference`          | Runs the beyond-SQLite manifest and Postgres oracle tests against PostgreSQL 16. Starts a Docker container locally when `REDLINEDB_POSTGRES_URL` is unset. |
+| `beyond-postgres-reference`          | Runs the beyond-SQLite manifest and Postgres oracle tests against pinned PostgreSQL 16.15. Starts a Docker container locally when `REDLINEDB_POSTGRES_URL` is unset. |
 | `ffi-check`                          | Targeted `redlinedb-ffi` compile proof.                                                               |
 | `ffi-test`                           | Targeted `redlinedb-ffi` test proof.                                                                   |
 | `cli-check`                          | Targeted `redlinedb-cli` compile proof.                                                               |
@@ -99,19 +100,49 @@ FTS5, RTREE, DBSTAT, `generate_series`, and `uint` support.
 
 For narrow repair loops, prefer the package-scoped lanes above over `fast` when the touched surface is already known. They stay deterministic without forcing a workspace-wide run.
 
-The `beyond-postgres-reference` lane is self-contained locally:
+Certification recipes must build the benchmark with `--release`: measured
+child processes run the same executable, so a debug build cannot produce a
+publishable certification. This is the optimized smoke recipe used by the
+`phase9-smoke` lane:
+
+```bash template
+cargo run -p redlinedb-bench --release -- certify --config crates/bench/bench/smoke.toml --out-dir target/bench/certify-smoke --seed 7 --repetitions 1 --warmup 0
+```
+
+It is an operator template, not a measurement performed by the documentation
+check. A smoke run does not replace the quiet-host scoreboard bundle required
+for README performance claims.
+
+The optional `beyond-postgres-reference` lane starts its own local oracle:
 
 ```
 rtk just beyond-postgres-reference
 ```
 
 If `REDLINEDB_POSTGRES_URL` is set, the lane uses that database. Otherwise it
-starts `${REDLINEDB_POSTGRES_IMAGE:-postgres:16-alpine}` with database
+starts the digest-pinned PostgreSQL 16.15 bookworm image in
+`ops/ci/beyond-postgres-reference.sh` (an override with a different digest is refused) with database
 `redlinedb_beyond`, user `redlinedb`, password `postgres`, and local port
 `${REDLINEDB_POSTGRES_PORT:-55432}`. The script waits for container health,
 exports `REDLINEDB_POSTGRES_URL`, runs `beyond_sqlite_manifest` and
 `beyond_postgres_reference`, then removes the container. Set
 `REDLINEDB_POSTGRES_KEEP=1` to keep the local container for debugging.
+
+This lane is separate from official parity. Its
+`boolean_and_uuid_strict_storage_matches_postgres` case currently fails at
+`CREATE TABLE`: the default SQLite execution mode rejects `BOOLEAN` in a
+`STRICT` table before the PostgreSQL storage comparison. The published
+v5.1.1 CLI has the same refusal; see the executable examples in
+[known limitations](known-limitations.md).
+
+`REDLINEDB_POSTGRES_URL` enables these optional Rust reference tests.
+When both `REDLINEDB_POSTGRES_URL` and
+`REDLINEDB_REQUIRE_POSTGRES_REFERENCE` are unset, oracle-dependent tests
+return early, even though the Rust test runner reports a pass; those
+comparisons are unmeasured.
+`REDLINE_TESTING_POSTGRES_URL` is the separate variable used by the official
+parity runner and CI service. Set that variable for official PostgreSQL
+proof in `pr-ci`; it does not enable the optional Rust reference lane.
 
 To reproduce the PR-side jankurai failure mode before pushing, commit the
 candidate changes and run:
@@ -131,9 +162,13 @@ rtk scripts/ci-local.sh pr-ci
 ```
 
 That command runs the same shared dispatchers used by `.github/workflows/ci.yml`:
-`CI_FAST_STAGE=preflight`, each `tests` matrix shard, `CI_PARITY_STAGE=redline-testing-official`,
-and `scripts/guard-official-evidence.sh`. It stops at the first failing local
-job and preserves the underlying command output.
+`CI_FAST_STAGE=preflight`, each `tests` matrix shard and
+`CI_PARITY_STAGE=redline-testing-official`, then the component, integration,
+package, security and audit dispatchers. It stops at the first failing local
+job and preserves the underlying command output. `pr-ci` does not invoke
+`scripts/guard-official-evidence.sh`; the official-evidence guard is a
+separate lane. Without `REDLINE_TESTING_POSTGRES_URL`, local PostgreSQL
+cases are skipped, so SQLite-only local proof is not PostgreSQL proof.
 
 The parity stage ends with `ops/ci/check-report.sh`, which renders the SQLite
 report in official mode (`--run-provenance`) and the PostgreSQL block through
@@ -210,42 +245,36 @@ Rebase is the one merge method: it keeps the reviewed commits as they are on a
 linear `main`. The parity report bot (`.github/workflows/report-merge.yml`)
 merges its report pull requests the same way.
 
-## Budgets and kill-switches
+## Budgets and stop conditions
 
-Long-running bench lanes carry budgets and a kill-switch so an agent
-can interrupt them without leaving the cluster wedged. The contract:
+The limits in [`.jankurai/cost-budget.toml`](../.jankurai/cost-budget.toml)
+are authored audit policy. They are not a runtime enforcement guarantee
+for the published v5.1.1 benchmark harness. The historical policy names
+`REDLINEDB_BENCH_KILL` and `kill_receipt.json`, but that release implements
+neither the environment-variable polling nor the receipt writer. Setting
+the variable does not stop a run, and exporting an environment variable in
+another shell cannot change an already-running process.
 
-| Lane (class)                        | Max wall-clock | Max disk | Max syscalls (strace) |
-|-------------------------------------|----------------|----------|------------------------|
-| `phase9-smoke`                      | 5 min          | 1 GiB    | 5e7                    |
-| `phase9-certification`              | 30 min         | 8 GiB    | 5e8                    |
-| `phase9-xbabe1-certification`       | 60 min         | 32 GiB   | 2e9                    |
-| `phase9-xbabe1-certify-with-strace` | 90 min         | 32 GiB   | 4e9 (strace overhead)  |
-| `phase10-xbabe1-certification`      | 90 min         | 64 GiB   | 4e9                    |
-| `phase11-oltp-gap`                  | 20 min         | 4 GiB    | 1e8                    |
+The policy also names dependency quotas (`max_advisory_count` and the license
+allowlist), a CI concurrency ceiling, and per-workload wall-clock, disk and
+syscall budgets. A declared spend cap is an operator limit, not proof that
+the harness enforces it. Record the selected limits and stop conditions in
+the run receipt, check available storage before starting, and monitor growth
+while the run is active. External `timeout` or Ctrl-C is the actual kill
+switch; preserve the interrupted run as rejected evidence. The dependency
+security lanes enforce their own advisory and license rules through
+`cargo audit` and `cargo deny`.
 
-These budgets are authored in `.jankurai/cost-budget.toml` (added in
-Section H of the repair plan); this doc is the human-readable index.
-
-### `REDLINEDB_BENCH_KILL=1`
-
-The bench harness honors the `REDLINEDB_BENCH_KILL` environment
-variable: when set to `1` before a bench process starts, the harness
-exits cleanly at the next workload boundary, flushes its in-flight
-metrics, and writes a `kill_receipt.json` next to the run's output
-directory. This is the supported way to abort a long bench run
-without losing the partial evidence already gathered. The variable is
-read once at harness startup; flipping it mid-run does not interrupt
-an in-flight workload (use SIGTERM for that).
-
-Section H of the jankurai-repair plan lands the implementation; this
-doc fixes the contract so downstream tooling can rely on the variable
-name today.
+Set a shell timeout before starting your own run, or interrupt that run
+with Ctrl-C. Preserve its exit status, raw logs and any partial output; do
+not label interrupted or reduced work publishable. Never stop another
+agent's job. The release scoreboard script has its own load, runner-job,
+completeness, correctness and SQLite-control checks; its bundle summary
+must pass before rendering published numbers.
 
 ## Structured errors and repair receipts
 
-Failures inside the kernel and downstream crates escalate into a
-typed exception surface defined at
+The optional structured error helper is defined at
 `crates/domain/src/error.rs::DomainError`. Every `DomainError`
 carries six fields:
 
@@ -260,7 +289,8 @@ carries six fields:
 - `source` — the underlying `Box<dyn Error + Send + Sync>` so the
   full causal chain stays attached.
 
-The canonical escalation example lives at
+This is not the universal error representation for the kernel, SQL or FFI.
+The explicit conversion example lives at
 `crates/kernel/src/error.rs::Error::into_domain` for the
 `InvalidChecksum` variant. The unit tests in both crates (`cargo test
 -p redlinedb-domain` and `cargo test -p redlinedb-kernel`) assert the
@@ -282,36 +312,6 @@ A `proof-receipt.md` template lives at
 `.jankurai/proof-receipt-template.md`; use it to record the lane name,
 seed, raw-log path, and exit code for any non-trivial repair.
 
-## Cost budgets and kill-switches
-
-Every bench / certification workload is enumerated in
-[`.jankurai/cost-budget.toml`](../.jankurai/cost-budget.toml) with three
-hard limits — `max_wall_clock_minutes`, `max_disk_gb`,
-`max_syscalls` — and a single `owner` field. The TOML is the
-machine-readable source of truth; the table earlier in this file is
-the human-readable summary.
-
-The kill-switch contract: set `REDLINEDB_BENCH_KILL=1` before
-launching (or `export` mid-run) and the bench harness exits at the
-next workload boundary, flushes its in-flight metrics, and writes a
-`kill_receipt.json` next to the run's output directory. The env var
-name is fixed under `[global].kill_switch_env` in
-`.jankurai/cost-budget.toml` so downstream tools can read the contract
-without hardcoding the string. Each kill switch and spend cap ceiling
-is defined per-workload in `.jankurai/cost-budget.toml` so the bench
-harness and CI both enforce the same limits.
-
-Adding a new long-running workload:
-
-1. Append a `[[workload]]` block to `.jankurai/cost-budget.toml` with
-   the three budgets and an owner.
-2. Update the "Budgets and kill-switches" table above with the
-   summary row.
-3. Make the bench binary honor `REDLINEDB_BENCH_KILL` at the same
-   poll boundary other workloads use (today: each repetition tick).
-
-Audit reference: HLT-026 cost-budget-gap.
-
 ## Release readiness — launch-gate evidence
 
 Test evidence rolls into the release-readiness gate documented in
@@ -320,16 +320,20 @@ tagged release must satisfy:
 
 - **Security** — `just security` (cargo audit, cargo deny,
   gitleaks) green; the `security` job in
-  `.github/workflows/jankurai.yml` blocks the PR otherwise.
+  `.github/workflows/ci.yml` blocks the PR otherwise.
   `bash ops/ci/security-receipt.sh` on the candidate writes
   `target/security/receipt.json`; see
   [`docs/security-scans.md`](security-scans.md).
 - **Backups** — kernel `Engine::backup` integration test green
   (`cargo test -p redlinedb-kernel backup`); restore round-trip
   proven by the failpoint matrix lane.
-- **Monitoring** — bench `kill_receipt.json` plus
-  `.jankurai/repo-score.json` archived per release; the
-  audit upload step in `jankurai.yml` is the canonical artifact.
+- **Qualification monitoring and evidence custody** — check every required
+  workflow job's conclusion and preserve its raw logs. The release acceptance manifest binds the
+  security, audit, parity and durability receipt digests. Downloaded receipts
+  are checked in the qualification custody directory;
+  [RELEASING.md](RELEASING.md) describes those checks.
+  This verifies the qualification run; it does not certify an application's
+  deployment monitoring.
 - **Rollback** — releases are never deleted or replaced: a defective
   release is superseded by a corrected one (`docs/release.md`, "Evidence and
   rollback"), and nothing is published to crates.io; `release-bad-behavior`
@@ -338,52 +342,7 @@ tagged release must satisfy:
   (`cargo test -p redlinedb-ffi shell`) plus the authz matrix lane
   cover misuse of the C ABI from untrusted callers.
 
-These five gates fulfill the audit's `release readiness` evidence
-requirement (HLT-025). The release-process steps themselves live
-in `docs/release.md`; this section is the testing-side index.
-
-## Budgets, quotas, stop conditions, and kill-switches for paid operations
-
-Canonical source: [`.jankurai/cost-budget.toml`](../.jankurai/cost-budget.toml).
-The TOML is machine-readable truth; this section is the agent-facing
-operations index for the gates in that file. Audit reference:
-HLT-026 cost-budget-gap.
-
-**Scope:** every paid or unbounded operation in this repo (benchmarks,
-chaos workloads, CI jobs that fan out matrices) is bounded by an
-explicit budget, a quota, a stop condition, and a kill-switch.
-
-- **Max wall-clock per bench run.** Aggregate CI cap is
-  `[bench].max_wall_clock_seconds = 1800` (30 minutes). Per-workload
-  caps live in each `[[workload]]` block as `max_wall_clock_minutes`
-  and bound a single invocation.
-- **Max CI concurrent jobs.** `[bench].max_ci_concurrent_jobs = 4`.
-  CI matrices that fan out wider than this must shard explicitly or
-  serialize behind a job-level `concurrency:` key.
-- **Kill-switch (CTRL-C / timeout).** Set `REDLINEDB_BENCH_KILL=1`
-  before launching (or `export` mid-run) and the bench harness exits
-  at the next workload boundary, flushes in-flight metrics, and
-  writes `kill_receipt.json` next to the run output. The env var
-  name is fixed under `[global].kill_switch_env`. For hard kills
-  use `timeout <seconds> just <lane>` to bound wall-clock from the
-  shell side, or `Ctrl-C` (SIGINT) to interrupt the current
-  workload iteration.
-- **Dry-run a benchmark without exceeding the budget.** Use the
-  lowest-rep certify (e.g. `just phase9-smoke`, or
-  `cargo run -p redlinedb-bench --release -- certify --config <toml>
-  --seed 7 --repetitions 1 --warmup 0`; a debug build refuses to certify
-  unless `--allow-debug-build` marks the run a diagnostic) with `REDLINEDB_BENCH_KILL=1`
-  pre-exported to force exit at the first iteration boundary; the
-  resulting `kill_receipt.json` confirms the wiring without paying
-  the full budget. Always inspect the matching `[[workload]]` block
-  in `.jankurai/cost-budget.toml` before launching a longer run.
-- **Quotas (dependency + license).** `[dependencies]` in the budget
-  file pins `max_advisory_count = 0` and a license allowlist; any
-  PR that introduces a new vulnerable or non-allowlisted dependency
-  is rejected by `cargo audit` + `cargo deny` in the security lane.
-- **Paid operations register.** All CI lanes that bill compute time
-  (bench matrices, cross-engine certification, xbabe1 runs) declare
-  a `max_wall_clock_seconds` in their `[[workload]]` block and a
-  kill-switch env var. There are no unbounded paid operations in
-  this repo; if one is added it must register a budget + stop
-  condition here and in `.jankurai/cost-budget.toml` before merging.
+This section indexes the release gate (HLT-025). Individual passing tests do
+not establish a qualified release; the acceptance manifest and downloaded
+receipts must agree. The release-process steps live in `docs/release.md`;
+this section is the testing-side index.

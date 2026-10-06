@@ -1,6 +1,6 @@
 # The RedlineDB manual
 
-This is the book for people who will open a database, send it SQL, and embed it in a program. It was written against commit `8ae3a8b791d4edab88cf8513ad0d99ef709a1202` (version 4.1.0, 23 September 2026) and updated for v5.0.0 where that release changed what it describes. It does not copy SQLite counts or latency ratios: those are in the generated README blocks, and each chapter says which file is the measurement.
+This is the book for people who will open a database, send it SQL, and embed it in a program. Its current instructions are checked against the published v5.1.1 binary, commit `9277455d5ad008252053a81d18add39b8cdc8f7b`. It does not copy SQLite counts or latency ratios: those are in the generated README blocks, and each chapter says which file is the measurement.
 
 RedlineDB is an embedded SQL engine written in Rust. A program links it, or a person runs the `redlinedb` shell. The path you pass is a directory. Inside it, pages live in `data.redline` and the write-ahead log lives in `wal/`. Page and log constants are the ASCII codes for `RDPG` and `RDWL`, stored little-endian. The shell accepts a large SQLite-shaped vocabulary. A separate mode renders a slice of Postgres 16.15 results. Both compatibility programs are measured, and both are unfinished.
 
@@ -41,4 +41,7 @@ A skip is a case the runner did not compare. A listed failure is a case that ran
 - [`examples/first.sql`](examples/first.sql) — a table, a row, a read.
 - [`examples/items.rql.json`](examples/items.rql.json) — the same idea as a typed RQL document, so an agent does not have to concatenate SQL.
 
-Build the shell from this checkout with `./scripts/build-from-source.sh` when you want the binary that matches the commit above. The install chapter has the release-package path.
+The install chapter pins the release package and source tag.
+[Documentation checks](../documentation-checks.md) explains the executable
+examples; the [upgrade note](../upgrade-v5.1.1.md) and
+[known limitations](../known-limitations.md) describe the release boundaries.

@@ -1,7 +1,7 @@
 # Performance history (historical)
 
 This page keeps performance figures that earlier READMEs published, so that
-links and citations still resolve. **None of them describes v5.0.0**, and most
+links and citations still resolve. **None of them describes v5.1.1**, and most
 of them cannot be reproduced. Each section says what it measured, how, and why
 it should not be compared with current numbers.
 

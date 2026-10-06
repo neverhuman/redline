@@ -1,5 +1,9 @@
 # Single-checkout migration
 
+> Historical migration record. The current source, review and release
+> authority is `neverhuman/redline`; old repository names and commands below
+> describe the migration, not current installation instructions.
+
 `neverhuman/RedlineDB` contains the active engine workspace at its root and five
 component subtrees. Develop all components here. Nested Cargo workspaces retain
 their lockfiles and are explicitly excluded from the engine workspace. Nested

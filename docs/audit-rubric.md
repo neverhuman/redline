@@ -16,14 +16,14 @@ repair. Pair this with `.jankurai/owner-map.json` (who owns the file) and
 ### 2. Future-hostile language
 - Evidence: source greps for the detector terms enumerated in
   `docs/language-bad-behavior.md`.
-- Proof lane: `just fast`, then `jankurai audit . --policy agent/audit-policy.toml --mode advisory`.
+- Proof lane: `just fast`, then a scratch audit with `--json target/docs-audit/repo-score.json --md target/docs-audit/repo-score.md --no-score-history`.
 
 ### 3. Repo rot
 - Evidence: bench TOMLs under `crates/bench/bench/`, module headers
   in `crates/{ffi,redlinedb}/src/backup.rs`, exception declarations in
   `.jankurai/repo-rot-exceptions.toml` (when present) and
   `.jankurai/generated-zones.toml`.
-- Proof lane: `just score`, `just fast`.
+- Proof lane: `just fast`, then the wider scratch audit in `just pr-ci`.
 
 ### 4. Rust bad behavior (`unsafe`)
 - Evidence: every `unsafe` block carries a `// SAFETY:` comment;
@@ -42,6 +42,8 @@ repair. Pair this with `.jankurai/owner-map.json` (who owns the file) and
   forbidden repository-wide and enforced by the Rust no-Python test.
 - Proof lane: `cargo test -p redlinedb-bench --test no_python_files --locked`.
 
+<a id="observability"></a>
+
 ### 7. Observability and structured errors
 - Evidence: typed exception surface at
   `crates/domain/src/error.rs::DomainError`; kernel escalation path at
@@ -53,7 +55,7 @@ repair. Pair this with `.jankurai/owner-map.json` (who owns the file) and
 ### 8. Agent-readable docs
 - Evidence: this file, `docs/language-bad-behavior.md`, `docs/testing.md`,
   and the root `AGENTS.md` router.
-- Proof lane: `just score`.
+- Proof lane: `bash scripts/check-docs.sh`; use scratch audit outputs for score verification.
 
 ### 9. Authz and data isolation
 - Evidence: tenant isolation tests under `crates/bench/tests/` (added in
@@ -79,7 +81,7 @@ hop.
 
 | TLR cell      | Where it lives                                        | Lane                          | Owner                         |
 |---------------|-------------------------------------------------------|-------------------------------|-------------------------------|
-| web           | (none — RedlineDB ships no web frontend)              | n/a                           | n/a                           |
+| web           | `subrepos/redline-web/` (included web console)              | n/a                           | n/a                           |
 | api           | `crates/server/`                                      | `just fast`                   | `framed-server`               |
 | domain        | `crates/domain/`, `crates/kernel/src/txn/`            | `just fast`                   | `storage-and-catalog`         |
 | application   | `crates/sql/`, `crates/redlinedb/`                    | `just fast`                   | `sql-parser-planner-executor` |
@@ -105,9 +107,9 @@ zones and intentional carve-outs are listed in
 
 ```
 jankurai audit . --policy agent/audit-policy.toml --mode advisory \
-  --json .jankurai/repo-score.json --md .jankurai/repo-score.md
+  --json target/docs-audit/repo-score.json --md target/docs-audit/repo-score.md \
+  --no-score-history
 ```
 
-Compare the new score line in `.jankurai/repo-score.md` against the
-preceding entry in `.jankurai/score-history.csv` to confirm motion in the
-expected direction.
+Compare the scratch report with the committed audit baseline. Do not write
+reports or score history into `.jankurai/` during verification.
