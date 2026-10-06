@@ -13,9 +13,7 @@ use std::sync::{Arc, mpsc};
 use std::thread;
 use std::time::Duration;
 
-use tempfile::TempDir;
-
-use super::buffer_eviction_tests::create_indexed_table;
+use super::buffer_eviction_tests::{create_indexed_table, scratch_dir};
 use super::{CommitDurability, Engine, EngineConfig};
 use crate::catalog::IndexId;
 use crate::format::{PageGeneration, PageId, RelId, RowId, TuplePtr};
@@ -189,7 +187,7 @@ fn pressure_checkpoints_keep_every_row_of_many_writers_in_a_small_pool() {
         for (writers, pool_pages) in SHAPES {
             for round in 0..2 {
                 let shape = format!("{writers} writers, {pool_pages} pages, round {round}");
-                let temp = TempDir::new().unwrap();
+                let temp = scratch_dir();
                 let engine = Engine::create(temp.path(), config(pool_pages)).unwrap();
                 engine.enable_pool_pressure_checkpoints().unwrap();
                 let index_id = create_indexed_table(&engine);
