@@ -1,0 +1,1 @@
+SELECT x AS "my col" FROM t ORDER BY 1 DESC

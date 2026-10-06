@@ -1,0 +1,1 @@
+SELECT id, CASE x WHEN '5' THEN 'five' WHEN '10' THEN 'ten' ELSE 'other' END,          CASE y WHEN 5 THEN 'five' ELSE 'other' END, CASE z WHEN '5' THEN 'five' END          FROM t ORDER BY id

@@ -62,6 +62,7 @@
     ".dockerignore": "workspace",
     ".gitleaks.toml": "security",
     ".gitleaksignore": "security",
+    "fuzz/": "tools",
     "ops/ci/arm64-packages.sh": "ops",
     "ops/ci/arm64-packages.Dockerfile": "ops",
     "ops/ci/arm64-packages.Dockerfile.dockerignore": "ops",

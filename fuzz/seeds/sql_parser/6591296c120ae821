@@ -1,0 +1,1 @@
+SELECT a FROM t INDEXED BY t_a WHERE a > ''

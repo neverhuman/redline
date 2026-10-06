@@ -1,0 +1,1 @@
+SELECT ?1 {op} ?2, typeof(?1 {op} ?2)

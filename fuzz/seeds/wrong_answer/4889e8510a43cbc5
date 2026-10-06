@@ -1,0 +1,1 @@
+SELECT tag FROM m INDEXED BY m_x WHERE x < 2

@@ -1,0 +1,1 @@
+INSERT INTO p VALUES (100, '9lives'), (101, 'zzz'), (102, x'2d3161');

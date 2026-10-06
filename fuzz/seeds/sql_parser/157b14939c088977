@@ -1,0 +1,1 @@
+SELECT 1, 'x' UNION SELECT 1.0, 'y'

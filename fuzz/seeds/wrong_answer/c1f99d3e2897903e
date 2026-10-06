@@ -1,0 +1,1 @@
+SELECT w, count(*) = w FROM ga GROUP BY w

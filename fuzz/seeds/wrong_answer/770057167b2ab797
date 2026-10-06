@@ -1,0 +1,1 @@
+WITH c AS (SELECT x FROM n) SELECT x FROM c WHERE x = '5'

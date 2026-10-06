@@ -1,0 +1,1 @@
+SELECT id, k FROM c ORDER BY id

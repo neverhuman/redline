@@ -1,0 +1,1 @@
+SELECT id FROM t WHERE {column} BETWEEN {low} AND {high} ORDER BY id

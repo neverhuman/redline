@@ -1,0 +1,1 @@
+SELECT 'é array_length(', 'é array_agg('

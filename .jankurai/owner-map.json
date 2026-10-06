@@ -118,6 +118,7 @@
     "ops/ci/beyond-postgres.compose.yml": "ops",
     "ops/ci/beyond-postgres-reference.sh": "ops",
     "packages/": "tools",
+    "fuzz/": "tools",
     "paper/": "standard",
     "paper/data/loc_comparison.csv": "redline-testing",
     "rust-toolchain.toml": "workspace",

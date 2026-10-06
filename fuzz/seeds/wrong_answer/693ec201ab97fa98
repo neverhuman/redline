@@ -1,0 +1,1 @@
+SELECT o, {func} OVER (ORDER BY o {frame}) FROM {table} ORDER BY o

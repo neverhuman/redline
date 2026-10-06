@@ -1,0 +1,1 @@
+WITH RECURSIVE r(x) AS (SELECT 2.0 UNION          SELECT CASE WHEN x > 0 THEN x - 1 ELSE 2 END FROM r)          SELECT x, typeof(x) FROM r ORDER BY x

@@ -1,0 +1,1 @@
+SELECT z FROM tt INDEXED BY tt_z WHERE z > 0 ORDER BY z

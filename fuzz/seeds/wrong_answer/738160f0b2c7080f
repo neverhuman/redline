@@ -1,0 +1,1 @@
+SELECT x, 'a window win as (b)', 'OVER win', sum(x) OVER win AS s FROM t          WINDOW win AS (ORDER BY x) ORDER BY x

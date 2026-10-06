@@ -1,0 +1,1 @@
+SELECT c AS materialized FROM t ORDER BY c

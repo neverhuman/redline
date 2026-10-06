@@ -1,0 +1,1 @@
+UPDATE w SET k = 11, v = 'c' WHERE id = 1

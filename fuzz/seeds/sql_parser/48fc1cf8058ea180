@@ -1,0 +1,1 @@
+SELECT y AS x, x AS y FROM t ORDER BY 2 DESC

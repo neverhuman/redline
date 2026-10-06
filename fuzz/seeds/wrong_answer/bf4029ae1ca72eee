@@ -1,0 +1,1 @@
+SELECT id FROM tv WHERE NOT v ORDER BY id

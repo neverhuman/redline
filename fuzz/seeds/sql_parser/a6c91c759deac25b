@@ -1,0 +1,1 @@
+SELECT count(*) FROM t JOIN v ON t.y = v.w

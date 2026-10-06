@@ -1,0 +1,1 @@
+SELECT count(*) FROM fired WHERE v = '1abc'

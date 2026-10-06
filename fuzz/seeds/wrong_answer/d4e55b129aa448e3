@@ -1,0 +1,1 @@
+SELECT a {op} b, typeof(a {op} b) FROM (SELECT {left} AS a, {right} AS b)

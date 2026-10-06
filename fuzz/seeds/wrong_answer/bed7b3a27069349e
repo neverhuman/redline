@@ -1,0 +1,1 @@
+INSERT INTO t VALUES (9, 'w'); UPDATE t SET x = 7 WHERE y = 'a';

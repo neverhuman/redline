@@ -1,0 +1,1 @@
+SELECT id FROM {access} WHERE v = {v}

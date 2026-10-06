@@ -1,0 +1,1 @@
+SELECT id FROM t WHERE {column} IN {list} ORDER BY id

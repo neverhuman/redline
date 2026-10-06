@@ -1,0 +1,1 @@
+SELECT id FROM e WHERE x = 1 AND y = ?1

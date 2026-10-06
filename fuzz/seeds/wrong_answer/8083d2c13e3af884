@@ -1,0 +1,6 @@
+` but not `[..]`, backticks, comments,
+//! `E'..'` or `$tag$..$tag$`. So `CREATE TABLE \`a GLOB b\`(x)` created
+//! ` glob(b,a)`, an apostrophe in a comment (`/* it's */`) let a later
+//! literal's text be rewritten as code, and `SELECT $$array[1,2]$$` answered
+//! `json_array(1,2)`. The property tests of `q5_01_literals.rs` used only
+//! `'..'`, `

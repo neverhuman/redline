@@ -1,0 +1,1 @@
+UPDATE u SET k = ?1 WHERE id = ?2

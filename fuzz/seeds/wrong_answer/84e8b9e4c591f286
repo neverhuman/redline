@@ -1,0 +1,1 @@
+SELECT min(v), max(v) FROM big

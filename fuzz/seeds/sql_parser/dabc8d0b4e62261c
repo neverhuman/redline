@@ -1,0 +1,1 @@
+UPDATE cancel SET g = 0;

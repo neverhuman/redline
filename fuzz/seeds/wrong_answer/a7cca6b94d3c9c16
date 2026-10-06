@@ -1,0 +1,1 @@
+SELECT o, x, {func} OVER (ORDER BY o {frame}) FROM w_peers

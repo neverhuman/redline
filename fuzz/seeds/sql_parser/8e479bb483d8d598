@@ -1,0 +1,1 @@
+SELECT rowid FROM {table} NOT INDEXED WHERE {pred} ORDER BY rowid

@@ -1,0 +1,1 @@
+SELECT g FROM ga GROUP BY g HAVING sum(v) = g ORDER BY g

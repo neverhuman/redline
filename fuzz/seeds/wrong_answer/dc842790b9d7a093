@@ -1,0 +1,1 @@
+SELECT id FROM {table} NOT INDEXED WHERE {pred} ORDER BY id

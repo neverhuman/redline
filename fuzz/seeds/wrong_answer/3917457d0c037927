@@ -1,0 +1,1 @@
+WITH x as materialized(SELECT 3 AS v), y AS NOT MATERIALIZED (SELECT v + 1 AS v FROM x)          SELECT v FROM y

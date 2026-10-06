@@ -1,0 +1,1 @@
+SELECT {func} OVER (ORDER BY rowid {frame}) FROM {table} ORDER BY rowid

@@ -1,0 +1,1 @@
+CREATE TABLE aux.an(id INTEGER PRIMARY KEY, x INTEGER);          INSERT INTO aux.an VALUES (1, 5), (2, 7);          CREATE TABLE aux.au(id INTEGER PRIMARY KEY, w);          INSERT INTO aux.au VALUES (1, 5), (2, '7');          CREATE TABLE t(id INTEGER PRIMARY KEY, y TEXT);          INSERT INTO t VALUES (1, '5'), (2, '7');

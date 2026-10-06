@@ -1,0 +1,1 @@
+SELECT g, max(x) AS m FROM t GROUP BY g HAVING max(x) > 1 ORDER BY 2

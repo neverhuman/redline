@@ -1,0 +1,1 @@
+UPDATE a SET k = 8 WHERE k = 5; UPDATE f SET flag = 0 WHERE id = 1;              UPDATE f SET flag = 1 WHERE id = 2; UPDATE g SET name = 'bye' WHERE id = 1;

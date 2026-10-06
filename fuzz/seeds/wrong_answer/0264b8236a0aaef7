@@ -1,0 +1,1 @@
+SELECT * FROM t AS a JOIN t AS b ON a.x = 6 - b.x ORDER BY 4

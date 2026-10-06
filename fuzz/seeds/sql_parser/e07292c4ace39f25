@@ -1,0 +1,1 @@
+SELECT 'Ã©' AS "Ã¶", 'Ã¤' GLOB 'Ã¤*' AS g, 'x' AS Ã¼

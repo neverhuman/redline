@@ -1,0 +1,1 @@
+SELECT count(*) FROM t, json_each('[5, 7]') j WHERE t.y = j.value

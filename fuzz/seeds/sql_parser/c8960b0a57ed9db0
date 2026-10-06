@@ -1,0 +1,1 @@
+SELECT quote(y) FROM r INDEXED BY r_xy WHERE x = 2 AND y <= 1

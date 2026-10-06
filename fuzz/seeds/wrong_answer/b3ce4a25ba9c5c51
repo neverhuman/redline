@@ -1,0 +1,1 @@
+SELECT tag FROM {access} WHERE x = ?

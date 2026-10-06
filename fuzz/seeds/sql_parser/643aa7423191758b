@@ -1,0 +1,1 @@
+SELECT 'a|Tb', 'c' EXCEPT SELECT 'a', 'b|Tc'

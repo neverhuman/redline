@@ -1,0 +1,1 @@
+SELECT g, sum(x) FROM same GROUP BY g

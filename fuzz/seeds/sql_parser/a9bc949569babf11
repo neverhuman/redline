@@ -1,0 +1,1 @@
+join lateral (select 1) s on true

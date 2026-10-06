@@ -1,0 +1,1 @@
+SELECT t.id, an.x FROM t JOIN aux.an an ON t.y = an.x

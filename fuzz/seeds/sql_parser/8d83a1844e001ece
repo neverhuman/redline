@@ -1,0 +1,1 @@
+SELECT x, typeof(x) FROM ck_cmp ORDER BY rowid

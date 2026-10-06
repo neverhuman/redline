@@ -1,0 +1,1 @@
+INSERT INTO u /* it's */ VALUES ('; SELECT a INTO b')

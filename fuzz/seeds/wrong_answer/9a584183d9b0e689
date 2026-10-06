@@ -1,0 +1,1 @@
+DELETE FROM w WHERE id = 2

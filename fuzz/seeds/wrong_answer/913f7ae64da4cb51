@@ -1,0 +1,1 @@
+CREATE TABLE v(y); INSERT INTO v VALUES (3), (3.0);

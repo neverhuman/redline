@@ -1,0 +1,1 @@
+SELECT t2.id, tt.id FROM t2 JOIN tt ON tt.y = t2.z

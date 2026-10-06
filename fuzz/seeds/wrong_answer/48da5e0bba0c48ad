@@ -1,0 +1,1 @@
+SELECT count(*) FROM t INDEXED BY ix_k WHERE flag = 1 AND k > 0

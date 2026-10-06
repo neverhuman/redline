@@ -1,0 +1,1 @@
+SELECT id, x, typeof(x) FROM u ORDER BY id

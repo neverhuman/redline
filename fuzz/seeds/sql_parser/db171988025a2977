@@ -1,0 +1,1 @@
+SELECT count(*) FROM {{access}} WHERE {pred} AND k > 0

@@ -1,0 +1,1 @@
+MERGE INTO u USING s ON u.id = s.id WHEN MATCHED THEN UPDATE SET flag = s.flag

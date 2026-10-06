@@ -1,0 +1,1 @@
+SELECT t.id, u.k FROM t, u WHERE {right} = {left} ORDER BY 1, 2

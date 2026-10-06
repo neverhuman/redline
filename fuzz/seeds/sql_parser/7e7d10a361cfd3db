@@ -1,0 +1,1 @@
+SELECT x, typeof(x), count(*), sum(v) FROM big GROUP BY x

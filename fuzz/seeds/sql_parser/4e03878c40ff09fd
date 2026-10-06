@@ -1,0 +1,1 @@
+SELECT g, sum(v) FROM big GROUP BY g ORDER BY 2, 1

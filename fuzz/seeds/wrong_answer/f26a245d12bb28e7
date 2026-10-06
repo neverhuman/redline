@@ -1,0 +1,1 @@
+SELECT a-b, a+b, a*b, a/b, a%b, a||b, typeof(a+b) FROM t ORDER BY rowid

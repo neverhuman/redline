@@ -1,0 +1,1 @@
+SELECT CAST(5 AS INTEGER) = '5', 5 = '5', CAST('5' AS TEXT) = 5, '5' = 5

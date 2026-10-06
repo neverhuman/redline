@@ -1,0 +1,1 @@
+CREATE TABLE ga(g TEXT, v INTEGER, w);          INSERT INTO ga VALUES ('1', 1, 5), ('2', 2, 5), ('2', 3, '5'), ('10', 4, 6), ('10', 6, 6);          CREATE TABLE gb(a INTEGER, b TEXT);          INSERT INTO gb VALUES (1, '1'), (2, '3'), (3, '3'), (3, '2');

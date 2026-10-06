@@ -1,0 +1,1 @@
+SELECT x, typeof(x), count(*) FROM t GROUP BY x ORDER BY count(*) DESC, x

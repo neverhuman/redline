@@ -1,0 +1,1 @@
+SELECT id, y FROM t WHERE id = ?1

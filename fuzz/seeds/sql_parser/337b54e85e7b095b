@@ -1,0 +1,1 @@
+SELECT id FROM t INDEXED BY t_part WHERE x = '5' OR y = 10 ORDER BY id

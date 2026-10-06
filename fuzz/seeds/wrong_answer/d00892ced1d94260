@@ -1,0 +1,1 @@
+SELECT max(a) {op} max(b) FROM {table}

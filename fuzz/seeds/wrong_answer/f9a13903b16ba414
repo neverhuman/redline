@@ -1,0 +1,1 @@
+SELECT g, NULL IN (count(*)), count(*) NOT IN (NULL, count(*)) FROM ga GROUP BY g

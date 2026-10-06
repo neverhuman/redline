@@ -1,0 +1,1 @@
+UPDATE t SET z = 'hit' WHERE n IN ('2.5', 'abc')

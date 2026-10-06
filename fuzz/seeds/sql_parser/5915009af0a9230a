@@ -1,0 +1,1 @@
+CREATE TABLE u(k INTEGER, s TEXT, w);         INSERT INTO u VALUES(5, '5', '5'), (10, '10.0', 10), (7, 'abc', 'abc');

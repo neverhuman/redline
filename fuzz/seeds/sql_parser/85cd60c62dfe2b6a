@@ -1,0 +1,1 @@
+SELECT t.id FROM t JOIN (SELECT x FROM n) s ON t.y = s.x

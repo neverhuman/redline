@@ -1,0 +1,1 @@
+SELECT total(x) OVER (), avg(x) OVER () FROM {t}

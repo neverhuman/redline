@@ -1,0 +1,1 @@
+SELECT CASE WHEN x > 0 THEN x END, abs(x) FROM c LIMIT 2

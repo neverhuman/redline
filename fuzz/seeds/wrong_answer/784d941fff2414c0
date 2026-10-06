@@ -1,0 +1,1 @@
+WITH c AS (SELECT -x AS v FROM t) SELECT v * 2 FROM c ORDER BY 1

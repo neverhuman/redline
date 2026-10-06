@@ -1,0 +1,1 @@
+SELECT x, count(*) OVER w FROM c WINDOW w AS () LIMIT 1

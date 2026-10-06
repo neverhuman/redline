@@ -1,0 +1,1 @@
+SELECT x, count(*) FROM t INDEXED BY t_x GROUP BY x ORDER BY x

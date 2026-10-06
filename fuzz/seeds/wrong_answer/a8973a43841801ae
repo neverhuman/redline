@@ -1,0 +1,1 @@
+SELECT CAST(x + row_number() OVER (ORDER BY x DESC) AS INTEGER) FROM c LIMIT 2

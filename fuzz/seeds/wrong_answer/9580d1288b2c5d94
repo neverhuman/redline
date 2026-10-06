@@ -1,0 +1,1 @@
+CREATE TABLE a(n NUMERIC, r REAL, i INTEGER, b);          INSERT INTO a VALUES (1, 1, 1, 1), (2.0, 2.0, 2.0, 2.0), (2.5, 2.5, 2.5, 2.5),          (3, 3, 3, 3.0), (-4.0, -4, -4.0, -4);          CREATE INDEX a_n ON a(n); CREATE INDEX a_r ON a(r); CREATE INDEX a_i ON a(i);          CREATE INDEX a_b ON a(b DESC);

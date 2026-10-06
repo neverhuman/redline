@@ -1,0 +1,1 @@
+SELECT * FROM (SELECT -x, g FROM t) ORDER BY 2, 1

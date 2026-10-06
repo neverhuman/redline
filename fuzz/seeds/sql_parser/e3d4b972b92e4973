@@ -1,0 +1,1 @@
+SELECT a FROM gb GROUP BY a HAVING a = max(b)
