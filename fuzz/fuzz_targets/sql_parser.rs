@@ -36,7 +36,7 @@ fuzz_target!(|data: &[u8]| {
     let (head, tail) = split_first_statement(&sql);
     let _ = (head, tail);
     let _ = split_statements(&sql);
-    if oracle::numbered_parameter_is_unbounded(&sql) {
+    if oracle::numbered_parameter_exceeds_sqlite_cap(&sql) {
         return;
     }
     if let Err(err) = connection().prepare(sql.as_ref()) {

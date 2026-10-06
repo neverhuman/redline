@@ -30,7 +30,7 @@ fuzz_target!(|data: &[u8]| {
     };
     if oracle::skips_filesystem(sql)
         || oracle::skips_recursive(sql)
-        || oracle::numbered_parameter_is_unbounded(sql)
+        || oracle::numbered_parameter_exceeds_sqlite_cap(sql)
     {
         return;
     }

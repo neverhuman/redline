@@ -103,7 +103,7 @@ pub fn skips_filesystem(sql: &str) -> bool {
 /// SQLite's default variable cap is 32766. A longer digit run aborts the
 /// process under AddressSanitizer, so the campaign records that input and
 /// does not prepare it again.
-pub fn numbered_parameter_is_unbounded(sql: &str) -> bool {
+pub fn numbered_parameter_exceeds_sqlite_cap(sql: &str) -> bool {
     let bytes = sql.as_bytes();
     let mut index = 0usize;
     while index < bytes.len() {
