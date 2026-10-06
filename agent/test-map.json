@@ -150,8 +150,9 @@
       "purpose": "verify dependency policy through the canonical host-required lane"
     },
     "docs/": {
-      "command": "rtk bash scripts/ci-local.sh required",
-      "purpose": "verify documentation through the canonical host-required lane"
+      "command": "bash scripts/check-docs.sh",
+      "purpose": "execute documentation against pinned published releases; reject output, help, configuration and generated-coverage drift",
+      "proof_lane": "docs-accuracy"
     },
     "docs/releases/v5.1.1.md": {
       "command": "bash scripts/test-release-prep-v511.sh",
@@ -292,6 +293,45 @@
     "metadata/ci/main-red-2026-10-06/": {
       "command": "bash ops/ci/tests/arm64-packages.sh && cargo test --locked -p redlinedb-bench --test recover_ready --test recover_oracle",
       "purpose": "verify the source custody and READY contracts diagnosed by the committed raw controls; diagnostic parity runs are explicitly filtered"
+    },
+    "scripts/docs/": {
+      "command": "bash scripts/check-docs.sh",
+      "purpose": "execute documentation against pinned published releases; reject output, help, configuration and generated-coverage drift",
+      "proof_lane": "docs-accuracy"
+    },
+    "scripts/check-docs.sh": {
+      "command": "bash scripts/check-docs.sh",
+      "purpose": "execute documentation against pinned published releases; reject output, help, configuration and generated-coverage drift",
+      "proof_lane": "docs-accuracy"
+    },
+    "docs/cli.md": {
+      "command": "bash scripts/check-docs.sh",
+      "purpose": "execute documentation against pinned published releases; reject output, help, configuration and generated-coverage drift",
+      "proof_lane": "docs-accuracy"
+    },
+    "docs/upgrade-v5.1.1.md": {
+      "command": "bash scripts/check-docs.sh",
+      "purpose": "execute documentation against pinned published releases; reject output, help, configuration and generated-coverage drift",
+      "proof_lane": "docs-accuracy"
+    },
+    "docs/known-limitations.md": {
+      "command": "bash scripts/check-docs.sh",
+      "purpose": "execute documentation against pinned published releases; reject output, help, configuration and generated-coverage drift",
+      "proof_lane": "docs-accuracy"
+    },
+    "docs/RELEASING.md": {
+      "command": "bash scripts/check-docs.sh",
+      "purpose": "execute documentation against pinned published releases; reject output, help, configuration and generated-coverage drift",
+      "proof_lane": "docs-accuracy"
+    },
+    "docs/documentation-checks.md": {
+      "command": "bash scripts/check-docs.sh",
+      "purpose": "execute documentation against pinned published releases; reject output, help, configuration and generated-coverage drift",
+      "proof_lane": "docs-accuracy"
+    },
+    "scripts/test-pre-push-scratch.sh": {
+      "command": "bash scripts/test-pre-push-scratch.sh",
+      "purpose": "prove hook audits into ignored scratch without score history and preserves audit/required gate failure exits"
     }
   }
 }

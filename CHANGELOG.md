@@ -2,13 +2,15 @@
 
 ## [Unreleased]
 
-## [5.1.1] - 2026-10-01
+## [5.1.1] - 2026-10-02
 
 This release fixes silent row replacement caused by a shared rowid counter,
 changes automatic rowid numbering to per-table sequences, and reduces work on
 write and indexed-read paths. The database format and C ABI major version are
 unchanged from v5.1.0. See [release notes](docs/releases/v5.1.1.md) for the
-behavior change, measured evidence, and known limitations.
+behavior change, measured evidence, and known limitations. The
+[v5.1.0 to v5.1.1 upgrade note](docs/upgrade-v5.1.1.md) describes backups
+and per-table automatic keys.
 
 ### Fixed
 
@@ -33,8 +35,7 @@ behavior change, measured evidence, and known limitations.
 - **Two connections writing the same rowid lost a row.** An insert took no
   row lock and did not look at a row committed after its transaction began,
   so it wrote over another connection's row: an `INSERT` with an explicit
-  key, an `UPDATE` moving a key, or an `AUTOINCREMENT` insert (four
-  connections inserting 200 rows kept 82). An insert into a table with an
+  key, an `UPDATE` moving a key, or an `AUTOINCREMENT` insert. An insert into a table with an
   `INTEGER PRIMARY KEY` now takes the row lock, as an update does, and a
   rowid a row committed after the statement's snapshot holds is a
   serialization failure, SQLite's `BUSY_SNAPSHOT`. An autocommit statement
@@ -56,8 +57,7 @@ behavior change, measured evidence, and known limitations.
   `statx` per `SELECT`, even a point read. The directory is now made when a
   query first spills.
 - **Unpinning a page wakes no one.** Every page unpin made a futex call to
-  wake threads that could not be waiting for it, about a fifth of the time
-  of an `UPDATE` in the performance audit's profile.
+  wake threads that could not be waiting for it.
 - **Writing a row with an `INTEGER PRIMARY KEY` no longer reads the whole
   table.** Every `INSERT`, and every row an `UPDATE`, `UPSERT`, `MERGE` or
   foreign-key action wrote, read all of the table's rows to test whether

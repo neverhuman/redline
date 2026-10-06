@@ -7,12 +7,18 @@ evidence. They are not configuration or publication prerequisites. The former
 forge control plane and its activation policies are retired; all components
 use GitHub `neverhuman/redline` and root `subrepos.toml`.
 
+The repeatable tag, qualification, custody and stable-publication steps are
+in [RELEASING.md](RELEASING.md).
+
 ## Required acceptance
 
 Run `just required` locally. It covers engine tests, all declared conformance
 suites, central client, web, integration, packaging, security, full-graph dependency review,
 and the Jankurai ratchet; none is advisory or soft-gated. Local packaging checks
-the current platform. GitHub additionally builds and tests all four native targets.
+the current platform. Ordinary GitHub CI additionally cross-builds Linux ARM64
+and runs its checks under emulation on Linux x86_64. Native macOS packaging
+blocks tag acceptance, and release-build verifies the published installer on
+all four native targets.
 The branch-protection check `RedlineDB/required` rejects failed, cancelled or
 skipped required jobs. `main` on `neverhuman/redline` requires that check
 (strict), one approving review dismissed by a new push, and linear history, and

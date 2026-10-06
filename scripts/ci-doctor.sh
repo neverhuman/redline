@@ -8,7 +8,8 @@
 #
 #   core         build and test from source: rustc (rust-toolchain.toml),
 #                cargo, a C compiler, pkg-config
-#   contributor  core plus just, cargo-nextest, git, jq and curl (`just fast`);
+#   contributor  core plus just, cargo-nextest, git, jq, curl, Node 22 and npm
+#                (`just fast` and its published-release documentation check);
 #                rtk is optional
 #   required     contributor plus what `just required` (ci-local.sh ->
 #                ops/ci/pr-ci.sh) runs: Node 22 and npm, Playwright's
@@ -118,18 +119,18 @@ check_node() {
     actual="$(node --version 2>/dev/null)"
     case "$actual" in
         v22.*) pass node "$actual" ;;
-        '') fail node 'missing (expected 22.x; the web console build and its tests use it)' ;;
+        '') fail node 'missing (expected 22.x; documentation checks and the web console use it)' ;;
         *) fail node "expected=22.x actual=${actual}" ;;
     esac
     check_presence npm 'ships with Node 22'
 }
 
 check_chromium() {
-    local browsers="${PLAYWRIGHT_BROWSERS_PATH:-$HOME/.cache/ms-playwright}"
+    local browsers="${PLAYWRIGHT_BROWSERS_PATH:-$ROOT/target/playwright-browsers}"
     if ls -d "$browsers"/chromium-* >/dev/null 2>&1; then
         pass chromium "Playwright Chromium in ${browsers}"
     else
-        fail chromium "no Playwright Chromium in ${browsers} (run: cd subrepos/redline-web/apps/web && npm ci && npx playwright install chromium)"
+        fail chromium "no Playwright Chromium in ${browsers} (run: bash scripts/ci-family.sh integration; uses this checkout cache unless PLAYWRIGHT_BROWSERS_PATH is set)"
     fi
 }
 
@@ -202,9 +203,9 @@ if [ "$profile" != core ]; then
     check_presence jq 'install jq'
     check_presence curl 'install curl'
     check_optional_rtk
+    check_node
 fi
 if [ "$profile" = required ]; then
-    check_node
     check_chromium
     check_postgres
     check_jankurai

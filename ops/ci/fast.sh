@@ -35,8 +35,10 @@ run_preflight() {
     # here rather than discovered by a failed build.
     bash scripts/ci-doctor.sh --profile core
     bash scripts/test-ci-doctor.sh
+    bash scripts/test-pre-push-scratch.sh
     bash scripts/test-playwright-isolation.sh
     bash scripts/test-docs-quickstart.sh --static
+    bash scripts/check-docs.sh
     bash scripts/test-sqlite-parity-report-audit.sh
     # The root invocation only reaches the root workspace. Each subrepo is its
     # own cargo workspace, so `cargo fmt --check` here reports clean while the

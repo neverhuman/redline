@@ -1,8 +1,14 @@
 # RedlineDB Engineering Specification
 
 **Version:** 1.0.1  
-**Status:** Living document — updated with each release cycle  
+**Status:** Historical internal specification; retained design and test-count snapshots
 **Scope:** Internal design reference for researchers, external reviewers, and agents performing architectural analysis. This is not a user guide.
+
+> This is not a current v5.1.1 capability, layout or certification contract.
+> Its pseudocode, counts and proposed controls are historical design material.
+> Use [the current component map](../architecture.md),
+> [the manual](../manual/README.md), [known limitations](../known-limitations.md)
+> and [the durability contract](../manual/durability.md) for release behavior.
 
 ---
 

@@ -1,3 +1,6 @@
+> Historical consolidation release notes. For the current release see
+> [v5.1.1](../releases/v5.1.1.md) and [known limitations](../known-limitations.md).
+
 RedlineDB now includes the engine, conformance runner, Rust clients, web console,
 release tooling and historical documentation in one ordinary GitHub checkout.
 

@@ -73,6 +73,14 @@
     "crates/bench/src/recover/child.rs": "tools",
     "crates/bench/tests/recover_ready.rs": "tools",
     "crates/bench/tests/support/recover_ready_delay.c": "tools",
-    "metadata/ci/main-red-2026-10-06/": "ops"
+    "metadata/ci/main-red-2026-10-06/": "ops",
+    "scripts/docs/": "docs",
+    "docs/cli.md": "docs",
+    "docs/upgrade-v5.1.1.md": "docs",
+    "docs/known-limitations.md": "docs",
+    "docs/RELEASING.md": "docs",
+    "docs/documentation-checks.md": "docs",
+    "scripts/check-docs.sh": "ops",
+    "scripts/test-pre-push-scratch.sh": "ops"
   }
 }

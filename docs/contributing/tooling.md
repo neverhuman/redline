@@ -12,7 +12,7 @@ commands here. The lanes that use it:
 
 | Command | What it runs |
 |---|---|
-| `just score` | `jankurai audit` with `agent/audit-policy.toml`, writing `.jankurai/repo-score.{json,md}` and the score history |
+| `just score` (report maintenance, not a verification command) | `jankurai audit` with `agent/audit-policy.toml`, writing `.jankurai/repo-score.{json,md}` and the score history |
 | `just doctor` | `jankurai doctor --fail-on high` |
 | `just rust-map`, `just rust-witness`, `just rust-diagnose` | `jankurai rust map .`, `jankurai rust witness build .`, `jankurai rust diagnose .` |
 | `just required` | the protected lane, whose audit step runs the pinned binary |

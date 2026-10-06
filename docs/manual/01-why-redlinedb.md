@@ -6,7 +6,7 @@ The storage core is MVCC. A transaction you begin takes a snapshot. A statement 
 
 ## What you gain
 
-**One engine, two familiar SQL shapes.** The default shell speaks a SQLite-shaped dialect: dot-commands, `INTEGER PRIMARY KEY`, and the official parity corpus. Set `REDLINEDB_RESULT_DIALECT=postgres` when the statement and the expected rendering come from Postgres. Booleans then render as `t` and `f`. The Postgres chapter lists what that mode has been shown to do, and what it still refuses.
+**One engine, two familiar SQL shapes.** The default shell speaks a SQLite-shaped dialect: dot-commands, `INTEGER PRIMARY KEY`, and the official parity corpus. Set `REDLINEDB_RESULT_DIALECT=postgres` when the statement and the expected rendering come from Postgres. Predicate booleans can render as `t` and `f`; literals and stored boolean values can render as `1` and `0`. The Postgres chapter lists what that mode has been shown to do, and what it still refuses.
 
 **A typed program for agents, beside SQL.** [RQL](../rql.md) is a JSON document of create, insert, update, delete, and select operations. The engine lowers that document into the same executor plans SQL uses. The text is not passed through the SQL parser. An agent that can emit JSON can talk to the database without building a SQL string. Chapter [For agents](03-for-agents.md) is the short version.
 
@@ -22,7 +22,7 @@ Choose RedlineDB when the program is Rust, the data fits an embedded file, and t
 
 Choose SQLite when you must open an existing SQLite format 3 file in place, when you need FTS5, R-tree, or `dbstat`, or when your own queries measure slower here and that matters more than the embedded Rust API. Latency against the SQLite shell is measured on a quiet host in the README's Versions over time table; the conformance report is not a benchmark. Read [SQLite coverage](04-sqlite-coverage.md) before you promise a speedup.
 
-Choose Postgres when you need the wire protocol, `plpgsql`, logical replication, row-level lock modes, or an extension such as `vector`. The shell lane is a SQL comparison. It is not a server you can point `psql` at. The TCP server in this tree speaks a small framed protocol whose magic is `RLDB`. Chapter [Embed it](08-embed.md) describes that protocol.
+Choose Postgres when you need the wire protocol, full `plpgsql`, logical replication, row-level lock modes, or an extension such as `vector`. The shell lane is a SQL comparison. It is not a server you can point `psql` at. The TCP server in this tree speaks a small framed protocol whose magic is `RLDB`. Chapter [Embed it](08-embed.md) describes that protocol.
 
 ## What this book will not do
 

@@ -48,8 +48,8 @@ because they describe external contracts) are listed in
 The same detector engine catches a second class of issue rooted in
 HTTP/web boilerplate (CORS holes, secret-in-source, SSRF sinks) and
 repo rot (fake-versioned filenames, abandoned branches, expired exception
-markers). RedlineDB ships no web frontend, so the web detectors fire
-only on documentation; the repo-rot detectors govern bench TOMLs and
+markers). The included `subrepos/redline-web` component contains a web
+frontend and has its own audit; the repo-rot detectors govern bench TOMLs and
 module headers under `crates/{bench,ffi,redlinedb}/`. The full
 detector reference and the local exception schema are tracked in
 `.jankurai/audit-policy.toml` and its `agent/audit-policy.toml`
@@ -60,7 +60,8 @@ repair plan.
 
 ```
 jankurai audit . --policy agent/audit-policy.toml --mode advisory \
-  --json .jankurai/repo-score.json --md .jankurai/repo-score.md
+  --json target/docs-audit/repo-score.json --md target/docs-audit/repo-score.md \
+  --no-score-history
 ```
 
 The audit's `future-hostile-dead-language-in-product-code` cap and

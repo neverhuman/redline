@@ -1,7 +1,9 @@
 #!/usr/bin/env bash
 # Run the documented quick start the way a reader does. Every ```bash quickstart
-# block of docs/install.md and of README.md runs in order, in one shell per
-# document, in a fresh HOME with PATH=/usr/bin:/bin, against this platform's
+# block of docs/install.md, README.md and docs/manual/02-start-here.md runs
+# in order, in one shell per
+# document, in a private prefix with inherited HOME and PATH=/usr/bin:/bin,
+# against this platform's
 # candidate archive: a file-transport curl serves the installer and release
 # URLs from the packages directory, and cargo, rustc, cc, node, npm, just and
 # rtk fail if called. The `# prints: <line>` comments of a block are its exact
@@ -22,7 +24,7 @@ failures=0
 fail() { printf 'FAIL: %s\n' "$*" >&2; failures=$((failures + 1)); }
 work=$(mktemp -d)
 trap 'rm -rf "$work"' EXIT
-documents=(docs/install.md README.md)
+documents=(docs/install.md README.md docs/manual/02-start-here.md)
 
 # block <file> <info string>: the fenced blocks opened by exactly that info
 # string, one file each: $work/blocks/<n>.
@@ -83,9 +85,9 @@ for document in "${documents[@]}"; do
   grep -lF -- "-batch :memory: 'SELECT 1;'" "$work/blocks"/* > "$work/select-one" || fail "$document's quick start has no SELECT 1"
   name=${document//\//-}
   run=$work/$name
-  mkdir -p "$run/home" "$run/tmp" "$run/out"
+  mkdir -p "$run/prefix" "$run/tmp" "$run/out"
   script=$run/quickstart.sh
-  printf 'cd "$HOME"\n' > "$script"
+  printf 'cd "$DOCS_CHECK_WORK"\n' > "$script"
   for ((n = 1; n <= count; n++)); do
     # A candidate for another tag is installed under that tag.
     if [[ -n $documented && $documented != "$tag" ]]; then
@@ -93,11 +95,15 @@ for document in "${documents[@]}"; do
     else
       cp "$work/blocks/$n" "$run/block-$n"
     fi
+    # Redirect the documented default prefix into this private fixture without
+    # replacing HOME or letting an example touch the caller's installation.
+    sed 's|$HOME/.local|$DOCS_CHECK_PREFIX|g' "$run/block-$n" > "$run/executable-$n"
     printf 'echo %d > "%s/at"\n{\n' "$n" "$run" >> "$script"
-    cat "$run/block-$n" >> "$script"
+    cat "$run/executable-$n" >> "$script"
     printf '\n} > "%s/out/%d"\n' "$run" "$n" >> "$script"
   done
-  if ! env -i HOME="$run/home" TMPDIR="$run/tmp" PATH="$work/no-toolchain:$work/transport:/usr/bin:/bin" \
+  if ! env -i HOME="$HOME" TMPDIR="$run/tmp" PATH="$work/no-toolchain:$work/transport:/usr/bin:/bin" \
+    PREFIX="$run/prefix" DOCS_CHECK_PREFIX="$run/prefix" DOCS_CHECK_WORK="$run" \
     RELEASE_PACKAGES="$packages" RELEASE_TAG="$tag" RELEASE_INSTALLER="$root/install.sh" \
     bash -euo pipefail "$script" > "$run/stdout" 2> "$run/stderr"; then
     fail "$document quick start block $(cat "$run/at") failed: $(tail -n 5 "$run/stderr")"

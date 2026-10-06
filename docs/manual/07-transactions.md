@@ -20,10 +20,26 @@ The kernel also knows `Isolation::ReadCommitted` and `Isolation::Serializable`. 
 
 `ROLLBACK TO` is not a partial undo. The kernel cannot undo part of a transaction, so `ROLLBACK TO s` rolls the whole transaction back and re-executes the statements the transaction ran before `SAVEPOINT s`, in the transaction's original snapshot and keeping a `BEGIN IMMEDIATE` or `BEGIN EXCLUSIVE` reservation. Rows another connection committed in the meantime stay invisible, as they would in SQLite. Re-execution is faithful only for deterministic statements, so `ROLLBACK TO` refuses, before it changes anything, when one of those earlier statements read the clock (`datetime('now')`, `CURRENT_TIMESTAMP`, a column default that reads it), drew a random value, called a user-defined or Postgres function, read `changes()`, `last_insert_rowid()`, a sequence or the transaction id, fired a trigger, used `RETURNING`, or changed the schema. The error says `ROLLBACK TO cannot be applied`, and the transaction is then failed: only `ROLLBACK` ends it. Statements after the savepoint are discarded, not re-executed, so they can be anything. A savepoint taken before the first statement of its transaction (including a `SAVEPOINT` that opened the transaction) always rolls back. If a re-executed statement fails, for example because a row it updates was changed and committed by another connection, `ROLLBACK TO` returns that error and the transaction is failed. Preparing a `SAVEPOINT`, `RELEASE` or `ROLLBACK TO` statement does nothing; stepping it does.
 
-```rust
+```rust doctest
 conn.begin(redlinedb::BeginMode::Deferred)?;
 conn.execute("INSERT INTO note (body) VALUES (?)", redlinedb::params![body])?;
 conn.commit()?;
+// prints: hello
+```
+
+The deterministic savepoint behavior is executable documentation:
+
+```sql doctest
+CREATE TABLE note (id INTEGER PRIMARY KEY, body TEXT);
+BEGIN;
+INSERT INTO note VALUES(1, 'keep');
+SAVEPOINT edit;
+INSERT INTO note VALUES(2, 'discard');
+ROLLBACK TO edit;
+RELEASE edit;
+COMMIT;
+SELECT id, body FROM note ORDER BY id;
+-- prints: 1|keep
 ```
 
 ## When the commit is real
@@ -38,7 +54,7 @@ conn.commit()?;
 
 If `REDLINEDB_DEFAULT_DURABILITY` is unset, `OpenOptions::default()` selects `Strict`. `strict` and `full` select Strict. `normal` selects Normal. `unsafe_dev`, `unsafe-dev`, and `off` select UnsafeDev. Any other string panics the first time default options are built. The panic text names `strict`, `normal`, and `unsafe_dev`.
 
-`REDLINEDB_QUIET_DURABILITY=1` suppresses the one-line notice the library prints the first time a non-default mode is selected through the environment.
+The presence of `REDLINEDB_QUIET_DURABILITY` (including value `0`) suppresses the one-line notice the library prints the first time a non-default mode is selected through the environment.
 
 The order is the product rule in every mode: past the mode's barrier, then visible. On `Strict` that means durable, then visible. Code that published the commit and flushed afterwards could show a row that a crash then lost. That path is gone.
 

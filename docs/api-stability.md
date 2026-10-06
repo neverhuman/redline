@@ -26,7 +26,7 @@ Depend on a release tag and commit your `Cargo.lock`:
 
 ```toml
 [dependencies]
-redlinedb = { git = "https://github.com/neverhuman/redline", tag = "v5.1.0" }
+redlinedb = { git = "https://github.com/neverhuman/redline", tag = "v5.1.1" }
 ```
 
 The Rust API of the `redlinedb` facade has no semver promise: any release,
@@ -179,7 +179,7 @@ wrong.
 | `sqlite3_interrupt` | yes | partial | Checked only when a step starts, not inside a running step, and never cleared: every later step on the connection returns `SQLITE_INTERRUPT`. | safety_invariants (rldb, NULL only) |
 | `sqlite3_is_interrupted` | no | untested | Reports the flag `sqlite3_interrupt` sets. | |
 | `sqlite3_last_insert_rowid` | yes | tested | | error_paths, safety_invariants (rldb) |
-| `sqlite3_libversion` | yes | partial | RedlineDB's version (for example "5.0.0"), not a SQLite version. | src/tests, probe |
+| `sqlite3_libversion` | yes | partial | RedlineDB's version ("5.1.1" in this release), not a SQLite version. | src/tests, probe |
 | `sqlite3_libversion_number` | yes | partial | RedlineDB's version as major×1000000 + minor×1000 + patch. | src/tests |
 | `sqlite3_open` | yes | tested | `:memory:` opens a private in-memory database; any other name is a RedlineDB database directory. | open_memory, upstream_abi, probe |
 | `sqlite3_open_v2` | yes | refuses | `SQLITE_OPEN_READONLY` fails with `SQLITE_READONLY`; a `file:` name with `SQLITE_OPEN_URI` fails with `SQLITE_CANTOPEN`; the VFS name is not read. | open_memory, src/tests |

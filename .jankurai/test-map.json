@@ -423,8 +423,9 @@
       "purpose": "advisory control-plane health check until migration tests exist"
     },
     "docs/": {
-      "command": "just score",
-      "purpose": "verify agent-readable documentation remains routed"
+      "command": "bash scripts/check-docs.sh",
+      "purpose": "execute documentation against pinned published releases; reject output, help, configuration and generated-coverage drift",
+      "proof_lane": "docs-accuracy"
     },
     "docs/releases/v5.1.1.md": {
       "command": "bash scripts/test-release-prep-v511.sh",
@@ -436,16 +437,19 @@
       "proof_lane": "beyond-sqlite-manifest"
     },
     "docs/COVERAGE_*.md": {
-      "command": "just score",
-      "purpose": "verify coverage evidence docs remain routed"
+      "command": "bash scripts/check-docs.sh",
+      "purpose": "execute documentation against pinned published releases; reject output, help, configuration and generated-coverage drift",
+      "proof_lane": "docs-accuracy"
     },
     "docs/architecture/": {
-      "command": "jankurai audit . --policy agent/audit-policy.toml --mode advisory --json .jankurai/repo-score.json --md .jankurai/repo-score.md",
-      "purpose": "verify architecture docs remain visible to the audit"
+      "command": "bash scripts/check-docs.sh",
+      "purpose": "execute documentation against pinned published releases; reject output, help, configuration and generated-coverage drift",
+      "proof_lane": "docs-accuracy"
     },
     "docs/decisions/": {
-      "command": "jankurai audit . --policy agent/audit-policy.toml --mode advisory --json .jankurai/repo-score.json --md .jankurai/repo-score.md",
-      "purpose": "verify decision records remain visible to the audit"
+      "command": "bash scripts/check-docs.sh",
+      "purpose": "execute documentation against pinned published releases; reject output, help, configuration and generated-coverage drift",
+      "proof_lane": "docs-accuracy"
     },
     "examples/perfect-web-api-db/backend/src/background_job.rs": {
       "command": "just fast",
@@ -673,6 +677,45 @@
     "metadata/ci/main-red-2026-10-06/": {
       "command": "bash ops/ci/tests/arm64-packages.sh && cargo test --locked -p redlinedb-bench --test recover_ready --test recover_oracle",
       "purpose": "verify the source custody and READY contracts diagnosed by the committed raw controls; diagnostic parity runs are explicitly filtered"
+    },
+    "scripts/docs/": {
+      "command": "bash scripts/check-docs.sh",
+      "purpose": "execute documentation against pinned published releases; reject output, help, configuration and generated-coverage drift",
+      "proof_lane": "docs-accuracy"
+    },
+    "scripts/check-docs.sh": {
+      "command": "bash scripts/check-docs.sh",
+      "purpose": "execute documentation against pinned published releases; reject output, help, configuration and generated-coverage drift",
+      "proof_lane": "docs-accuracy"
+    },
+    "docs/cli.md": {
+      "command": "bash scripts/check-docs.sh",
+      "purpose": "execute documentation against pinned published releases; reject output, help, configuration and generated-coverage drift",
+      "proof_lane": "docs-accuracy"
+    },
+    "docs/upgrade-v5.1.1.md": {
+      "command": "bash scripts/check-docs.sh",
+      "purpose": "execute documentation against pinned published releases; reject output, help, configuration and generated-coverage drift",
+      "proof_lane": "docs-accuracy"
+    },
+    "docs/known-limitations.md": {
+      "command": "bash scripts/check-docs.sh",
+      "purpose": "execute documentation against pinned published releases; reject output, help, configuration and generated-coverage drift",
+      "proof_lane": "docs-accuracy"
+    },
+    "docs/RELEASING.md": {
+      "command": "bash scripts/check-docs.sh",
+      "purpose": "execute documentation against pinned published releases; reject output, help, configuration and generated-coverage drift",
+      "proof_lane": "docs-accuracy"
+    },
+    "docs/documentation-checks.md": {
+      "command": "bash scripts/check-docs.sh",
+      "purpose": "execute documentation against pinned published releases; reject output, help, configuration and generated-coverage drift",
+      "proof_lane": "docs-accuracy"
+    },
+    "scripts/test-pre-push-scratch.sh": {
+      "command": "bash scripts/test-pre-push-scratch.sh",
+      "purpose": "prove hook audits into ignored scratch without score history and preserves audit/required gate failure exits"
     }
   },
   "workspace": "jankurai"

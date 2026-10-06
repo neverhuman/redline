@@ -8,8 +8,9 @@ SQL remains the compatibility language. Use it when you are replaying a SQLite s
 
 When the agent is the author of the query, prefer [RQL](../rql.md). RQL version 0.1 is a typed relational program. It is off unless you call it. The Rust methods are `Connection::prepare_rql`, `Connection::execute_rql`, and `Database::prepare_rql`. The shell form is:
 
-```bash
-redlinedb --rql /tmp/items.redline < docs/manual/examples/items.rql.json
+```bash doctest
+redlinedb --rql :memory: < docs/manual/examples/items.rql.json
+# prints: Ada
 ```
 
 `--rql` reads one JSON document from stdin. It cannot be combined with `--cmd` or a SQL argument. The document's statements are `create_table`, `insert`, `select`, and the other phase-1 forms listed in `docs/rql.md`. The engine lowers them to prepared plans. It does not render SQL text and parse it again. A value inside the JSON is a value. It is not a slice of the statement.
@@ -28,11 +29,11 @@ If you do send SQL, keep values in parameters. The Rust `Params` trait is the su
 
 There is no `load_extension` entry point in the engine. A statement that asks for one fails. Native code enters the process through the host program's link line. An agent cannot turn that on by sending SQL.
 
-`CREATE VIRTUAL TABLE ... USING fts5`, `rtree`, or `dbstat` creates an ordinary table. `MATCH` scans that row's text, and `highlight` wraps the term. An unknown module still fails. `pragma_module_list` also prints names that do not create a table (`fts3`, `fts4`, `dbpage`). Trust a `CREATE VIRTUAL TABLE` that succeeds.
+`CREATE VIRTUAL TABLE ... USING fts5`, `rtree`, or `dbstat` creates an ordinary table. `MATCH` scans that row's text, and `highlight` wraps the term. An unknown module still fails. `pragma_module_list` also prints names that do not create a table (`fts3`, `fts4`, `dbpage`). Successful DDL establishes only the declared stand-in table, not a full module or its C API. Check the module limits before relying on it.
 
 ## Two dialects, one flag
 
-Agents often emit Postgres even when the file is local. `REDLINEDB_RESULT_DIALECT=postgres` (read once when the shell starts; `DbOptions::dialect` in Rust) switches result rendering and the Postgres-oriented rewrites the shell corpus uses. Booleans come back as `t` and `f`. Schema-qualified names stay distinct, so `auth.users` and `public.users` do not collapse into one table. `CREATE TYPE ... AS ENUM` compares labels in declaration order. `CREATE DOMAIN ... CHECK (VALUE > n)` accepts a value that passes the check and rejects one that fails. `int4range` is half-open. `point` distance uses `<->`. A value cast with `::citext` compares without case and preserves the spelling you stored; a column declared `citext` is refused with `unsupported capability: citext column`, so treat `citext` as partial and cast instead.
+Agents often emit Postgres even when the file is local. `REDLINEDB_RESULT_DIALECT=postgres` (read once when the shell starts; `DbOptions::dialect` in Rust) switches result rendering and the Postgres-oriented rewrites the shell corpus uses. Predicate booleans can come back as `t` and `f`, while literals and stored boolean values can come back as `1` and `0`. Schema-qualified names stay distinct, so `auth.users` and `public.users` do not collapse into one table. `CREATE TYPE ... AS ENUM` compares labels in declaration order. `CREATE DOMAIN ... CHECK (VALUE > n)` checks explicit domain casts; it does not enforce the same check for an ordinary value inserted into a domain-typed column. `int4range` is half-open. `point` distance uses `<->`. After `CREATE EXTENSION citext` in that session, a value cast with `::citext` compares without case and preserves the spelling you stored; a column declared `citext` is refused with `unsupported capability: citext column`, so treat `citext` as partial and cast instead.
 
 That flag does not turn the process into Postgres. The corpus subset of `plpgsql` runs. `RAISE EXCEPTION` aborts with `ERROR: boom`. `CREATE EXTENSION vector` fails with `extension "vector" is not available`. Text search, trigram, and the GIN/GiST forms in the corpus return rows; those indexes are ordinary indexes. `LISTEN` records a channel on this connection and restores the set on rollback. It is not a notification bus: `NOTIFY`, `pg_notify`, `pg_current_wal_lsn` and `pg_export_snapshot` fail with `unsupported capability:`. Advisory locks and `txid_current()` are real, but only between the connections of one process. There is no PostgreSQL wire protocol, TLS, roles or SQLSTATE. The Postgres chapter and its capability matrix are the list.
 
@@ -40,7 +41,34 @@ SQLite tests and SQLite scripts should leave the variable unset. The official SQ
 
 ## Stop a runaway statement
 
-`InterruptHandle` is part of the public connection API. Hold it in the supervisor task and interrupt the statement when the agent's deadline expires. A busy timeout on `OpenOptions` defaults to five seconds and covers lock waits. Interrupts and busy timeouts answer different waits. Set both when an agent must bound its own runtime.
+`InterruptHandle` sets an interrupt flag shared by connections to the same live database. v5.1.1 checks it at
+entry points and before stepping a statement; it does not poll inside an
+already-running executor step. The flag is not cleared, so subsequent
+operations continue returning `Interrupt`, including through a newly opened
+connection on the same live database. A busy timeout on `OpenOptions` defaults to
+five seconds and covers lock waits, not general query execution. Neither
+mechanism guarantees a deadline for an already-running statement. Use an
+application-owned worker process with an external timeout when that bound
+is required.
+
+```rust doctest
+use redlinedb::{Database, ErrorCode};
+fn main() -> redlinedb::Result<()> {
+    let db = Database::create(std::env::temp_dir().join("interrupt.redline"))?;
+    let mut conn = db.connect()?;
+    conn.interrupt_handle().interrupt();
+    for _ in 0..2 {
+        let error = conn.execute("SELECT 1", ()).unwrap_err();
+        assert_eq!(error.code(), ErrorCode::Interrupt);
+    }
+    let mut fresh = db.connect()?;
+    let error = fresh.execute("SELECT 1", ()).unwrap_err();
+    assert_eq!(error.code(), ErrorCode::Interrupt);
+    println!("interrupt remains set");
+    Ok(())
+}
+// prints: interrupt remains set
+```
 
 ## Read the ledger before you retry
 

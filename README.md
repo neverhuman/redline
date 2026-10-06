@@ -175,9 +175,11 @@ Node 22 and npm).
 ### Read more
 
 [docs/manual](docs/manual/README.md) is the book for operators and for people
-embedding the engine. It was written against v4.1.0 and updated for v5.0.0
-where the release changed what it describes; where it differs from the
-generated blocks in this README, the blocks are the measurement.
+embedding the engine. Its current instructions are checked against the published
+v5.1.1 binary. Read the [upgrade note](docs/upgrade-v5.1.1.md),
+[CLI reference](docs/cli.md) and [known limitations](docs/known-limitations.md)
+before deploying it; generated blocks remain the measured compatibility and
+performance evidence.
 
 <a id="engine-throughput"></a>
 
@@ -387,21 +389,30 @@ RedlineDB is a layered Rust workspace. Lower layers never depend on higher ones.
 
 ## RQL
 
-RQL is an additive, default-off typed relational IR: callers submit JSON or Rust
-values that lower straight into executor plans without the SQL parser. In the
-v5.1.0 official evidence (`083e5efa3`, 2026-09-29), the `rql_phase1`
-suite passed 1183 of 1385 cases. It skipped 202, each
-declared in advance: 105 the phase-1 rewriter cannot parse or lower,
-77 known differences between RQL and SQLite output, and
-20 expected-error cases the suite does not run through RQL.
+RQL is an opt-in typed relational frontend: callers submit JSON or Rust
+values that lower straight into executor plans without the SQL parser.
+<!-- rql-coverage:begin -->
+<!-- Generated from committed official evidence and scope policy; do not edit by hand. -->
+The `rql_phase1` suite passed 1183 of 1385 cases, failed 0,
+and skipped 202. Every skip is declared in advance:
+
+- 105 cases the phase-1 rewriter cannot parse or lower.
+- 77 known differences between RQL and SQLite output.
+- 20 expected-error cases the suite does not run through RQL.
+
+Evidence source: `af4fc74cc3280582c4e6bd0583fe503c83118c48`. A skip is not a pass.
+<!-- rql-coverage:end -->
+
 See [docs/rql.md](docs/rql.md).
 
 ## Development and contributing
 
 `just required` is the protected PR lane. It runs every CI family (engine,
 testing, central, web, release tools, integration, parity and packaging), then
-the jankurai security check and the audit family. `just fast` is the default
-local proof lane.
+the jankurai security check and the audit family. Local PostgreSQL parity
+requires `REDLINE_TESTING_POSTGRES_URL`; a run without that oracle reports
+skips. GitHub also runs platform packaging checks. `just fast` is the default
+local proof lane, including the [release documentation check](docs/documentation-checks.md).
 
 ```bash
 just fast
@@ -421,7 +432,8 @@ bundle, and
 `redline-testing version-history --bundle … --readme README.md` for the version
 table. Official SQLite, memory, RQL and PostgreSQL evidence is produced only by
 `subrepos/redline-testing`; engine-local tests are regression checks.
-[docs/release.md](docs/release.md) is the release and rollback runbook, and
+[docs/RELEASING.md](docs/RELEASING.md) records the qualification and publication
+steps; [docs/release.md](docs/release.md) defines release policy, and
 [SECURITY.md](SECURITY.md) says how to report a vulnerability.
 
 ## Citing

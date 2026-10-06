@@ -1,5 +1,9 @@
 # GitHub authority cutover
 
+> Historical migration record. The current source, review and release
+> authority is `neverhuman/redline`; old repository names and commands below
+> describe the migration, not current installation instructions.
+
 Source, pull requests, checks and releases for all six RedlineDB components use
 https://github.com/neverhuman/RedlineDB. Root `subrepos.toml` is the component
 inventory; component Cargo workspaces remain independent.

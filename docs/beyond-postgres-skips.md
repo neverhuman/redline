@@ -113,4 +113,7 @@ triaged 233 failures: about 114 were written into this skip list and about
 live here ("14 skipped of 14 failed", and the same shape for procedures,
 replication, materialized views, locks, collations, types, migration,
 schemas, and indexes) described that triage. They are not the current score.
-The current score is 265 / 265 with the 12 rejections above.
+Current agreement, expected rejections and declared-unsupported counts come
+from the generated [README PostgreSQL block](../README.md#postgresql-sql-shell-corpus)
+and [known-limitations evidence](known-limitations.md#what-the-compatibility-evidence-measures).
+Declared-unsupported cases are refusals, not passing queries.

@@ -33,7 +33,7 @@ The corpus is a SQL-shell comparison. The [capability matrix](../beyond-postgres
 
 These are in the engine on this commit, and the corpus cases that cover them are not in the open list.
 
-**Results.** Booleans render as `t` and `f`. `NULL` renders as the null marker the shell was given.
+**Results.** Predicate booleans can render as `t` and `f`; literals and stored boolean values can render as `1` and `0`. `NULL` renders as the null marker the shell was given.
 
 **What a match means.** A passing case is *normalized SQL-shell transcript agreement*: `psql` and the `redlinedb` shell print the same text once the case's normalizers run. Both shells print the ASCII unit separator (0x1F) between cells and `NULL` wrapped in ASCII record separators (0x1E) for a SQL NULL, so `('a|b','c')` and `('a','b|c')` differ, and NULL, the text `'NULL'`, and `''` differ. It is still a text comparison. A value that contains a newline prints like two rows, and the normalizers (for example `t`/`f` to `1`/`0`) act on cells without their SQL types. It is not typed-result or application parity.
 
@@ -42,10 +42,10 @@ These are in the engine on this commit, and the corpus cases that cover them are
 **Types you can create.**
 
 - `CREATE TYPE name AS ENUM (...)` stores the labels in declaration order. `'meh'::mood < 'sad'::mood` follows that order, which is not alphabetical.
-- `CREATE DOMAIN ... CHECK (VALUE > n)` returns the base value when the check passes and rejects the value when it fails.
+- `CREATE DOMAIN ... CHECK (VALUE > n)` checks an explicit domain cast and returns its base value on success. Ordinary inserts into domain-typed columns do not enforce that check.
 - `int4range(lo, hi)` is half-open. `int4range(1, 10)` contains 5 and does not contain 10. Overlap (`&&`) uses the same bounds.
 - `point(x, y)` and the `<->` operator. `point(0,0) <-> point(3,4)` is `5`.
-- `citext` is partial. A value cast with `::citext` compares and orders without case and keeps the spelling you wrote. A column declared `citext` is refused (`unsupported capability: citext column`) because it would compare with case; cast the values instead. The cast's internal U+E000 prefix shows up in `length`, `octet_length` and `substr`, and `count(DISTINCT)`, `GROUP BY` and indexes still compare cast values by their bytes. The prefix is read as a marker only in Postgres-dialect statements after `CREATE EXTENSION citext`; anywhere else U+E000 is an ordinary character. `CREATE EXTENSION pg_trgm`, `btree_gin`, and `btree_gist` are accepted. `CREATE EXTENSION vector` fails with `extension "vector" is not available`.
+- `citext` is partial. After `CREATE EXTENSION citext` in the session, a value cast with `::citext` compares and orders without case and keeps the spelling you wrote. A column declared `citext` is refused (`unsupported capability: citext column`) because it would compare with case; cast the values instead. The cast's internal U+E000 prefix shows up in `length`, `octet_length` and `substr`, and `count(DISTINCT)`, `GROUP BY` and indexes still compare cast values by their bytes. The prefix is read as a marker only in Postgres-dialect statements after `CREATE EXTENSION citext`; anywhere else U+E000 is an ordinary character. `CREATE EXTENSION pg_trgm`, `btree_gin`, and `btree_gist` are accepted. `CREATE EXTENSION vector` fails with `extension "vector" is not available`.
 - `to_tsvector`, `to_tsquery`, `setweight`, `ts_rank`, `@@`, `similarity`, `word_similarity`, `%`, and text `<->` match the corpus rows. `USING gin` and `USING gist` are stored as ordinary indexes. The cases compare rows, not plans.
 
 **SQL functions.** `LANGUAGE SQL` functions run. `LATERAL` is accepted on the forms the corpus covers. `DEFAULT nextval(...)` together with `ALTER SEQUENCE ... OWNED BY` inserts sequence values.

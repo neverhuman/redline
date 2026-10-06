@@ -1,5 +1,11 @@
 # Beyond-SQLite Gap Backlog
 
+> Historical ranking seed, not the v5.1.1 support matrix. Some rows still say
+> backlog although corpus-shaped routines, schemas and materialized views
+> now run. Use [PostgreSQL coverage](manual/05-postgres-coverage.md) and the
+> [capability matrix](beyond-postgres-skips.md#capability-matrix) for current
+> support and limitations.
+
 This backlog records features that are useful beyond SQLite compatibility but
 are not default CI failures until RedlineDB chooses an executable contract for
 them. The ranking is seeded from `tips/beyond/*.txt`; each row names the local
