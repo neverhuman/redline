@@ -1,0 +1,20 @@
+{
+  "memory": {
+    "path": "target/redline-testing/memory.raw.jsonl",
+    "rawSha256": "67db71ba1d2c2fe4e5934764a9f0e207ded3ae63532cde654168f851ea2e67aa",
+    "uniqueCases": 2445,
+    "caseStatusCounts": {
+      "passed": 2440,
+      "failed": 5
+    }
+  },
+  "rql_phase1": {
+    "path": "target/redline-testing/rql_phase1.raw.jsonl",
+    "rawSha256": "1fa783293203827f765381ea96242e9cc356c6ba3546fb2743dc5eecb191c9c7",
+    "uniqueCases": 1385,
+    "caseStatusCounts": {
+      "skipped": 202,
+      "passed": 1183
+    }
+  }
+}

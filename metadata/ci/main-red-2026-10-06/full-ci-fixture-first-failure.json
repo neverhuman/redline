@@ -1,0 +1,162 @@
+{
+  "at": "2026-10-06T18:34:07.962852+00:00",
+  "sourceHead": "867f574de19f41f3249e7ab04f3bb871e24e5dc7",
+  "gatePassed": false,
+  "steps": [
+    {
+      "name": "acceptance",
+      "command": [
+        "bash",
+        "ops/ci/tests/arm64-packages.sh"
+      ],
+      "pid": 1254048,
+      "processGroup": 1254048,
+      "startedAt": "2026-10-06T18:04:35.035014+00:00",
+      "log": "target/rt-scratch/pr-ci-main-red-867f574de-proof1-acceptance.log",
+      "exit": 0,
+      "expected": 0,
+      "finishedAt": "2026-10-06T18:04:35.631964+00:00",
+      "logSha256": "41d11d7c2827162ffaadfc0fc4ccc9638cfc415ffb42aed8d9f81e678025eb87"
+    },
+    {
+      "name": "parent",
+      "command": [
+        "bash",
+        "/home/ubuntu/redlineDB/ops/ci/tests/arm64-packages.sh"
+      ],
+      "pid": 1255014,
+      "processGroup": 1255014,
+      "startedAt": "2026-10-06T18:04:36.173360+00:00",
+      "log": "target/rt-scratch/pr-ci-main-red-867f574de-proof1-parent.log",
+      "exit": 1,
+      "expected": 1,
+      "finishedAt": "2026-10-06T18:04:36.240287+00:00",
+      "logSha256": "057a30456dfd20d0c179f410eeb483fa55be3edebeeefd63b6b80333cad4af8e"
+    },
+    {
+      "name": "security-preflight",
+      "command": [
+        "taskset",
+        "-c",
+        "125",
+        "target/ci/tools/jankurai",
+        "security",
+        "run",
+        ".",
+        "--strict",
+        "--profile",
+        "ci",
+        "--script",
+        "ops/ci/security-family.sh",
+        "--out",
+        "target/jankurai/security/evidence.json"
+      ],
+      "pid": 1302494,
+      "processGroup": 1302494,
+      "startedAt": "2026-10-06T18:05:43.427991+00:00",
+      "log": "target/rt-scratch/pr-ci-main-red-867f574de-proof1-security-preflight.log",
+      "exit": 0,
+      "expected": 0,
+      "finishedAt": "2026-10-06T18:07:46.492516+00:00",
+      "logSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "name": "audit-preflight",
+      "command": [
+        "taskset",
+        "-c",
+        "125",
+        "bash",
+        "-euo",
+        "pipefail",
+        "-c",
+        "source ops/ci/lib.sh\njankurai audit . --full --mode ratchet --baseline .jankurai/baselines/github-monorepo.repo-score.json --policy agent/audit-policy.toml --json \"$1\" --md \"$2\" --no-score-history\njq -e \".score > 85 and .decision.hard_findings == 0 and (.caps_applied | length) == 0\" \"$1\" >/dev/null",
+        "sandbox-audit",
+        "/home/ubuntu/redlineDB/target/review/main-red/sandbox-audit-867f574de-proof1.json",
+        "/home/ubuntu/redlineDB/target/review/main-red/sandbox-audit-867f574de-proof1.md"
+      ],
+      "pid": 1540541,
+      "processGroup": 1540541,
+      "startedAt": "2026-10-06T18:07:46.575360+00:00",
+      "log": "target/rt-scratch/pr-ci-main-red-867f574de-proof1-audit-preflight.log",
+      "exit": 0,
+      "expected": 0,
+      "finishedAt": "2026-10-06T18:08:26.907005+00:00",
+      "logSha256": "da11e2479240e313d86a610bf672713520c21895f5443d99808ba47b3543ece8"
+    },
+    {
+      "name": "required",
+      "command": [
+        "taskset",
+        "-c",
+        "125",
+        "just",
+        "pr-ci"
+      ],
+      "pid": 1568467,
+      "processGroup": 1568467,
+      "startedAt": "2026-10-06T18:08:26.927495+00:00",
+      "log": "target/rt-scratch/pr-ci-main-red-867f574de-proof1-required.log",
+      "exit": 101,
+      "expected": 0,
+      "finishedAt": "2026-10-06T18:27:12.308198+00:00",
+      "logSha256": "9cc719d0a4f32a77452d3f5c04d8af5dc24018e9008c4166cc034906eea48139"
+    }
+  ],
+  "error": "RuntimeError('required exit 101, expected 0')",
+  "targetRestored": true,
+  "sandboxRemoved": true,
+  "postgresCleanup": {
+    "exit": 0,
+    "container": "97d32f723aac1f79db0fb19479a2c3ca124af12ad9582d99c8bbf91fa9175c21"
+  },
+  "failure": "ci_fixture_git.rs:79: new package-build-custody fixture did not clear every git rev-parse --local-env-vars variable before git init",
+  "successfulNextestSummaries": [
+    [
+      "  33.311s",
+      "447",
+      "447",
+      "4"
+    ],
+    [
+      "  63.498s",
+      "605",
+      "605",
+      "3"
+    ],
+    [
+      "   1.772s",
+      "22",
+      "22",
+      "242"
+    ],
+    [
+      "   0.153s",
+      "11",
+      "11",
+      "1"
+    ],
+    [
+      "   1.230s",
+      "14",
+      "14",
+      "0"
+    ],
+    [
+      "   0.078s",
+      "1",
+      "1",
+      "0"
+    ],
+    [
+      " 288.972s",
+      "1898",
+      "1898",
+      "4"
+    ]
+  ],
+  "parityBaselineSeconds": [
+    "5.295"
+  ],
+  "resolution": "Both new fixture scripts clear the complete Git local environment list. The package fixture now executes under the existing poisoned-Git harness, verifying caller repository preservation. No source test or gate weakening. A separate post-clean narrow attempt101 used a cached integration binary pointing at the removed clone; recompile only the final test target with a debuginfo-only flag, then tests pass. Fresh stock clean-head required remains mandatory."
+}

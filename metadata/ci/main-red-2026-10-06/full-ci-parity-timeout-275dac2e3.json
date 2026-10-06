@@ -1,0 +1,192 @@
+{
+  "sourceHead": "275dac2e3e75d72138131d85aaaacdf22909344e",
+  "sourceTree": "7404bc9b9003a744acd5b72c97b024cfa21f8a73",
+  "fullRequiredExit": 1,
+  "gatePassed": false,
+  "failedStage": "Official PostgreSQL qualification rejects two target invocations that timed out after5s; processed report remains older0aa and is not current evidence.",
+  "skippedCases": [
+    {
+      "case_file": "corpus/beyond_sqlite/generated_manifest.json",
+      "case_id": "BEYOND-CASE-20049",
+      "category": "BEYOND_COLLATIONS_ILIKE",
+      "comparator_version": "redline-beyond-sqlite-comparator-v2",
+      "diagnostic": "target invocation error: target binary timed out after 5s",
+      "feature_rank": 8,
+      "memory_status": "not_run",
+      "name": "UPPER_GERMAN_ESZETT",
+      "priority": "P0",
+      "profile": "beyond_sqlite_target",
+      "reference_elapsed_ns": 100778241,
+      "reference_engine": "postgres",
+      "reference_exit_code": 0,
+      "reference_stdout": "STRA\u00dfE\n",
+      "repetition_index": 1,
+      "sample_index": 0,
+      "sample_role": "measured:1",
+      "status": "skipped",
+      "suite": "beyond_sqlite",
+      "target_elapsed_ns": 5020042102,
+      "target_engine": "redlinedb",
+      "target_exit_code": null,
+      "target_stderr_head": "",
+      "target_stdout": ""
+    },
+    {
+      "case_file": "corpus/beyond_sqlite/generated_manifest.json",
+      "case_id": "BEYOND-CASE-20342",
+      "category": "BEYOND_VECTOR_ADVANCED_INDEXES",
+      "comparator_version": "redline-beyond-sqlite-comparator-v2",
+      "diagnostic": "target invocation error: target binary timed out after 5s",
+      "feature_rank": 12,
+      "memory_status": "not_run",
+      "name": "INDEX_HASH_EQUALITY",
+      "priority": "P0",
+      "profile": "beyond_sqlite_target",
+      "reference_elapsed_ns": 100785084,
+      "reference_engine": "postgres",
+      "reference_exit_code": 0,
+      "reference_stdout": "2\n",
+      "repetition_index": 1,
+      "sample_index": 0,
+      "sample_role": "measured:1",
+      "status": "skipped",
+      "suite": "beyond_sqlite",
+      "target_elapsed_ns": 5049978218,
+      "target_engine": "redlinedb",
+      "target_exit_code": null,
+      "target_stderr_head": "",
+      "target_stdout": ""
+    }
+  ],
+  "classifiedTargetResults": {
+    "positivePass": 240,
+    "expectedRejectionPass": 12,
+    "unsupported": 11,
+    "notExecuted": 2
+  },
+  "allPreviousSteps": [
+    {
+      "name": "acceptance",
+      "command": [
+        "bash",
+        "ops/ci/tests/arm64-packages.sh"
+      ],
+      "startedAt": "2026-10-06T20:11:47.175234+00:00",
+      "log": "target/rt-scratch/pr-ci-main-red-275dac2e3-proof1-acceptance.log",
+      "exit": 0,
+      "expected": 0,
+      "finishedAt": "2026-10-06T20:11:47.939115+00:00",
+      "logSha256": "2acde2879a444ff805cbe6a0c9b31a4b03de9266403da49c0f647ab29b050905"
+    },
+    {
+      "name": "parent",
+      "command": [
+        "bash",
+        "/home/ubuntu/redlineDB/ops/ci/tests/arm64-packages.sh"
+      ],
+      "startedAt": "2026-10-06T20:11:48.083105+00:00",
+      "log": "target/rt-scratch/pr-ci-main-red-275dac2e3-proof1-parent.log",
+      "exit": 1,
+      "expected": 1,
+      "finishedAt": "2026-10-06T20:11:48.148488+00:00",
+      "logSha256": "057a30456dfd20d0c179f410eeb483fa55be3edebeeefd63b6b80333cad4af8e"
+    },
+    {
+      "name": "source-context-preflight",
+      "command": [
+        "timeout",
+        "900",
+        "bash",
+        "ops/ci/arm64-packages.sh",
+        "check-sources"
+      ],
+      "startedAt": "2026-10-06T20:12:15.625416+00:00",
+      "log": "target/rt-scratch/pr-ci-main-red-275dac2e3-proof1-source-context-preflight.log",
+      "exit": 0,
+      "expected": 0,
+      "finishedAt": "2026-10-06T20:12:26.530819+00:00",
+      "logSha256": "956e2650b1f5aafe6bd285576b198cd864d61a5f9c4b172b2b6aa929dddda9f7"
+    },
+    {
+      "name": "security-preflight",
+      "command": [
+        "taskset",
+        "-c",
+        "61,63,126",
+        "target/ci/tools/jankurai",
+        "security",
+        "run",
+        ".",
+        "--strict",
+        "--profile",
+        "ci",
+        "--script",
+        "ops/ci/security-family.sh",
+        "--out",
+        "target/jankurai/security/evidence.json"
+      ],
+      "startedAt": "2026-10-06T20:12:26.533975+00:00",
+      "log": "target/rt-scratch/pr-ci-main-red-275dac2e3-proof1-security-preflight.log",
+      "exit": 0,
+      "expected": 0,
+      "finishedAt": "2026-10-06T20:13:11.931403+00:00",
+      "logSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "name": "audit-preflight",
+      "command": [
+        "taskset",
+        "-c",
+        "61,63,126",
+        "bash",
+        "-euo",
+        "pipefail",
+        "-c",
+        "source ops/ci/lib.sh\njankurai audit . --full --mode ratchet --baseline .jankurai/baselines/github-monorepo.repo-score.json --policy agent/audit-policy.toml --json \"$1\" --md \"$2\" --no-score-history\njq -e \".score > 85 and .decision.hard_findings == 0 and (.caps_applied | length) == 0\" \"$1\" >/dev/null",
+        "sandbox-audit",
+        "/home/ubuntu/redlineDB/target/review/main-red/sandbox-audit-275dac2e3-proof1.json",
+        "/home/ubuntu/redlineDB/target/review/main-red/sandbox-audit-275dac2e3-proof1.md"
+      ],
+      "startedAt": "2026-10-06T20:13:11.937449+00:00",
+      "log": "target/rt-scratch/pr-ci-main-red-275dac2e3-proof1-audit-preflight.log",
+      "exit": 0,
+      "expected": 0,
+      "finishedAt": "2026-10-06T20:13:48.253137+00:00",
+      "logSha256": "da11e2479240e313d86a610bf672713520c21895f5443d99808ba47b3543ece8"
+    },
+    {
+      "name": "required",
+      "command": [
+        "taskset",
+        "-c",
+        "61,63,126",
+        "just",
+        "pr-ci"
+      ],
+      "startedAt": "2026-10-06T20:13:48.276049+00:00",
+      "log": "target/rt-scratch/pr-ci-main-red-275dac2e3-proof1-required.log",
+      "exit": 1,
+      "expected": 0,
+      "finishedAt": "2026-10-06T20:42:52.281290+00:00",
+      "logSha256": "442cd8ee190703ec99b2769c1b4379ea79f72d5bd70bba144fe7b9f7bd95fb09"
+    }
+  ],
+  "cleanup": {
+    "targetRestored": true,
+    "sandboxRemoved": true,
+    "postgresCleanup": {
+      "exit": 0,
+      "container": "1a7681701a92291822c55b2febf7935717491758dabaa68d7cf35d5035b78439"
+    }
+  },
+  "offrootCustody": {
+    "head": "275dac2e3e75d72138131d85aaaacdf22909344e",
+    "gatePassed": false,
+    "archive": "/mnt/fast-scratch/jope-prime-offroot/redlinedb-v511-tests/archive/main-red-275dac2e3-proof1-verified-evidence-20261006T204434Z.tar.gz",
+    "archiveBytes": 129010983,
+    "archiveSha256": "28dc6a7eccd7c2af7bb67afd32e7403ff620e46917d4eff5f6c46b7ab4869f2d",
+    "verifiedFiles": 2224,
+    "sourceReceiptSha256": "ce2b44c99551a099c461870c3bb740dc5aa57e89fa999c2b455f8ecec3350948"
+  },
+  "classification": "Likely scheduling/host-contention flake: preserved CLI bytes match earlier successful0aa; both exact invocations pass20repetitions in same environment/affinity/5s timeout. Not a replacement for full required and not an induced busy-host proof."
+}

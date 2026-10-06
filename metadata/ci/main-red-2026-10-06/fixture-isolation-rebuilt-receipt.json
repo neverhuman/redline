@@ -1,0 +1,78 @@
+{
+  "at": "2026-10-06T18:31:16.741040+00:00",
+  "reason": "Restored target held unchanged integration tests whose CARGO_MANIFEST_DIR was compiled for an automatically removed clone. A final-target debuginfo-only flag forces canonical manifest recompilation without altering test behavior, product inputs, target directory or dependency graph.",
+  "priorNarrowAttemptExit": 101,
+  "priorPanic": "removed-clone path: fast.sh NotFound; found only0 fixture scripts",
+  "steps": [
+    {
+      "target": "ci_fixture_git",
+      "phase": "compile",
+      "argv": [
+        "taskset",
+        "-c",
+        "124-127",
+        "cargo",
+        "rustc",
+        "--locked",
+        "-p",
+        "redlinedb-bench",
+        "--test",
+        "ci_fixture_git",
+        "--message-format=json",
+        "--",
+        "-C",
+        "debuginfo=0"
+      ],
+      "exit": 0,
+      "rawLog": "target/review/main-red/ci_fixture_git-manifest-rebuilt-compile.log",
+      "sha256": "131da9b5dc35c693fc11baae293c08c72372a78eef0ed070e73e39641e78d83f"
+    },
+    {
+      "target": "ci_fixture_git",
+      "phase": "test",
+      "argv": [
+        "/home/ubuntu/redlineDB/target/debug/deps/ci_fixture_git-d8489922dd2087d1",
+        "--test-threads=1",
+        "--nocapture"
+      ],
+      "exit": 0,
+      "rawLog": "target/review/main-red/ci_fixture_git-manifest-rebuilt-run.log",
+      "sha256": "687bf2f0189eceba61f328f1c2f684d31394f7cab236f74f661f3424ea7d770c"
+    },
+    {
+      "target": "ci_workflow_routing",
+      "phase": "compile",
+      "argv": [
+        "taskset",
+        "-c",
+        "124-127",
+        "cargo",
+        "rustc",
+        "--locked",
+        "-p",
+        "redlinedb-bench",
+        "--test",
+        "ci_workflow_routing",
+        "--message-format=json",
+        "--",
+        "-C",
+        "debuginfo=0"
+      ],
+      "exit": 0,
+      "rawLog": "target/review/main-red/ci_workflow_routing-manifest-rebuilt-compile.log",
+      "sha256": "85f1680ebc2f689e4b0f65af1ab937e23a0c40f58b58b57eb9f7854c1db78b12"
+    },
+    {
+      "target": "ci_workflow_routing",
+      "phase": "test",
+      "argv": [
+        "/home/ubuntu/redlineDB/target/debug/deps/ci_workflow_routing-16d9f7180433fd78",
+        "--test-threads=1",
+        "--nocapture"
+      ],
+      "exit": 0,
+      "rawLog": "target/review/main-red/ci_workflow_routing-manifest-rebuilt-run.log",
+      "sha256": "24c141d9bb51c246bab528ac1288b67e56da4f895e738ddf5fee391198f3e5b6"
+    }
+  ]
+}

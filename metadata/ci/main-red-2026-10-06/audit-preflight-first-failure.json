@@ -1,0 +1,109 @@
+{
+  "at": "2026-10-06T18:02:03.306050+00:00",
+  "sourceHead": "de8b52880f1be56cd91773eb480e9834b53c8aee",
+  "cleanHeadGate": {
+    "requiredStarted": false,
+    "gatePassed": false,
+    "steps": [
+      {
+        "name": "acceptance",
+        "command": [
+          "bash",
+          "ops/ci/tests/arm64-packages.sh"
+        ],
+        "pid": 672448,
+        "processGroup": 672448,
+        "startedAt": "2026-10-06T17:56:07.772862+00:00",
+        "log": "target/rt-scratch/pr-ci-main-red-de8b52880-proof1-acceptance.log",
+        "exit": 0,
+        "expected": 0,
+        "finishedAt": "2026-10-06T17:56:08.085837+00:00",
+        "logSha256": "6938c2cea2e6fa83290eb808b4c8d7b66e6f13930d956dbb27addde8d0bbedd1"
+      },
+      {
+        "name": "parent",
+        "command": [
+          "bash",
+          "/home/ubuntu/redlineDB/ops/ci/tests/arm64-packages.sh"
+        ],
+        "pid": 672866,
+        "processGroup": 672866,
+        "startedAt": "2026-10-06T17:56:08.142672+00:00",
+        "log": "target/rt-scratch/pr-ci-main-red-de8b52880-proof1-parent.log",
+        "exit": 1,
+        "expected": 1,
+        "finishedAt": "2026-10-06T17:56:08.191202+00:00",
+        "logSha256": "057a30456dfd20d0c179f410eeb483fa55be3edebeeefd63b6b80333cad4af8e"
+      },
+      {
+        "name": "security-preflight",
+        "command": [
+          "taskset",
+          "-c",
+          "125",
+          "target/ci/tools/jankurai",
+          "security",
+          "run",
+          ".",
+          "--strict",
+          "--profile",
+          "ci",
+          "--script",
+          "ops/ci/security-family.sh",
+          "--out",
+          "target/jankurai/security/evidence.json"
+        ],
+        "pid": 678717,
+        "processGroup": 678717,
+        "startedAt": "2026-10-06T17:56:18.521573+00:00",
+        "log": "target/rt-scratch/pr-ci-main-red-de8b52880-proof1-security-preflight.log",
+        "exit": 0,
+        "expected": 0,
+        "finishedAt": "2026-10-06T17:57:28.577923+00:00",
+        "logSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      {
+        "name": "audit-preflight",
+        "command": [
+          "taskset",
+          "-c",
+          "125",
+          "bash",
+          "-euo",
+          "pipefail",
+          "-c",
+          "source ops/ci/lib.sh\njankurai audit . --full --mode ratchet --baseline .jankurai/baselines/github-monorepo.repo-score.json --policy agent/audit-policy.toml --json \"$1\" --md \"$2\" --no-score-history\njq -e \".score > 85 and .decision.hard_findings == 0 and (.caps_applied | length) == 0\" \"$1\" >/dev/null",
+          "sandbox-audit",
+          "/home/ubuntu/redlineDB/target/review/main-red/sandbox-audit-de8b52880-proof1.json",
+          "/home/ubuntu/redlineDB/target/review/main-red/sandbox-audit-de8b52880-proof1.md"
+        ],
+        "pid": 716930,
+        "processGroup": 716930,
+        "startedAt": "2026-10-06T17:57:28.580323+00:00",
+        "log": "target/rt-scratch/pr-ci-main-red-de8b52880-proof1-audit-preflight.log",
+        "exit": 1,
+        "expected": 0,
+        "finishedAt": "2026-10-06T17:58:05.882281+00:00",
+        "logSha256": "daaa84c2762cf67d378bcebeec722e3e21b31e1081069a5774edfe566b94baf4"
+      }
+    ],
+    "error": "RuntimeError('audit-preflight exit 1, expected 0')",
+    "targetRestored": true,
+    "sandboxRemoved": true,
+    "postgresCleanup": {
+      "exit": 0,
+      "container": "c3faa2313ab7d9b28e3e10b8579db3d67b1738c3b84c4e5d81e0ad889cb138fb"
+    }
+  },
+  "audit": {
+    "score": 74,
+    "hardFindings": 2,
+    "caps": [
+      "non-optimal-product-language-found",
+      "false-green-test-risk"
+    ],
+    "reportRawSha256": "a0087b9275e17d08d7bcdead3b576173d699f9417fa17493d0c08bdb5732ccaf",
+    "rawPath": "target/review/main-red/sandbox-audit-de8b52880-proof1.json"
+  },
+  "resolution": "Diagnostic C snapshot stored as byte-exact compressed evidence instead of an active runtime .c file. The two libc nonzero fail-closed termination sites carry the documented dated HLT-008 detector justification; C behavior and all policy/gate contracts unchanged. A new source head must pass a fresh clean-head full required run."
+}

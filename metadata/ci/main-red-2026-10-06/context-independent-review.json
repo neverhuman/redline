@@ -1,0 +1,13 @@
+{
+  "at": "2026-10-06T20:08:25.132875+00:00",
+  "reviewer": "/root/independent_ci_review",
+  "scope": "Read-only two-file delta, no tests/writes/claims/GitHub approval",
+  "finding": "P2 broad log glob included ignored private logs",
+  "resolution": "Exactly25 unique literal tracked exceptions,24 logs and public envexample, with fullset/tracked/no-glob regression. Global private and build exclusions retained.",
+  "remainingBlockers": [],
+  "inputs": {
+    "ops/ci/arm64-packages.Dockerfile.dockerignore": "a6f4a075f4a21b01fc9e93e257ef32a09f7b6851b5c40c6a99327a95a869cf5a",
+    "ops/ci/tests/arm64-packages.sh": "e3bcd96d9cf49da72decd54f9e68660e2db438af032d753f6b8f7878d0960d20"
+  },
+  "realContextControlSha256": "dfe16333629d48a500c52540ef1fcd44986e0c563b308163b3baffbab63bdfac"
+}

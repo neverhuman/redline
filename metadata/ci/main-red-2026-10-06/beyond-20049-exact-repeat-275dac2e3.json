@@ -1,0 +1,79 @@
+{
+  "at": "2026-10-06T20:46:06.198510+00:00",
+  "sourceHead": "275dac2e3e75d72138131d85aaaacdf22909344e",
+  "caseId": "BEYOND-CASE-20049",
+  "binarySha256": "b229b56103bb9d75955c886ff22aabcbc89b93ef30cd734901704a79d9ec0729",
+  "scope": "Exact failed-case CLI arguments, preamble, SQL and5s timeout; only own subprocesses. Earlier successful0aa parity uses byte-identical CLI. Repetition does not replace failed full-gate evidence.",
+  "iterations": [
+    {
+      "index": 1,
+      "exit": 0,
+      "elapsedSeconds": 0.16287554474547505,
+      "stdout": "STRA\u00dfE\n",
+      "stderr": ""
+    },
+    {
+      "index": 2,
+      "exit": 0,
+      "elapsedSeconds": 0.04844622081145644,
+      "stdout": "STRA\u00dfE\n",
+      "stderr": ""
+    },
+    {
+      "index": 3,
+      "exit": 0,
+      "elapsedSeconds": 0.05130092799663544,
+      "stdout": "STRA\u00dfE\n",
+      "stderr": ""
+    },
+    {
+      "index": 4,
+      "exit": 0,
+      "elapsedSeconds": 0.044464702252298594,
+      "stdout": "STRA\u00dfE\n",
+      "stderr": ""
+    },
+    {
+      "index": 5,
+      "exit": 0,
+      "elapsedSeconds": 0.644898883998394,
+      "stdout": "STRA\u00dfE\n",
+      "stderr": ""
+    },
+    {
+      "index": 6,
+      "exit": 0,
+      "elapsedSeconds": 0.08267747517675161,
+      "stdout": "STRA\u00dfE\n",
+      "stderr": ""
+    },
+    {
+      "index": 7,
+      "exit": 0,
+      "elapsedSeconds": 0.05361975869163871,
+      "stdout": "STRA\u00dfE\n",
+      "stderr": ""
+    },
+    {
+      "index": 8,
+      "exit": 0,
+      "elapsedSeconds": 0.09438621765002608,
+      "stdout": "STRA\u00dfE\n",
+      "stderr": ""
+    },
+    {
+      "index": 9,
+      "exit": 0,
+      "elapsedSeconds": 0.0430521871894598,
+      "stdout": "STRA\u00dfE\n",
+      "stderr": ""
+    },
+    {
+      "index": 10,
+      "exit": 0,
+      "elapsedSeconds": 0.05193024966865778,
+      "stdout": "STRA\u00dfE\n",
+      "stderr": ""
+    }
+  ]
+}

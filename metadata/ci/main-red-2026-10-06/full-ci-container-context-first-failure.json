@@ -1,0 +1,198 @@
+{
+  "sourceHead": "0aa60d6255483379d7c2493678f032aa4e61faaf",
+  "sourceTree": "172324a8eb598ee595990797d7355a6a6e3fd1b7",
+  "fullRequiredExit": 1,
+  "gatePassed": false,
+  "failedStage": "ARM64 container checkout guard before compilation",
+  "reason": "Production Docker ignore file omitted one tracked public env example and 24 committed historical release logs; exact Git checkout guard correctly rejected deletions.",
+  "missingTrackedContextPaths": [
+    "subrepos/redline-central/.env.example",
+    "subrepos/redline-split-ops/release-evidence/8.0.0/jain-consumer-jain6-web2-r3.test.log",
+    "subrepos/redline-split-ops/release-evidence/8.0.0/jain-consumer.test.log",
+    "subrepos/redline-split-ops/release-evidence/8.0.0/jeryu-consumer-jain6-web2-r3.test.log",
+    "subrepos/redline-split-ops/release-evidence/8.0.0/jeryu-consumer.test.log",
+    "subrepos/redline-split-ops/release-evidence/8.0.0/redline-family-ci-jain3-final.d/redline-core.log",
+    "subrepos/redline-split-ops/release-evidence/8.0.0/redline-family-ci-jain3-final.d/redline-testing-artifact.log",
+    "subrepos/redline-split-ops/release-evidence/8.0.0/redline-family-ci-jain3-final.d/redline-testing.log",
+    "subrepos/redline-split-ops/release-evidence/8.0.0/redline-family-ci-jain3-final.d/redline-web.log",
+    "subrepos/redline-split-ops/release-evidence/8.0.0/redline-family-ci-jain3-final.d/redline.log",
+    "subrepos/redline-split-ops/release-evidence/8.0.0/redline-family-ci-jain6-web2-r2.d/redline-core.log",
+    "subrepos/redline-split-ops/release-evidence/8.0.0/redline-family-ci-jain6-web2-r2.d/redline-testing-artifact.log",
+    "subrepos/redline-split-ops/release-evidence/8.0.0/redline-family-ci-jain6-web2-r2.d/redline-testing.log",
+    "subrepos/redline-split-ops/release-evidence/8.0.0/redline-family-ci-jain6-web2-r2.d/redline-web.log",
+    "subrepos/redline-split-ops/release-evidence/8.0.0/redline-family-ci-jain6-web2-r2.d/redline.log",
+    "subrepos/redline-split-ops/release-evidence/8.0.0/redline-family-ci-jain6-web2-r3.d/redline-core.log",
+    "subrepos/redline-split-ops/release-evidence/8.0.0/redline-family-ci-jain6-web2-r3.d/redline-testing-artifact.log",
+    "subrepos/redline-split-ops/release-evidence/8.0.0/redline-family-ci-jain6-web2-r3.d/redline-testing.log",
+    "subrepos/redline-split-ops/release-evidence/8.0.0/redline-family-ci-jain6-web2-r3.d/redline-web.log",
+    "subrepos/redline-split-ops/release-evidence/8.0.0/redline-family-ci-jain6-web2-r3.d/redline.log",
+    "subrepos/redline-split-ops/release-evidence/8.0.0/redline-family-ci-jain6-web2.d/redline-core.log",
+    "subrepos/redline-split-ops/release-evidence/8.0.0/redline-family-ci-jain6-web2.d/redline-testing-artifact.log",
+    "subrepos/redline-split-ops/release-evidence/8.0.0/redline-family-ci-jain6-web2.d/redline-testing.log",
+    "subrepos/redline-split-ops/release-evidence/8.0.0/redline-family-ci-jain6-web2.d/redline-web.log",
+    "subrepos/redline-split-ops/release-evidence/8.0.0/redline-family-ci-jain6-web2.d/redline.log"
+  ],
+  "allPreviousSteps": [
+    {
+      "name": "acceptance",
+      "command": [
+        "bash",
+        "ops/ci/tests/arm64-packages.sh"
+      ],
+      "pid": 3412043,
+      "processGroup": 3412043,
+      "startedAt": "2026-10-06T18:36:22.893325+00:00",
+      "log": "target/rt-scratch/pr-ci-main-red-0aa60d625-proof1-acceptance.log",
+      "exit": 0,
+      "expected": 0,
+      "finishedAt": "2026-10-06T18:36:23.324968+00:00",
+      "logSha256": "80058a9e05e497e113603c579115289b79c93ecbe6a13e0a51e1b92234c21ca8"
+    },
+    {
+      "name": "parent",
+      "command": [
+        "bash",
+        "/home/ubuntu/redlineDB/ops/ci/tests/arm64-packages.sh"
+      ],
+      "pid": 3412851,
+      "processGroup": 3412851,
+      "startedAt": "2026-10-06T18:36:23.441911+00:00",
+      "log": "target/rt-scratch/pr-ci-main-red-0aa60d625-proof1-parent.log",
+      "exit": 1,
+      "expected": 1,
+      "finishedAt": "2026-10-06T18:36:23.498252+00:00",
+      "logSha256": "057a30456dfd20d0c179f410eeb483fa55be3edebeeefd63b6b80333cad4af8e"
+    },
+    {
+      "name": "security-preflight",
+      "command": [
+        "taskset",
+        "-c",
+        "125",
+        "target/ci/tools/jankurai",
+        "security",
+        "run",
+        ".",
+        "--strict",
+        "--profile",
+        "ci",
+        "--script",
+        "ops/ci/security-family.sh",
+        "--out",
+        "target/jankurai/security/evidence.json"
+      ],
+      "pid": 3420280,
+      "processGroup": 3420280,
+      "startedAt": "2026-10-06T18:36:31.344354+00:00",
+      "log": "target/rt-scratch/pr-ci-main-red-0aa60d625-proof1-security-preflight.log",
+      "exit": 0,
+      "expected": 0,
+      "finishedAt": "2026-10-06T18:37:51.726515+00:00",
+      "logSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "name": "audit-preflight",
+      "command": [
+        "taskset",
+        "-c",
+        "125",
+        "bash",
+        "-euo",
+        "pipefail",
+        "-c",
+        "source ops/ci/lib.sh\njankurai audit . --full --mode ratchet --baseline .jankurai/baselines/github-monorepo.repo-score.json --policy agent/audit-policy.toml --json \"$1\" --md \"$2\" --no-score-history\njq -e \".score > 85 and .decision.hard_findings == 0 and (.caps_applied | length) == 0\" \"$1\" >/dev/null",
+        "sandbox-audit",
+        "/home/ubuntu/redlineDB/target/review/main-red/sandbox-audit-0aa60d625-proof1.json",
+        "/home/ubuntu/redlineDB/target/review/main-red/sandbox-audit-0aa60d625-proof1.md"
+      ],
+      "pid": 3509207,
+      "processGroup": 3509207,
+      "startedAt": "2026-10-06T18:37:51.743047+00:00",
+      "log": "target/rt-scratch/pr-ci-main-red-0aa60d625-proof1-audit-preflight.log",
+      "exit": 0,
+      "expected": 0,
+      "finishedAt": "2026-10-06T18:38:32.614275+00:00",
+      "logSha256": "da11e2479240e313d86a610bf672713520c21895f5443d99808ba47b3543ece8"
+    },
+    {
+      "name": "required",
+      "command": [
+        "taskset",
+        "-c",
+        "125",
+        "just",
+        "pr-ci"
+      ],
+      "pid": 3533060,
+      "processGroup": 3533060,
+      "startedAt": "2026-10-06T18:38:32.700130+00:00",
+      "log": "target/rt-scratch/pr-ci-main-red-0aa60d625-proof1-required.log",
+      "exit": 1,
+      "expected": 0,
+      "finishedAt": "2026-10-06T19:40:48.135962+00:00",
+      "logSha256": "44017290a3aa7b96b10c9111bf6228334250f76b7c614fb793eff5b2785df46b"
+    }
+  ],
+  "cleanup": {
+    "targetRestored": true,
+    "sandboxRemoved": true,
+    "postgresCleanup": {
+      "exit": 0,
+      "container": "a93fb0b53246af06af5a7cb305a373026b614ca092e328ba8f77a828691540d5"
+    }
+  },
+  "offrootCustody": {
+    "head": "0aa60d6255483379d7c2493678f032aa4e61faaf",
+    "gatePassed": false,
+    "archive": "/mnt/fast-scratch/jope-prime-offroot/redlinedb-v511-tests/archive/main-red-0aa60d625-proof1-verified-evidence-20261006T194211Z.tar.gz",
+    "archiveBytes": 118044558,
+    "archiveSha256": "0057a98d4612b715e7ae67b3661707452b108a2673d3ae6caa9d8b089cb6380a",
+    "verifiedFiles": 2103,
+    "sourceReceiptSha256": "de115ef75398146a17ce2ad46d7417c41867cb1362168bafb47f9651f716092f"
+  },
+  "contextDiagnostic": {
+    "sourceHead": "0aa60d6255483379d7c2493678f032aa4e61faaf",
+    "sourceTree": "172324a8eb598ee595990797d7355a6a6e3fd1b7",
+    "startedAt": "2026-10-06T19:46:10.714530+00:00",
+    "exit": 1,
+    "logSha256": "f3effe3c2fd27ae02710d467a191a0b00c517ef890a1a92089a8de004efdf099",
+    "sourceStatus": "",
+    "stashes": "",
+    "allRefsInCanonical": true,
+    "sandboxRemoved": true,
+    "finishedAt": "2026-10-06T19:46:21.818243+00:00"
+  },
+  "correction": "Two narrow public-source exceptions preserve private env/log and build-cache exclusions. A native source-bound stage now gates full pr-ci before its expensive test lanes; no guard or existing timeout/assertion was weakened.",
+  "officialIdentity": {
+    "source_commit": "0aa60d6255483379d7c2493678f032aa4e61faaf",
+    "source_tree": "172324a8eb598ee595990797d7355a6a6e3fd1b7",
+    "source_inputs_sha256": "10599241ed204ab65fb8304fb50f78c1643ff3c5bb9347ddd72cc7ccb1b3019e",
+    "source_dirty": false
+  },
+  "completedSuiteCounts": {
+    "beyond_sqlite": {
+      "total": 265,
+      "passed": 254,
+      "failed": 11,
+      "skipped": 0
+    },
+    "memory": {
+      "total": 2445,
+      "passed": 2440,
+      "failed": 5,
+      "skipped": 0
+    },
+    "rql_phase1": {
+      "total": 1385,
+      "passed": 1183,
+      "failed": 0,
+      "skipped": 202
+    },
+    "sqlite_parity": {
+      "total": 2445,
+      "passed": 2440,
+      "failed": 5,
+      "skipped": 0
+    }
+  }
+}

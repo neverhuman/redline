@@ -1,0 +1,10 @@
+{
+  "verifiedAt": "2026-10-06T20:07:51.831195+00:00",
+  "head": "927688460cc005fd832ba091a8de8419de9d4d6f",
+  "container": "ff68065b76f6b742c347ff8d8199437e910c3944616965cbb1fc35872e4ea291",
+  "originalCleanupExit": 143,
+  "readOnlyInspectExit": 1,
+  "containerAbsentVerified": true,
+  "rawLogSha256": "bd6746ad251ff2468add7d844ff53d15f209ad67b6250dba5c4d9b9ec764c475",
+  "scope": "Original asynchronous removal eventually completed; no second remove, daemon/service restart or peer action."
+}

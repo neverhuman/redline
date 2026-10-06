@@ -1,0 +1,59 @@
+{
+  "startedAt": "2026-10-06T20:07:18.317260+00:00",
+  "oldHead": "927688460cc005fd832ba091a8de8419de9d4d6f",
+  "oldIgnoreSha256": "23a539bcaff66d5556812a0379473557b215b66dcb4a04dbba024b0b9cf4bf3b",
+  "fixedIgnoreSha256": "a6f4a075f4a21b01fc9e93e257ef32a09f7b6851b5c40c6a99327a95a869cf5a",
+  "publicPaths": [
+    "subrepos/redline-split-ops/release-evidence/8.0.0/jain-consumer-jain6-web2-r3.test.log",
+    "subrepos/redline-split-ops/release-evidence/8.0.0/jain-consumer.test.log",
+    "subrepos/redline-split-ops/release-evidence/8.0.0/jeryu-consumer-jain6-web2-r3.test.log",
+    "subrepos/redline-split-ops/release-evidence/8.0.0/jeryu-consumer.test.log",
+    "subrepos/redline-split-ops/release-evidence/8.0.0/redline-family-ci-jain3-final.d/redline-core.log",
+    "subrepos/redline-split-ops/release-evidence/8.0.0/redline-family-ci-jain3-final.d/redline-testing-artifact.log",
+    "subrepos/redline-split-ops/release-evidence/8.0.0/redline-family-ci-jain3-final.d/redline-testing.log",
+    "subrepos/redline-split-ops/release-evidence/8.0.0/redline-family-ci-jain3-final.d/redline-web.log",
+    "subrepos/redline-split-ops/release-evidence/8.0.0/redline-family-ci-jain3-final.d/redline.log",
+    "subrepos/redline-split-ops/release-evidence/8.0.0/redline-family-ci-jain6-web2-r2.d/redline-core.log",
+    "subrepos/redline-split-ops/release-evidence/8.0.0/redline-family-ci-jain6-web2-r2.d/redline-testing-artifact.log",
+    "subrepos/redline-split-ops/release-evidence/8.0.0/redline-family-ci-jain6-web2-r2.d/redline-testing.log",
+    "subrepos/redline-split-ops/release-evidence/8.0.0/redline-family-ci-jain6-web2-r2.d/redline-web.log",
+    "subrepos/redline-split-ops/release-evidence/8.0.0/redline-family-ci-jain6-web2-r2.d/redline.log",
+    "subrepos/redline-split-ops/release-evidence/8.0.0/redline-family-ci-jain6-web2-r3.d/redline-core.log",
+    "subrepos/redline-split-ops/release-evidence/8.0.0/redline-family-ci-jain6-web2-r3.d/redline-testing-artifact.log",
+    "subrepos/redline-split-ops/release-evidence/8.0.0/redline-family-ci-jain6-web2-r3.d/redline-testing.log",
+    "subrepos/redline-split-ops/release-evidence/8.0.0/redline-family-ci-jain6-web2-r3.d/redline-web.log",
+    "subrepos/redline-split-ops/release-evidence/8.0.0/redline-family-ci-jain6-web2-r3.d/redline.log",
+    "subrepos/redline-split-ops/release-evidence/8.0.0/redline-family-ci-jain6-web2.d/redline-core.log",
+    "subrepos/redline-split-ops/release-evidence/8.0.0/redline-family-ci-jain6-web2.d/redline-testing-artifact.log",
+    "subrepos/redline-split-ops/release-evidence/8.0.0/redline-family-ci-jain6-web2.d/redline-testing.log",
+    "subrepos/redline-split-ops/release-evidence/8.0.0/redline-family-ci-jain6-web2.d/redline-web.log",
+    "subrepos/redline-split-ops/release-evidence/8.0.0/redline-family-ci-jain6-web2.d/redline.log"
+  ],
+  "privateControlPath": "subrepos/redline-split-ops/release-evidence/8.0.0/private-context-control.log",
+  "scope": "Synthetic harmless private marker in a private Git fixture; production Docker ignore files copied byte-exactly. Tests context routing only, not full ARM qualification.",
+  "cases": [
+    {
+      "label": "reviewed-parent",
+      "exit": 0,
+      "ignoreSha256": "23a539bcaff66d5556812a0379473557b215b66dcb4a04dbba024b0b9cf4bf3b",
+      "log": "target/review/main-red/context-private-log-reviewed-parent.log",
+      "logSha256": "d89c047bd2c2d2c50469a1a54d90ff8f2d5142a8378c5c905b9951d746d7f650",
+      "privateLogPresent": true,
+      "privateEnvPresent": false,
+      "publicFilesPresent": 25
+    },
+    {
+      "label": "fixed-head",
+      "exit": 0,
+      "ignoreSha256": "a6f4a075f4a21b01fc9e93e257ef32a09f7b6851b5c40c6a99327a95a869cf5a",
+      "log": "target/review/main-red/context-private-log-fixed-head.log",
+      "logSha256": "0a28951093b299cc0a70eaafd7eb8883b77141a6c4f4213ef381a713d23c5f5f",
+      "privateLogPresent": false,
+      "privateEnvPresent": false,
+      "publicFilesPresent": 25
+    }
+  ],
+  "fixtureCleanWithIgnoredPrivateFiles": true,
+  "passed": true,
+  "finishedAt": "2026-10-06T20:07:21.020300+00:00"
+}

@@ -1,0 +1,24 @@
+{
+  "at": "2026-10-06T20:08:38.817575+00:00",
+  "checkedOutHead": "927688460cc005fd832ba091a8de8419de9d4d6f",
+  "sourceModified": true,
+  "sourceHashes": {
+    "ops/ci/tests/arm64-packages.sh": "e3bcd96d9cf49da72decd54f9e68660e2db438af032d753f6b8f7878d0960d20",
+    "ops/ci/arm64-packages.Dockerfile.dockerignore": "a6f4a075f4a21b01fc9e93e257ef32a09f7b6851b5c40c6a99327a95a869cf5a"
+  },
+  "tests": [
+    {
+      "test": "ci_fixture_git",
+      "binary": "target/debug/deps/ci_fixture_git-d8489922dd2087d1",
+      "sha256": "181459ffd8445009490ed1b815c88e5db13430ecbe93fd3d3f7db68e0884a6d7",
+      "exit": 0
+    },
+    {
+      "test": "ci_workflow_routing",
+      "binary": "target/debug/deps/ci_workflow_routing-16d9f7180433fd78",
+      "sha256": "8b1596b61ef17c61b149321e63f223e233d7198fdceec4580747dc02cf419102",
+      "exit": 0
+    }
+  ],
+  "logSha256": "653dcac3806c924a618704cba9dc12058fbdec59db0284164ad6b1227840926f"
+}

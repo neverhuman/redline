@@ -1,0 +1,744 @@
+{
+  "schema": "redline.main-ci-diagnosis/v1",
+  "generatedAt": "2026-10-06T20:52:18.423606+00:00",
+  "mainHead": "7d883012a1b74424c0c1ce4764be32f890350160",
+  "mainRun": "https://github.com/neverhuman/redline/actions/runs/37498623588",
+  "mainRunConclusion": "success",
+  "scope": "Narrow controls and failed full-gate evidence are retained honestly; fresh clean-head required is pending. No peer workloads or host scheduling were changed. Requested registered worktree custody still awaits voluntary peer handoff; automatically removed exact-SHA sandbox used for diagnosis.",
+  "conclusions": {
+    "packages": "CI built a fresh CLI but later staged an older source SHA. A shared target cache spans compilation and later staging; hold it through the whole build and staging. The tiny BuildKit control independently reproduces stale final COPY export with a correct binary inside RUN, fixed by a source-SHA-bound output path and COPY selector. Runtime still validates embedded build-info against archive provenance before all existing qualification gates.",
+    "recovery": "A scheduling race already present on last-green 141, not a #43/#44-only interaction: READY previously preceded any commit or ACK. Both source heads pass three natural repetitions and fail at recover_oracle.rs:461 under the same own-child-only post-READY delay. READY now follows the first complete committed ACK; the Linux regression holds the child until the parent verifies that ACK.",
+    "parity": "No SQL regression reproduced: both exact source heads pass the baseline locally. CI timeout under reported host contention is consistent with scheduling pressure; a busy-host parity reproduction was deliberately not induced and the 300-second timeout remains unchanged.",
+    "context": "Real source-bound old context omitted25 public tracked files. Exact literal exceptions restore only those files; no wildcard exceptions. Synthetic realDocker control exports ignored private log with reviewed927 glob and excludes it after correction, preserving all25 public files and private env exclusion. Early source-verified stage runs before expensive full mirror. Interrupted927 required143 is review-driven, not product failure; final owned-container absence separately verified after cleanup-client timeout143."
+  },
+  "focusedRecovery": [
+    {
+      "passed": 14,
+      "failed": 0,
+      "ignored": 0,
+      "measured": 0,
+      "filtered": 0
+    },
+    {
+      "passed": 2,
+      "failed": 0,
+      "ignored": 0,
+      "measured": 0,
+      "filtered": 0
+    }
+  ],
+  "parityControls": {
+    "green141": {
+      "files": 275,
+      "passed": 275,
+      "divergent": 0,
+      "testsRun": 1,
+      "testsPassed": 1,
+      "filteredSkips": 2
+    },
+    "main7d": {
+      "files": 275,
+      "passed": 275,
+      "divergent": 0,
+      "testsRun": 1,
+      "testsPassed": 1,
+      "filteredSkips": 2
+    }
+  },
+  "cacheLockOnlyDiagnostic": false,
+  "cacheShaBoundControl": true,
+  "artifacts": [
+    {
+      "original": "target/review/main-red/reproduction-receipt.json",
+      "committed": "metadata/ci/main-red-2026-10-06/reproduction-receipt.json",
+      "sha256": "88880df52fc0fa24b22522f1bcb136d69426333b203fe60ee37eb255880541de",
+      "bytes": 9423
+    },
+    {
+      "original": "target/review/main-red/parent141-bench-custody.json",
+      "committed": "metadata/ci/main-red-2026-10-06/parent141-bench-custody.json",
+      "sha256": "0c0377265d80aa53876eceaa50b9e6ceeffbef2c825bd41439a11fe8b3c0f6e0",
+      "bytes": 912
+    },
+    {
+      "original": "target/review/main-red/ready-handshake-parent-failing-receipt.json",
+      "committed": "metadata/ci/main-red-2026-10-06/ready-handshake-parent-failing-receipt.json",
+      "sha256": "26ee30b7c35f5c6f277a2ad103de582d1d2e9b4d98e6e15f916186e138173f04",
+      "bytes": 2274
+    },
+    {
+      "original": "target/review/main-red/ready-handshake-parent-compile.log",
+      "committed": "metadata/ci/main-red-2026-10-06/ready-handshake-parent-compile.log.gz",
+      "sha256": "f61f27bd17de546264aa58f40f3aafaac7021e0ef69c17f6b1b4cd7664a037ec",
+      "bytes": 20,
+      "rawSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "rawBytes": 0,
+      "compression": "gzip"
+    },
+    {
+      "original": "target/review/main-red/ready-handshake-parent-run.log",
+      "committed": "metadata/ci/main-red-2026-10-06/ready-handshake-parent-run.log.gz",
+      "sha256": "8a427d9cf4b5af1c1d476190d496ba1e6a9dccb77f6ac054b1159bc1d21409fc",
+      "bytes": 341,
+      "rawSha256": "6560f7bc02169e45a5523426c993515e7a419598acaca876c7c81e3a9191d266",
+      "rawBytes": 808,
+      "compression": "gzip"
+    },
+    {
+      "original": "target/review/main-red/ready-handshake-focused.log",
+      "committed": "metadata/ci/main-red-2026-10-06/ready-handshake-focused.log.gz",
+      "sha256": "66b9387b943026ec2fff93c3c5f8dafc5a44e3c8c4143b280b4771348d8d672f",
+      "bytes": 624,
+      "rawSha256": "bd897e43062310da97e24520411ddf1728dfc8a78fac5246099bca02dedc7582",
+      "rawBytes": 1373,
+      "compression": "gzip"
+    },
+    {
+      "original": "target/review/main-red/ready-handshake-focused.exit",
+      "committed": "metadata/ci/main-red-2026-10-06/ready-handshake-focused.exit",
+      "sha256": "9a271f2a916b0b6ee6cecb2426f0b3206ef074578be55d9bc94f6f3fe3ab86aa",
+      "bytes": 2
+    },
+    {
+      "original": "target/review/main-red/acceptance-head-hardened.log",
+      "committed": "metadata/ci/main-red-2026-10-06/acceptance-head-hardened.log.gz",
+      "sha256": "9d338f06d0e552311517b8795e4df06cdcad54eab21ab564d7260d05441db2f1",
+      "bytes": 308,
+      "rawSha256": "678798e6a7f81860134b46a95be5414cb45ed6138f06fd320ed222fb9a5b5baf",
+      "rawBytes": 540,
+      "compression": "gzip"
+    },
+    {
+      "original": "target/review/main-red/acceptance-head-hardened.exit",
+      "committed": "metadata/ci/main-red-2026-10-06/acceptance-head-hardened.exit",
+      "sha256": "9a271f2a916b0b6ee6cecb2426f0b3206ef074578be55d9bc94f6f3fe3ab86aa",
+      "bytes": 2
+    },
+    {
+      "original": "target/review/main-red/recover-head-delayed-final.log",
+      "committed": "metadata/ci/main-red-2026-10-06/recover-head-delayed-final.log.gz",
+      "sha256": "3a79b75a60170dfab464fdfd8d1bc2738af3effa5402d96916aa312a4792536e",
+      "bytes": 242,
+      "rawSha256": "249f45df18cdab3f213fb0c7fc9fe9ee358c388d7613c599ad83b6715346405a",
+      "rawBytes": 333,
+      "compression": "gzip"
+    },
+    {
+      "original": "target/review/main-red/recover-head-delayed-final.exit",
+      "committed": "metadata/ci/main-red-2026-10-06/recover-head-delayed-final.exit",
+      "sha256": "9a271f2a916b0b6ee6cecb2426f0b3206ef074578be55d9bc94f6f3fe3ab86aa",
+      "bytes": 2
+    },
+    {
+      "original": "target/review/main-red/head-ready-delay-marker.txt",
+      "committed": "metadata/ci/main-red-2026-10-06/head-ready-delay-marker.txt",
+      "sha256": "a6f197b7bfce607641c4bfc9a7b51229a15aa3e645fb6cb6b0cd6ef17d900901",
+      "bytes": 80
+    },
+    {
+      "original": "target/review/main-red/ready-scheduler-delay.c",
+      "committed": "metadata/ci/main-red-2026-10-06/ready-scheduler-delay.c.gz",
+      "sha256": "17294e62e82615a0755b1afa0211d1e5e11cd46b41e5dcb858058bb0cb624097",
+      "bytes": 410,
+      "rawSha256": "ee528ac54fdcffbcd6a3cc59114be57d5d726462c8e24ba90e572870a52042a3",
+      "rawBytes": 626,
+      "compression": "gzip"
+    },
+    {
+      "original": "target/review/main-red/main7d-progress-1730.json",
+      "committed": "metadata/ci/main-red-2026-10-06/main7d-progress-1730.json",
+      "sha256": "57d1530d10a61afb3f40a78f32b5a174fa2724297337e0b336c14cddaab7063d",
+      "bytes": 63362
+    },
+    {
+      "original": "target/review/main-red/package-acceptance-parent7d.log",
+      "committed": "metadata/ci/main-red-2026-10-06/package-acceptance-parent7d.log.gz",
+      "sha256": "f61f27bd17de546264aa58f40f3aafaac7021e0ef69c17f6b1b4cd7664a037ec",
+      "bytes": 20,
+      "rawSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "rawBytes": 0,
+      "compression": "gzip"
+    },
+    {
+      "original": "target/review/main-red/compile-owned-ready-delay.log",
+      "committed": "metadata/ci/main-red-2026-10-06/compile-owned-ready-delay.log.gz",
+      "sha256": "f61f27bd17de546264aa58f40f3aafaac7021e0ef69c17f6b1b4cd7664a037ec",
+      "bytes": 20,
+      "rawSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "rawBytes": 0,
+      "compression": "gzip"
+    },
+    {
+      "original": "target/review/main-red/main7d-recover-natural-1.log",
+      "committed": "metadata/ci/main-red-2026-10-06/main7d-recover-natural-1.log.gz",
+      "sha256": "00c01e99ef071ef863c0e655d22c63dc02e84b42ba29b716cda65f43989a7f2d",
+      "bytes": 350,
+      "rawSha256": "e96f7d8853125b41de77ac49617b3c70959b03e19b39cfd35591825f67e45033",
+      "rawBytes": 875,
+      "compression": "gzip"
+    },
+    {
+      "original": "target/review/main-red/main7d-recover-natural-2.log",
+      "committed": "metadata/ci/main-red-2026-10-06/main7d-recover-natural-2.log.gz",
+      "sha256": "678957b6e2001e75f82563c8b92a3c31dfaaa5a068de84b03cc14fb16d640697",
+      "bytes": 260,
+      "rawSha256": "1ebaaa794e3582a63f8e78e900f375aa2606c0a7390933004353a61023fc2cf9",
+      "rawBytes": 356,
+      "compression": "gzip"
+    },
+    {
+      "original": "target/review/main-red/main7d-recover-natural-3.log",
+      "committed": "metadata/ci/main-red-2026-10-06/main7d-recover-natural-3.log.gz",
+      "sha256": "ec2eb4ba98abda0ad8e32af56238dec11befc2d8963be2fd25f1ebdc0ef99a52",
+      "bytes": 260,
+      "rawSha256": "a17fac20904d15c9f32c517bc8393523e6b4864e6e33a698eacdb8e341fbe243",
+      "rawBytes": 356,
+      "compression": "gzip"
+    },
+    {
+      "original": "target/review/main-red/main7d-recover-delayed-after-ready.log",
+      "committed": "metadata/ci/main-red-2026-10-06/main7d-recover-delayed-after-ready.log.gz",
+      "sha256": "e771c2fe70e0e60779e9d1a92a6d251f387142f4d48b6d644e3b7142f418032a",
+      "bytes": 664,
+      "rawSha256": "ad8734ee672faf8f888e4d91513aca739122c77aaf2dbf3ea8e69585e2bc5efe",
+      "rawBytes": 1287,
+      "compression": "gzip"
+    },
+    {
+      "original": "target/review/main-red/main7d-parity-baseline.log",
+      "committed": "metadata/ci/main-red-2026-10-06/main7d-parity-baseline.log.gz",
+      "sha256": "5b524fab3046f3f5c3696c05076639008bdf582697d3cb77ef89dbee56466c45",
+      "bytes": 492,
+      "rawSha256": "6ffe2e21d9d4bf2e47a9b2e3bb4c653d4d2ef6afc5a2bd19b6e6c4c88a42010d",
+      "rawBytes": 976,
+      "compression": "gzip"
+    },
+    {
+      "original": "target/review/main-red/green141-recover-natural-1.log",
+      "committed": "metadata/ci/main-red-2026-10-06/green141-recover-natural-1.log.gz",
+      "sha256": "c1c76d68a77544eff4814edcfe470d38d6ba2a76ab2620bcf78d4b995e03128b",
+      "bytes": 339,
+      "rawSha256": "ba2413335889d71d79ee3acd343e30b112233f1998953de81613fefd517e0a01",
+      "rawBytes": 769,
+      "compression": "gzip"
+    },
+    {
+      "original": "target/review/main-red/green141-recover-natural-2.log",
+      "committed": "metadata/ci/main-red-2026-10-06/green141-recover-natural-2.log.gz",
+      "sha256": "2fc4496f8d2a0e8d8a3c3237802bd36b906be792da922d141e7d2e08ab06d00e",
+      "bytes": 260,
+      "rawSha256": "610e0388b88d82c765fc5f82d4623c95eef778080260496640e67dd0fcde81db",
+      "rawBytes": 356,
+      "compression": "gzip"
+    },
+    {
+      "original": "target/review/main-red/green141-recover-natural-3.log",
+      "committed": "metadata/ci/main-red-2026-10-06/green141-recover-natural-3.log.gz",
+      "sha256": "8ac3aad6af87cad458ca52dcb36361e0410d3f70d766b99b4f5efd858b23d2df",
+      "bytes": 261,
+      "rawSha256": "2016a7838961d1ffd576cbb946ad3e22a4f3b7ed28c0f92bf9065ace3a636064",
+      "rawBytes": 356,
+      "compression": "gzip"
+    },
+    {
+      "original": "target/review/main-red/green141-recover-delayed-after-ready.log",
+      "committed": "metadata/ci/main-red-2026-10-06/green141-recover-delayed-after-ready.log.gz",
+      "sha256": "9de5e4b0ab9196ec16f0321099746bc048207e0ff62fae206fc811821d754a6c",
+      "bytes": 664,
+      "rawSha256": "8bda57d1ec8858c0fb3a03b0cbab857f1a7f5c604bacf58cf7854e60e026eef1",
+      "rawBytes": 1287,
+      "compression": "gzip"
+    },
+    {
+      "original": "target/review/main-red/green141-parity-baseline.log",
+      "committed": "metadata/ci/main-red-2026-10-06/green141-parity-baseline.log.gz",
+      "sha256": "6c3e0a5f47f5213e294936e6bff9ddc0ab941f62a7bc64c8924bb94bc6f3c1a2",
+      "bytes": 488,
+      "rawSha256": "d169481fc696a2bc3718f645c4e07a8b14fd427b83021b55cbfef2e91e1346e7",
+      "rawBytes": 976,
+      "compression": "gzip"
+    },
+    {
+      "original": "target/review/main-red/cache-race-run-output/run-output-locked-A.log",
+      "committed": "metadata/ci/main-red-2026-10-06/cache-race-run-output/run-output-locked-A.log.gz",
+      "sha256": "7a600076d6c402fcd970582c38ec102fcba01b8d0832e6b2431b549b21efa0c3",
+      "bytes": 669,
+      "rawSha256": "58978363e1267297c9a05468ad29cd7da8f8ef46becfa4d560bc508b79c6c82f",
+      "rawBytes": 1559,
+      "compression": "gzip"
+    },
+    {
+      "original": "target/review/main-red/cache-race-run-output/receipt.json",
+      "committed": "metadata/ci/main-red-2026-10-06/cache-race-run-output/receipt.json",
+      "sha256": "2d53bf89225aa2a4df888bc3efde2923048bd07fd89606c155be6ff2eb0e78a4",
+      "bytes": 4184
+    },
+    {
+      "original": "target/review/main-red/cache-race-run-output/run-output-locked.Dockerfile",
+      "committed": "metadata/ci/main-red-2026-10-06/cache-race-run-output/run-output-locked.Dockerfile",
+      "sha256": "812e04f5be7abc14c7e6e520d0d5b1a5151f0e893644b16093cc8ca182fd54bf",
+      "bytes": 604
+    },
+    {
+      "original": "target/review/main-red/cache-race-run-output/run-output-locked-prime.log",
+      "committed": "metadata/ci/main-red-2026-10-06/cache-race-run-output/run-output-locked-prime.log.gz",
+      "sha256": "cb83d6c59dcb3d3d0ee3442c98d822168d0442701f795572a21910375d2a6488",
+      "bytes": 668,
+      "rawSha256": "53dc2b8a92eaef0827aeedabc01adee24a2c042aa2fddbdecec0365ce09efee9",
+      "rawBytes": 1557,
+      "compression": "gzip"
+    },
+    {
+      "original": "target/review/main-red/cache-race-run-output/run-output-locked-B.log",
+      "committed": "metadata/ci/main-red-2026-10-06/cache-race-run-output/run-output-locked-B.log.gz",
+      "sha256": "65ccd367e440f6cbabaaa184d2d15cb6b45c3c4b8bafb88527c659ff02ff89b4",
+      "bytes": 667,
+      "rawSha256": "afa9d652169e7cac203a30885095a54259b046d6346ae36119942e1b4626266b",
+      "rawBytes": 1557,
+      "compression": "gzip"
+    },
+    {
+      "original": "target/review/main-red/cache-race-sha-bound/sha-bound-locked-A.log",
+      "committed": "metadata/ci/main-red-2026-10-06/cache-race-sha-bound/sha-bound-locked-A.log.gz",
+      "sha256": "94d67cd370533a06181576cb74efd2edbc03eefaa2586652fa26f54cd80b8c45",
+      "bytes": 685,
+      "rawSha256": "e4c177a339afc70ad748aa9a989f24e2ab0b3de537507f13c434b531e419ecef",
+      "rawBytes": 1820,
+      "compression": "gzip"
+    },
+    {
+      "original": "target/review/main-red/cache-race-sha-bound/receipt.json",
+      "committed": "metadata/ci/main-red-2026-10-06/cache-race-sha-bound/receipt.json",
+      "sha256": "41746b74e176524c13611d46a131ebe7163afc0472dc1f851af2bc6dd0ecb032",
+      "bytes": 4165
+    },
+    {
+      "original": "target/review/main-red/cache-race-sha-bound/sha-bound-locked.Dockerfile",
+      "committed": "metadata/ci/main-red-2026-10-06/cache-race-sha-bound/sha-bound-locked.Dockerfile",
+      "sha256": "2e769155cb703ee294845594c135c58341e8d0e32f3faf6207bc38f9ae457fb8",
+      "bytes": 739
+    },
+    {
+      "original": "target/review/main-red/cache-race-sha-bound/sha-bound-locked-B.log",
+      "committed": "metadata/ci/main-red-2026-10-06/cache-race-sha-bound/sha-bound-locked-B.log.gz",
+      "sha256": "d3ad7991c324e909c7f4bd58ca3ce5363fa1fcf7893ebf548c1a973d802c6c47",
+      "bytes": 682,
+      "rawSha256": "55db865de8996cfd63729f71f19ddf46e15cb884c23fe78d1d7c74cc635dbaa1",
+      "rawBytes": 1818,
+      "compression": "gzip"
+    },
+    {
+      "original": "target/review/main-red/cache-race-sha-bound/sha-bound-locked-prime.log",
+      "committed": "metadata/ci/main-red-2026-10-06/cache-race-sha-bound/sha-bound-locked-prime.log.gz",
+      "sha256": "0a5134cf2575ed7c002dff99d9349c42f179fd5a4513621f532f84b564684a58",
+      "bytes": 687,
+      "rawSha256": "2c1878a8a295fef72b6665f105321a4ab9e426e9305f37b1f1c6e1e4dfdf04a2",
+      "rawBytes": 1818,
+      "compression": "gzip"
+    },
+    {
+      "original": "metadata/ci/main-red-2026-10-06/audit-preflight-first-failure.json",
+      "committed": "metadata/ci/main-red-2026-10-06/audit-preflight-first-failure.json",
+      "sha256": "1e6c5afd3dbcd3954cf29f604c8dd50cc94693c28d609cad148779d5c2297989",
+      "bytes": 4148
+    },
+    {
+      "original": "metadata/ci/main-red-2026-10-06/full-ci-fixture-first-failure.json",
+      "committed": "metadata/ci/main-red-2026-10-06/full-ci-fixture-first-failure.json",
+      "sha256": "fe9ace23040833e64ff2e339526ad70626d768a87cf2bd60bd133f44f5f86a80",
+      "bytes": 4942
+    },
+    {
+      "original": "target/review/main-red/package-hook-isolation-head.log",
+      "committed": "metadata/ci/main-red-2026-10-06/package-hook-isolation-head.log.gz",
+      "sha256": "76dd11de59c6a3d60a0a54fb07d1e618779987d9f81468c1d15acadf5493327d",
+      "bytes": 358,
+      "rawSha256": "5cb865a6058fed649e6772f7dc39855ce4966584c6e443c9427427352838a496",
+      "rawBytes": 613,
+      "compression": "gzip"
+    },
+    {
+      "original": "target/review/main-red/package-hook-isolation-head.exit",
+      "committed": "metadata/ci/main-red-2026-10-06/package-hook-isolation-head.exit",
+      "sha256": "9a271f2a916b0b6ee6cecb2426f0b3206ef074578be55d9bc94f6f3fe3ab86aa",
+      "bytes": 2
+    },
+    {
+      "original": "target/review/main-red/fixture-routing-fixed-focused.log",
+      "committed": "metadata/ci/main-red-2026-10-06/fixture-routing-fixed-focused.log.gz",
+      "sha256": "cf05cea65fb711ccd46056bcf6338f2023cacc0b5a3534e725cc21c74751848c",
+      "bytes": 563,
+      "rawSha256": "0fa7af9c279c06586dbe5cd3e0c4aecbd115f5e101c83fa3068b8997b1f57c64",
+      "rawBytes": 1299,
+      "compression": "gzip"
+    },
+    {
+      "original": "target/review/main-red/fixture-routing-fixed-focused.exit",
+      "committed": "metadata/ci/main-red-2026-10-06/fixture-routing-fixed-focused.exit",
+      "sha256": "39b8dc3fc8b44765c8e6f1adee04c5b465e555ab791cc42d0d9e810d5b64297c",
+      "bytes": 4
+    },
+    {
+      "original": "target/review/main-red/fixture-isolation-rebuilt-receipt.json",
+      "committed": "metadata/ci/main-red-2026-10-06/fixture-isolation-rebuilt-receipt.json",
+      "sha256": "5953b6e9745f457578448971143b01273bd7006564bbd2bbc54396e11e9a6d3a",
+      "bytes": 2449
+    },
+    {
+      "original": "target/review/main-red/ci_fixture_git-manifest-rebuilt-run.log",
+      "committed": "metadata/ci/main-red-2026-10-06/ci_fixture_git-manifest-rebuilt-run.log.gz",
+      "sha256": "aafdcf12edd1b844e819bf40de23b1e5908cdfa4a4fcd65d67652b4f09598740",
+      "bytes": 181,
+      "rawSha256": "687bf2f0189eceba61f328f1c2f684d31394f7cab236f74f661f3424ea7d770c",
+      "rawBytes": 259,
+      "compression": "gzip"
+    },
+    {
+      "original": "target/review/main-red/ci_workflow_routing-manifest-rebuilt-run.log",
+      "committed": "metadata/ci/main-red-2026-10-06/ci_workflow_routing-manifest-rebuilt-run.log.gz",
+      "sha256": "d4040fd1a3323e7cff2b02efd6bfdfafb00bf6f75c75b0e00e1a2542f3582434",
+      "bytes": 414,
+      "rawSha256": "24c141d9bb51c246bab528ac1288b67e56da4f895e738ddf5fee391198f3e5b6",
+      "rawBytes": 823,
+      "compression": "gzip"
+    },
+    {
+      "original": "target/review/main-red/full-ci-container-context-first-failure.json",
+      "committed": "metadata/ci/main-red-2026-10-06/full-ci-container-context-first-failure.json",
+      "sha256": "f80bc4d84ed213ce0546904a15d5ef42d7e38366dd6e11c9e834124623f68dc8",
+      "bytes": 8591
+    },
+    {
+      "original": "target/review/main-red/context-diagnostic-0aa60d625.log",
+      "committed": "metadata/ci/main-red-2026-10-06/context-diagnostic-0aa60d625.log.gz",
+      "sha256": "1b51be3a164ecb18ad3d03132857fc1840cbdf10e489b8acbeb81a307864f959",
+      "bytes": 1596,
+      "rawSha256": "f3effe3c2fd27ae02710d467a191a0b00c517ef890a1a92089a8de004efdf099",
+      "rawBytes": 7903
+    },
+    {
+      "original": "target/review/main-red/context-diagnostic-0aa60d625.json",
+      "committed": "metadata/ci/main-red-2026-10-06/context-diagnostic-0aa60d625.json",
+      "sha256": "bc5761c55afbb73292350ee4e520f9d7477f2985ec1dafb74d979f52db35ad61",
+      "bytes": 417
+    },
+    {
+      "original": "target/review/main-red/context-diagnostic.Dockerfile",
+      "committed": "metadata/ci/main-red-2026-10-06/context-diagnostic.Dockerfile",
+      "sha256": "94b3c5d0529043a93bdde933cfdc7cf137698381c83153fa64e5b9a7140ba8b2",
+      "bytes": 4488
+    },
+    {
+      "original": "target/review/main-red/context-diagnostic.Dockerfile.dockerignore",
+      "committed": "metadata/ci/main-red-2026-10-06/context-diagnostic.Dockerfile.dockerignore",
+      "sha256": "28fa47790d6789b8c8d9b2e182718764917e847cb9b199b9a3d9401c63903bac",
+      "bytes": 151
+    },
+    {
+      "original": "target/review/main-red/parity-binary-custody-0aa60d625.json",
+      "committed": "metadata/ci/main-red-2026-10-06/parity-binary-custody-0aa60d625.json",
+      "sha256": "d0e8b1f4c107c376aafb9f78ae71149ded5b007ff822c2e3c5c94b7e99ccc679",
+      "bytes": 738
+    },
+    {
+      "original": "target/review/main-red/completed-memory-rql-0aa60d625.json",
+      "committed": "metadata/ci/main-red-2026-10-06/completed-memory-rql-0aa60d625.json",
+      "sha256": "eb76ca95b6f77ebaa5ba33b858bb4464f1d5ceb5e48654e33a59e80a7ddf6b4d",
+      "bytes": 526
+    },
+    {
+      "original": "target/rt-scratch/pr-ci-main-red-0aa60d625-proof1-required.log",
+      "committed": "metadata/ci/main-red-2026-10-06/pr-ci-main-red-0aa60d625-proof1-required.log.gz",
+      "sha256": "d098898bcd9769055423e3706decab3e53c3940ba65312ac7f85d2b0a7fcbc4b",
+      "bytes": 77795,
+      "rawSha256": "44017290a3aa7b96b10c9111bf6228334250f76b7c614fb793eff5b2785df46b",
+      "rawBytes": 431913
+    },
+    {
+      "original": "target/review/main-red/context-fixed-ci_fixture_git-run.log",
+      "committed": "metadata/ci/main-red-2026-10-06/context-fixed-ci_fixture_git-run.log.gz",
+      "sha256": "98bd648057974f52ec8ccdfb6551b7107add055eee462442376a652fce3cc1fd",
+      "bytes": 182,
+      "rawSha256": "60e759d32ff372afa9e6926ac353624c9459d47c34d165b0172f488faabc4afd",
+      "rawBytes": 259
+    },
+    {
+      "original": "target/review/main-red/context-fixed-ci_workflow_routing-run.log",
+      "committed": "metadata/ci/main-red-2026-10-06/context-fixed-ci_workflow_routing-run.log.gz",
+      "sha256": "c28a25226b2494972b39f454b31239da69985adb6e6bd772cbf1638577a9644b",
+      "bytes": 414,
+      "rawSha256": "11f460157a948a58bd5e5d878fcc5d39e157dd6fdfb0730ceb5c2716f0638e31",
+      "rawBytes": 823
+    },
+    {
+      "original": "target/review/main-red/context-fixed-focused-receipt.json",
+      "committed": "metadata/ci/main-red-2026-10-06/context-fixed-focused-receipt.json",
+      "sha256": "c01c1cd5617e21d5c25f577803e39d2a113f8759a06ba4cb86e6139d40ffbea3",
+      "bytes": 271
+    },
+    {
+      "original": "target/review/main-red/review-interrupted-927688460-summary.json",
+      "committed": "metadata/ci/main-red-2026-10-06/review-interrupted-927688460-summary.json",
+      "sha256": "b855c2278a9fe243d42b952b91e131c250889a4fe04bda47d1971e1eb8a0c5ca",
+      "bytes": 5282
+    },
+    {
+      "original": "target/review/main-red/pr-ci-927688460-review-interruption.json",
+      "committed": "metadata/ci/main-red-2026-10-06/pr-ci-927688460-review-interruption.json",
+      "sha256": "96b8f37967b280fbc7e5a7fc3070231482d06f46a7543a375c61b4edfd26c543",
+      "bytes": 361
+    },
+    {
+      "original": "target/review/main-red/pr-ci-927688460-cleanup-client-timeout.json",
+      "committed": "metadata/ci/main-red-2026-10-06/pr-ci-927688460-cleanup-client-timeout.json",
+      "sha256": "cdb86a2c6becf0df92d94dabd57910622f4c3a1afaf0161de3126676de2a4884",
+      "bytes": 437
+    },
+    {
+      "original": "target/review/main-red/927-owned-container-custody-verified.json",
+      "committed": "metadata/ci/main-red-2026-10-06/927-owned-container-custody-verified.json",
+      "sha256": "06ad25223188a5eecf177df123099c4a540ae0459a5972f490ae5511d1d5d013",
+      "bytes": 494
+    },
+    {
+      "original": "target/review/main-red/927-owned-container-inspect.log",
+      "committed": "metadata/ci/main-red-2026-10-06/927-owned-container-inspect.log.gz",
+      "sha256": "c42e3fdc85dc8c891dc9ca050b5683c9334cd38514e952e8de9999e5eb6bb3e5",
+      "bytes": 96,
+      "rawSha256": "bd6746ad251ff2468add7d844ff53d15f209ad67b6250dba5c4d9b9ec764c475",
+      "rawBytes": 89,
+      "compression": "gzip"
+    },
+    {
+      "original": "target/review/main-red/927-owned-container-inspect.exit",
+      "committed": "metadata/ci/main-red-2026-10-06/927-owned-container-inspect.exit",
+      "sha256": "4355a46b19d348dc2f57c046f8ef63d4538ebb936000f3c9ee954a27460dd865",
+      "bytes": 2
+    },
+    {
+      "original": "target/review/main-red/context-private-log-control.json",
+      "committed": "metadata/ci/main-red-2026-10-06/context-private-log-control.json",
+      "sha256": "dfe16333629d48a500c52540ef1fcd44986e0c563b308163b3baffbab63bdfac",
+      "bytes": 4083
+    },
+    {
+      "original": "target/review/main-red/context-private-log-control.py",
+      "committed": "metadata/ci/main-red-2026-10-06/context-private-log-control.py.gz",
+      "sha256": "371f4e3fe1865d6440da9d164691be5f3881ff0eba49427796f4c7f87810ff86",
+      "bytes": 1553,
+      "rawSha256": "1ba61ab158a86c7019e954cd4a97007ebb9955b7de4df5dc8cd673553f24dd3e",
+      "rawBytes": 3698,
+      "compression": "gzip"
+    },
+    {
+      "original": "target/review/main-red/context-private-log-reviewed-parent.log",
+      "committed": "metadata/ci/main-red-2026-10-06/context-private-log-reviewed-parent.log.gz",
+      "sha256": "dec9bac51a7159c5636907cf5a6531ed23611fe12bad7e1ab88aebe01d5139ad",
+      "bytes": 247,
+      "rawSha256": "d89c047bd2c2d2c50469a1a54d90ff8f2d5142a8378c5c905b9951d746d7f650",
+      "rawBytes": 397,
+      "compression": "gzip"
+    },
+    {
+      "original": "target/review/main-red/context-private-log-fixed-head.log",
+      "committed": "metadata/ci/main-red-2026-10-06/context-private-log-fixed-head.log.gz",
+      "sha256": "a4ee8e844d22f77347b6e085a4b493b002245d6588b2cf909a640414c0772d47",
+      "bytes": 249,
+      "rawSha256": "0a28951093b299cc0a70eaafd7eb8883b77141a6c4f4213ef381a713d23c5f5f",
+      "rawBytes": 399,
+      "compression": "gzip"
+    },
+    {
+      "original": "target/review/main-red/context-independent-review.json",
+      "committed": "metadata/ci/main-red-2026-10-06/context-independent-review.json",
+      "sha256": "b79cccfa9e7dffbb0a6f94495949bc91b52c5ac325c85d9ef0cff280c4e63ea4",
+      "bytes": 786
+    },
+    {
+      "original": "target/review/main-red/context-exact-allowlist-fixture.log",
+      "committed": "metadata/ci/main-red-2026-10-06/context-exact-allowlist-fixture.log.gz",
+      "sha256": "e3cd4a66f53376d16c22b3b05dae28f1ed37233500bacfbe6c429418df4bd8b1",
+      "bytes": 356,
+      "rawSha256": "7badacf8e0a3cbbdfc51af65cbe31a3e6aeb770cd7bf983c90a0c0c8cd7e92b1",
+      "rawBytes": 633,
+      "compression": "gzip"
+    },
+    {
+      "original": "target/review/main-red/context-exact-allowlist-fixture.exit",
+      "committed": "metadata/ci/main-red-2026-10-06/context-exact-allowlist-fixture.exit",
+      "sha256": "9a271f2a916b0b6ee6cecb2426f0b3206ef074578be55d9bc94f6f3fe3ab86aa",
+      "bytes": 2
+    },
+    {
+      "original": "target/review/main-red/context-exact-focused.log",
+      "committed": "metadata/ci/main-red-2026-10-06/context-exact-focused.log.gz",
+      "sha256": "fce3044dc2bc0b33bcbb34e193d06622a03fe69d1fd59e5698d325e17eb8790a",
+      "bytes": 502,
+      "rawSha256": "653dcac3806c924a618704cba9dc12058fbdec59db0284164ad6b1227840926f",
+      "rawBytes": 1082,
+      "compression": "gzip"
+    },
+    {
+      "original": "target/review/main-red/context-exact-focused-receipt.json",
+      "committed": "metadata/ci/main-red-2026-10-06/context-exact-focused-receipt.json",
+      "sha256": "58a8328378b4aabd0b9e4441e8daff1725f701f4d70c3fd5ca86832ec05e78f1",
+      "bytes": 926
+    },
+    {
+      "original": "target/review/main-red/context-exact-focused-rebuild.log",
+      "committed": "metadata/ci/main-red-2026-10-06/context-exact-focused-rebuild.log.gz",
+      "sha256": "a49f1eb64ff06a87a145667d84c3ff9855f218b699d830d26c0b85ff1a113d4c",
+      "bytes": 100,
+      "rawSha256": "b602a8022b87a191949aeedc9d7f7076755727d07156058684a82e5b9f44ef52",
+      "rawBytes": 144,
+      "compression": "gzip"
+    },
+    {
+      "original": "target/review/main-red/context-exact-focused-rebuild.exit",
+      "committed": "metadata/ci/main-red-2026-10-06/context-exact-focused-rebuild.exit",
+      "sha256": "9a271f2a916b0b6ee6cecb2426f0b3206ef074578be55d9bc94f6f3fe3ab86aa",
+      "bytes": 2
+    },
+    {
+      "original": "target/review/main-red/context-exact-routing-rebuild.exit",
+      "committed": "metadata/ci/main-red-2026-10-06/context-exact-routing-rebuild.exit",
+      "sha256": "9a271f2a916b0b6ee6cecb2426f0b3206ef074578be55d9bc94f6f3fe3ab86aa",
+      "bytes": 2
+    },
+    {
+      "original": "target/rt-scratch/pr-ci-main-red-927688460-proof1-acceptance.log",
+      "committed": "metadata/ci/main-red-2026-10-06/pr-ci-main-red-927688460-proof1-acceptance.log.gz",
+      "sha256": "01addf41bde872d5aa60b1c2ca5d054381c3798d70bf86e2e588e32c609f88c3",
+      "bytes": 357,
+      "rawSha256": "78fa7c8a3b5e22c2e3c159c920681cf5fcc443c8bdcb7e68c626f8ee11169da5",
+      "rawBytes": 633,
+      "compression": "gzip"
+    },
+    {
+      "original": "target/rt-scratch/pr-ci-main-red-927688460-proof1-parent.log",
+      "committed": "metadata/ci/main-red-2026-10-06/pr-ci-main-red-927688460-proof1-parent.log.gz",
+      "sha256": "89c75aca593298922f8ebfba61deb6fe1d9e467dee5942652f54cbdf62ac18f3",
+      "bytes": 126,
+      "rawSha256": "057a30456dfd20d0c179f410eeb483fa55be3edebeeefd63b6b80333cad4af8e",
+      "rawBytes": 125,
+      "compression": "gzip"
+    },
+    {
+      "original": "target/rt-scratch/pr-ci-main-red-927688460-proof1-source-context-preflight.log",
+      "committed": "metadata/ci/main-red-2026-10-06/pr-ci-main-red-927688460-proof1-source-context-preflight.log.gz",
+      "sha256": "3f493445cf531a549599fdb90e499c458592da13bae5afc118ce055819ee6fe7",
+      "bytes": 1173,
+      "rawSha256": "9069a2d723e7199563524cc048d39645db7c41f633f8361a4aa7310591c98032",
+      "rawBytes": 3428,
+      "compression": "gzip"
+    },
+    {
+      "original": "target/rt-scratch/pr-ci-main-red-927688460-proof1-security-preflight.log",
+      "committed": "metadata/ci/main-red-2026-10-06/pr-ci-main-red-927688460-proof1-security-preflight.log.gz",
+      "sha256": "f61f27bd17de546264aa58f40f3aafaac7021e0ef69c17f6b1b4cd7664a037ec",
+      "bytes": 20,
+      "rawSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "rawBytes": 0,
+      "compression": "gzip"
+    },
+    {
+      "original": "target/rt-scratch/pr-ci-main-red-927688460-proof1-audit-preflight.log",
+      "committed": "metadata/ci/main-red-2026-10-06/pr-ci-main-red-927688460-proof1-audit-preflight.log.gz",
+      "sha256": "cab4465c28f1e618ad19304c3fcb67dc6ff828e2f3d93a187976831d723b2bed",
+      "bytes": 88,
+      "rawSha256": "da11e2479240e313d86a610bf672713520c21895f5443d99808ba47b3543ece8",
+      "rawBytes": 74,
+      "compression": "gzip"
+    },
+    {
+      "original": "target/rt-scratch/pr-ci-main-red-927688460-proof1-required.log",
+      "committed": "metadata/ci/main-red-2026-10-06/pr-ci-main-red-927688460-proof1-required.log.gz",
+      "sha256": "4bf40bf1d7efad4abf1f45b0fd9f87981f5f09c544f51be0477a958b2b4cd289",
+      "bytes": 1982,
+      "rawSha256": "5378ae19f3d9335ccca9072b39c10eb3f2b8eb2445d4ad47a0fb4a6ca2653a39",
+      "rawBytes": 5245,
+      "compression": "gzip"
+    },
+    {
+      "original": "target/review/main-red/full-ci-parity-timeout-275dac2e3.json",
+      "committed": "metadata/ci/main-red-2026-10-06/full-ci-parity-timeout-275dac2e3.json",
+      "sha256": "a1fca17798367da4057ef2e45fe7a608568674fa6b9d96ec11ea2439c7eddb8b",
+      "bytes": 7037
+    },
+    {
+      "original": "target/rt-scratch/pr-ci-main-red-275dac2e3-proof1-required.log",
+      "committed": "metadata/ci/main-red-2026-10-06/pr-ci-main-red-275dac2e3-proof1-required.log.gz",
+      "sha256": "213a84372d3f6d6441c3816d06aa88b6ca9958bd6c749443e6b93c48b1973fae",
+      "bytes": 76253,
+      "rawSha256": "442cd8ee190703ec99b2769c1b4379ea79f72d5bd70bba144fe7b9f7bd95fb09",
+      "rawBytes": 419645,
+      "compression": "gzip"
+    },
+    {
+      "original": "target/review/main-red/failed-parity-binary-custody-275dac2e3.json",
+      "committed": "metadata/ci/main-red-2026-10-06/failed-parity-binary-custody-275dac2e3.json",
+      "sha256": "00cd6406c7269b144b3722c0ff45690d893c760758a19494629d7abb305285be",
+      "bytes": 905
+    },
+    {
+      "original": "target/review/main-red/beyond-20049-exact-repeat-275dac2e3.json",
+      "committed": "metadata/ci/main-red-2026-10-06/beyond-20049-exact-repeat-275dac2e3.json",
+      "sha256": "0eb57a7a79739940e2ce45a4948e609835f82b40f4f1d21c1b2dcdc592f3c34d",
+      "bytes": 1905
+    },
+    {
+      "original": "target/review/main-red/beyond-two-exact-environment-repeats-275dac2e3.json",
+      "committed": "metadata/ci/main-red-2026-10-06/beyond-two-exact-environment-repeats-275dac2e3.json",
+      "sha256": "afc9676a8872fc9630f4ca3364ee2d14a793679dab76bf8c46738f25705670a5",
+      "bytes": 5613
+    },
+    {
+      "original": "target/review/main-red/next-proof-physical-affinity-after-parity-timeout.json",
+      "committed": "metadata/ci/main-red-2026-10-06/next-proof-physical-affinity-after-parity-timeout.json",
+      "sha256": "00f3ef7986fac8497e1823a94692b49d1ad329562f8233b15e7443bfebfbf88c",
+      "bytes": 9497
+    },
+    {
+      "original": "target/review/main-red/natural-physical-cpu-sample-after-parity-timeout.json",
+      "committed": "metadata/ci/main-red-2026-10-06/natural-physical-cpu-sample-after-parity-timeout.json",
+      "sha256": "1e0d658759c99841b9eeebfeea19028743070bf1b1f91d917e2ce9fea1494b23",
+      "bytes": 9373
+    },
+    {
+      "original": "target/redline-testing/sqlite_parity.raw.jsonl",
+      "committed": "metadata/ci/main-red-2026-10-06/275dac2e3-sqlite_parity.raw.jsonl.gz",
+      "sha256": "32b0c535285426403cb2b80b019e25dd064a2830d27d2f9867cf241ad8968ca9",
+      "bytes": 504322,
+      "rawSha256": "612e9186624c102cdc28a60be4ae1fc2a0c84ff43e791e52a81d25fc0948bb0a",
+      "rawBytes": 19044892,
+      "compression": "gzip"
+    },
+    {
+      "original": "target/redline-testing/memory.raw.jsonl",
+      "committed": "metadata/ci/main-red-2026-10-06/275dac2e3-memory.raw.jsonl.gz",
+      "sha256": "5eba35a9db3f7fdcb15e37e71df3cc3dcf99e8fa7f841867ef81f9b2c70bb5da",
+      "bytes": 648608,
+      "rawSha256": "927128c064f52c00ae21f3c47fc60a186d43f561e627691257b533390f6f05d6",
+      "rawBytes": 20160677,
+      "compression": "gzip"
+    },
+    {
+      "original": "target/redline-testing/rql_phase1.raw.jsonl",
+      "committed": "metadata/ci/main-red-2026-10-06/275dac2e3-rql_phase1.raw.jsonl.gz",
+      "sha256": "55d7abe232458048849c36fd727c71fd24ddc8801f7975b35f319f140fdf8429",
+      "bytes": 249576,
+      "rawSha256": "5b32a0da37bf42b462a6a4d44d7173d0d5d3ae96981d49b9bdcf34c9aa2ce0c7",
+      "rawBytes": 9492168,
+      "compression": "gzip"
+    },
+    {
+      "original": "target/redline-testing/beyond_sqlite.raw.jsonl",
+      "committed": "metadata/ci/main-red-2026-10-06/275dac2e3-beyond_sqlite.raw.jsonl.gz",
+      "sha256": "4e121adfb532e5eadfc635b9a610e7a48d346dd642d2e9303d6fd56c9b60317f",
+      "bytes": 31329,
+      "rawSha256": "132e6aee45c7d3c5c51f5a10c3ea05cbc100eb48cc4f9dca6d28a2fe1dc0d892",
+      "rawBytes": 496979,
+      "compression": "gzip"
+    }
+  ]
+}

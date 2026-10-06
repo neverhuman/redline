@@ -1,0 +1,8 @@
+{
+  "time": "2026-10-06T20:03:42.942411+00:00",
+  "head": "927688460cc005fd832ba091a8de8419de9d4d6f",
+  "ownedPid": 323161,
+  "ownedProcessGroup": 323161,
+  "command": "/snap/just/40/bin/just pr-ci ",
+  "reason": "Independent P2: broad public log exception uploads ignored private logs. Stop only own proof group to correct exact-path allowlist before push."
+}

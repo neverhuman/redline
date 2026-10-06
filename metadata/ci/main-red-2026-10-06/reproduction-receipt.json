@@ -1,0 +1,306 @@
+{
+  "startedAt": "2026-10-06T17:24:51.988741+00:00",
+  "purpose": "Read-only exact-SHA diagnostics while requested registered-lane custody is pending",
+  "commands": [
+    {
+      "label": "package-acceptance-parent7d",
+      "argv": [
+        "bash",
+        "/home/ubuntu/redlineDB/ops/ci/tests/arm64-packages.sh"
+      ],
+      "exit": 1,
+      "seconds": 0.06795860081911087,
+      "log": "target/review/main-red/package-acceptance-parent7d.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "label": "compile-owned-ready-delay",
+      "argv": [
+        "cc",
+        "-shared",
+        "-fPIC",
+        "-O2",
+        "/home/ubuntu/redlineDB/target/review/main-red/ready-scheduler-delay.c",
+        "-o",
+        "/home/ubuntu/redlineDB/target/review/main-red/ready-scheduler-delay.so"
+      ],
+      "exit": 0,
+      "seconds": 0.7985349711962044,
+      "log": "target/review/main-red/compile-owned-ready-delay.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "label": "main7d-recover-natural-1",
+      "argv": [
+        "taskset",
+        "-c",
+        "124,125,126,127",
+        "cargo",
+        "test",
+        "--locked",
+        "-p",
+        "redlinedb-bench",
+        "--test",
+        "recover_oracle",
+        "recover_matrix_healthy_single_case_exits_zero",
+        "--",
+        "--exact",
+        "--nocapture"
+      ],
+      "exit": 0,
+      "seconds": 26.453159180935472,
+      "log": "target/review/main-red/main7d-recover-natural-1.log",
+      "sha256": "e96f7d8853125b41de77ac49617b3c70959b03e19b39cfd35591825f67e45033"
+    },
+    {
+      "label": "main7d-recover-natural-2",
+      "argv": [
+        "taskset",
+        "-c",
+        "124,125,126,127",
+        "cargo",
+        "test",
+        "--locked",
+        "-p",
+        "redlinedb-bench",
+        "--test",
+        "recover_oracle",
+        "recover_matrix_healthy_single_case_exits_zero",
+        "--",
+        "--exact",
+        "--nocapture"
+      ],
+      "exit": 0,
+      "seconds": 1.7248211959376931,
+      "log": "target/review/main-red/main7d-recover-natural-2.log",
+      "sha256": "1ebaaa794e3582a63f8e78e900f375aa2606c0a7390933004353a61023fc2cf9"
+    },
+    {
+      "label": "main7d-recover-natural-3",
+      "argv": [
+        "taskset",
+        "-c",
+        "124,125,126,127",
+        "cargo",
+        "test",
+        "--locked",
+        "-p",
+        "redlinedb-bench",
+        "--test",
+        "recover_oracle",
+        "recover_matrix_healthy_single_case_exits_zero",
+        "--",
+        "--exact",
+        "--nocapture"
+      ],
+      "exit": 0,
+      "seconds": 1.7109181573614478,
+      "log": "target/review/main-red/main7d-recover-natural-3.log",
+      "sha256": "a17fac20904d15c9f32c517bc8393523e6b4864e6e33a698eacdb8e341fbe243"
+    },
+    {
+      "label": "main7d-recover-delayed-after-ready",
+      "argv": [
+        "taskset",
+        "-c",
+        "124,125,126,127",
+        "cargo",
+        "test",
+        "--locked",
+        "-p",
+        "redlinedb-bench",
+        "--test",
+        "recover_oracle",
+        "recover_matrix_healthy_single_case_exits_zero",
+        "--",
+        "--exact",
+        "--nocapture"
+      ],
+      "exit": 101,
+      "seconds": 1.360197993926704,
+      "log": "target/review/main-red/main7d-recover-delayed-after-ready.log",
+      "sha256": "ad8734ee672faf8f888e4d91513aca739122c77aaf2dbf3ea8e69585e2bc5efe"
+    },
+    {
+      "label": "main7d-parity-baseline",
+      "argv": [
+        "taskset",
+        "-c",
+        "124,125,126,127",
+        "cargo",
+        "nextest",
+        "run",
+        "--locked",
+        "-p",
+        "redlinedb-sql",
+        "--test",
+        "parity_oracle",
+        "-E",
+        "test(=parity_oracle_baseline)",
+        "--no-capture"
+      ],
+      "exit": 0,
+      "seconds": 16.09841026365757,
+      "log": "target/review/main-red/main7d-parity-baseline.log",
+      "sha256": "6ffe2e21d9d4bf2e47a9b2e3bb4c653d4d2ef6afc5a2bd19b6e6c4c88a42010d"
+    },
+    {
+      "label": "green141-recover-natural-1",
+      "argv": [
+        "taskset",
+        "-c",
+        "124,125,126,127",
+        "cargo",
+        "test",
+        "--locked",
+        "-p",
+        "redlinedb-bench",
+        "--test",
+        "recover_oracle",
+        "recover_matrix_healthy_single_case_exits_zero",
+        "--",
+        "--exact",
+        "--nocapture"
+      ],
+      "exit": 0,
+      "seconds": 19.52802314190194,
+      "log": "target/review/main-red/green141-recover-natural-1.log",
+      "sha256": "ba2413335889d71d79ee3acd343e30b112233f1998953de81613fefd517e0a01"
+    },
+    {
+      "label": "green141-recover-natural-2",
+      "argv": [
+        "taskset",
+        "-c",
+        "124,125,126,127",
+        "cargo",
+        "test",
+        "--locked",
+        "-p",
+        "redlinedb-bench",
+        "--test",
+        "recover_oracle",
+        "recover_matrix_healthy_single_case_exits_zero",
+        "--",
+        "--exact",
+        "--nocapture"
+      ],
+      "exit": 0,
+      "seconds": 1.7455051969736814,
+      "log": "target/review/main-red/green141-recover-natural-2.log",
+      "sha256": "610e0388b88d82c765fc5f82d4623c95eef778080260496640e67dd0fcde81db"
+    },
+    {
+      "label": "green141-recover-natural-3",
+      "argv": [
+        "taskset",
+        "-c",
+        "124,125,126,127",
+        "cargo",
+        "test",
+        "--locked",
+        "-p",
+        "redlinedb-bench",
+        "--test",
+        "recover_oracle",
+        "recover_matrix_healthy_single_case_exits_zero",
+        "--",
+        "--exact",
+        "--nocapture"
+      ],
+      "exit": 0,
+      "seconds": 1.765569746028632,
+      "log": "target/review/main-red/green141-recover-natural-3.log",
+      "sha256": "2016a7838961d1ffd576cbb946ad3e22a4f3b7ed28c0f92bf9065ace3a636064"
+    },
+    {
+      "label": "green141-recover-delayed-after-ready",
+      "argv": [
+        "taskset",
+        "-c",
+        "124,125,126,127",
+        "cargo",
+        "test",
+        "--locked",
+        "-p",
+        "redlinedb-bench",
+        "--test",
+        "recover_oracle",
+        "recover_matrix_healthy_single_case_exits_zero",
+        "--",
+        "--exact",
+        "--nocapture"
+      ],
+      "exit": 101,
+      "seconds": 1.347525272052735,
+      "log": "target/review/main-red/green141-recover-delayed-after-ready.log",
+      "sha256": "8bda57d1ec8858c0fb3a03b0cbab857f1a7f5c604bacf58cf7854e60e026eef1"
+    },
+    {
+      "label": "green141-parity-baseline",
+      "argv": [
+        "taskset",
+        "-c",
+        "124,125,126,127",
+        "cargo",
+        "nextest",
+        "run",
+        "--locked",
+        "-p",
+        "redlinedb-sql",
+        "--test",
+        "parity_oracle",
+        "-E",
+        "test(=parity_oracle_baseline)",
+        "--no-capture"
+      ],
+      "exit": 0,
+      "seconds": 15.728584034834057,
+      "log": "target/review/main-red/green141-parity-baseline.log",
+      "sha256": "d169481fc696a2bc3718f645c4e07a8b14fd427b83021b55cbfef2e91e1346e7"
+    }
+  ],
+  "cloneRemoved": true,
+  "schedulerControl": {
+    "sourceSha256": "ee528ac54fdcffbcd6a3cc59114be57d5d726462c8e24ba90e572870a52042a3",
+    "librarySha256": "9732ec9c834cba9f1475f233b0f0d44b96fa5232bfcf563f29f9ed115dbff116",
+    "effect": "Only this test invocation inherited LD_PRELOAD; pause its own crash child for1000ms immediately after READY to model scheduling delay; no peer process or machine load changes"
+  },
+  "sourceInputs": {
+    "main7d": {
+      "head": "7d883012a1b74424c0c1ce4764be32f890350160",
+      "tree": "c3a851ba91b5ffc063b112cdc4a41caaa0714257",
+      "inputs": {
+        "crates/bench/src/recover.rs": "980c81264751445929bfd913bc23d99f8fabadf9016e82fed64140f04ab7ba49",
+        "crates/bench/src/recover/harness.rs": "dd1bdc9e00f4e6b838a74017f1da5b134310ae4d43cd0433e5284423ddfc546c",
+        "crates/bench/tests/recover_oracle.rs": "0d389921f41e8441a978b827813e9c8e10e9357de0551bf5256911199d218246",
+        "crates/sql/tests/parity_oracle.rs": "7b1774f5db5001a4812dec1c9c9909b1f07a49c3d2a705e34a36a0739625b37c",
+        "Cargo.lock": "20afd62b65fc7d9c271cfd9e2d54e1e224e7c316dcd6e0b4ab50da13aa26e989"
+      }
+    },
+    "green141": {
+      "head": "141247e96c509fa1b7a2d5d2865cf27d2d14b5ea",
+      "tree": "db6994a46d5d32f8b03dc5910cf55ffe17e9238e",
+      "inputs": {
+        "crates/bench/src/recover.rs": "980c81264751445929bfd913bc23d99f8fabadf9016e82fed64140f04ab7ba49",
+        "crates/bench/src/recover/harness.rs": "dd1bdc9e00f4e6b838a74017f1da5b134310ae4d43cd0433e5284423ddfc546c",
+        "crates/bench/tests/recover_oracle.rs": "0d389921f41e8441a978b827813e9c8e10e9357de0551bf5256911199d218246",
+        "crates/sql/tests/parity_oracle.rs": "7b1774f5db5001a4812dec1c9c9909b1f07a49c3d2a705e34a36a0739625b37c",
+        "Cargo.lock": "20afd62b65fc7d9c271cfd9e2d54e1e224e7c316dcd6e0b4ab50da13aa26e989"
+      }
+    }
+  },
+  "readyMarkers": {
+    "main7d": {
+      "path": "target/review/main-red/main7d-ready-delay-marker.txt",
+      "present": true,
+      "contents": "pid=2688021 delayed_after_ready_ms=1000\npid=2688496 delayed_after_ready_ms=1000\n"
+    },
+    "green141": {
+      "path": "target/review/main-red/green141-ready-delay-marker.txt",
+      "present": true,
+      "contents": "pid=2717219 delayed_after_ready_ms=1000\npid=2717784 delayed_after_ready_ms=1000\n"
+    }
+  },
+  "finishedAt": "2026-10-06T17:27:20.394568+00:00"
+}

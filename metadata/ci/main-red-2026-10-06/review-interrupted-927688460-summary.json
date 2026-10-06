@@ -1,0 +1,140 @@
+{
+  "head": "927688460cc005fd832ba091a8de8419de9d4d6f",
+  "tree": "09ecf23cfcb879409151f6e261432ff54e495925",
+  "gatePassed": false,
+  "deliberateReviewInterruption": true,
+  "steps": [
+    {
+      "name": "acceptance",
+      "command": [
+        "bash",
+        "ops/ci/tests/arm64-packages.sh"
+      ],
+      "startedAt": "2026-10-06T20:00:39.487366+00:00",
+      "log": "target/rt-scratch/pr-ci-main-red-927688460-proof1-acceptance.log",
+      "exit": 0,
+      "expected": 0,
+      "finishedAt": "2026-10-06T20:00:40.033305+00:00",
+      "logSha256": "78fa7c8a3b5e22c2e3c159c920681cf5fcc443c8bdcb7e68c626f8ee11169da5"
+    },
+    {
+      "name": "parent",
+      "command": [
+        "bash",
+        "/home/ubuntu/redlineDB/ops/ci/tests/arm64-packages.sh"
+      ],
+      "startedAt": "2026-10-06T20:00:40.091319+00:00",
+      "log": "target/rt-scratch/pr-ci-main-red-927688460-proof1-parent.log",
+      "exit": 1,
+      "expected": 1,
+      "finishedAt": "2026-10-06T20:00:40.159593+00:00",
+      "logSha256": "057a30456dfd20d0c179f410eeb483fa55be3edebeeefd63b6b80333cad4af8e"
+    },
+    {
+      "name": "source-context-preflight",
+      "command": [
+        "timeout",
+        "900",
+        "bash",
+        "ops/ci/arm64-packages.sh",
+        "check-sources"
+      ],
+      "startedAt": "2026-10-06T20:00:56.876695+00:00",
+      "log": "target/rt-scratch/pr-ci-main-red-927688460-proof1-source-context-preflight.log",
+      "exit": 0,
+      "expected": 0,
+      "finishedAt": "2026-10-06T20:01:14.165719+00:00",
+      "logSha256": "9069a2d723e7199563524cc048d39645db7c41f633f8361a4aa7310591c98032"
+    },
+    {
+      "name": "security-preflight",
+      "command": [
+        "taskset",
+        "-c",
+        "61,63,126",
+        "target/ci/tools/jankurai",
+        "security",
+        "run",
+        ".",
+        "--strict",
+        "--profile",
+        "ci",
+        "--script",
+        "ops/ci/security-family.sh",
+        "--out",
+        "target/jankurai/security/evidence.json"
+      ],
+      "startedAt": "2026-10-06T20:01:14.189836+00:00",
+      "log": "target/rt-scratch/pr-ci-main-red-927688460-proof1-security-preflight.log",
+      "exit": 0,
+      "expected": 0,
+      "finishedAt": "2026-10-06T20:02:03.994363+00:00",
+      "logSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "name": "audit-preflight",
+      "command": [
+        "taskset",
+        "-c",
+        "61,63,126",
+        "bash",
+        "-euo",
+        "pipefail",
+        "-c",
+        "source ops/ci/lib.sh\njankurai audit . --full --mode ratchet --baseline .jankurai/baselines/github-monorepo.repo-score.json --policy agent/audit-policy.toml --json \"$1\" --md \"$2\" --no-score-history\njq -e \".score > 85 and .decision.hard_findings == 0 and (.caps_applied | length) == 0\" \"$1\" >/dev/null",
+        "sandbox-audit",
+        "/home/ubuntu/redlineDB/target/review/main-red/sandbox-audit-927688460-proof1.json",
+        "/home/ubuntu/redlineDB/target/review/main-red/sandbox-audit-927688460-proof1.md"
+      ],
+      "startedAt": "2026-10-06T20:02:04.021426+00:00",
+      "log": "target/rt-scratch/pr-ci-main-red-927688460-proof1-audit-preflight.log",
+      "exit": 0,
+      "expected": 0,
+      "finishedAt": "2026-10-06T20:02:38.642400+00:00",
+      "logSha256": "da11e2479240e313d86a610bf672713520c21895f5443d99808ba47b3543ece8"
+    },
+    {
+      "name": "required",
+      "command": [
+        "taskset",
+        "-c",
+        "61,63,126",
+        "just",
+        "pr-ci"
+      ],
+      "startedAt": "2026-10-06T20:02:38.678695+00:00",
+      "log": "target/rt-scratch/pr-ci-main-red-927688460-proof1-required.log",
+      "exit": 143,
+      "expected": 0,
+      "finishedAt": "2026-10-06T20:03:42.965308+00:00",
+      "logSha256": "5378ae19f3d9335ccca9072b39c10eb3f2b8eb2445d4ad47a0fb4a6ca2653a39"
+    }
+  ],
+  "targetRestored": true,
+  "sandboxRemoved": true,
+  "originalPostgresCleanup": {
+    "exit": 143,
+    "container": "ff68065b76f6b742c347ff8d8199437e910c3944616965cbb1fc35872e4ea291"
+  },
+  "finalOwnedContainerAbsent": {
+    "verifiedAt": "2026-10-06T20:07:51.831195+00:00",
+    "head": "927688460cc005fd832ba091a8de8419de9d4d6f",
+    "container": "ff68065b76f6b742c347ff8d8199437e910c3944616965cbb1fc35872e4ea291",
+    "originalCleanupExit": 143,
+    "readOnlyInspectExit": 1,
+    "containerAbsentVerified": true,
+    "rawLogSha256": "bd6746ad251ff2468add7d844ff53d15f209ad67b6250dba5c4d9b9ec764c475",
+    "scope": "Original asynchronous removal eventually completed; no second remove, daemon/service restart or peer action."
+  },
+  "allRefsBundleSha256": "6278b195f13432ff4068e0c08fd191eb8bf9f9703d40e808cb6edf2858301925",
+  "archive": {
+    "head": "927688460cc005fd832ba091a8de8419de9d4d6f",
+    "gatePassed": false,
+    "archive": "/mnt/fast-scratch/jope-prime-offroot/redlinedb-v511-tests/archive/main-red-927688460-proof1-verified-evidence-20261006T200609Z.tar.gz",
+    "archiveBytes": 118648167,
+    "archiveSha256": "ffa05600bb4010693c34de669e584d30efff5fa8231d13aeed165b99f3b7df0b",
+    "verifiedFiles": 2136,
+    "sourceReceiptSha256": "bd3364433ad3779914548a46e23bf39a0e9854fc12dcc7f31a12b8615a1c6af9"
+  },
+  "review": "P2 ignored-private-log Docker context upload, corrected before publication; no product failure claimed."
+}
