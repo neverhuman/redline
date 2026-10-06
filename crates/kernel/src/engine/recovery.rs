@@ -7,7 +7,7 @@ use std::sync::Arc;
 use crate::catalog::{CatalogManager, CatalogStore, CatalogSyncPolicy, bootstrap_schema};
 use crate::engine::lock::RowLockManager;
 use crate::engine::page_heap::PageBackedHeap;
-use crate::format::{Lsn, Page, RelId, TxId};
+use crate::format::{Csn, Lsn, Page, RelId, TxId};
 use crate::io::{StdFileSystem, create_dir_all_durable};
 use crate::storage::{BufferPool, ControlStore, PageFile, TxStatusStore};
 use crate::telemetry::Phase11Counters;
@@ -364,7 +364,32 @@ impl Engine {
         }
         reserve_ids_named_in_wal(&scan_report.records, &txs, &heap)?;
         recover_index_page_images(&scan_report.records, replay_from_lsn, &filter, &buffer)?;
-        let metrics = recover_heap(&scan_report.records, heap_replay_from, &filter, &txs, &heap)?;
+        let (committed, commits_recovered) =
+            publish_recovered_commits(&scan_report.records, &filter, &txs)?;
+        // With a checkpoint, the heap pages hold every row the WAL below the
+        // heap redo LSN wrote. Load their heads now, with every commit
+        // published so the newest version wins, so heap redo finds each row
+        // it changes through the directory instead of a scan of every page.
+        // A redone heap page image would replace slots the directory points
+        // at; then the directory is loaded after redo instead, as before.
+        let directory_loaded = checkpoint.is_some()
+            && !redoes_heap_page_image(
+                &scan_report.records,
+                heap_replay_from,
+                &filter,
+                &committed,
+            )?;
+        if directory_loaded {
+            heap.load_row_directory_from_pages(heap.page_count()?, &txs)?;
+        }
+        let mut metrics = recover_heap(
+            &scan_report.records,
+            heap_replay_from,
+            &filter,
+            &committed,
+            &heap,
+        )?;
+        metrics.commits_recovered = commits_recovered;
         // Every commit recovery will publish is published now. A CSN below
         // them that the WAL lacks was given up before the crash.
         txs.seal_recovered_frontier();
@@ -408,9 +433,13 @@ impl Engine {
         recover_indexes(&scan_report.records, replay_from_lsn, &filter, &engine)?;
         if checkpoint.is_some() {
             let page_count = engine.heap.page_count()?;
-            engine
-                .heap
-                .load_row_directory_from_pages(page_count, &engine.txs)?;
+            // A directory loaded before redo is complete: redo set the head
+            // of every row it wrote.
+            if !directory_loaded {
+                engine
+                    .heap
+                    .load_row_directory_from_pages(page_count, &engine.txs)?;
+            }
             engine.heap.load_reusable_pages_from_pages(page_count)?;
         }
         // Recovery has succeeded. Only now is a torn tail copied to
@@ -551,15 +580,15 @@ fn reserve_ids_named_in_wal(
     Ok(())
 }
 
-fn recover_heap(
+/// Publish every commit the WAL holds that recovery keeps, and return the
+/// committed transactions with how many there are.
+fn publish_recovered_commits(
     records: &[WalRecord],
-    replay_from_lsn: Lsn,
     filter: &ReplayFilter,
     txs: &ConcurrentTxStatus,
-    heap: &PageBackedHeap,
-) -> Result<RecoveryMetrics> {
+) -> Result<(HashMap<TxId, Csn>, usize)> {
     let mut committed = HashMap::new();
-    let mut metrics = RecoveryMetrics::default();
+    let mut count = 0;
     for record in records {
         if record.kind == WalRecordKind::Commit {
             match WalPayload::decode(&record.payload)? {
@@ -567,14 +596,50 @@ fn recover_heap(
                     if filter.commit_visible(record.lsn, csn) {
                         committed.insert(tx_id, csn);
                         txs.publish_recovered_commit(tx_id, csn);
-                        metrics.commits_recovered += 1;
+                        count += 1;
                     }
                 }
                 _ => return Err(Error::CorruptWal("commit record has non-commit payload")),
             }
         }
     }
+    Ok((committed, count))
+}
 
+/// Whether heap redo will apply a logged image of a heap page: a committed
+/// page image at or after `replay_from_lsn` whose page is a heap page. No
+/// current writer logs one; a log written by an older build can hold them.
+fn redoes_heap_page_image(
+    records: &[WalRecord],
+    replay_from_lsn: Lsn,
+    filter: &ReplayFilter,
+    committed: &HashMap<TxId, Csn>,
+) -> Result<bool> {
+    for record in records {
+        if record.kind != WalRecordKind::PageImage
+            || record.lsn < replay_from_lsn
+            || !filter.applies(record.lsn)
+            || !committed.contains_key(&record.tx_id)
+        {
+            continue;
+        }
+        if let WalPayload::PageImage { page_bytes, .. } = WalPayload::decode(&record.payload)?
+            && Page::from_bytes(page_bytes)?.header()?.kind == crate::format::PageKind::Heap
+        {
+            return Ok(true);
+        }
+    }
+    Ok(false)
+}
+
+fn recover_heap(
+    records: &[WalRecord],
+    replay_from_lsn: Lsn,
+    filter: &ReplayFilter,
+    committed: &HashMap<TxId, Csn>,
+    heap: &PageBackedHeap,
+) -> Result<RecoveryMetrics> {
+    let mut metrics = RecoveryMetrics::default();
     for record in records {
         if record.lsn < replay_from_lsn || !filter.applies(record.lsn) {
             continue;
@@ -865,6 +930,10 @@ mod dir_sync_tests;
 #[cfg(test)]
 #[path = "recovery_index_image_tests.rs"]
 mod index_image_tests;
+
+#[cfg(test)]
+#[path = "recovery_heap_image_tests.rs"]
+mod heap_image_tests;
 
 #[cfg(test)]
 mod tests {
