@@ -13,12 +13,34 @@ mod acceptance {
     #[test]
     fn numbered_parameter_over_the_sqlite_cap_is_quarantined() {
         assert!(!oracle::numbered_parameter_exceeds_sqlite_cap("SELECT ?1"));
-        assert!(!oracle::numbered_parameter_exceeds_sqlite_cap("SELECT ?32766"));
-        assert!(oracle::numbered_parameter_exceeds_sqlite_cap("SELECT ?32767"));
-        assert!(oracle::numbered_parameter_exceeds_sqlite_cap("SELECT ?123456"));
+        assert!(!oracle::numbered_parameter_exceeds_sqlite_cap(
+            "SELECT ?32766"
+        ));
+        assert!(oracle::numbered_parameter_exceeds_sqlite_cap(
+            "SELECT ?32767"
+        ));
+        assert!(oracle::numbered_parameter_exceeds_sqlite_cap(
+            "SELECT ?123456"
+        ));
         assert!(!oracle::skips_recursive("SELECT 1"));
         assert!(oracle::skips_recursive(
             "WITH RECURSIVE c(x) AS (SELECT 1) SELECT x FROM c",
         ));
+    }
+
+    #[test]
+    fn vacuum_into_with_whitespace_or_comments_is_quarantined() {
+        assert!(oracle::skips_filesystem("VACUUM INTO 'out.db'"));
+        assert!(oracle::skips_filesystem("VACUUM\nINTO 'out.db'"));
+        assert!(oracle::skips_filesystem("VACUUM/**/INTO 'out.db'"));
+        assert!(oracle::skips_filesystem("VACUUM /* note */ INTO 'out.db'"));
+        assert!(oracle::skips_filesystem("VACUUM -- note\nINTO 'out.db'"));
+        assert!(oracle::skips_filesystem("VACUUM main INTO 'out.db'"));
+        assert!(oracle::skips_filesystem("VACUUM \"main\" INTO 'out.db'"));
+        assert!(!oracle::skips_filesystem("VACUUM"));
+        assert!(!oracle::skips_filesystem("VACUUM main"));
+        assert!(!oracle::skips_filesystem("VACUUM /* INTO */"));
+        assert!(!oracle::skips_filesystem("VACUUM; SELECT 1"));
+        assert!(oracle::skips_filesystem("SELECT 'vacuum into'"));
     }
 }
