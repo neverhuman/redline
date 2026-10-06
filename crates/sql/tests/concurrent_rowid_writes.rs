@@ -210,21 +210,53 @@ fn stepping_past_a_committed_row_leaves_its_writers_free() {
     // The late insert steps past rowid 2, which it cannot see.
     late.execute("INSERT INTO t(v) VALUES ('late')")
         .expect("late insert");
-    // While `late` is still open, row 2 can be updated at once.
+    // While `late` is still open, row 2 can be updated without waiting
+    // for a row lock. The lock manager counts every acquisition that had
+    // to wait, so the count says it, whatever the host's load; a wall-time
+    // bound did not.
+    let engine = early.engine_for_tests();
+    let lock_waits = || -> u64 {
+        engine
+            .phase11_counters_snapshot()
+            .lock_wait_us_buckets
+            .iter()
+            .sum()
+    };
+    let before = lock_waits();
     let update = {
         let db = Arc::clone(&db);
         std::thread::spawn(move || {
-            let started = std::time::Instant::now();
             db.connect()
                 .execute("UPDATE t SET v = 'changed' WHERE id = 2")
                 .expect("update");
-            started.elapsed()
         })
     };
-    let waited = update.join().expect("updater");
+    update.join().expect("updater");
+    let waited = lock_waits() - before;
     late.execute("COMMIT").expect("commit");
-    assert!(
-        waited < Duration::from_millis(500),
-        "updating the row the insert stepped past waited {waited:?}"
+    assert_eq!(
+        waited, 0,
+        "updating the row the insert stepped past waited for {waited} row lock(s)"
     );
+
+    // The count does register a wait: an update of a row another open
+    // transaction holds waits for its lock, here until a short timeout.
+    // It runs inside BEGIN, where a timeout is not retried as in autocommit.
+    let holder = db.connect();
+    holder.execute("BEGIN").expect("begin");
+    holder
+        .execute("UPDATE t SET v = 'held' WHERE id = 1")
+        .expect("hold row 1");
+    let blocked = db.connect();
+    blocked.set_busy_timeout(Duration::from_millis(50));
+    blocked.execute("BEGIN").expect("begin");
+    let before = lock_waits();
+    let refused = blocked.execute("UPDATE t SET v = 'blocked' WHERE id = 1");
+    assert!(refused.is_err(), "an update of a held row did not wait");
+    assert!(
+        lock_waits() > before,
+        "a blocked update counted no lock wait"
+    );
+    let _ = blocked.execute("ROLLBACK");
+    holder.execute("ROLLBACK").expect("rollback");
 }
