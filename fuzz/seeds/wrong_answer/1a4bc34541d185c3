@@ -1,0 +1,1 @@
+SELECT v FROM t WHERE k = 5 AND j = 1

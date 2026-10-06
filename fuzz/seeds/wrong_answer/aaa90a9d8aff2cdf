@@ -1,0 +1,1 @@
+SELECT count(*) FROM c LIMIT 1

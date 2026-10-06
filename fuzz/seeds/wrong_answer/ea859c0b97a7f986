@@ -1,0 +1,1 @@
+SELECT id FROM {access} WHERE x = 1 AND y IS NULL

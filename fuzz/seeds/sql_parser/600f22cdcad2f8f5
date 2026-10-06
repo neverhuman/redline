@@ -1,0 +1,1 @@
+SELECT t.id, au.w FROM t JOIN aux.au au ON t.y = au.w

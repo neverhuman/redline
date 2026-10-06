@@ -1,0 +1,1 @@
+SELECT g, total(x), avg(x) FROM {t} GROUP BY g

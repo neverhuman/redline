@@ -1,0 +1,1 @@
+UPDATE n SET k = NULL WHERE id = 4

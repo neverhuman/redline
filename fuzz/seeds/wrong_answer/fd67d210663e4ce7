@@ -1,0 +1,1 @@
+SELECT id FROM {{access}} WHERE {column} BETWEEN {probe} AND '99'

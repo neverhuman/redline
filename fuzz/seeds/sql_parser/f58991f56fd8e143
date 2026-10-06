@@ -1,0 +1,1 @@
+SELECT x, typeof(x), y FROM t GROUP BY x

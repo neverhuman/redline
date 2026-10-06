@@ -1,0 +1,1 @@
+CREATE TABLE big(x, v INTEGER);          WITH RECURSIVE n(i) AS (SELECT 0 UNION ALL SELECT i + 1 FROM n WHERE i < 3999)          INSERT INTO big SELECT CASE WHEN (i / 100) % 2 = 0 THEN i % 100 ELSE (i % 100) * 1.0 END, i          FROM n;

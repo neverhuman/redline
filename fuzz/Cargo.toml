@@ -1,0 +1,38 @@
+[package]
+name = "redlinedb-fuzz"
+version = "0.0.0"
+publish = false
+edition = "2021"
+description = "cargo-fuzz targets for the v5.1.1 post-release audit"
+
+[package.metadata]
+cargo-fuzz = true
+
+# Own workspace so this package does not inherit the product release profile
+# (panic = abort, fat LTO). libFuzzer needs unwind and its own sanitizer flags.
+[workspace]
+
+[dependencies]
+libfuzzer-sys = "0.4"
+redlinedb-sql = { path = "../crates/sql" }
+rusqlite = { version = "0.37.0", features = ["bundled"] }
+
+[lib]
+name = "redlinedb_fuzz"
+path = "src/lib.rs"
+doctest = false
+bench = false
+
+[[bin]]
+name = "sql_parser"
+path = "fuzz_targets/sql_parser.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "wrong_answer"
+path = "fuzz_targets/wrong_answer.rs"
+test = false
+doc = false
+bench = false

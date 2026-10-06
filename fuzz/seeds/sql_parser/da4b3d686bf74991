@@ -1,0 +1,1 @@
+SELECT 1 /* AS MATERIALIZED */ AS materialized -- AS NOT MATERIALIZED (

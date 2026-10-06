@@ -1,0 +1,1 @@
+SELECT x FROM m INDEXED BY m_x_desc WHERE x > 2 ORDER BY x DESC

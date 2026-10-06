@@ -1,0 +1,1 @@
+SELECT t.id FROM t JOIN vl ON t.y = vl.l

@@ -1,0 +1,1 @@
+SELECT a, typeof(a), b, typeof(b), c, typeof(c), d, typeof(d), e, typeof(e)          FROM g ORDER BY rowid

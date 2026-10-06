@@ -1,0 +1,1 @@
+SELECT id, CASE WHEN v THEN 't' ELSE 'f' END FROM tv ORDER BY id

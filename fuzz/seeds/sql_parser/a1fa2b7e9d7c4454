@@ -1,0 +1,1 @@
+SELECT id, v FROM t INDEXED BY t_k WHERE k = 5

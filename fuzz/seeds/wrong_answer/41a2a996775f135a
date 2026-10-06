@@ -1,0 +1,1 @@
+SELECT t.id, vn.x FROM t JOIN vn ON t.y = vn.x

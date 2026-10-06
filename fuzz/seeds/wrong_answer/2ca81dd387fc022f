@@ -1,0 +1,1 @@
+SELECT sum(x) OVER (ORDER BY o {frame}), o FROM w_ints ORDER BY o

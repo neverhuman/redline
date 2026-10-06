@@ -1,0 +1,1 @@
+CREATE TABLE x.t(a); INSERT INTO x.t VALUES (1);

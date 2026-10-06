@@ -1,0 +1,1 @@
+SELECT tb.id, tt.id FROM tb JOIN tt ON tb.w = tt.y

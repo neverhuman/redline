@@ -1,0 +1,1 @@
+SELECT x + y, x FROM t ORDER BY 1, 2

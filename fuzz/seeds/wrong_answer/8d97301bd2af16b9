@@ -1,0 +1,1 @@
+SELECT count(*) FROM vn WHERE x IN ('5', '7')

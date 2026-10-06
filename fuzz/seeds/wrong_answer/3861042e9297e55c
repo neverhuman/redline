@@ -1,0 +1,1 @@
+SELECT id, x, y, z FROM t ORDER BY id

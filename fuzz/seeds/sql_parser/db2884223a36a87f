@@ -1,0 +1,1 @@
+SELECT 7 AS [select * from public.t]

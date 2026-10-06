@@ -1,0 +1,1 @@
+CREATE TABLE u(y, z); CREATE UNIQUE INDEX u_y ON u(y);                  CREATE INDEX u_z ON u(z);                  INSERT INTO u VALUES (1, 'a'), (1.0, 'b'), (2, 'c');

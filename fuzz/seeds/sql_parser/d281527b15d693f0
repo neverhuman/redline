@@ -1,0 +1,1 @@
+SELECT {column}, typeof({column}) FROM {access} WHERE {column} >= 2                      ORDER BY {column}{order}, typeof({column})

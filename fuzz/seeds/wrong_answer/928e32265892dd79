@@ -1,0 +1,1 @@
+SELECT {column} FROM a INDEXED BY {index} WHERE {column} > 1                      ORDER BY {column}{order} LIMIT 2

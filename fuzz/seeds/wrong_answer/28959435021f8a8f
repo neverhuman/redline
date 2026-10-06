@@ -1,0 +1,1 @@
+SELECT id, y = CAST(5 AS INTEGER), z = CAST('5' AS INTEGER), x = CAST(y AS TEXT),          CAST(x AS TEXT) = y FROM t ORDER BY id

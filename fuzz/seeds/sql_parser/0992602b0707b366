@@ -1,0 +1,1 @@
+SELECT id, v FROM t WHERE k = 5 AND v <> 'e'

@@ -1,0 +1,1 @@
+WITH c AS (SELECT x + 0 AS e FROM n) SELECT t.id FROM t JOIN c ON t.y = c.e

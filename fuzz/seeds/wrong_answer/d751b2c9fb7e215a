@@ -1,0 +1,1 @@
+SELECT sum(x), max(x), avg(x) FROM c LIMIT 1

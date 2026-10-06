@@ -1,0 +1,1 @@
+CREATE TEMP TABLE tt(z); CREATE INDEX tt_z ON tt(z); INSERT INTO tt VALUES (1),(1.5),(2.0);

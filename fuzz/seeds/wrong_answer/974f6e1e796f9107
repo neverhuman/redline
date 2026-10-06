@@ -1,0 +1,1 @@
+WITH RECURSIVE c(x) AS (SELECT 1 UNION ALL SELECT x + 1 FROM c WHERE x < 5),          d(n) AS (SELECT count(*) FROM c)          SELECT x, (SELECT n FROM d) FROM c LIMIT 1

@@ -1,0 +1,1 @@
+SELECT g, count(*) IN ('1', '2') FROM ga GROUP BY g

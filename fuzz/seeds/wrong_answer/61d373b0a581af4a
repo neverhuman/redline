@@ -1,0 +1,1 @@
+SELECT g, CAST(sum(v) AS TEXT) = g FROM ga GROUP BY g

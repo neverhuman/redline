@@ -1,0 +1,1 @@
+SELECT x, typeof(x), count(*) FROM (SELECT 1.0 x UNION ALL SELECT 1) GROUP BY x

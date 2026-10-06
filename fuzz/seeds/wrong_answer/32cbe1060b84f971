@@ -1,0 +1,1 @@
+SELECT g || '', count(*) FROM t GROUP BY g ORDER BY 1 COLLATE NOCASE, 2 DESC

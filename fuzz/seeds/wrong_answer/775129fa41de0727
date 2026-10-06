@@ -1,0 +1,1 @@
+SELECT a, a = max(b), a < min(b) FROM gb GROUP BY a

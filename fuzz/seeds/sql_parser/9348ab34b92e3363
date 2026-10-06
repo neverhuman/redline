@@ -1,0 +1,1 @@
+SELECT x FROM s INDEXED BY s_x WHERE x >= 2 AND x < 3 ORDER BY typeof(x)

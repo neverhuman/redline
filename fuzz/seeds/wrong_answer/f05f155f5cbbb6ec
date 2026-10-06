@@ -1,0 +1,1 @@
+insert into t overriding system value values (1)

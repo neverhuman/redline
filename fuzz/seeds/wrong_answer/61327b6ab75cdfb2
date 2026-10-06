@@ -1,0 +1,1 @@
+SELECT g, g NOT IN (count(*), 99) FROM ga GROUP BY g

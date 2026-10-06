@@ -1,0 +1,1 @@
+CREATE TABLE g(a, b REAL GENERATED ALWAYS AS (a) STORED,              c INTEGER GENERATED ALWAYS AS (a) VIRTUAL,              d TEXT GENERATED ALWAYS AS (a) STORED,              e NUMERIC GENERATED ALWAYS AS (a * 1) STORED);          INSERT INTO g(a) VALUES (2), (2.0), ('3'), (2.5), (-4);          CREATE INDEX g_b ON g(b); CREATE INDEX g_e ON g(e);

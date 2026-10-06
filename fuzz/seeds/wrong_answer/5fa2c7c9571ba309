@@ -1,0 +1,2 @@
+INSERT INTO u VALUES(1 -- it's
+|| 'array[2]')

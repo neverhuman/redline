@@ -1,0 +1,1 @@
+UPDATE t SET flag = 1 WHERE id = 1

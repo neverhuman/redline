@@ -1,0 +1,1 @@
+SELECT x, count(*) FROM big GROUP BY x ORDER BY x

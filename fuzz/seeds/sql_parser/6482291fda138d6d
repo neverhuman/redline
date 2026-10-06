@@ -1,0 +1,1 @@
+CREATE TABLE s(x ANY) STRICT;          INSERT INTO s VALUES (2.0), (2), (1.5), (3), (-4.0), ('7');          CREATE INDEX s_x ON s(x);

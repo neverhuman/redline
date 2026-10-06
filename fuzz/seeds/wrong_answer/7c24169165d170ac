@@ -1,0 +1,1 @@
+SELECT t.id, v.w FROM t, v WHERE t.y = v.w

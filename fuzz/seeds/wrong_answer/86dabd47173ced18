@@ -1,0 +1,1 @@
+MERGE INTO w USING s ON w.id = s.id WHEN MATCHED THEN UPDATE SET v = s.v

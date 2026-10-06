@@ -1,0 +1,1 @@
+SELECT id, k FROM {{access}} WHERE {pred} AND k = {k}

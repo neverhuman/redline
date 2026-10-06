@@ -1,0 +1,1 @@
+SELECT id FROM u WHERE k = 5 ORDER BY id

@@ -1,0 +1,1 @@
+SELECT g, sum(y) + 1 FROM t GROUP BY g ORDER BY 2 DESC

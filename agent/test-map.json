@@ -29,6 +29,10 @@
       "command": "rtk bash scripts/ci-local.sh required",
       "purpose": "verify ignored evidence boundaries through the canonical host-required lane"
     },
+    "fuzz/": {
+      "command": "rtk bash scripts/ci-local.sh required",
+      "purpose": "verify the v5.1.1 cargo-fuzz parser and wrong-answer targets through the canonical host-required lane"
+    },
     ".jankurai/": {
       "command": "rtk bash scripts/ci-local.sh required",
       "purpose": "verify proof policy through the canonical host-required lane"

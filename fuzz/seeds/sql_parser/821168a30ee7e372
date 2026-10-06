@@ -1,0 +1,1 @@
+CREATE INDEX u_s ON u(s); CREATE INDEX u_k ON u(k); CREATE INDEX u_w ON u(w)

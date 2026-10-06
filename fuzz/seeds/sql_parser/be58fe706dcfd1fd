@@ -1,0 +1,1 @@
+SELECT id FROM {{access}} WHERE {pred} AND k > 0 ORDER BY id

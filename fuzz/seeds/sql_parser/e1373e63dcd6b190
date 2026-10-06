@@ -1,0 +1,1 @@
+SELECT {column} FROM {access} WHERE {column} > -10 ORDER BY {column}{order}

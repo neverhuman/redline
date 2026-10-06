@@ -1,0 +1,1 @@
+SELECT tag, count(*) FROM {access} WHERE {predicate} GROUP BY tag

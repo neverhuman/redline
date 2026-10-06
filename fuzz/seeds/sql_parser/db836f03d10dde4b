@@ -1,0 +1,1 @@
+DELETE FROM a WHERE k = 5; INSERT INTO a VALUES (11, 5, 'new');          UPDATE f SET flag = 0 WHERE id = 1; UPDATE f SET flag = 1 WHERE id = 3;          UPDATE g SET name = 'other' WHERE id = 1; INSERT INTO g VALUES (4, 'HeLLo', 4);          UPDATE e SET y = 'z' WHERE id = 1; UPDATE e SET y = 'a' WHERE id = 3;

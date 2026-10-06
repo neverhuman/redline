@@ -1,0 +1,1 @@
+SELECT x FROM {access} WHERE x > 1 ORDER BY x DESC LIMIT 2

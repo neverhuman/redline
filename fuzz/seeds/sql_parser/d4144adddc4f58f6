@@ -1,0 +1,1 @@
+CREATE TABLE w_peers(o INTEGER, x);          INSERT INTO w_peers VALUES (1, 1), (1, {MAX}), (2, 1), (2, -5), (3, 2), (4, 3),          (4, 4), (4, 5), (5, 6);

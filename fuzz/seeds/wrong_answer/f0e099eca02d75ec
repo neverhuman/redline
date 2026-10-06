@@ -1,0 +1,1 @@
+INSERT INTO a VALUES (10, 5, 'back'); DELETE FROM a WHERE k = 7;          UPDATE f SET flag = 0 WHERE id = 2; UPDATE f SET flag = 1 WHERE id = 3;          INSERT INTO g VALUES (3, 'World!', 3);

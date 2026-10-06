@@ -1,0 +1,1 @@
+SELECT c = 5, d = '5' FROM (SELECT '5' AS c, 5 AS d)

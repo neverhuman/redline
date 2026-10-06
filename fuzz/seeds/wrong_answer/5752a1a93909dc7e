@@ -1,0 +1,1 @@
+SELECT id, (SELECT count(*) FROM t AS i WHERE i.x = o.y) FROM t AS o ORDER BY id

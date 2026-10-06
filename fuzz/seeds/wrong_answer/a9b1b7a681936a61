@@ -1,0 +1,1 @@
+SELECT -a, typeof(-a) FROM (SELECT {MIN} AS a)

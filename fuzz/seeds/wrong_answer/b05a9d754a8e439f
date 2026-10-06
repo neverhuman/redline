@@ -1,0 +1,1 @@
+SELECT count(*) FROM t WHERE y IN (SELECT value FROM json_each('[5]'))

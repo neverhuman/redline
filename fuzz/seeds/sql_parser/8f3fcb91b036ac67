@@ -1,0 +1,1 @@
+SELECT 1 AS [AS MATERIALIZED], 2 AS `as not materialized`

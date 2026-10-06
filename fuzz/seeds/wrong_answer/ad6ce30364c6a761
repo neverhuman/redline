@@ -1,0 +1,1 @@
+SELECT x * 2, -x, (x), CAST(x AS REAL), x || 'a' COLLATE NOCASE, c.x FROM c LIMIT 2

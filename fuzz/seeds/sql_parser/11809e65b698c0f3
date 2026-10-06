@@ -1,0 +1,1 @@
+SELECT g, sum(x), count(*) FROM {t} GROUP BY g

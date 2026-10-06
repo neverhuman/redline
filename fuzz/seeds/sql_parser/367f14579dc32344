@@ -1,0 +1,1 @@
+WITH RECURSIVE r(a, b) AS (SELECT 'a|Tb', 'c' UNION SELECT 'a', 'b|Tc' FROM r)          SELECT count(*) FROM r

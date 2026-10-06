@@ -1,0 +1,1 @@
+CREATE TABLE p(a INTEGER, flag); CREATE INDEX pi ON p(a) WHERE flag;

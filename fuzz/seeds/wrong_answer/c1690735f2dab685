@@ -1,0 +1,1 @@
+SELECT x, typeof(x) FROM (SELECT 1 AS x UNION SELECT 1.0)

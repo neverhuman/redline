@@ -1,0 +1,1 @@
+SELECT min(v), max(v), typeof(max(v)) FROM edge

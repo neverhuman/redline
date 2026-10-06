@@ -1,0 +1,1 @@
+DELETE FROM {table}; INSERT INTO {table} VALUES ({left}, {right});

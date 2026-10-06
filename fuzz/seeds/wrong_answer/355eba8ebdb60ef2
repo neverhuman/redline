@@ -1,0 +1,1 @@
+SELECT k FROM {{access}} WHERE {pred} AND k >= 0 ORDER BY k

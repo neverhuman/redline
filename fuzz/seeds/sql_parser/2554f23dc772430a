@@ -1,0 +1,1 @@
+WITH c AS (SELECT w FROM u) SELECT count(*) FROM t JOIN c ON t.y = c.w

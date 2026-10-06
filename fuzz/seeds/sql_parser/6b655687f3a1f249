@@ -1,0 +1,1 @@
+SELECT 7 /* it's */, 'x array[1,2] y', '(a)[1]'

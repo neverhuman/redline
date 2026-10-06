@@ -1,0 +1,1 @@
+SELECT total(x), avg(x) FROM {t}

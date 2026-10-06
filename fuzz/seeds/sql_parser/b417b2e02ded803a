@@ -1,0 +1,1 @@
+UPDATE p SET id = 2, k = 200, flag = 1 WHERE id = 1;     UPDATE p SET id = 4, k = 400, flag = 0 WHERE id = 3;

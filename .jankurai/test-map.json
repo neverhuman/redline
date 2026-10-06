@@ -140,6 +140,10 @@
       "command": "just score",
       "purpose": "keep the exclude list aligned with the owner-map"
     },
+    "fuzz/": {
+      "command": "just score",
+      "purpose": "keep the v5.1.1 cargo-fuzz targets routed and indexed"
+    },
     "assets/": {
       "command": "just score",
       "purpose": "ensure paper/figure assets stay routed and indexed"

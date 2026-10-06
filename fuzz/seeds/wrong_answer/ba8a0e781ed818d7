@@ -1,0 +1,1 @@
+SELECT '5' IN (SELECT x FROM t), 5 IN (SELECT y FROM t)

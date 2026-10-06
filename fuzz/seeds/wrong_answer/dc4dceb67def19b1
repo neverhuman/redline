@@ -1,0 +1,1 @@
+SELECT 7 AS [insert into t select 1 on conflict (a) do nothing]

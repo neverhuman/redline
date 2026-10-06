@@ -1,0 +1,1 @@
+UPDATE t SET id = 30 WHERE id = 1

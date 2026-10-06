@@ -1,0 +1,1 @@
+SELECT a FROM {access} WHERE flag AND a > 0

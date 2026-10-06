@@ -1,0 +1,1 @@
+SELECT id FROM f WHERE flag = 1 AND k = ?1

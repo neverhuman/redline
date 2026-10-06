@@ -1,0 +1,1 @@
+SELECT v FROM {access} WHERE v > '' ORDER BY v

@@ -1,0 +1,1 @@
+SELECT v, typeof(v) FROM ck_not ORDER BY rowid

@@ -1,0 +1,1 @@
+SELECT NOT {value}, {value} AND 1, {value} OR 0, 1 AND {value}

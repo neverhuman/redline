@@ -1,0 +1,1 @@
+CREATE TABLE mix(g, x); INSERT INTO mix VALUES (0, 1), (0, 2), (1, {MAX}), (1, 1);

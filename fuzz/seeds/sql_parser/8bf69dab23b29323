@@ -1,0 +1,1 @@
+CREATE TABLE o(x); INSERT INTO o VALUES {DISTINCT},(2.0),(1.0),(0.0),(NULL),('t');          CREATE INDEX o_asc ON o(x); CREATE INDEX o_desc ON o(x DESC);

@@ -1,0 +1,1 @@
+SELECT y FROM t INDEXED BY t_xy WHERE x = 2 AND y > 'A'

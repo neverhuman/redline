@@ -1,0 +1,1 @@
+CREATE TABLE p(id INT, k INTEGER, flag INTEGER);         CREATE INDEX p_k ON p(k) WHERE flag = 1;         INSERT INTO p VALUES (1, 100, 0), (2, 200, 1), (3, 300, 1), (4, 400, 0);

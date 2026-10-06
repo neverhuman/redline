@@ -1,0 +1,1 @@
+SELECT c AS not_materialized FROM t ORDER BY c

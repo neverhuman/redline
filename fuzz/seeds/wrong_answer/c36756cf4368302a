@@ -1,0 +1,1 @@
+SELECT x, (SELECT count(*) FROM c) FROM c LIMIT 1

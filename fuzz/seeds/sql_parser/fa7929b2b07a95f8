@@ -1,0 +1,1 @@
+SELECT t2.id, tn.id FROM t2 JOIN tn ON t2.z = tn.n

@@ -1,0 +1,1 @@
+SELECT (SELECT count(*) FROM t AS u WHERE u.x < t.x) FROM t ORDER BY 1 DESC

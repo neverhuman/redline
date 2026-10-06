@@ -1,0 +1,1 @@
+SELECT id FROM u INDEXED BY u_x WHERE x = 3

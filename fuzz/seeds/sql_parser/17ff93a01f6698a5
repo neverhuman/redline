@@ -1,0 +1,1 @@
+DELETE FROM q WHERE rowid = {}

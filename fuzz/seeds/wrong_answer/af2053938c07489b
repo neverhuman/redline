@@ -1,0 +1,1 @@
+CREATE TABLE n(x ANY); INSERT INTO n VALUES (2.0), (2), (1.5);          CREATE INDEX n_x ON n(x);

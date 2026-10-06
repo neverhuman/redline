@@ -1,0 +1,1 @@
+CREATE TABLE fine(g, x); INSERT INTO fine VALUES (0, -1), (0, {MAX}), (0, 1);

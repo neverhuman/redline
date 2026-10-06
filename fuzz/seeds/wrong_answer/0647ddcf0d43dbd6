@@ -1,0 +1,1 @@
+SELECT g, count(*) AS n FROM t GROUP BY g HAVING count(*) > 0 ORDER BY 2, 1 DESC

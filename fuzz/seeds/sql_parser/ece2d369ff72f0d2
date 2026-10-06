@@ -1,0 +1,1 @@
+SELECT 'alter column c drop identity'

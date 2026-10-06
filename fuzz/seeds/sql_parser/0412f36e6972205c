@@ -1,0 +1,1 @@
+UPDATE u SET y = y - ?1

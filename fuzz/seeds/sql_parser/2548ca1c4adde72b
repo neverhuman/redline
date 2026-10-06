@@ -1,0 +1,1 @@
+SELECT t.id FROM t JOIN (VALUES (5), (7)) v ON t.y = v.column1

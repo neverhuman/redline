@@ -1,0 +1,1 @@
+SELECT v, typeof(v) FROM edge ORDER BY v

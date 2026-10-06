@@ -1,0 +1,1 @@
+SELECT x, count(*) FROM t GROUP BY x HAVING x = '5' OR x > '7' ORDER BY x
