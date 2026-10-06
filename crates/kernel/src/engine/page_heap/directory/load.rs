@@ -151,6 +151,36 @@ impl PageBackedHeap {
         Ok(out)
     }
 
+    /// The relation's row ids from `low` to `high` inclusive, ascending.
+    /// Only those ids are copied out of the directory.
+    pub fn relation_rowids_between(
+        &self,
+        rel_id: RelId,
+        low: RowId,
+        high: RowId,
+    ) -> Result<Vec<RowId>> {
+        let mut rows = Vec::new();
+        if low > high {
+            return Ok(rows);
+        }
+        for shard in &self.relation_row_dir {
+            let shard = shard
+                .read()
+                .map_err(|_| Error::CorruptPage("relation row dir shard poisoned"))?;
+            if let Some(entries) = shard.get(&rel_id) {
+                rows.extend(
+                    entries
+                        .keys()
+                        .copied()
+                        .filter(|row_id| (low..=high).contains(row_id)),
+                );
+            }
+        }
+        crate::observe::add_directory_entries_copied(rows.len() as u64);
+        rows.sort_unstable();
+        Ok(rows)
+    }
+
     pub fn relation_rowids(&self, rel_id: RelId) -> Result<Vec<RowId>> {
         let mut rows = Vec::new();
         for shard in &self.relation_row_dir {

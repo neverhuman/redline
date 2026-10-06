@@ -169,6 +169,16 @@ impl Engine {
         self.heap.relation_rowids(rel_id)
     }
 
+    /// [`Engine::relation_rowids`] from `low` to `high` inclusive, ascending.
+    pub fn relation_rowids_between(
+        &self,
+        rel_id: RelId,
+        low: RowId,
+        high: RowId,
+    ) -> Result<Vec<RowId>> {
+        self.heap.relation_rowids_between(rel_id, low, high)
+    }
+
     /// WS-C3 R3: number of pages allocated in the page-backed heap,
     /// including pages still only in the buffer pool: page ids run from 1
     /// to this count. It bounds a full [`Engine::parallel_scan_page_range`]

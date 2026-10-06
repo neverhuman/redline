@@ -4,6 +4,10 @@ use super::select_parallel::{
 };
 use super::*;
 
+#[path = "rowid_range.rs"]
+mod rowid_range;
+pub(super) use rowid_range::bounds_rowid;
+
 /// One visibility load, then project. The unordered heap scan used to
 /// decode each row to drop invisible versions and decode the survivors
 /// again in the table cursor.
@@ -472,6 +476,17 @@ fn build_select_runtime(
                         } else {
                             visible_table_scan(conn, tx, table, plan, bindings)?
                         }
+                    } else if !matches!(
+                        plan.table_hint,
+                        Some(crate::statement::TableAccessHint::NotIndexed)
+                    ) && let Some(rowids) =
+                        rowid_range::table_rowids(conn.engine(), table, &plan.selection, bindings)?
+                    {
+                        SelectRuntimeSource::Table {
+                            table: Arc::clone(table),
+                            rowids,
+                            cursor: 0,
+                        }
                     } else {
                         let tx = tx.as_mut().expect("tx present");
                         visible_table_scan(conn, tx, table, plan, bindings)?
@@ -887,6 +902,16 @@ fn table_rows_for_select(
                 Ok(rows)
             }
         };
+    }
+
+    if let Some(rowids) = rowid_range::table_rowids(conn.engine(), table, selection, bindings)? {
+        let mut rows = Vec::with_capacity(rowids.len());
+        for rowid in rowids {
+            if let Some(row) = load_table_row_by_rowid(conn.engine(), tx, table, rowid)? {
+                rows.push(row);
+            }
+        }
+        return Ok(rows);
     }
 
     collect_table_rows(conn.engine(), tx, table)
