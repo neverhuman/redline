@@ -651,25 +651,22 @@ impl BtreeIndex {
                 high_key,
             },
         )?;
-        for entry in entries {
-            if let Entry::Leaf {
+        page.insert_cells(entries.iter().filter_map(|entry| match entry {
+            Entry::Leaf {
                 logical_key,
                 row,
                 physical,
                 create_tx,
                 delete_tx,
-            } = entry
-            {
-                page.insert_cell(&LeafCell::encode(
-                    logical_key,
-                    *row,
-                    physical,
-                    *create_tx,
-                    *delete_tx,
-                ))?;
-            }
-        }
-        Ok(())
+            } => Some(LeafCell::encode(
+                logical_key,
+                *row,
+                physical,
+                *create_tx,
+                *delete_tx,
+            )),
+            _ => None,
+        }))
     }
 
     pub(in crate::index) fn rewrite_internal(
@@ -701,12 +698,10 @@ impl BtreeIndex {
                 high_key,
             },
         )?;
-        for entry in entries {
-            if let Entry::Internal { separator, child } = entry {
-                page.insert_cell(&InternalCell::encode(separator, *child))?;
-            }
-        }
-        Ok(())
+        page.insert_cells(entries.iter().filter_map(|entry| match entry {
+            Entry::Internal { separator, child } => Some(InternalCell::encode(separator, *child)),
+            _ => None,
+        }))
     }
 
     pub(super) fn read_page_header(page: &Page) -> Result<PageHeader> {

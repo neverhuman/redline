@@ -12,6 +12,34 @@ impl Page {
     }
 
     pub fn insert_cell_at(&mut self, slot: u16, payload: &[u8]) -> Result<u16> {
+        self.place_cell(slot, payload)?;
+        self.refresh_checksum()?;
+        Ok(slot)
+    }
+
+    /// Append `cells` in order and refresh the checksum once, not once per
+    /// cell: rewriting a page of N cells checksums the page once instead of
+    /// N times. On an error the cells placed so far stay, as they would
+    /// with [`Page::insert_cell`], and the checksum still covers them.
+    pub fn insert_cells<I, C>(&mut self, cells: I) -> Result<()>
+    where
+        I: IntoIterator<Item = C>,
+        C: AsRef<[u8]>,
+    {
+        let mut placed = Ok(());
+        for cell in cells {
+            let slot = self.slot_count()?;
+            if let Err(err) = self.place_cell(slot, cell.as_ref()) {
+                placed = Err(err);
+                break;
+            }
+        }
+        self.refresh_checksum()?;
+        placed
+    }
+
+    /// [`Page::insert_cell_at`] without refreshing the checksum.
+    fn place_cell(&mut self, slot: u16, payload: &[u8]) -> Result<()> {
         let mut header = self.header()?;
         let slot_count = self.slot_count()?;
         if slot > slot_count {
@@ -44,9 +72,7 @@ impl Page {
 
         header.lower = new_lower as u16;
         header.upper = new_upper as u16;
-        self.write_header(&header)?;
-        self.refresh_checksum()?;
-        Ok(slot)
+        self.write_header(&header)
     }
 
     pub fn delete_cell(&mut self, slot: u16) -> Result<()> {
