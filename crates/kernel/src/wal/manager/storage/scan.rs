@@ -143,8 +143,12 @@ impl<Fs: FileSystem> WalReader<Fs> {
                 }
 
                 let encoded = window.read(&mut file, file_len, offset, record_len as usize)?;
+                // Give ordinary records an owned decode buffer while retaining
+                // batched file reads. The temporary stays through validation
+                // and push; large records keep borrowing the read window.
+                let ordinary = (record_len <= 512 << 10).then(|| encoded.to_vec());
 
-                match WalRecord::decode(encoded) {
+                match WalRecord::decode(ordinary.as_deref().unwrap_or(encoded)) {
                     Ok(record) => {
                         validate_record_position(
                             &record,

@@ -372,7 +372,10 @@ impl Engine {
         // it changes through the directory instead of a scan of every page.
         // A redone heap page image would replace slots the directory points
         // at; then the directory is loaded after redo instead, as before.
+        // With no WAL past the checkpoint, no redo needs a directory lookup.
+        // Keep the ordinary checkpoint-open allocation order in that case.
         let directory_loaded = checkpoint.is_some()
+            && heap_replay_from < scan_report.valid_end_lsn
             && !redoes_heap_page_image(
                 &scan_report.records,
                 heap_replay_from,

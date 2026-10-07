@@ -1,0 +1,49 @@
+{
+  "purpose": "Separate recovery7b and WAL8f source changes on the same host; choose lowest load once at series start, retain all five-case ABBA studies and all results.",
+  "hostSelection": [
+    {
+      "at": "2026-10-07T22:27:44Z",
+      "host": "xbabe1",
+      "load": [
+        5.0263671875,
+        4.56396484375,
+        7.9443359375
+      ]
+    },
+    {
+      "at": "2026-10-07T22:27:44Z",
+      "host": "xbabe2",
+      "load": [
+        38.12255859375,
+        41.482421875,
+        47.56640625
+      ]
+    },
+    {
+      "at": "2026-10-07T22:27:44Z",
+      "host": "xbabe3",
+      "load": [
+        6.470703125,
+        4.2421875,
+        4.9150390625
+      ]
+    }
+  ],
+  "steps": [
+    [
+      "bisect-7bdf4c8c",
+      "series-recovery7b-20261007",
+      "bisect-release-af4-rebuilt"
+    ],
+    [
+      "bisect-8f880b21",
+      "series-wal8f-20261007",
+      "bisect-7bdf4c8c"
+    ],
+    [
+      "bisect-8f880b21",
+      "series-main8f-20261007",
+      "bisect-release-af4-rebuilt"
+    ]
+  ]
+}

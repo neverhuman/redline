@@ -218,6 +218,11 @@ syncs included, is available in the linked raw bundle.
 Throughput, higher is better, except open times. Each figure is the median of 3 runs, each the median of 5 repetitions (3 when one takes over 10 s) of the same fixed work on a fresh copy of a 20000-row database, in one process, with every query on the calling thread. RedlineDB `Normal` durability is paired with SQLite 3.50.2 in WAL mode with `synchronous=NORMAL` and `locking_mode=EXCLUSIVE`: a commit survives a process crash, not a power loss, and one process owns the database. Each engine has a 64 MiB page cache; SQLite uses 4 KiB pages and no mmap. The files are on tmpfs, so no device cost is measured. SQLite is measured beside the newest version in the same runs, and the last column is RedlineDB's throughput over that SQLite's; below 1 means SQLite is faster. † marks a change within run-to-run noise. Raw records, host and build details: [`benchmark-results/perf/releases/v5.1.1-vs-v5.1.0-paired-rerun21`](benchmark-results/perf/releases/v5.1.1-vs-v5.1.0-paired-rerun21/). The shell table below times whole processes, start-up included.
 <!-- engine-throughput:end -->
 
+Current-main diagnostics and the focused regression investigation are recorded
+separately in [the follow-up report](benchmark-results/perf/regressions/focused-normal-94da-20261007/README.md).
+They retain conflicting results and candidate before/after receipts; they do not
+replace the released-version figures above.
+
 <a id="versions-over-time"></a>
 
 ## Historical CLI benchmarks (through v5.0.0)

@@ -1,0 +1,39 @@
+{
+  "schema_version": "redline-scoreboard-build-v1",
+  "profile": "release",
+  "profile_release": "[profile.release]\nopt-level = 3\nlto = \"fat\"\ncodegen-units = 1\npanic = \"abort\"\nstrip = \"symbols\"\ndebug = false\ndebug-assertions = false\noverflow-checks = false\nincremental = false\n\n# Local CPU specialization requires an explicit RUSTFLAGS override.",
+  "rustflags": "",
+  "pgo": false,
+  "failpoints": false,
+  "rustc_verbose_version": [
+    "rustc 1.95.0 (59807616e 2026-04-14)",
+    "binary: rustc",
+    "commit-hash: 59807616e1fa2540724bfbac14d7976d7e4a3860",
+    "commit-date: 2026-04-14",
+    "host: x86_64-unknown-linux-gnu",
+    "release: 1.95.0",
+    "LLVM version: 22.1.2"
+  ],
+  "cargo_version": "cargo 1.95.0 (f2d3ce0bd 2026-03-21)",
+  "cargo_lock_delta": "",
+  "source_tree": "e1137b4ad78dea06ec9c2e8b4e6a26f256e0a6e4",
+  "build_workspace": "/home/ubuntu/redlineDB/.agent/worktrees/audit/.agent/sandbox/focused-bisect-build",
+  "standalone_package_build": true,
+  "label": "candidate-checkpoint-late",
+  "engine_ref": "4f9cb79224bd3d896188c48bdc0f22cdea1a0d39",
+  "engine_commit": "4f9cb79224bd3d896188c48bdc0f22cdea1a0d39",
+  "engine_commit_date": "2026-10-07T22:35:34+00:00",
+  "harness_ref": "4f9cb79224bd3d896188c48bdc0f22cdea1a0d39",
+  "harness_commit": "4f9cb79224bd3d896188c48bdc0f22cdea1a0d39",
+  "harness_tree": "bb1434a80ca0390401eb628d2785e8387c5f346e",
+  "engines": {
+    "redlinedb": "5.1.1",
+    "sqlite": "3.50.2",
+    "sqlite_source_id": "2025-06-28 14:00:48 2af157d77fb1304a74176eaee7fbc7c7e932d946bf25325e9c26c91db19e3079"
+  },
+  "cargo_command": "cargo build --release --locked --offline --jobs 2 -p redlinedb-scoreboard --target-dir /home/ubuntu/redlineDB/.agent/worktrees/audit/target",
+  "binary_sha256": "0b10328504fb0772c11677f910a892a9773131e2d1cde1f22565401879a958c8",
+  "built_at_utc": "2026-10-07T22:38:53.209856+00:00",
+  "sandbox": "Automatically removed exact-SHA standalone clone, reused own lane target cache; package-only release without failpoints/PGO",
+  "source_inputs_sha256": "2ca2916ecbd99445ee153067f4a0ea985f6b5180b04187084f31c29dc9cfb195"
+}

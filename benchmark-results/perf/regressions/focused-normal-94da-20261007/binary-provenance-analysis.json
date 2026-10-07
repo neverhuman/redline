@@ -1,0 +1,146 @@
+{
+  "schema": "redline-baseline-binary-provenance-diagnostic-v1",
+  "claim": "c-3738",
+  "investigationReadOnly": true,
+  "conclusion": {
+    "unequalBinaryHashesExplained": "The binaries contain different mimalloc compilation timestamps and different Rust standard-library source-location strings. Those linked-data differences change section sizes and addresses.",
+    "differentOptimizationOrAllocatorAlgorithmEstablished": false,
+    "performanceCauseEstablished": false,
+    "causalBisectCaveat": "A comparison against the historical release artifact confounds product changes with cross-build-host artifact variation. Use the identically rebuilt AF4 baseline for source attribution. The linked-layout difference has not been shown to cause the observed timing deltas."
+  },
+  "binaries": {
+    "historicalAF4": {
+      "path": ".agent/worktrees/audit/target/scoreboard/v5.1.1/redline-scoreboard",
+      "sha256": "2a5a1ea486070ba388c39b3db73ff6968a1c5b6881fff1569552b6cf719fa5ca",
+      "bytes": 12210960,
+      "buildId": "984966d4fc4cd6c369a892a30c440d4cfa264607",
+      "buildMetadataPath": ".agent/worktrees/audit/target/scoreboard/v5.1.1/build.json",
+      "buildMetadataSha256": "8fd57560785a7db7b4b128557570c0084a6de4813a8746cd2ca2c8a5290fd03f",
+      "buildHostEvidence": {
+        "host": "xbabe3",
+        "path": "target/review/pr36-46-refresh/owner-handoff-final-20261007.md",
+        "line": 482,
+        "fileSha256": "b55dce2210fed9a06c0b56429f336f142328e081811752399fe9561e79fb3705",
+        "description": "Preserved handoff identifies the new xbabe3 common-Q v5.1.1 binary by its exact 2a5a1ea4 hash."
+      }
+    },
+    "rebuiltAF4": {
+      "path": ".agent/worktrees/audit/target/scoreboard/bisect-release-af4-rebuilt/redline-scoreboard",
+      "sha256": "3f6db0b1badfb07350c4efb6f5b0626e335228389327aad352899b1e850b21c4",
+      "bytes": 12215120,
+      "buildId": "2d2d7e9e0467bf41051f0e88978c80ee490287ac",
+      "buildMetadataPath": ".agent/worktrees/audit/target/scoreboard/bisect-release-af4-rebuilt/build.json",
+      "buildMetadataSha256": "52f8bcfeb13708e1f8cf039bf0d78eb390eddb5c0f3c6b804cfa680dbeb258b2",
+      "buildWorkspace": "/home/ubuntu/redlineDB/.agent/worktrees/audit/.agent/sandbox/focused-bisect-build"
+    }
+  },
+  "matchingRecordedInputs": {
+    "engineCommit": "af4fc74cc3280582c4e6bd0583fe503c83118c48",
+    "harnessTree": "bb1434a80ca0390401eb628d2785e8387c5f346e",
+    "rustc": "1.95.0 (59807616e 2026-04-14)",
+    "llvm": "22.1.2",
+    "cargo": "1.95.0 (f2d3ce0bd 2026-03-21)",
+    "rustflags": "",
+    "releaseOptLevel": 3,
+    "lto": "fat",
+    "codegenUnits": 1,
+    "panic": "abort",
+    "strip": "symbols",
+    "debugAssertions": false,
+    "overflowChecks": false,
+    "incremental": false,
+    "pgo": false,
+    "failpoints": false,
+    "cargoLockDelta": "",
+    "sqliteSourceId": "2025-06-28 14:00:48 2af157d77fb1304a74176eaee7fbc7c7e932d946bf25325e9c26c91db19e3079",
+    "dynamicLibraries": ["libgcc_s.so.1", "libm.so.6", "libc.so.6"]
+  },
+  "elfFindings": {
+    "textBytesBoth": 10423538,
+    "textHistoricalVirtualAddress": "0x184f10",
+    "textRebuiltVirtualAddress": "0x185bd0",
+    "textAddressShiftBytes": 3264,
+    "rodataHistoricalBytes": 523192,
+    "rodataRebuiltBytes": 525496,
+    "rodataGrowthBytes": 2304,
+    "dataRelRoHistoricalBytes": 163552,
+    "dataRelRoRebuiltBytes": 164448,
+    "dataRelRoGrowthBytes": 896,
+    "additionalDynamicRelocations": 38,
+    "identicalSectionContents": [
+      ".interp", ".note.ABI-tag", ".dynsym", ".gnu.version",
+      ".gnu.version_r", ".gnu.hash", ".dynstr", ".gcc_except_table",
+      ".eh_frame_hdr", ".fini", ".tdata", ".fini_array",
+      ".init_array", ".got", ".data", ".comment", ".shstrtab"
+    ],
+    "ehFrameBytesBoth": 723504,
+    "ehFrameDifferentByteCount": 2
+  },
+  "instructionComparison": {
+    "command": ["objdump", "-d", "--no-show-raw-insn", "-j", ".text", "-M", "intel", "<binary>"],
+    "reproductionCommand": "nice -n 19 python3 target/review/focused-regressions-20261007/compare-baseline-elf-instructions.py .agent/worktrees/audit/target/scoreboard/v5.1.1/redline-scoreboard .agent/worktrees/audit/target/scoreboard/bisect-release-af4-rebuilt/redline-scoreboard",
+    "objdumpExitBoth": 0,
+    "instructionsBoth": 2410127,
+    "differentInstructionOffsets": 0,
+    "normalizedDifferentInstructions": 0,
+    "normalizedSha256Both": "42ce06e413d5438adad185c61fa102240199eef9d92fdb82c8c205d0c4809000",
+    "normalization": [
+      "Index instructions by virtual address minus that binary's .text start.",
+      "Collapse whitespace.",
+      "Replace only rip+0x... or rip-0x... data displacements with rip+DATA_ADDRESS.",
+      "Remove trailing objdump # comments.",
+      "Rebase direct call/jump/loop targets by the .text start.",
+      "Remove objdump <symbol> annotations.",
+      "Hash sorted lines formatted as lowercase-hex-offset, space, normalized instruction, joined by newline without a final newline."
+    ],
+    "interpretation": "All decoded instructions, registers, other immediates, non-RIP addressing forms and relative control-flow targets match after address normalization. This includes statically linked native allocator code.",
+    "limitation": "Masking RIP-relative addresses does not prove that every referenced data value is identical. This establishes matching instruction structure, not complete semantic equivalence of linked data. The observed timing differences cannot be causally attributed from this static comparison."
+  },
+  "stringDifferences": {
+    "historicalOnlyPrintableStrings": 19,
+    "rebuiltOnlyPrintableStrings": 33,
+    "extraction": "Every maximal printable-ASCII sequence of length at least 6, over the complete ELF, compared as sets.",
+    "differenceCategories": ["Rust standard-library source-location strings", "mimalloc compilation date/time banner"],
+    "historicalRustLocationPrefix": "/rustc/59807616e1fa2540724bfbac14d7976d7e4a3860/library/",
+    "rebuiltRustLocationPrefix": "/home/ubuntu/.rustup/toolchains/1.95.0-x86_64-unknown-linux-gnu/lib/rustlib/src/rust/library/",
+    "historicalNativeTimestamp": {"date": "Oct  1 2026", "time": "22:31:39"},
+    "rebuiltNativeTimestamp": {"date": "Oct  7 2026", "time": "03:09:15"},
+    "timestampSource": "/home/ubuntu/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/libmimalloc-sys-0.1.49/c_src/mimalloc/v3/src/options.c:236",
+    "timestampExpression": "__DATE__, __TIME__",
+    "rustPathRemappingCause": "Unestablished: the original dependency build invocation/environment was not retained in build.json. Local rust-src and rustc installation timestamps predate the historical build, so a recent local rust-src installation is not supported."
+  },
+  "currentNativeAllocatorCustody": {
+    "package": "libmimalloc-sys 0.1.49",
+    "nativeImplementation": "mimalloc/v3",
+    "features": [],
+    "rustflags": [],
+    "recordedCCOverrides": null,
+    "recordedCFlags": null,
+    "recordedArFlags": null,
+    "archivePath": ".agent/worktrees/audit/target/release/build/libmimalloc-sys-22ac386bc24494ad/out/libmimalloc.a",
+    "archiveSha256": "ce11b4fbcb7e6a086d7a636b3629f8799237dccb8ee8e7e3a1d3c1aca1c0dc22",
+    "objectPath": ".agent/worktrees/audit/target/release/build/libmimalloc-sys-22ac386bc24494ad/out/b85de32113adef8e-static.o",
+    "objectSha256": "a709bd3d52052f6689633538e9787fe4dd0e6e55f86bb1d42b1e69d85db9cef3",
+    "originalNativeObjectCustody": "Not available in the inspected historical staged build directory; it contains binary and build.json only."
+  },
+  "provenanceGap": {
+    "historicalBuildScript": "scripts/perf/build-scoreboard.sh",
+    "records": ["Engine and harness commits/tree", "Rust compiler and Cargo version strings", "Rustflags and root release profile", "Binary hash", "SQLite source ID", "Lockfile delta"],
+    "doesNotRecord": ["Build host identity", "Rust standard-library/native object hashes", "Native compiler effective flags/environment", "Rust standard-library source-path remapping state"],
+    "finding": "Equal recorded version/profile metadata did not make these historical artifacts byte reproducible."
+  },
+  "readOnlyCommandsUsed": [
+    "cat <historical and rebuilt build.json>",
+    "sed -n '1,260p' scripts/perf/build-scoreboard.sh",
+    "file <historical and rebuilt ELF>",
+    "readelf -n <historical and rebuilt ELF>",
+    "readelf -S <historical and rebuilt ELF>",
+    "readelf -d <historical and rebuilt ELF>",
+    "Python struct-based ELF section parsing, hashes, printable-string set comparison and retained-file SHA256 checks",
+    "nice -n 19 Python normalization using objdump -d --no-show-raw-insn -j .text -M intel",
+    "rg native allocator cached build output/fingerprints and native source for __DATE__/__TIME__",
+    "stat local rust-src/rustc/standard-library files",
+    "sed retained owner-handoff source around line482"
+  ],
+  "measurementSeparation": "This report contains static provenance/instruction findings only. No benchmark was launched by this investigator, and the report does not infer performance causality from the parent agent's separately retained matched AF4 measurements."
+}

@@ -57,3 +57,9 @@ command = "node scripts/perf/abba-summary.mjs <bundle> && node scripts/perf/abba
 path = "benchmark-results/perf/regressions/"
 read_only = false
 source = "Owner-approved contended-host paired ABBA diagnostics, recorded separately from publishable release scoreboard bundles: immutable plan, raw samples, host telemetry, build records and receipt hashes; derived summary/report and optional main-regression README block are generated, never typed"
+
+[[zone]]
+command = "node scripts/perf/focused-investigation.mjs benchmark-results/perf/regressions/focused-normal-94da-20261007"
+path = "benchmark-results/perf/regressions/focused-normal-94da-20261007/"
+read_only = false
+source = "Immutable focused ABBA inputs, supplemental source/build/syscall evidence and archive custody records; focused-summary derives each bundle and focused-investigation renders the complete retained study index. Historical absolute-throughput README blocks remain bound to their publishable release bundles."
