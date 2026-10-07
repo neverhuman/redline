@@ -34,6 +34,7 @@ use serde::Serialize;
 
 use super::memory::ProcessMemory;
 
+mod deadline_classification;
 mod files;
 mod group;
 mod piped;
@@ -91,6 +92,9 @@ pub enum ExecutionOutcome {
     Signal,
     /// The harness killed the child's process group at the deadline.
     Timeout,
+    /// The deadline fired, but the leader exited normally. The run remains
+    /// incomplete; this does not assert that the leader was killed.
+    DeadlineExceeded,
     /// The harness killed the child's process group when stdout or stderr
     /// passed the output cap; the kept bytes stop at the cap.
     OutputLimit,
@@ -112,6 +116,7 @@ impl ExecutionOutcome {
             Self::Exited => "exited",
             Self::Signal => "signal",
             Self::Timeout => "timeout",
+            Self::DeadlineExceeded => "deadline_exceeded",
             Self::OutputLimit => "output_limit",
             Self::SpawnError => "spawn_error",
             Self::NotRun => "not_run",

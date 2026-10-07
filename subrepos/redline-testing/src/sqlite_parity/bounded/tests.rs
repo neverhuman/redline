@@ -167,7 +167,12 @@ fn a_descendant_that_left_the_group_cannot_hold_the_harness() {
             waited < Duration::from_secs(10),
             "{script}: the harness waited {waited:?} on a descendant outside the group"
         );
-        assert_eq!(captured.outcome, ExecutionOutcome::Timeout, "{script}");
+        assert_eq!(
+            captured.outcome,
+            ExecutionOutcome::DeadlineExceeded,
+            "{script}"
+        );
+        assert!(!captured.outcome.is_complete());
         assert_eq!(captured.stdout, b"done\n", "{script}");
     }
     // The file-capture path has no readers, but its stdin writer is
@@ -190,7 +195,12 @@ fn a_descendant_that_left_the_group_cannot_hold_the_harness() {
         waited < Duration::from_secs(10),
         "{script}: the harness waited {waited:?} on a descendant outside the group"
     );
-    assert_eq!(captured.outcome, ExecutionOutcome::Timeout, "{script}");
+    assert_eq!(
+        captured.outcome,
+        ExecutionOutcome::DeadlineExceeded,
+        "{script}"
+    );
+    assert!(!captured.outcome.is_complete());
 }
 
 #[test]

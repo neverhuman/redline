@@ -332,6 +332,27 @@
     "scripts/test-pre-push-scratch.sh": {
       "command": "bash scripts/test-pre-push-scratch.sh",
       "purpose": "prove hook audits into ignored scratch without score history and preserves audit/required gate failure exits"
+    },
+    "crates/kernel/tests/wal_scan_reads.rs": {
+      "command": "cargo test --locked -p redlinedb-kernel --test wal_scan_reads",
+      "purpose": "bound WAL scan reads and preserve complete payloads and scan metadata across read-window boundaries and oversized records"
+    },
+    "subrepos/redline-testing/src/sqlite_parity/bounded/deadline_classification.rs": {
+      "command": "cargo test --locked --manifest-path subrepos/redline-testing/Cargo.toml --target-dir target --bin redline-testing deadline_classification",
+      "purpose": "distinguish expired normal exits while preserving incomplete-run rejection, caps, deadlines and process containment"
+    },
+    "subrepos/redline-testing/src/sqlite_parity/bounded/deadline_classification_tests.rs": {
+      "command": "cargo test --locked --manifest-path subrepos/redline-testing/Cargo.toml --target-dir target --bin redline-testing deadline_classification",
+      "purpose": "distinguish expired normal exits while preserving incomplete-run rejection, caps, deadlines and process containment"
+    },
+    "docs/audits/wal-scan-deadline-classification.md": {
+      "command": "cargo test --locked --manifest-path subrepos/redline-testing/Cargo.toml --target-dir target --bin redline-testing deadline_classification",
+      "purpose": "distinguish expired normal exits while preserving incomplete-run rejection, caps, deadlines and process containment"
+    },
+    "scripts/docs/server-readiness.test.mjs": {
+      "command": "bash scripts/check-docs.sh",
+      "purpose": "exercise the real published server after more than one hundred transient refusals; reject never-ready/exited servers and unexpected connection errors under the unchanged15s deadline",
+      "proof_lane": "docs-accuracy"
     }
   }
 }

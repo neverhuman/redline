@@ -23,7 +23,9 @@ export async function serverChecks(binary, tempRoot) {
   const deadline = new AbortController();
   const timer = setTimeout(() => { deadline.abort(); socket?.destroy(); child.kill('SIGTERM'); }, 15000);
   try {
-    for (let attempt = 0; attempt < 100; attempt++) {
+    // Startup is bounded by the same protocol deadline as the round trip.
+    // A retry count would turn transient refusal into a shorter startup limit.
+    for (;;) {
       try {
         socket = net.connect({ host: '127.0.0.1', port });
         await once(socket, 'connect', { signal: deadline.signal });
@@ -32,7 +34,7 @@ export async function serverChecks(binary, tempRoot) {
         socket.destroy();
         if (deadline.signal.aborted) throw new Error(`server protocol deadline: ${stderr}`);
         if (child.exitCode !== null) throw new Error(`server exited: ${stderr}`);
-        if (attempt === 99) throw error;
+        if (error.code !== 'ECONNREFUSED') throw error;
         await new Promise(resolve => setTimeout(resolve, 20));
       }
     }

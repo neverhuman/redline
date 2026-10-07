@@ -66,7 +66,7 @@ impl Group {
 
     pub(super) fn outcome(&self, status: ExitStatus) -> ExecutionOutcome {
         match self.fired.load(Ordering::SeqCst) {
-            FIRED_TIMEOUT => ExecutionOutcome::Timeout,
+            FIRED_TIMEOUT => super::deadline_classification::expired(status),
             FIRED_OUTPUT_LIMIT => ExecutionOutcome::OutputLimit,
             _ if status.code().is_some() => ExecutionOutcome::Exited,
             _ => ExecutionOutcome::Signal,
@@ -132,3 +132,7 @@ pub(super) fn finished_by(writer: &mpsc::Receiver<()>, deadline: Instant) -> boo
         .recv_timeout(deadline.saturating_duration_since(Instant::now()))
         .is_ok()
 }
+
+#[cfg(all(test, unix))]
+#[path = "deadline_classification_tests.rs"]
+mod deadline_classification_tests;

@@ -11,6 +11,39 @@ use super::*;
 /// How many record start positions the torn-tail probe reads at once.
 const PROBE_CHUNK: u64 = 1 << 20;
 
+/// How many bytes of a segment the scan reads at once.
+const SCAN_WINDOW: u64 = 1 << 20;
+
+/// The bytes of one segment, read [`SCAN_WINDOW`] at a time. A scan then
+/// reads a segment in a few large reads, not two small ones per record.
+#[derive(Default)]
+struct SegmentWindow {
+    start: u64,
+    bytes: Vec<u8>,
+}
+
+impl SegmentWindow {
+    /// The `len` bytes at `offset`. The caller has checked that they lie
+    /// within the segment's `file_len`.
+    fn read<F: FileHandle>(
+        &mut self,
+        file: &mut F,
+        file_len: u64,
+        offset: u64,
+        len: usize,
+    ) -> Result<&[u8]> {
+        let held_end = self.start + self.bytes.len() as u64;
+        if offset < self.start || offset + len as u64 > held_end {
+            let want = (len as u64).max(SCAN_WINDOW).min(file_len - offset);
+            self.bytes.resize(want as usize, 0);
+            file.read_exact_at(offset, &mut self.bytes)?;
+            self.start = offset;
+        }
+        let at = (offset - self.start) as usize;
+        Ok(&self.bytes[at..at + len])
+    }
+}
+
 impl WalReader<StdFileSystem> {
     pub fn new(path: impl AsRef<Path>, config: WalConfig) -> Self {
         Self::new_with_fs(path, config, StdFileSystem)
@@ -58,6 +91,7 @@ impl<Fs: FileSystem> WalReader<Fs> {
                 len: file_len,
             });
             let mut offset = 0_u64;
+            let mut window = SegmentWindow::default();
 
             while offset < file_len {
                 if tail.is_some() {
@@ -81,9 +115,8 @@ impl<Fs: FileSystem> WalReader<Fs> {
                     return Err(Error::CorruptWal("partial record header before final tail"));
                 }
 
-                let mut header = vec![0; WAL_HEADER_LEN];
-                file.read_exact_at(offset, &mut header)?;
-                let payload_len = read_u32(&header, 12)? as u64;
+                let header = window.read(&mut file, file_len, offset, WAL_HEADER_LEN)?;
+                let payload_len = read_u32(header, 12)? as u64;
                 let record_len = match (WAL_HEADER_LEN as u64).checked_add(payload_len) {
                     Some(record_len) => record_len,
                     None if is_tail_candidate => {
@@ -109,14 +142,9 @@ impl<Fs: FileSystem> WalReader<Fs> {
                     return Err(Error::CorruptWal("partial record body before final tail"));
                 }
 
-                let mut encoded = vec![0; record_len as usize];
-                encoded[..WAL_HEADER_LEN].copy_from_slice(&header);
-                file.read_exact_at(
-                    offset + WAL_HEADER_LEN as u64,
-                    &mut encoded[WAL_HEADER_LEN..],
-                )?;
+                let encoded = window.read(&mut file, file_len, offset, record_len as usize)?;
 
-                match WalRecord::decode(&encoded) {
+                match WalRecord::decode(encoded) {
                     Ok(record) => {
                         validate_record_position(
                             &record,

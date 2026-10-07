@@ -13,6 +13,10 @@ fn incomplete_runs_fail_before_any_contract() {
     let healthy = |engine| output(engine, Some(0), "", "");
     for (outcome, failure) in [
         (ExecutionOutcome::Timeout, "timed out after 500 ms"),
+        (
+            ExecutionOutcome::DeadlineExceeded,
+            "deadline exceeded after 500 ms; leader exited 0; run rejected",
+        ),
         (ExecutionOutcome::OutputLimit, "wrote more than 64 bytes"),
         (ExecutionOutcome::SpawnError, "could not run: spawn failed"),
     ] {
@@ -41,6 +45,31 @@ fn incomplete_runs_fail_before_any_contract() {
                 Some(format!("{engine} {failure}").as_str())
             );
         }
+    }
+}
+
+#[test]
+fn deadline_with_matching_output_and_zero_exit_is_rejected_on_either_engine() {
+    let case = plain_case();
+    for engine in ["redlinedb", "sqlite3"] {
+        let mut late = output(engine, Some(0), "2440952.5\n", "");
+        late.outcome = ExecutionOutcome::DeadlineExceeded;
+        late.failure = Some("deadline exceeded; normal leader exit; run rejected".to_owned());
+        let other_engine = if engine == "redlinedb" {
+            "sqlite3"
+        } else {
+            "redlinedb"
+        };
+        let healthy = output(other_engine, Some(0), "2440952.5\n", "");
+        let (reference, target) = if engine == "redlinedb" {
+            (healthy, late)
+        } else {
+            (late, healthy)
+        };
+        let verdict = judge_sample(&case, &reference, &target);
+        assert_eq!(verdict.reason, VerdictReason::ExecutionFailure);
+        assert_eq!(verdict.stage, VerdictStage::Execution);
+        assert_eq!(verdict.status(), "failed");
     }
 }
 

@@ -13,10 +13,12 @@ export TMPDIR="$docs_scratch"
 node scripts/docs/fetch-release.mjs --cache "$cache" > "$evidence/oracles.json"
 docs_binary=$(node -e 'const r=require(process.argv[1]); console.log(r.receipts.find(x=>x.tag==="v5.1.1").binary)' "$evidence/oracles.json")
 docs_old_binary=$(node -e 'const r=require(process.argv[1]); console.log(r.receipts.find(x=>x.tag==="v5.1.0").binary)' "$evidence/oracles.json")
+docs_server=$(node -e 'const r=require(process.argv[1]); console.log(r.receipts.find(x=>x.tag==="v5.1.1").server)' "$evidence/oracles.json")
 export CARGO_INCREMENTAL="${CARGO_INCREMENTAL:-0}"
 export CARGO_PROFILE_DEV_DEBUG="${CARGO_PROFILE_DEV_DEBUG:-line-tables-only}"
 cargo build --locked -p redlinedb --lib
 node --test scripts/docs/check-hardening.test.mjs
+REDLINE_DOCS_TEST_SERVER="$docs_server" node --test scripts/docs/server-readiness.test.mjs
 REDLINE_DOCS_TEST_BINARY="$docs_binary" REDLINE_DOCS_TEST_OLD_BINARY="$docs_old_binary" node --test scripts/docs/check.test.mjs
 node scripts/docs/check.mjs --oracles "$evidence/oracles.json" \
   --rlib "$target_directory/debug/libredlinedb.rlib" --output "$evidence/receipt.json"
