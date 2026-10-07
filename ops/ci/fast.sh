@@ -36,6 +36,9 @@ run_preflight() {
     bash scripts/ci-doctor.sh --profile core
     bash scripts/test-ci-doctor.sh
     bash scripts/test-pre-push-scratch.sh
+    bash scripts/test-fuzz-smoke-gate.sh
+    TMPDIR=target/rt-scratch bash scripts/test-fuzz-smoke-gate.sh
+    bash ops/ci/fuzz-smoke.sh
     bash scripts/test-playwright-isolation.sh
     bash scripts/test-docs-quickstart.sh --static
     bash scripts/check-docs.sh

@@ -161,6 +161,8 @@
     "docs/documentation-checks.md": "docs",
     "scripts/check-docs.sh": "ops",
     "scripts/test-pre-push-scratch.sh": "ops",
+    "ops/ci/fuzz-smoke.sh": "ops",
+    "scripts/test-fuzz-smoke-gate.sh": "tools",
     "crates/kernel/tests/wal_scan_reads.rs": "storage-and-catalog",
     "subrepos/redline-testing/src/sqlite_parity/bounded/deadline_classification.rs": "component-maintainers",
     "subrepos/redline-testing/src/sqlite_parity/bounded/deadline_classification_tests.rs": "component-maintainers",
