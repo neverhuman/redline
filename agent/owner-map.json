@@ -31,6 +31,7 @@
     "assets/": "workspace",
     "bench/": "tools",
     "benchmark-results/": "redline-testing",
+    "benchmark-results/perf/regressions/": "tools",
     "benchmark-results/perf/releases/": "tools",
     "contracts/": "contracts",
     "crates/": "tools",

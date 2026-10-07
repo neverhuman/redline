@@ -1,0 +1,64 @@
+TAP version 13
+# Subtest: cost orientation detects slower main and accepts faster main
+ok 1 - cost orientation detects slower main and accepts faster main
+  ---
+  duration_ms: 264.366393
+  type: 'test'
+  ...
+# Subtest: an interval crossing 1.05 is inconclusive, never a regression or clean proof
+ok 2 - an interval crossing 1.05 is inconclusive, never a regression or clean proof
+  ---
+  duration_ms: 25.29686
+  type: 'test'
+  ...
+# Subtest: bootstrap resamples paired blocks deterministically using recorded seeds
+ok 3 - bootstrap resamples paired blocks deterministically using recorded seeds
+  ---
+  duration_ms: 64.815304
+  type: 'test'
+  ...
+# Subtest: 64-bit result digests are preserved exactly
+ok 4 - 64-bit result digests are preserved exactly
+  ---
+  duration_ms: 0.118073
+  type: 'test'
+  ...
+# Subtest: missing/extra, reordered, failed and overlapping samples fail closed
+ok 5 - missing/extra, reordered, failed and overlapping samples fail closed
+  ---
+  duration_ms: 2.199796
+  type: 'test'
+  ...
+# Subtest: unequal work, settings, correctness or tampered raw bytes fail closed
+ok 6 - unequal work, settings, correctness or tampered raw bytes fail closed
+  ---
+  duration_ms: 1.831248
+  type: 'test'
+  ...
+# Subtest: warmup is retained and checked, but does not affect the median
+ok 7 - warmup is retained and checked, but does not affect the median
+  ---
+  duration_ms: 17.136515
+  type: 'test'
+  ...
+# Subtest: late interruption/error cannot qualify an exit-zero receipt
+ok 8 - late interruption/error cannot qualify an exit-zero receipt
+  ---
+  duration_ms: 1.076168
+  type: 'test'
+  ...
+# Subtest: image custody requires six distinct successful builds and nonempty immutable inventories
+ok 9 - image custody requires six distinct successful builds and nonempty immutable inventories
+  ---
+  duration_ms: 2.863714
+  type: 'test'
+  ...
+1..9
+# tests 9
+# suites 0
+# pass 9
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 974.744998

@@ -8,6 +8,8 @@ dist
 **/.env
 **/.env.*
 # These public tracked inputs must stay in the exact Git checkout.
+!benchmark-results/perf/regressions/main-bac7e9186-vs-v5.1.1-abba/run.log
+!benchmark-results/perf/regressions/main-bac7e9186-vs-v5.1.1-abba/unit-tests.log
 !subrepos/redline-central/.env.example
 !subrepos/redline-split-ops/release-evidence/8.0.0/jain-consumer-jain6-web2-r3.test.log
 !subrepos/redline-split-ops/release-evidence/8.0.0/jain-consumer.test.log

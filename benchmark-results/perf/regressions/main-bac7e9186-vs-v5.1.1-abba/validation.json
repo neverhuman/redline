@@ -1,0 +1,45 @@
+{
+  "schema": "redline-abba-validation-v1",
+  "measuredDriverSha256": "ebe3a9bc7e170c9d2ec4b8f42ffe3d7a39b5ec4058193f36c1c92d25ad883e31",
+  "measuredHelperSha256": "86bad1e3fa762e76e438f937bdf880d87428cad1ddc04b20a3cef6784a6cf5bd",
+  "finalSource": [
+    {
+      "path": "scripts/perf/abba-compare.mjs",
+      "sha256": "abdf4b9e23840424004f3b362fe5507aca6834bdfddd7b2585eb74c6f47d5856"
+    },
+    {
+      "path": "scripts/perf/abba-summary.mjs",
+      "sha256": "ab58e6751418ecff330d46e237b55fc3a6e30426281c803978f1b3b5b940e9f8"
+    },
+    {
+      "path": "scripts/perf/abba-summary.test.mjs",
+      "sha256": "aa070f88eb1b02adfd25e1ef11a5fbf8980a0837531e9ed4f80d12c6ff005b05"
+    },
+    {
+      "path": "scripts/perf/verify-readme-figures.mjs",
+      "sha256": "bd95b6fa75cba14489ab2b9cb02d1f14267e3c03e1ec62016f783e2e5ea9e915"
+    },
+    {
+      "path": "scripts/test-main-abba-receipts.sh",
+      "sha256": "82e27836436e59a8611a5086cdbbbbd4a97b422e0886ab80c5ea47cdb513667e"
+    }
+  ],
+  "measuredDriverDifference": "Only a final interruption guard was added to the future runner; current completed receipt has no interruption or error",
+  "analysisRevision": "Final validator adds completion/provenance/build/baseline/image/sequence checks and report generation. ABBA ratio estimator, bootstrap arithmetic/order/seeds remain unchanged from recorded helper.",
+  "independentReview": "Preparatory read-only independent_ci_review found/resolved interruption and image-inventory acceptance defects; independently matched PK/top10 bootstrap and all18 historical CLI runs. No GitHub approval at this stage.",
+  "focusedTests": {
+    "command": "/home/ubuntu/.nvm/versions/node/v22.23.2/bin/node --test scripts/perf/abba-summary.test.mjs",
+    "passed": 9,
+    "failed": 0,
+    "skipped": 0,
+    "logSha256": "0fe3b0dedbaded24534b75ff46ece9ef0b267f7bb3c7828d73a61e0a86af8a16"
+  },
+  "publishedEngine": {
+    "bundle": "benchmark-results/perf/releases/v5.1.1-vs-v5.1.0-paired-rerun21",
+    "summarySha256": "4a84a36f490f06d4c7e17281533d0cb608fc41f37a0e8ee09a475e509e79ed88",
+    "summarizeCheckExit": 0,
+    "readmeRenderCheckExit": 0
+  },
+  "historicalFiguresProofSha256": "ef897b55e1e76145bcd96d7ef02fd6b59c819260b449bc5d3b0b3a09389517ad",
+  "releaseEngineDiffExit": 0
+}

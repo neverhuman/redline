@@ -51,3 +51,9 @@ command = "node scripts/docs/render-coverage.mjs"
 path = "docs/known-limitations.md"
 read_only = false
 source = "scripts/docs/known-limitations.md.in, committed official-evidence.processed.json and parity policies. The same generator renders the README and docs/rql.md rql-coverage marker blocks; never edit these generated counts by hand."
+
+[[zone]]
+command = "node scripts/perf/abba-summary.mjs <bundle> && node scripts/perf/abba-summary.mjs <bundle> --report"
+path = "benchmark-results/perf/regressions/"
+read_only = false
+source = "Owner-approved contended-host paired ABBA diagnostics, recorded separately from publishable release scoreboard bundles: immutable plan, raw samples, host telemetry, build records and receipt hashes; derived summary/report and optional main-regression README block are generated, never typed"

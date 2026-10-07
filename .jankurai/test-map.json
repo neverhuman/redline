@@ -78,6 +78,30 @@
       "command": "rtk just sqlite-parity-report-check",
       "purpose": "verify committed benchmark-results artifacts remain bound to official-evidence.processed.json"
     },
+    "benchmark-results/perf/regressions/": {
+      "command": "bash scripts/test-main-abba-receipts.sh",
+      "purpose": "verify complete fixed-work ABBA receipts, raw hashes, block-bootstrap classification and derived report without running timings in CI"
+    },
+    "scripts/perf/abba-compare.mjs": {
+      "command": "bash scripts/test-main-abba-receipts.sh",
+      "purpose": "verify complete fixed-work ABBA receipts, raw hashes, block-bootstrap classification and derived report without running timings in CI"
+    },
+    "scripts/perf/abba-summary.mjs": {
+      "command": "bash scripts/test-main-abba-receipts.sh",
+      "purpose": "verify complete fixed-work ABBA receipts, raw hashes, block-bootstrap classification and derived report without running timings in CI"
+    },
+    "scripts/perf/abba-summary.test.mjs": {
+      "command": "bash scripts/test-main-abba-receipts.sh",
+      "purpose": "verify complete fixed-work ABBA receipts, raw hashes, block-bootstrap classification and derived report without running timings in CI"
+    },
+    "scripts/perf/verify-readme-figures.mjs": {
+      "command": "bash scripts/test-main-abba-receipts.sh",
+      "purpose": "verify complete fixed-work ABBA receipts, raw hashes, block-bootstrap classification and derived report without running timings in CI"
+    },
+    "scripts/test-main-abba-receipts.sh": {
+      "command": "bash scripts/test-main-abba-receipts.sh",
+      "purpose": "verify complete fixed-work ABBA receipts, raw hashes, block-bootstrap classification and derived report without running timings in CI"
+    },
     "benchmark-results/perf/releases/": {
       "command": "rtk cargo test -p redlinedb-scoreboard --lib --locked tests::the_readme_block_matches_its_bundle -- --exact",
       "purpose": "verify a publishable scoreboard summary and the generated README block against the committed raw measurements",
