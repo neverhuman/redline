@@ -131,8 +131,8 @@ test('relative cargo target paths and unset or relative TMPDIR work through the 
   writeFileSync(join(root, 'bin/cargo'), '#!/usr/bin/env bash\nexit 0\n');
   chmodSync(join(root, 'bin/cargo'), 0o755);
   writeFileSync(join(root, 'scripts/docs/fetch-release.mjs'),
-    `console.log(JSON.stringify({receipts:['v5.1.0','v5.1.1'].map(tag=>({tag,binary:${JSON.stringify(binary)},archive:process.argv.at(-1)+'/core.zip'}))}));\n`);
-  for (const file of ['check-hardening.test.mjs', 'check.test.mjs']) writeFileSync(join(root, 'scripts/docs', file), '');
+    `console.log(JSON.stringify({receipts:['v5.1.0','v5.1.1'].map(tag=>({tag,binary:${JSON.stringify(binary)},server:${JSON.stringify(binary)},archive:process.argv.at(-1)+'/core.zip'}))}));\n`);
+  for (const file of ['check-hardening.test.mjs', 'check.test.mjs', 'server-readiness.test.mjs']) writeFileSync(join(root, 'scripts/docs', file), '');
   writeFileSync(join(root, 'scripts/docs/check.mjs'),
     "import { writeFileSync } from 'node:fs'; writeFileSync('wrapper-result.json', JSON.stringify({tmpdir:process.env.TMPDIR,args:process.argv.slice(2)}));\n");
   for (const file of ['test-docs-quickstart.sh', 'test-package-ffi.sh']) writeFileSync(join(root, 'scripts', file), 'exit 0\n');

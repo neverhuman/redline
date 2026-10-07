@@ -389,6 +389,11 @@ impl EngineSpec {
                 "timed out after {} ms; its process group was killed",
                 self.limits.timeout_ms()
             )),
+            ExecutionOutcome::DeadlineExceeded => Some(format!(
+                "deadline of {} ms exceeded; leader {}; run rejected",
+                self.limits.timeout_ms(),
+                captured.status
+            )),
             ExecutionOutcome::OutputLimit => Some(format!(
                 "wrote more than {} bytes to stdout or stderr; its process group was killed",
                 self.limits.max_output_bytes

@@ -159,7 +159,12 @@
     "docs/RELEASING.md": "docs",
     "docs/documentation-checks.md": "docs",
     "scripts/check-docs.sh": "ops",
-    "scripts/test-pre-push-scratch.sh": "ops"
+    "scripts/test-pre-push-scratch.sh": "ops",
+    "crates/kernel/tests/wal_scan_reads.rs": "storage-and-catalog",
+    "subrepos/redline-testing/src/sqlite_parity/bounded/deadline_classification.rs": "component-maintainers",
+    "subrepos/redline-testing/src/sqlite_parity/bounded/deadline_classification_tests.rs": "component-maintainers",
+    "docs/audits/wal-scan-deadline-classification.md": "docs",
+    "scripts/docs/server-readiness.test.mjs": "docs"
   },
   "workspace": "crates/*"
 }
