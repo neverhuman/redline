@@ -46,7 +46,9 @@ done
 # ignored private logs while the source checkout guard still reports clean.
 {
   printf '!subrepos/redline-central/.env.example\n'
-  git -C "$source_root" ls-files 'subrepos/redline-split-ops/release-evidence/*.log' | sed 's/^/!/'
+  git -C "$source_root" ls-files 'subrepos/redline-split-ops/release-evidence/*.log' \
+    'benchmark-results/perf/regressions/main-bac7e9186-vs-v5.1.1-abba/run.log' \
+    'benchmark-results/perf/regressions/main-bac7e9186-vs-v5.1.1-abba/unit-tests.log' | sed 's/^/!/'
 } | LC_ALL=C sort > "$work/expected-exceptions"
 grep '^!' "$ignore" | LC_ALL=C sort > "$work/actual-exceptions"
 diff -u "$work/expected-exceptions" "$work/actual-exceptions"

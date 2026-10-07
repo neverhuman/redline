@@ -1,0 +1,55 @@
+2026-10-07T15:09:54.583Z begin normal/insert_autocommit
+2026-10-07T15:10:27.276Z done normal/insert_autocommit 12 ABBA blocks
+2026-10-07T15:10:27.276Z begin normal/insert_batch100
+2026-10-07T15:11:05.079Z done normal/insert_batch100 12 ABBA blocks
+2026-10-07T15:11:05.081Z begin normal/insert_bulk_1txn
+2026-10-07T15:12:44.284Z done normal/insert_bulk_1txn 12 ABBA blocks
+2026-10-07T15:12:44.284Z begin normal/point_pk_prepared
+2026-10-07T15:13:56.988Z done normal/point_pk_prepared 12 ABBA blocks
+2026-10-07T15:13:56.989Z begin normal/point_pk_sql_text
+2026-10-07T15:15:06.914Z done normal/point_pk_sql_text 12 ABBA blocks
+2026-10-07T15:15:06.914Z begin normal/range_pk_sum_100
+2026-10-07T15:22:57.064Z done normal/range_pk_sum_100 12 ABBA blocks
+2026-10-07T15:22:57.065Z begin normal/range_pk_rows_100
+2026-10-07T15:28:11.813Z done normal/range_pk_rows_100 12 ABBA blocks
+2026-10-07T15:28:11.820Z begin normal/index_count
+2026-10-07T15:31:07.031Z done normal/index_count 12 ABBA blocks
+2026-10-07T15:31:07.031Z begin normal/index_rows
+2026-10-07T15:32:39.328Z done normal/index_rows 12 ABBA blocks
+2026-10-07T15:32:39.328Z begin normal/full_scan_sum
+2026-10-07T15:33:21.525Z done normal/full_scan_sum 12 ABBA blocks
+2026-10-07T15:33:21.525Z begin normal/group_by
+2026-10-07T15:33:57.424Z done normal/group_by 12 ABBA blocks
+2026-10-07T15:33:57.449Z begin normal/top10
+2026-10-07T15:34:55.508Z done normal/top10 12 ABBA blocks
+2026-10-07T15:34:55.508Z begin normal/join_point
+2026-10-07T15:38:00.831Z done normal/join_point 12 ABBA blocks
+2026-10-07T15:38:00.831Z begin normal/join_group_by_city
+2026-10-07T15:39:01.463Z done normal/join_group_by_city 12 ABBA blocks
+2026-10-07T15:39:01.463Z begin normal/update_pk_autocommit
+2026-10-07T15:39:16.300Z done normal/update_pk_autocommit 12 ABBA blocks
+2026-10-07T15:39:16.300Z begin normal/update_pk_1txn
+2026-10-07T15:39:28.865Z done normal/update_pk_1txn 12 ABBA blocks
+2026-10-07T15:39:28.866Z begin normal/update_indexed_1txn
+2026-10-07T15:40:38.935Z done normal/update_indexed_1txn 12 ABBA blocks
+2026-10-07T15:40:38.935Z begin normal/delete_pk_1txn
+2026-10-07T15:40:58.831Z done normal/delete_pk_1txn 12 ABBA blocks
+2026-10-07T15:40:58.832Z begin normal/open_first_read
+2026-10-07T15:41:08.309Z done normal/open_first_read 12 ABBA blocks
+2026-10-07T15:41:08.310Z begin normal/open_after_updates
+2026-10-07T15:42:33.414Z done normal/open_after_updates 12 ABBA blocks
+2026-10-07T15:42:33.414Z begin strict/insert_autocommit
+2026-10-07T15:44:01.389Z done strict/insert_autocommit 12 ABBA blocks
+2026-10-07T15:44:01.389Z begin strict/insert_batch100
+2026-10-07T15:44:31.429Z done strict/insert_batch100 12 ABBA blocks
+2026-10-07T15:44:31.566Z begin strict/insert_bulk_1txn
+2026-10-07T15:45:29.152Z done strict/insert_bulk_1txn 12 ABBA blocks
+2026-10-07T15:45:29.152Z begin strict/update_pk_autocommit
+2026-10-07T15:46:30.587Z done strict/update_pk_autocommit 12 ABBA blocks
+2026-10-07T15:46:30.587Z begin strict/update_pk_1txn
+2026-10-07T15:47:34.372Z done strict/update_pk_1txn 12 ABBA blocks
+2026-10-07T15:47:34.373Z begin strict/update_indexed_1txn
+2026-10-07T15:48:36.964Z done strict/update_indexed_1txn 12 ABBA blocks
+2026-10-07T15:48:36.965Z begin strict/delete_pk_1txn
+2026-10-07T15:49:00.904Z done strict/delete_pk_1txn 12 ABBA blocks
+{"cases":27,"regressions":3,"inconclusive":10,"counts":{"passed":1404,"failed":0,"skipped":0,"warmup":108,"measured":1296}}

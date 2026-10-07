@@ -1,0 +1,6 @@
+{"pair":"normal","label":"release","kind":"base","code":0,"signal":null,"out":"","err":""}
+{"pair":"normal","label":"release","kind":"after-updates","code":0,"signal":null,"out":"","err":""}
+{"pair":"normal","label":"main","kind":"base","code":0,"signal":null,"out":"","err":""}
+{"pair":"normal","label":"main","kind":"after-updates","code":0,"signal":null,"out":"","err":""}
+{"pair":"strict","label":"release","kind":"base","code":0,"signal":null,"out":"","err":""}
+{"pair":"strict","label":"main","kind":"base","code":0,"signal":null,"out":"","err":""}
