@@ -749,7 +749,8 @@
       "command": "bash scripts/check-docs.sh",
       "purpose": "exercise the real published server after more than one hundred transient refusals; reject never-ready/exited servers and unexpected connection errors under the unchanged15s deadline",
       "proof_lane": "docs-accuracy"
-    }
+    },
+    "docs/audits/v5.1.1-post-release-evidence/": {"command": "bash ops/ci/fuzz-smoke.sh", "purpose": "nested fuzz unit/bin checks and committed historical evidence custody"}
   },
   "workspace": "jankurai"
 }
