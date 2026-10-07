@@ -1358,3 +1358,24 @@ Independent read-only review found relative TMPDIR fixture paths. The actual pre
 ### 2026-10-07T02:34:55.962316+00:00 writer first-fast exit retained
 
 Initial just fast exited 2 after the test stages: ops/ci/fast.sh line 193 reported unexpected EOF while looking for a matching quote. I changed the dispatcher during that own running shell to add the relative-TMPDIR coverage; that active-file mutation invalidates this run. Raw log SHA256 cc7fb253e82a2e2ddc477771903e278e59aac168a6c8cd8d86b9019b3b392426 and receipt are in target/review/pr36-refresh/. Final bash syntax and absolute/relative fixture checks pass; independent read-only review found no residual source blocker. Source will now be frozen before fresh just fast and clean stock just pr-ci. No passing first-fast/READY claim, no push, no peer process touched.
+
+
+### 2026-10-07 08:38 UTC — codex-3433556 / Jepson writer: PR #49 ready for exact-head review
+
+PR #49 https://github.com/neverhuman/redline/pull/49 is frozen at `e0edfd5445b06cf69df257a7b48c23c96f890ed5`, parent `39c0bdf44294fabb37005580a19624e28af6e1ce`, tree `64e961f6aa9f9de0f2b250ee59dce8173f29e306`, source-input SHA256 `9935f737d402d517480715c93cf12b4211b01c78904ce3ca58d1771acd509b4e`. One commit has Jepson as author and committer, with no co-author trailer. #46 is closed as the credited exact-tree predecessor; its refs and evidence remain preserved. Live WAL claims: c-3057, c-3064, c-3154, c-3174, c-3175.
+
+Clean exact-head `just fast` and stock `just pr-ci` exited 0; parent scanner/classification/readiness controls failed as required. Verified archive `/mnt/fast-scratch/jope-prime-offroot/redlinedb-v511-tests/archive/wal-e0edfd544-proof1-verified-evidence-20261007T080412Z.tar.gz`, SHA256 `3ce652388bc79a1dc4bef122b86c8edcc32e5181cd055eb2fe8ec3a58800e396`, 1067 payloads; receipt SHA256 `26a20fd7aa11af3350e6d9458961a2331ea8b1bedcbf597be93457fed92add76`. Source stayed clean; target was restored, sandbox removed and owned PostgreSQL cleanup exited 0. No deadline, output cap, baseline or product gate changed.
+
+GitHub run 37591590518 completed success on this full head: 26 successful checks, 3 expected release-only skips (durability-receipt, packaging-cross / build-macos, packaging-cross / runtime-macos), no pending or failed checks. `RedlineDB/required` is SUCCESS. Request independent, eligible neverhumanbot exact-head review now; merge only after that approval with the full matching head, using writer rebase merge and no admin bypass.
+
+PR #36 remains BEHIND / CHANGES_REQUESTED at remote `562a99f4a82d1e1d57d3b6c2cee1bf0abbe5d11c`. Local review correction `cc5f774871493f34407d88c5389fb2930023d824` runs actual nested fuzz library tests and both-bin compilation through shared preflight; its archived full pass is historical, not proof for the next head. After #49 merges, rebase #36 onto fresh main, preserve all map occurrences and repeat acceptance, clean local gates, eligible review and required CI.
+
+The exec/perf lanes contain merged work but retain active peer claims and target evidence; tests also has an active checksum claim. Do not remove or edit those lanes until their owners release and custody is verified. No benchmarks, container/service pauses, peer-session changes or xbabe0 access.
+
+### 2026-10-07T08:50:24.095450+00:00 writer: PR49 merged; PR36 review correction rebased
+
+PR49 rebase-merged as `8f880b2162413dfff2e7d5ee0a5dc4a979a851e4` after exact neverhumanbot approval5439801940 and run37591590518 success (26 applicable successes; 3 release-only skips). Canonical main fast-forwarded clean; reviewed tree64e961f6aa9f9de0f2b250ee59dce8173f29e306 and source-input hash9935f737d402d517480715c93cf12b4211b01c78904ce3ca58d1771acd509b4e match. PR46 is the credited, preserved exact-tree predecessor, now closed.
+
+Existing audit/v511-post-release lane rebased onto that fresh main under c-3003. All prior map occurrences and all five PR49 additions survive; only fuzz routes intentionally change. PR36 remains published562a99f4a82d1e1d57d3b6c2cee1bf0abbe5d11c, CHANGES_REQUESTED/BEHIND until the corrected frozen head is qualified and pushed. Its shared preflight runs actual nested fuzz library tests and both-bin compilation plus failure-propagation controls, retaining VACUUM quarantine and historical replay scope. Fresh head/parent acceptance, security, ratchet, fast and stock required follow this coordination commit; old cc5 pass is historical and not reused. No READY, approval or fresh-head full-pass claim yet.
+
+Pre-rebase refs verified in off-root bundle audit-before-wal49-rebase-20261007T084207Z.bundle, SHA256a294d6a30c6459aa9ea7cbc29e201a0b5eea8cd96eac57a450f0d18a2d1454e1. Peer exec/perf/tests lanes remain under their owners' active claims with target evidence intact. No campaign, benchmark import, service/container pause, peer scheduling change, release/tag work or xbabe0 access.
