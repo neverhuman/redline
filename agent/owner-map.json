@@ -89,6 +89,7 @@
     "subrepos/redline-testing/src/sqlite_parity/bounded/deadline_classification.rs": "component-maintainers",
     "subrepos/redline-testing/src/sqlite_parity/bounded/deadline_classification_tests.rs": "component-maintainers",
     "docs/audits/wal-scan-deadline-classification.md": "docs",
-    "scripts/docs/server-readiness.test.mjs": "docs"
+    "scripts/docs/server-readiness.test.mjs": "docs",
+    "docs/audits/v5.1.1-post-release-evidence/": "docs"
   }
 }

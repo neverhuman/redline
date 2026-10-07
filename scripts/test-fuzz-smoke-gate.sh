@@ -11,6 +11,8 @@ trap 'rm -rf "$scratch"' EXIT
 mkdir -p "$scratch/ops/ci" "$scratch/bin" "$scratch/target/debug"
 cp "$fast_sh" "$scratch/ops/ci/fast.sh"
 cp "$root/ops/ci/fuzz-smoke.sh" "$scratch/ops/ci/fuzz-smoke.sh"
+mkdir -p "$scratch/docs/audits"
+cp -R "$root/docs/audits/v5.1.1-post-release-evidence" "$scratch/docs/audits/"
 printf 'set -euo pipefail\n' > "$scratch/ops/ci/lib.sh"
 export FUZZ_GATE_REAL_BASH
 FUZZ_GATE_REAL_BASH=$(command -v bash)
