@@ -1,0 +1,39 @@
+{
+  "schema_version": "redline-scoreboard-build-v1",
+  "profile": "release",
+  "profile_release": "[profile.release]\nopt-level = 3\nlto = \"fat\"\ncodegen-units = 1\npanic = \"abort\"\nstrip = \"symbols\"\ndebug = false\ndebug-assertions = false\noverflow-checks = false\nincremental = false\n\n# Local CPU specialization requires an explicit RUSTFLAGS override.",
+  "rustflags": "",
+  "pgo": false,
+  "failpoints": false,
+  "rustc_verbose_version": [
+    "rustc 1.95.0 (59807616e 2026-04-14)",
+    "binary: rustc",
+    "commit-hash: 59807616e1fa2540724bfbac14d7976d7e4a3860",
+    "commit-date: 2026-04-14",
+    "host: x86_64-unknown-linux-gnu",
+    "release: 1.95.0",
+    "LLVM version: 22.1.2"
+  ],
+  "cargo_version": "cargo 1.95.0 (f2d3ce0bd 2026-03-21)",
+  "cargo_lock_delta": "",
+  "source_tree": "14e890ea0a49c87d27d1a2d1ce01f3db401bc8f7",
+  "build_workspace": "/home/ubuntu/redlineDB/.agent/worktrees/audit/.agent/sandbox/focused-bisect-build",
+  "standalone_package_build": true,
+  "label": "bisect-e9afed9e",
+  "engine_ref": "e9afed9e7c5724c8a8395117c1334422d35722ce",
+  "engine_commit": "e9afed9e7c5724c8a8395117c1334422d35722ce",
+  "engine_commit_date": "2026-10-06T08:33:01-06:00",
+  "harness_ref": "e9afed9e7c5724c8a8395117c1334422d35722ce",
+  "harness_commit": "e9afed9e7c5724c8a8395117c1334422d35722ce",
+  "harness_tree": "bb1434a80ca0390401eb628d2785e8387c5f346e",
+  "engines": {
+    "redlinedb": "5.1.1",
+    "sqlite": "3.50.2",
+    "sqlite_source_id": "2025-06-28 14:00:48 2af157d77fb1304a74176eaee7fbc7c7e932d946bf25325e9c26c91db19e3079"
+  },
+  "cargo_command": "cargo build --release --locked --offline --jobs 2 -p redlinedb-scoreboard --target-dir /home/ubuntu/redlineDB/.agent/worktrees/audit/target",
+  "binary_sha256": "39ca8d1add49cd21b862d95de5fc5b9294a687db3b37f6e2551c79ee0b803b8e",
+  "built_at_utc": "2026-10-07T21:14:12.491193+00:00",
+  "sandbox": "Automatically removed exact-SHA standalone clone, reused own lane target cache; package-only release without failpoints/PGO",
+  "source_inputs_sha256": "34a54ba722f7eb7555aefdd6b8dd4a6410ee03f1b17e8dcdd73e33a89e5764e0"
+}

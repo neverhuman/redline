@@ -125,6 +125,26 @@
       "command": "rtk bash scripts/ci-local.sh required",
       "purpose": "verify benchmark evidence through the canonical host-required lane"
     },
+    "crates/kernel/tests/wal_decode_ownership.rs": {
+      "command": "cargo test --locked -p redlinedb-kernel --test wal_decode_ownership",
+      "purpose": "public WAL scan allocation lifetime at ordinary/oversized boundary, decode/push and rejected CRC/link paths; no timing or allocator reuse assumption"
+    },
+    "scripts/perf/focused-summary.mjs": {
+      "command": "bash scripts/test-main-abba-receipts.sh",
+      "purpose": "validate focused fixed-work ABBA telemetry, immutable inputs, source references and the owner reproduction boundary without timing in CI"
+    },
+    "scripts/perf/focused-summary.test.mjs": {
+      "command": "bash scripts/test-main-abba-receipts.sh",
+      "purpose": "validate focused fixed-work ABBA telemetry, immutable inputs, source references and the owner reproduction boundary without timing in CI"
+    },
+    "scripts/perf/focused-investigation.mjs": {
+      "command": "bash scripts/test-main-abba-receipts.sh",
+      "purpose": "retain and regenerate every source-bisect and rejected-candidate receipt; no timings in CI"
+    },
+    "scripts/perf/focused-investigation.test.mjs": {
+      "command": "bash scripts/test-main-abba-receipts.sh",
+      "purpose": "retain and regenerate every source-bisect and rejected-candidate receipt; no timings in CI"
+    },
     "benchmark-results/perf/regressions/": {
       "command": "bash scripts/test-main-abba-receipts.sh",
       "purpose": "verify complete fixed-work ABBA receipts, raw hashes, block-bootstrap classification and derived report without running timings in CI"

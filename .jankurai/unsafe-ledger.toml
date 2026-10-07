@@ -1182,3 +1182,38 @@ owner = "cli-shell"
 invariant = "`realloc` forwards `ptr`, `layout` and `new_size`; the caller upholds `GlobalAlloc::realloc`'s contract, which is exactly what the wrapped allocator requires."
 proof_lane = "rtk cargo test -p redlinedb-cli --test sqlite_shell_output --quiet --locked"
 proof_test = "redlinedb-cli::sqlite_shell_output::memtrace_reports_each_allocation"
+
+[[entries]]
+file = "crates/kernel/tests/wal_decode_ownership.rs"
+line = 72
+owner = "kernel"
+invariant = "Test-only GlobalAlloc forwards valid caller layouts and live allocation pointers unchanged to System. Fixed const thread-local Cell records integer pointer identities only, without dereferencing, allocating, locking or callback panics; realloc records a replacement only on success. Capture disables tracing before assertions and on unwind."
+proof_lane = "cargo test --locked -p redlinedb-kernel --test wal_decode_ownership"
+
+[[entries]]
+file = "crates/kernel/tests/wal_decode_ownership.rs"
+line = 75
+owner = "kernel"
+invariant = "Test-only GlobalAlloc forwards valid caller layouts and live allocation pointers unchanged to System. Fixed const thread-local Cell records integer pointer identities only, without dereferencing, allocating, locking or callback panics; realloc records a replacement only on success. Capture disables tracing before assertions and on unwind."
+proof_lane = "cargo test --locked -p redlinedb-kernel --test wal_decode_ownership"
+
+[[entries]]
+file = "crates/kernel/tests/wal_decode_ownership.rs"
+line = 82
+owner = "kernel"
+invariant = "Test-only GlobalAlloc forwards valid caller layouts and live allocation pointers unchanged to System. Fixed const thread-local Cell records integer pointer identities only, without dereferencing, allocating, locking or callback panics; realloc records a replacement only on success. Capture disables tracing before assertions and on unwind."
+proof_lane = "cargo test --locked -p redlinedb-kernel --test wal_decode_ownership"
+
+[[entries]]
+file = "crates/kernel/tests/wal_decode_ownership.rs"
+line = 90
+owner = "kernel"
+invariant = "Test-only GlobalAlloc forwards valid caller layouts and live allocation pointers unchanged to System. Fixed const thread-local Cell records integer pointer identities only, without dereferencing, allocating, locking or callback panics; realloc records a replacement only on success. Capture disables tracing before assertions and on unwind."
+proof_lane = "cargo test --locked -p redlinedb-kernel --test wal_decode_ownership"
+
+[[entries]]
+file = "crates/kernel/tests/wal_decode_ownership.rs"
+line = 95
+owner = "kernel"
+invariant = "Test-only GlobalAlloc forwards valid caller layouts and live allocation pointers unchanged to System. Fixed const thread-local Cell records integer pointer identities only, without dereferencing, allocating, locking or callback panics; realloc records a replacement only on success. Capture disables tracing before assertions and on unwind."
+proof_lane = "cargo test --locked -p redlinedb-kernel --test wal_decode_ownership"

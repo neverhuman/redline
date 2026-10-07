@@ -1,0 +1,14 @@
+{
+  "measuredCommit": "ac96a7150a5ad4c244605ec09124518d5f016dae",
+  "productionParent": "94da3b131d6d50009d2d24e026b9010681e1f04d",
+  "files": [
+    {
+      "path": "crates/kernel/src/engine/recovery.rs",
+      "sha256": "aefd0184b1ef3c7ed91ae9dc9edb6efb56f4c1d327faefb15c22ad497d045bb9"
+    },
+    {
+      "path": "crates/kernel/src/wal/manager/storage/scan.rs",
+      "sha256": "8e4451d2e06aa27ef444536cb08d11af3a9f4d5458e62eb1b30a16074bd1def5"
+    }
+  ]
+}

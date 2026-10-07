@@ -1,0 +1,3 @@
+{"archive": "/mnt/fast-scratch/jope-prime-offroot/redlinedb-v511-tests/archive/profile-group-20261007.tar.gz", "sha256": "a80399264b4a3f9b5426f5030daf8d2b4c6e0e8acd9b2c067063b900cee4591c", "payloads": 49, "verified": true}
+{"archive": "/mnt/fast-scratch/jope-prime-offroot/redlinedb-v511-tests/archive/profile-group-verbose-20261007.tar.gz", "sha256": "228ee209d664b83deed6b1f7de3335853d9c12d441a4bd14ae08d3aaa61673cb", "payloads": 49, "verified": true}
+{"archive": "/mnt/fast-scratch/jope-prime-offroot/redlinedb-v511-tests/archive/profile-group-minimal-20261007.tar.gz", "sha256": "057701d520cf3d6677a033de61b83c4256d3c26ca61f7693b92c62a035d02fda", "payloads": 578, "verified": true}

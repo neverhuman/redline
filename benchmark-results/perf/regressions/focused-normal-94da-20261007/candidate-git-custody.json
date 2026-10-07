@@ -1,0 +1,7 @@
+{
+  "archive": "/mnt/fast-scratch/jope-prime-offroot/redlinedb-v511-tests/archive/focused-regressions-ac96.bundle",
+  "sha256": "c104a1a2a6ee32b09e47d59ba5fb9bd0697a73ffd31edcc5c47b36a88148cb9b",
+  "head": "ac96a7150a5ad4c244605ec09124518d5f016dae",
+  "prerequisite": "94da3b131d6d50009d2d24e026b9010681e1f04d",
+  "verified": true
+}

@@ -1,0 +1,2 @@
+{"pair":"normal","label":"release","kind":"base","code":0,"signal":null,"out":"","err":"","scheduling":{"pid":2771504,"cpus":"2-3","nice":19,"ioPriority":"idle"}}
+{"pair":"normal","label":"main","kind":"base","code":0,"signal":null,"out":"","err":"","scheduling":{"pid":2771816,"cpus":"2-3","nice":19,"ioPriority":"idle"}}

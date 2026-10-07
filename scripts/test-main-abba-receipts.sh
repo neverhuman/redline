@@ -11,3 +11,6 @@ bash ops/ci/tests/arm64-packages.sh
 if rg -q '<!-- main-regression:begin -->' README.md; then
   node scripts/perf/abba-summary.mjs "$bundle" --check README.md
 fi
+node --test scripts/perf/focused-summary.test.mjs
+node --test scripts/perf/focused-investigation.test.mjs
+node scripts/perf/focused-investigation.mjs benchmark-results/perf/regressions/focused-normal-94da-20261007 --check
