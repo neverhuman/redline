@@ -141,8 +141,8 @@
       "purpose": "keep the exclude list aligned with the owner-map"
     },
     "fuzz/": {
-      "command": "just score",
-      "purpose": "keep the v5.1.1 cargo-fuzz targets routed and indexed"
+      "command": "bash ops/ci/fuzz-smoke.sh",
+      "purpose": "Run the nested fuzz library acceptance and compile both targets through required shared preflight; no fuzz campaign"
     },
     "assets/": {
       "command": "just score",
@@ -720,6 +720,14 @@
     "scripts/test-pre-push-scratch.sh": {
       "command": "bash scripts/test-pre-push-scratch.sh",
       "purpose": "prove hook audits into ignored scratch without score history and preserves audit/required gate failure exits"
+    },
+    "ops/ci/fuzz-smoke.sh": {
+      "command": "bash scripts/test-fuzz-smoke-gate.sh && bash ops/ci/fuzz-smoke.sh",
+      "purpose": "Verify shared-preflight dispatch and error propagation, execute nested library tests, compile both fuzz bins"
+    },
+    "scripts/test-fuzz-smoke-gate.sh": {
+      "command": "bash scripts/test-fuzz-smoke-gate.sh",
+      "purpose": "Execute the real preflight with isolated fixtures and prove both fuzz checks are mandatory and fail closed"
     },
     "crates/kernel/tests/wal_scan_reads.rs": {
       "command": "cargo test --locked -p redlinedb-kernel --test wal_scan_reads",
