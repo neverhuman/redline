@@ -1,0 +1,233 @@
+{
+  "schema": "redline-probe-interference-receipt-v1",
+  "exit": 0,
+  "startedAt": "2026-10-08T09:50:33.868Z",
+  "files": [
+    {
+      "path": "abba-summary.mjs",
+      "sha256": "ab58e6751418ecff330d46e237b55fc3a6e30426281c803978f1b3b5b940e9f8"
+    },
+    {
+      "path": "host-samples.jsonl",
+      "sha256": "f76c6aad5354c8dc437a1fe8e7d8301f755796ba989bac262bae90e7ed75a5d5"
+    },
+    {
+      "path": "main-build.json",
+      "sha256": "d25b075d47ebad954605bc1983509b7e323aa1ec9ed8cf5921c53be5ddb56b07"
+    },
+    {
+      "path": "plan.json",
+      "sha256": "c1de30c4a64d37a69c0dadac1c489e132b47a358c7573fdbd061a7227419da23"
+    },
+    {
+      "path": "probe-barrier.mjs",
+      "sha256": "b180bffc5ccc8403586014ad1ed37b68f60e1b74aa6af165de3d66e5d802533c"
+    },
+    {
+      "path": "records.jsonl",
+      "sha256": "b2e38d9e3dccce25de1c94f000537dc317027afeecdfbf3297c77de1c4163339"
+    },
+    {
+      "path": "release-build.json",
+      "sha256": "e057a5e01824608688201673684f8a30bc5c5ebbb9ed6cfc924fb0a1bbd8e0e0"
+    }
+  ],
+  "planSha256": "c1de30c4a64d37a69c0dadac1c489e132b47a358c7573fdbd061a7227419da23",
+  "images": [
+    {
+      "key": "normal/release/base",
+      "before": [
+        {
+          "path": "db.redline/CONTROL_A",
+          "size": 64,
+          "sha256": "e1c7539470ba510fd9079f0319200056506270f1aeab74344eaa0c41f33945cb"
+        },
+        {
+          "path": "db.redline/TX_STATUS_00000000000000000001",
+          "size": 216,
+          "sha256": "956216269be2288e348f158c1aec344b5a3dceb9ced14fb46f5663bbc98f1c46"
+        },
+        {
+          "path": "db.redline/data.redline",
+          "size": 6062080,
+          "sha256": "8c309cf9f2675de30ce0e4aa67d5a5a56c1d9b62a19ea75340d4a4d60a6950cb"
+        },
+        {
+          "path": "db.redline/owner.lock",
+          "size": 0,
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        {
+          "path": "db.redline/phase8/retention.json",
+          "size": 167,
+          "sha256": "6a0bb849a4fbab3b7add4810def311e8ab151740263eb4d519ed359dbc23a75a"
+        },
+        {
+          "path": "db.redline/schema.redline",
+          "size": 2667,
+          "sha256": "817fdc95552187a7f3140f1183e09876f31623930910d521ec41b1e636dd2ac1"
+        },
+        {
+          "path": "db.redline/stats.redline",
+          "size": 52090,
+          "sha256": "d412517044d4618c1aebeb272534d6c2bb4046ff9f5e1f71c02835e183b960dd"
+        },
+        {
+          "path": "db.redline/user_version.redline",
+          "size": 2,
+          "sha256": "9a271f2a916b0b6ee6cecb2426f0b3206ef074578be55d9bc94f6f3fe3ab86aa"
+        },
+        {
+          "path": "db.redline/wal/00000000000000000001.wal",
+          "size": 13972071,
+          "sha256": "0f921bd725c9ab8e9fefed9599f7be4f1148150a407f846a0fcbd674e91fd4d6"
+        }
+      ],
+      "after": [
+        {
+          "path": "db.redline/CONTROL_A",
+          "size": 64,
+          "sha256": "e1c7539470ba510fd9079f0319200056506270f1aeab74344eaa0c41f33945cb"
+        },
+        {
+          "path": "db.redline/TX_STATUS_00000000000000000001",
+          "size": 216,
+          "sha256": "956216269be2288e348f158c1aec344b5a3dceb9ced14fb46f5663bbc98f1c46"
+        },
+        {
+          "path": "db.redline/data.redline",
+          "size": 6062080,
+          "sha256": "8c309cf9f2675de30ce0e4aa67d5a5a56c1d9b62a19ea75340d4a4d60a6950cb"
+        },
+        {
+          "path": "db.redline/owner.lock",
+          "size": 0,
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        {
+          "path": "db.redline/phase8/retention.json",
+          "size": 167,
+          "sha256": "6a0bb849a4fbab3b7add4810def311e8ab151740263eb4d519ed359dbc23a75a"
+        },
+        {
+          "path": "db.redline/schema.redline",
+          "size": 2667,
+          "sha256": "817fdc95552187a7f3140f1183e09876f31623930910d521ec41b1e636dd2ac1"
+        },
+        {
+          "path": "db.redline/stats.redline",
+          "size": 52090,
+          "sha256": "d412517044d4618c1aebeb272534d6c2bb4046ff9f5e1f71c02835e183b960dd"
+        },
+        {
+          "path": "db.redline/user_version.redline",
+          "size": 2,
+          "sha256": "9a271f2a916b0b6ee6cecb2426f0b3206ef074578be55d9bc94f6f3fe3ab86aa"
+        },
+        {
+          "path": "db.redline/wal/00000000000000000001.wal",
+          "size": 13972071,
+          "sha256": "0f921bd725c9ab8e9fefed9599f7be4f1148150a407f846a0fcbd674e91fd4d6"
+        }
+      ]
+    },
+    {
+      "key": "normal/main/base",
+      "before": [
+        {
+          "path": "db.redline/CONTROL_A",
+          "size": 64,
+          "sha256": "e1c7539470ba510fd9079f0319200056506270f1aeab74344eaa0c41f33945cb"
+        },
+        {
+          "path": "db.redline/TX_STATUS_00000000000000000001",
+          "size": 216,
+          "sha256": "956216269be2288e348f158c1aec344b5a3dceb9ced14fb46f5663bbc98f1c46"
+        },
+        {
+          "path": "db.redline/data.redline",
+          "size": 6062080,
+          "sha256": "8c309cf9f2675de30ce0e4aa67d5a5a56c1d9b62a19ea75340d4a4d60a6950cb"
+        },
+        {
+          "path": "db.redline/owner.lock",
+          "size": 0,
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        {
+          "path": "db.redline/phase8/retention.json",
+          "size": 167,
+          "sha256": "f61c9133d6658b05722d9dbda5b8f143f009a94139de4dab476164bc04bfabea"
+        },
+        {
+          "path": "db.redline/schema.redline",
+          "size": 2667,
+          "sha256": "817fdc95552187a7f3140f1183e09876f31623930910d521ec41b1e636dd2ac1"
+        },
+        {
+          "path": "db.redline/stats.redline",
+          "size": 52090,
+          "sha256": "d412517044d4618c1aebeb272534d6c2bb4046ff9f5e1f71c02835e183b960dd"
+        },
+        {
+          "path": "db.redline/user_version.redline",
+          "size": 2,
+          "sha256": "9a271f2a916b0b6ee6cecb2426f0b3206ef074578be55d9bc94f6f3fe3ab86aa"
+        },
+        {
+          "path": "db.redline/wal/00000000000000000001.wal",
+          "size": 13972071,
+          "sha256": "0f921bd725c9ab8e9fefed9599f7be4f1148150a407f846a0fcbd674e91fd4d6"
+        }
+      ],
+      "after": [
+        {
+          "path": "db.redline/CONTROL_A",
+          "size": 64,
+          "sha256": "e1c7539470ba510fd9079f0319200056506270f1aeab74344eaa0c41f33945cb"
+        },
+        {
+          "path": "db.redline/TX_STATUS_00000000000000000001",
+          "size": 216,
+          "sha256": "956216269be2288e348f158c1aec344b5a3dceb9ced14fb46f5663bbc98f1c46"
+        },
+        {
+          "path": "db.redline/data.redline",
+          "size": 6062080,
+          "sha256": "8c309cf9f2675de30ce0e4aa67d5a5a56c1d9b62a19ea75340d4a4d60a6950cb"
+        },
+        {
+          "path": "db.redline/owner.lock",
+          "size": 0,
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        {
+          "path": "db.redline/phase8/retention.json",
+          "size": 167,
+          "sha256": "f61c9133d6658b05722d9dbda5b8f143f009a94139de4dab476164bc04bfabea"
+        },
+        {
+          "path": "db.redline/schema.redline",
+          "size": 2667,
+          "sha256": "817fdc95552187a7f3140f1183e09876f31623930910d521ec41b1e636dd2ac1"
+        },
+        {
+          "path": "db.redline/stats.redline",
+          "size": 52090,
+          "sha256": "d412517044d4618c1aebeb272534d6c2bb4046ff9f5e1f71c02835e183b960dd"
+        },
+        {
+          "path": "db.redline/user_version.redline",
+          "size": 2,
+          "sha256": "9a271f2a916b0b6ee6cecb2426f0b3206ef074578be55d9bc94f6f3fe3ab86aa"
+        },
+        {
+          "path": "db.redline/wal/00000000000000000001.wal",
+          "size": 13972071,
+          "sha256": "0f921bd725c9ab8e9fefed9599f7be4f1148150a407f846a0fcbd674e91fd4d6"
+        }
+      ]
+    }
+  ],
+  "finishedAt": "2026-10-08T10:00:26.749Z"
+}

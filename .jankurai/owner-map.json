@@ -1,5 +1,17 @@
 {
   "owners": {
+    "scripts/perf/checked-worker.mjs": "tools",
+    "scripts/perf/checked-worker.test.mjs": "tools",
+    "scripts/perf/probe-barrier-summary.mjs": "tools",
+    "scripts/perf/probe-barrier-summary.test.mjs": "tools",
+
+    "scripts/perf/tighter-investigation.test.mjs": "tools",
+    "scripts/perf/tighter-investigation.mjs": "tools",
+    "scripts/test-ci-target-directory.test.mjs": "ops",
+    "scripts/perf/tighter-compare.mjs": "tools",
+    "scripts/perf/tighter-summary.mjs": "tools",
+    "scripts/perf/tighter-summary.test.mjs": "tools",
+    "benchmark-results/perf/regressions/tighter-top-group-3e8-20261008/": "bench-harness",
     ".agents/": "agent",
     "agent/": "agent",
     "agent/audit-policy.toml": "agent",

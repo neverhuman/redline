@@ -63,3 +63,9 @@ command = "node scripts/perf/focused-investigation.mjs benchmark-results/perf/re
 path = "benchmark-results/perf/regressions/focused-normal-94da-20261007/"
 read_only = false
 source = "Immutable focused ABBA inputs, supplemental source/build/syscall evidence and archive custody records; focused-summary derives each bundle and focused-investigation renders the complete retained study index. Historical absolute-throughput README blocks remain bound to their publishable release bundles."
+
+[[zone]]
+command = "node scripts/perf/tighter-investigation.mjs benchmark-results/perf/regressions/tighter-top-group-3e8-20261008"
+path = "benchmark-results/perf/regressions/tighter-top-group-3e8-20261008/"
+read_only = false
+source = "Retained two-core and one-core studies, completed scheduling-barrier crossover and rejected affinity precursor: immutable raw records and metadata; receipt checks verify completeness, custody, build/source/host contracts and seeded moving-block intervals. Existing published throughput remains unchanged."

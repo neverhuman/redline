@@ -1,0 +1,7 @@
+{
+  "at": "2026-10-08T08:19:48.239717+00:00",
+  "removedOnlyLink": "/home/ubuntu/redlineDB/.agent/worktrees/audit/target",
+  "targetRetained": "/mnt/fast-scratch/jope-prime-offroot/redlinedb-v511-tests/tighter-top-group-20261008/cache-root/target",
+  "buildMethod": "per-command CARGO_TARGET_DIR",
+  "exit": 0
+}

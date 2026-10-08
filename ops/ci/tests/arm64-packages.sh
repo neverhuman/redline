@@ -48,7 +48,17 @@ done
   printf '!subrepos/redline-central/.env.example\n'
   git -C "$source_root" ls-files 'subrepos/redline-split-ops/release-evidence/*.log' \
     'benchmark-results/perf/regressions/main-bac7e9186-vs-v5.1.1-abba/run.log' \
-    'benchmark-results/perf/regressions/main-bac7e9186-vs-v5.1.1-abba/unit-tests.log' | sed 's/^/!/'
+    'benchmark-results/perf/regressions/main-bac7e9186-vs-v5.1.1-abba/unit-tests.log' \
+    'benchmark-results/perf/regressions/tighter-top-group-3e8-20261008/two-core/coordinator.log' \
+    'benchmark-results/perf/regressions/tighter-top-group-3e8-20261008/two-core/session-1/measure.log' \
+    'benchmark-results/perf/regressions/tighter-top-group-3e8-20261008/two-core/session-2/measure.log' \
+    'benchmark-results/perf/regressions/tighter-top-group-3e8-20261008/one-core/coordinator.log' \
+    'benchmark-results/perf/regressions/tighter-top-group-3e8-20261008/one-core/session-1/measure.log' \
+    'benchmark-results/perf/regressions/tighter-top-group-3e8-20261008/one-core/session-2/measure.log' \
+    'benchmark-results/perf/regressions/tighter-top-group-3e8-20261008/scheduling-barrier/coordinator.log' \
+    'benchmark-results/perf/regressions/tighter-top-group-3e8-20261008/scheduling-barrier/measure.log' \
+    'benchmark-results/perf/regressions/tighter-top-group-3e8-20261008/rejected-affinity/coordinator.log' \
+    'benchmark-results/perf/regressions/tighter-top-group-3e8-20261008/rejected-affinity/measure.log' | sed 's/^/!/'
 } | LC_ALL=C sort > "$work/expected-exceptions"
 grep '^!' "$ignore" | LC_ALL=C sort > "$work/actual-exceptions"
 diff -u "$work/expected-exceptions" "$work/actual-exceptions"

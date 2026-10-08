@@ -1,0 +1,18 @@
+{
+  "parent": "3e8b2d5b6f13a4440c10ad5c56bff73d3d967538",
+  "files": [
+    [
+      "scripts/ci-family.sh",
+      "70363137a7bb5d129458550c5dc39102ba62597a"
+    ],
+    [
+      "ops/ci/lib.sh",
+      "cf7ec4a29f5f96df88dd9a9eef87364154f27b41"
+    ],
+    [
+      "ops/ci/check-report.sh",
+      "7762c92c3cddabdd98fdee90fbaa2af19b6067ba"
+    ]
+  ],
+  "exit": 1
+}

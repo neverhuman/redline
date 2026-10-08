@@ -1,0 +1,36 @@
+{
+  "schema": "redline-tight-method-v1",
+  "authority": "OWNER06:55Z20261008",
+  "main": "3e8b2d5b6f13a4440c10ad5c56bff73d3d967538",
+  "release": "9277455d5ad008252053a81d18add39b8cdc8f7b",
+  "harnessTree": "bb1434a80ca0390401eb628d2785e8387c5f346e",
+  "primaryCases": [
+    "top10",
+    "join_group_by_city"
+  ],
+  "controls": [
+    "point_pk_sql_text"
+  ],
+  "sessions": 2,
+  "blocksPerSession": 128,
+  "warmupBlocksPerCase": 1,
+  "order": "ABBA",
+  "rows": 20000,
+  "workDivisor": 1,
+  "nice": 19,
+  "ioClass": "idle",
+  "maximumPinnedCPUs": 1,
+  "bootstrapDraws": 50000,
+  "bootstrapSeed": 202610081,
+  "primaryFamilySize": 4,
+  "individualConfidence": 0.95,
+  "familywiseIntervalsConfidence": 0.9875,
+  "correlationBootstrap": "circular moving blocks of8 complete ABBA blocks within each session, median equal-operation query-time ratios; preserve session strata",
+  "decision": "real slowdown only if98.75% pooled interval wholly above1.0 and both session95% intervals wholly above1.0; speedup analogous; crossing remains inconclusive",
+  "hostSelection": "fresh lowest load among xbabe1/2/3 at measurement start; local Linux xbabe2, ssh xbabe2 alias is Mac-Studio and excluded",
+  "coreSelection": "one least-busy logical CPU on a physical core outside cores0-15; sample its SMT sibling; pinned not exclusive or kernel isolated",
+  "noTimingDeletion": true,
+  "sourceFlags": "release profile identical; RUSTFLAGS empty; nofailpoints/nopgo; package-only exact-SHA builds with2jobs",
+  "followup": "Fixed final confirmation after first study stayed inconclusive; no additional extension; retain both studies, stricter four-comparison intervals",
+  "initialStudyArchiveSha256": "a4833a515c27c80ee0ccb0aef120465ef1308a0b434c13a2e13749137d4ee011"
+}

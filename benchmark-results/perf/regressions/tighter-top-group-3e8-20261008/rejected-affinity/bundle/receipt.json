@@ -1,0 +1,38 @@
+{
+  "schema": "redline-probe-interference-receipt-v1",
+  "exit": 1,
+  "startedAt": "2026-10-08T09:41:28.969Z",
+  "files": [
+    {
+      "path": "abba-summary.mjs",
+      "sha256": "ab58e6751418ecff330d46e237b55fc3a6e30426281c803978f1b3b5b940e9f8"
+    },
+    {
+      "path": "host-samples.jsonl",
+      "sha256": "a3e53661d85b31a7c49381d8a0ff518f6efbaac885835a4a8a15bbcce01951cb"
+    },
+    {
+      "path": "main-build.json",
+      "sha256": "d25b075d47ebad954605bc1983509b7e323aa1ec9ed8cf5921c53be5ddb56b07"
+    },
+    {
+      "path": "plan.json",
+      "sha256": "8d95db7c4addae0355e3d36b8bd2e94a54ffa9bba59e08c0911f446a87090199"
+    },
+    {
+      "path": "probe-interference.mjs",
+      "sha256": "524ce0831bfc8cf1b501f87ba314cb3a5d9b56db29637963ad1cd083cd12a9de"
+    },
+    {
+      "path": "records.jsonl",
+      "sha256": "850ccd91ebe4b900830a07f0d8a97ad69d115ace63d480aeb76330a8c2e6bd7a"
+    },
+    {
+      "path": "release-build.json",
+      "sha256": "e057a5e01824608688201673684f8a30bc5c5ebbb9ed6cfc924fb0a1bbd8e0e0"
+    }
+  ],
+  "planSha256": "8d95db7c4addae0355e3d36b8bd2e94a54ffa9bba59e08c0911f446a87090199",
+  "error": "AssertionError [ERR_ASSERTION]: The expression evaluated to a falsy value:\n\n  assert(!record.probeError)\n\n    at file:///dev/shm/redline-tight-top-group-20261008/probe-interference/probe-interference.mjs:90:70",
+  "finishedAt": "2026-10-08T09:44:52.630Z"
+}

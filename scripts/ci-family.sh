@@ -2,7 +2,9 @@
 set -euo pipefail
 root=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
 cd "$root"
-export CARGO_TARGET_DIR="$root/target"
+export CARGO_TARGET_DIR="${CARGO_TARGET_DIR:-$root/target}"
+mkdir -p "$CARGO_TARGET_DIR"
+CARGO_TARGET_DIR=$(cd "$CARGO_TARGET_DIR" && pwd -P)
 case "${1:-all}" in
   engine) bash ops/ci/fast.sh ;;
   testing)
@@ -25,13 +27,13 @@ case "${1:-all}" in
     ;;
   integration)
     ./scripts/build-from-source.sh --all
-    bash scripts/test-binaries.sh "$root/target/release"
+    bash scripts/test-binaries.sh "$CARGO_TARGET_DIR/release"
     (
       cd subrepos/redline-web/apps/web
       # Reuse this checkout's cache without contending with other repositories.
       export PLAYWRIGHT_BROWSERS_PATH="${PLAYWRIGHT_BROWSERS_PATH:-$root/target/playwright-browsers}"
       npx --no-install playwright install chromium
-      REDLINE_WEB_TARGET_BIN="$root/target/release/redlinedb" npx --no-install playwright test
+      REDLINE_WEB_TARGET_BIN="$CARGO_TARGET_DIR/release/redlinedb" npx --no-install playwright test
     )
     ;;
   parity) bash ops/ci/parity.sh ;;

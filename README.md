@@ -220,6 +220,11 @@ Throughput, higher is better, except open times. Each figure is the median of 3 
 
 Current-main diagnostics and the focused regression investigation are recorded
 separately in [the follow-up report](benchmark-results/perf/regressions/focused-normal-94da-20261007/README.md).
+The [tighter Top 10 and grouped-join investigation](benchmark-results/perf/regressions/tighter-top-group-3e8-20261008/README.md)
+preserves both complete studies and a separate scheduling-control crossover.
+Completing controller checks before engine startup removes the large elapsed
+slowdowns seen with the original single-core launcher. The corrected comparison
+retains a small Top 10 difference and does not qualify a future release.
 They retain conflicting results and candidate before/after receipts; they do not
 replace the released-version figures above.
 

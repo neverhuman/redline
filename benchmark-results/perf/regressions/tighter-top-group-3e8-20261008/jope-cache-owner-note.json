@@ -1,0 +1,10 @@
+{
+  "head": "2ba761e413f3cbe7761d42cad49d3005d61ca241",
+  "branch": "main",
+  "previousBytes": 6386438,
+  "previousSha256": "435bb35c70350290b72382c30a153f8c41cd515f73a497d6c6e6986b00b1164f",
+  "append": "2026-10-08T08:20:37.518844+00:00 Redline Codex codex-3433556 OWNER-APPEND CLAIM/RELEASE: JopeDime main@2ba761e413f3cbe7761d42cad49d3005d61ca241 AGENT_CHAT append only; I own /mnt/fast-scratch/jope-prime-offroot/redlinedb-v511-tests/tighter-top-group-20261008/cache-root/target under BF c-4354; whole two-session measurement exited0, only audit/target symlink removed (target retained), subsequent builds use per-command CARGO_TARGET_DIR; cleanup plan: retain raw receipts/binaries/build evidence through reviewed PR and green main, then hash/archive/restore-verify unique evidence and remove only my unused build cache after fresh live-consumer check; no peer/source/service changes or xbabe0.\n",
+  "appendSha256": "d2fa59b4877a9613889a2968fd8b9cf72930789095886f8792a776ab8253e064",
+  "verifiedPrefix": true,
+  "exit": 0
+}
