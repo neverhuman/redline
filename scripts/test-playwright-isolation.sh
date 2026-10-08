@@ -12,7 +12,9 @@ printf '%s\n' unrelated-installer > "$fixture/home/.cache/ms-playwright/__dirloc
 export PLAYWRIGHT_TEST_HOME="$fixture/home"
 export PATH="$fixture/bin:$PATH"
 export INSTALL_LOG="$fixture/calls"
-unset PLAYWRIGHT_BROWSERS_PATH FAIL_INSTALL FAIL_TEST
+# These fixtures exercise checkout-local defaults; external Cargo targets have
+# separate dispatcher controls in test-ci-target-directory.test.mjs.
+unset PLAYWRIGHT_BROWSERS_PATH FAIL_INSTALL FAIL_TEST CARGO_TARGET_DIR
 cat > "$fixture/bin/npx" <<'STUB'
 #!/usr/bin/env bash
 set -euo pipefail

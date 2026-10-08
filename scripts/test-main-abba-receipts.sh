@@ -14,3 +14,7 @@ fi
 node --test scripts/perf/focused-summary.test.mjs
 node --test scripts/perf/focused-investigation.test.mjs
 node scripts/perf/focused-investigation.mjs benchmark-results/perf/regressions/focused-normal-94da-20261007 --check
+node --test scripts/perf/tighter-summary.test.mjs scripts/perf/tighter-investigation.test.mjs
+node scripts/perf/tighter-investigation.mjs benchmark-results/perf/regressions/tighter-top-group-3e8-20261008 --check
+node --test scripts/test-ci-target-directory.test.mjs
+node --test scripts/perf/checked-worker.test.mjs scripts/perf/probe-barrier-summary.test.mjs

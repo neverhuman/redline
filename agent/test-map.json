@@ -1,6 +1,30 @@
 {
   "workspace": "redline-core",
   "tests": {
+    "scripts/perf/checked-worker.mjs": {"command": "bash scripts/test-main-abba-receipts.sh", "purpose": "Hold the same benchmark PID until scheduling checks finish, then exec without timed observer overlap"},
+    "scripts/perf/checked-worker.test.mjs": {"command": "bash scripts/test-main-abba-receipts.sh", "purpose": "Prove pre-exec barrier, PID/affinity preservation, literal argv and retained exit/abort failures"},
+    "scripts/perf/probe-barrier-summary.mjs": {"command": "bash scripts/test-main-abba-receipts.sh", "purpose": "Verify completed direct/gated crossover, all raw work, scheduling, timings, digests and hashes; retain rejected precursor"},
+    "scripts/perf/probe-barrier-summary.test.mjs": {"command": "bash scripts/test-main-abba-receipts.sh", "purpose": "Reject incomplete conditions, changed CPU, released-before-checks gates, signals, tampering and metadata races"},
+
+    "scripts/perf/tighter-investigation.test.mjs": {"command": "bash scripts/test-main-abba-receipts.sh", "purpose": "reject dropped studies, duplicated independent sessions and missing archive identities"},
+    "scripts/perf/tighter-investigation.mjs": {"command": "bash scripts/test-main-abba-receipts.sh", "purpose": "preserve both complete tighter studies and verify every immutable receipt, supplemental hash and generated report"},
+    "scripts/test-ci-target-directory.test.mjs": {"command": "node --test scripts/test-ci-target-directory.test.mjs", "purpose": "honor explicit Cargo cache paths in family, runner, integration and reporter lanes while preserving checkout-local defaults and rejecting a stale reporter"},
+    "scripts/perf/tighter-compare.mjs": {
+      "command": "bash scripts/test-main-abba-receipts.sh",
+      "purpose": "verify tighter complete paired-session receipts, full work, original release digests, scheduling, correlated uncertainty and derived reports without timing in CI"
+    },
+    "scripts/perf/tighter-summary.mjs": {
+      "command": "bash scripts/test-main-abba-receipts.sh",
+      "purpose": "verify tighter complete paired-session receipts, full work, original release digests, scheduling, correlated uncertainty and derived reports without timing in CI"
+    },
+    "scripts/perf/tighter-summary.test.mjs": {
+      "command": "bash scripts/test-main-abba-receipts.sh",
+      "purpose": "verify tighter complete paired-session receipts, full work, original release digests, scheduling, correlated uncertainty and derived reports without timing in CI"
+    },
+    "benchmark-results/perf/regressions/tighter-top-group-3e8-20261008/": {
+      "command": "bash scripts/test-main-abba-receipts.sh",
+      "purpose": "verify tighter complete paired-session receipts, full work, original release digests, scheduling, correlated uncertainty and derived reports without timing in CI"
+    },
     ".agents/": {
       "command": "rtk bash scripts/ci-local.sh required",
       "purpose": "verify agent context through the canonical host-required lane"

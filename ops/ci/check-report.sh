@@ -3,13 +3,14 @@
 set -euo pipefail
 root=$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)
 cd "$root"
+runner="${CARGO_TARGET_DIR:-$root/target}/release/redline-testing"
 work=$(mktemp -d)
 trap 'rm -rf "$work"' EXIT
 cp README.md "$work/README.md"
 # Official mode: the run's own provenance, which must record a clean source
 # tree (the measured binaries are then the checked-out commit). Work in
 # progress under the source inputs fails this check; see docs/testing.md.
-target/release/redline-testing report \
+"$runner" report \
   --suite sqlite_parity \
   --input target/redline-testing/sqlite_parity.raw.jsonl \
   --official-evidence target/redline-testing/official-evidence.processed.json \
@@ -20,7 +21,7 @@ target/release/redline-testing report \
   --expected-warmup "${REDLINEDB_SQLITE_PARITY_WARMUP:-1}"
 # Writing even a scratch README needs release evidence: the checked-out
 # commit, a clean source tree when the run started, and a measured reference.
-target/release/redline-testing check-postgres \
+"$runner" check-postgres \
   --input target/redline-testing/beyond_sqlite.raw.jsonl \
   --baseline metadata/beyond_sqlite/postgres-regression.json \
   --readme "$work/README.md" \

@@ -1,0 +1,5 @@
+AssertionError [ERR_ASSERTION]: The expression evaluated to a falsy value:
+
+  assert(!record.probeError)
+
+    at file:///dev/shm/redline-tight-top-group-20261008/probe-interference/probe-interference.mjs:90:70

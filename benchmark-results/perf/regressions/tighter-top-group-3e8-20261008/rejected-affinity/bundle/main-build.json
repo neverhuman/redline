@@ -1,0 +1,39 @@
+{
+  "schema_version": "redline-scoreboard-build-v1",
+  "label": "main",
+  "engine_ref": "3e8b2d5b6f13a4440c10ad5c56bff73d3d967538",
+  "engine_commit": "3e8b2d5b6f13a4440c10ad5c56bff73d3d967538",
+  "harness_commit": "3e8b2d5b6f13a4440c10ad5c56bff73d3d967538",
+  "harness_tree": "bb1434a80ca0390401eb628d2785e8387c5f346e",
+  "engines": {
+    "redlinedb": "5.1.1",
+    "sqlite": "3.50.2",
+    "sqlite_source_id": "2025-06-28 14:00:48 2af157d77fb1304a74176eaee7fbc7c7e932d946bf25325e9c26c91db19e3079"
+  },
+  "rustc_verbose_version": [
+    "rustc 1.95.0 (59807616e 2026-04-14)",
+    "binary: rustc",
+    "commit-hash: 59807616e1fa2540724bfbac14d7976d7e4a3860",
+    "commit-date: 2026-04-14",
+    "host: x86_64-unknown-linux-gnu",
+    "release: 1.95.0",
+    "LLVM version: 22.1.2"
+  ],
+  "cargo_version": "cargo 1.95.0 (f2d3ce0bd 2026-03-21)",
+  "cargo_command": "cargo build --release --locked --offline --jobs 2 -p redlinedb-scoreboard --target-dir /home/ubuntu/redlineDB/.agent/worktrees/audit/target",
+  "profile": "release",
+  "profile_release": "\nopt-level = 3\nlto = \"fat\"\ncodegen-units = 1\npanic = \"abort\"\nstrip = \"symbols\"\ndebug = false\ndebug-assertions = false\noverflow-checks = false\nincremental = false\n\n# Local CPU specialization requires an explicit RUSTFLAGS override.",
+  "rustflags": "",
+  "pgo": false,
+  "failpoints": false,
+  "binary_sha256": "c25b4f353c5396f05a76d68ed62634d1bc1b976568b8af042009bf4d7ab7091f",
+  "source_tree": "940d2609bad2ce37e67572500e313b7658ff98cc",
+  "source_inputs_sha256": "0c590856758d2744898223520352a44cce572d84a0bfb160ac846e1f65343b56",
+  "source_dirty": false,
+  "started_at": "2026-10-08T07:05:50.864822+00:00",
+  "built_at_utc": "2026-10-08T07:07:41.795459+00:00",
+  "productionArtifactsCleaned": true,
+  "build_jobs": 2,
+  "affinity": "60-61",
+  "nice": 19
+}

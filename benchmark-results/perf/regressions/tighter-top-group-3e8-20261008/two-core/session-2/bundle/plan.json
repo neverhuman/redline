@@ -1,0 +1,195 @@
+{
+  "schema": "redline-abba-plan-v1",
+  "purpose": "tighter-top-group-v511",
+  "authority": "OWNER06:55Z20261008",
+  "methodFile": "/dev/shm/redline-tight-top-group-20261008/method-predeclared.json",
+  "methodSha256": "3dd7ff4cdbf9ce862215fd981c26e11fe727b3dd9147a9ccfc440c55812cd9f7",
+  "session": 2,
+  "comparisonMain": "3e8b2d5b6f13a4440c10ad5c56bff73d3d967538",
+  "releaseTagCommit": "9277455d5ad008252053a81d18add39b8cdc8f7b",
+  "versions": {
+    "release": {
+      "binary": "/dev/shm/redline-tight-top-group-20261008/inputs/release/redline-scoreboard",
+      "build": "/dev/shm/redline-tight-top-group-20261008/inputs/release/build.json",
+      "binarySha256": "3f6db0b1badfb07350c4efb6f5b0626e335228389327aad352899b1e850b21c4",
+      "engineCommit": "9277455d5ad008252053a81d18add39b8cdc8f7b"
+    },
+    "main": {
+      "binary": "/dev/shm/redline-tight-top-group-20261008/inputs/main/redline-scoreboard",
+      "build": "/dev/shm/redline-tight-top-group-20261008/inputs/main/build.json",
+      "binarySha256": "c25b4f353c5396f05a76d68ed62634d1bc1b976568b8af042009bf4d7ab7091f",
+      "engineCommit": "3e8b2d5b6f13a4440c10ad5c56bff73d3d967538"
+    }
+  },
+  "host": {
+    "name": "xbabe3",
+    "cpu": "AMD Ryzen Threadripper PRO 3995WX 64-Cores",
+    "normalMount": "tmpfs"
+  },
+  "hostSelection": {
+    "at": "2026-10-08T07:13:03.992589+00:00",
+    "chosen": "xbabe3",
+    "snapshots": [
+      {
+        "name": "xbabe1",
+        "load": [
+          80.26123046875,
+          74.19482421875,
+          79.634765625
+        ],
+        "logicalCPUs": 128,
+        "at": "2026-10-08T07:13:02.535736+00:00",
+        "transport": "SSH read-only proc snapshot"
+      },
+      {
+        "name": "xbabe2",
+        "at": "2026-10-08T07:13:02.535941+00:00",
+        "load": [
+          68.24267578125,
+          50.84521484375,
+          47.0
+        ],
+        "logicalCPUs": 128,
+        "transport": "local Linux, not ssh alias"
+      },
+      {
+        "name": "xbabe3",
+        "load": [
+          22.85009765625,
+          30.08349609375,
+          44.140625
+        ],
+        "logicalCPUs": 128,
+        "at": "2026-10-08T07:13:02.536236+00:00",
+        "transport": "SSH read-only proc snapshot"
+      }
+    ],
+    "xbabe1": [
+      80.26123046875,
+      74.19482421875,
+      79.634765625
+    ],
+    "xbabe2": [
+      68.24267578125,
+      50.84521484375,
+      47.0
+    ],
+    "xbabe3": [
+      22.85009765625,
+      30.08349609375,
+      44.140625
+    ]
+  },
+  "cpus": "32,46",
+  "selectedCPUs": [
+    32,
+    46
+  ],
+  "sampleCPUs": [
+    32,
+    46,
+    96,
+    110
+  ],
+  "isolation": {
+    "exclusive": false,
+    "kernelIsolated": false,
+    "sampleSeconds": 10,
+    "selected": [
+      {
+        "cpu": 32,
+        "core": 32,
+        "siblings": [
+          32,
+          96
+        ],
+        "node": 0,
+        "busy": 0.0030060120240480437,
+        "score": 0.0015030060120240218
+      },
+      {
+        "cpu": 46,
+        "core": 46,
+        "siblings": [
+          46,
+          110
+        ],
+        "node": 0,
+        "busy": 0.0010010010010009784,
+        "score": 0.0015005005005004901
+      }
+    ]
+  },
+  "nice": 19,
+  "ioClass": "idle",
+  "blocks": 64,
+  "warmupBlocks": 1,
+  "rows": 20000,
+  "workDivisor": 1,
+  "caseBudgetSeconds": 600,
+  "bootstrapDraws": 50000,
+  "bootstrapSeed": 202610080,
+  "order": "ABBA",
+  "caseInterleaving": "each block runs all three cases; second session reverses primary case order",
+  "cases": [
+    {
+      "id": "join_group_by_city",
+      "unit": "row",
+      "image": "base",
+      "writes": false,
+      "summary": "join of every event to its account, grouped",
+      "pair": "normal",
+      "ops": 20000,
+      "digest": "1516718079838037000",
+      "settings": {
+        "durability": "Normal",
+        "cache_bytes": 67108864,
+        "buffer_pool_pages": 4096,
+        "query_pool_threads": 0
+      }
+    },
+    {
+      "id": "top10",
+      "unit": "row",
+      "image": "base",
+      "writes": false,
+      "summary": "ORDER BY ... LIMIT 10 over the whole table",
+      "pair": "normal",
+      "ops": 100000,
+      "digest": "77024404922884660",
+      "settings": {
+        "durability": "Normal",
+        "cache_bytes": 67108864,
+        "buffer_pool_pages": 4096,
+        "query_pool_threads": 0
+      }
+    },
+    {
+      "id": "point_pk_sql_text",
+      "unit": "stmt",
+      "image": "base",
+      "writes": false,
+      "summary": "SELECT by INTEGER PRIMARY KEY, a new SQL string each time",
+      "pair": "normal",
+      "ops": 20000,
+      "digest": "-6083726178364169045",
+      "settings": {
+        "durability": "Normal",
+        "cache_bytes": 67108864,
+        "buffer_pool_pages": 4096,
+        "query_pool_threads": 0
+      }
+    }
+  ],
+  "filesystems": {
+    "normal": "tmpfs"
+  },
+  "workRoots": {
+    "normal": "/dev/shm/redline-tight-top-group-20261008/session-2/work"
+  },
+  "output": "/dev/shm/redline-tight-top-group-20261008/session-2/bundle",
+  "orchestrator": {
+    "node": "/home/ubuntu/.nvm/versions/node/v22.22.2/bin/node",
+    "version": "v22.22.2"
+  }
+}

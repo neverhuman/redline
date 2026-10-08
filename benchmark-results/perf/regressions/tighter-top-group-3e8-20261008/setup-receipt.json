@@ -1,0 +1,6 @@
+{
+  "at": "2026-10-08T07:01:06.043936+00:00",
+  "initialSetup": "target symlink destination directory absent; mkdir/log redirections failed before jankurai execution; directory created and command rerun",
+  "target": "offroot lane-specific cache",
+  "peerMutation": false
+}

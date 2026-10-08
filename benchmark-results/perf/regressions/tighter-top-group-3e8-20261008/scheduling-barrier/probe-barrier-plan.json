@@ -1,0 +1,194 @@
+{
+  "schema": "redline-probe-barrier-plan-v1",
+  "purpose": "separate fixed scheduling barrier diagnostic after rejected affinity controller race; no closed-study sample extension",
+  "frozenAt": "2026-10-08T09:50:32.266220+00:00",
+  "host": "xbabe3",
+  "blocks": 32,
+  "warmupBlocks": 1,
+  "rows": 20000,
+  "childCPU": "23",
+  "conditions": [
+    {
+      "id": "direct",
+      "parentCPU": "23"
+    },
+    {
+      "id": "gated",
+      "parentCPU": "23"
+    }
+  ],
+  "cases": [
+    {
+      "id": "top10",
+      "unit": "row",
+      "image": "base",
+      "writes": false,
+      "summary": "ORDER BY ... LIMIT 10 over the whole table",
+      "pair": "normal",
+      "ops": 100000,
+      "digest": "77024404922884660",
+      "settings": {
+        "durability": "Normal",
+        "cache_bytes": 67108864,
+        "buffer_pool_pages": 4096,
+        "query_pool_threads": 0
+      }
+    },
+    {
+      "id": "join_group_by_city",
+      "unit": "row",
+      "image": "base",
+      "writes": false,
+      "summary": "join of every event to its account, grouped",
+      "pair": "normal",
+      "ops": 20000,
+      "digest": "1516718079838037000",
+      "settings": {
+        "durability": "Normal",
+        "cache_bytes": 67108864,
+        "buffer_pool_pages": 4096,
+        "query_pool_threads": 0
+      }
+    },
+    {
+      "id": "point_pk_sql_text",
+      "unit": "stmt",
+      "image": "base",
+      "writes": false,
+      "summary": "SELECT by INTEGER PRIMARY KEY, a new SQL string each time",
+      "pair": "normal",
+      "ops": 20000,
+      "digest": "-6083726178364169045",
+      "settings": {
+        "durability": "Normal",
+        "cache_bytes": 67108864,
+        "buffer_pool_pages": 4096,
+        "query_pool_threads": 0
+      }
+    }
+  ],
+  "versions": {
+    "release": {
+      "binary": "/dev/shm/redline-tight-top-group-20261008/one-core/inputs/release/redline-scoreboard",
+      "build": "/dev/shm/redline-tight-top-group-20261008/one-core/inputs/release/build.json",
+      "binarySha256": "3f6db0b1badfb07350c4efb6f5b0626e335228389327aad352899b1e850b21c4",
+      "engineCommit": "9277455d5ad008252053a81d18add39b8cdc8f7b",
+      "image": "/dev/shm/redline-tight-top-group-20261008/one-core/session-1/work/images/release/base",
+      "imageInventory": [
+        {
+          "path": "db.redline/CONTROL_A",
+          "sha256": "e1c7539470ba510fd9079f0319200056506270f1aeab74344eaa0c41f33945cb",
+          "size": 64
+        },
+        {
+          "path": "db.redline/TX_STATUS_00000000000000000001",
+          "sha256": "956216269be2288e348f158c1aec344b5a3dceb9ced14fb46f5663bbc98f1c46",
+          "size": 216
+        },
+        {
+          "path": "db.redline/data.redline",
+          "sha256": "8c309cf9f2675de30ce0e4aa67d5a5a56c1d9b62a19ea75340d4a4d60a6950cb",
+          "size": 6062080
+        },
+        {
+          "path": "db.redline/owner.lock",
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "size": 0
+        },
+        {
+          "path": "db.redline/phase8/retention.json",
+          "sha256": "6a0bb849a4fbab3b7add4810def311e8ab151740263eb4d519ed359dbc23a75a",
+          "size": 167
+        },
+        {
+          "path": "db.redline/schema.redline",
+          "sha256": "817fdc95552187a7f3140f1183e09876f31623930910d521ec41b1e636dd2ac1",
+          "size": 2667
+        },
+        {
+          "path": "db.redline/stats.redline",
+          "sha256": "d412517044d4618c1aebeb272534d6c2bb4046ff9f5e1f71c02835e183b960dd",
+          "size": 52090
+        },
+        {
+          "path": "db.redline/user_version.redline",
+          "sha256": "9a271f2a916b0b6ee6cecb2426f0b3206ef074578be55d9bc94f6f3fe3ab86aa",
+          "size": 2
+        },
+        {
+          "path": "db.redline/wal/00000000000000000001.wal",
+          "sha256": "0f921bd725c9ab8e9fefed9599f7be4f1148150a407f846a0fcbd674e91fd4d6",
+          "size": 13972071
+        }
+      ]
+    },
+    "main": {
+      "binary": "/dev/shm/redline-tight-top-group-20261008/one-core/inputs/main/redline-scoreboard",
+      "build": "/dev/shm/redline-tight-top-group-20261008/one-core/inputs/main/build.json",
+      "binarySha256": "c25b4f353c5396f05a76d68ed62634d1bc1b976568b8af042009bf4d7ab7091f",
+      "engineCommit": "3e8b2d5b6f13a4440c10ad5c56bff73d3d967538",
+      "image": "/dev/shm/redline-tight-top-group-20261008/one-core/session-1/work/images/main/base",
+      "imageInventory": [
+        {
+          "path": "db.redline/CONTROL_A",
+          "sha256": "e1c7539470ba510fd9079f0319200056506270f1aeab74344eaa0c41f33945cb",
+          "size": 64
+        },
+        {
+          "path": "db.redline/TX_STATUS_00000000000000000001",
+          "sha256": "956216269be2288e348f158c1aec344b5a3dceb9ced14fb46f5663bbc98f1c46",
+          "size": 216
+        },
+        {
+          "path": "db.redline/data.redline",
+          "sha256": "8c309cf9f2675de30ce0e4aa67d5a5a56c1d9b62a19ea75340d4a4d60a6950cb",
+          "size": 6062080
+        },
+        {
+          "path": "db.redline/owner.lock",
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "size": 0
+        },
+        {
+          "path": "db.redline/phase8/retention.json",
+          "sha256": "f61c9133d6658b05722d9dbda5b8f143f009a94139de4dab476164bc04bfabea",
+          "size": 167
+        },
+        {
+          "path": "db.redline/schema.redline",
+          "sha256": "817fdc95552187a7f3140f1183e09876f31623930910d521ec41b1e636dd2ac1",
+          "size": 2667
+        },
+        {
+          "path": "db.redline/stats.redline",
+          "sha256": "d412517044d4618c1aebeb272534d6c2bb4046ff9f5e1f71c02835e183b960dd",
+          "size": 52090
+        },
+        {
+          "path": "db.redline/user_version.redline",
+          "sha256": "9a271f2a916b0b6ee6cecb2426f0b3206ef074578be55d9bc94f6f3fe3ab86aa",
+          "size": 2
+        },
+        {
+          "path": "db.redline/wal/00000000000000000001.wal",
+          "sha256": "0f921bd725c9ab8e9fefed9599f7be4f1148150a407f846a0fcbd674e91fd4d6",
+          "size": 13972071
+        }
+      ]
+    }
+  },
+  "output": "/dev/shm/redline-tight-top-group-20261008/probe-barrier/bundle",
+  "workRoot": "/dev/shm/redline-tight-top-group-20261008/probe-barrier/work",
+  "nice": 19,
+  "ioClass": "idle",
+  "bootstrapSeed": 202610082,
+  "bootstrapDraws": 50000,
+  "chunk": 8,
+  "originalConfirmationReceiptSha256": "278acf0a0a1a610897ad956725008bd37eb43a2c135123ffd9aedbcffbd0f60a",
+  "runnerSha256": "b180bffc5ccc8403586014ad1ed37b68f60e1b74aa6af165de3d66e5d802533c",
+  "maximumAssignedLogicalCPUs": 1,
+  "exclusive": false,
+  "caseBudgetSeconds": 600,
+  "schedule": "block-major/case-major, condition order alternates every block, complete ABBA per condition/case, retain declared warmup block-1",
+  "interpretation": "controller/engine CPU23 in both conditions; direct spawn with running scheduling checks vs waiting-shell preservedPID exec released after all same scheduling checks. Identical binary/images/SQL/work/timer; launch wrapper and barrier are explicit treatment. Exploratory diagnostic, retain all observations, fixed32 blocks per condition, no sample extension."
+}

@@ -490,9 +490,11 @@ ci_measure_postgres_reference_image() {
 ci_install_redline_testing() {
     local root
     root="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
-    export CARGO_TARGET_DIR="$root/target"
+    export CARGO_TARGET_DIR="${CARGO_TARGET_DIR:-$root/target}"
+    mkdir -p "$CARGO_TARGET_DIR"
+    CARGO_TARGET_DIR=$(cd "$CARGO_TARGET_DIR" && pwd -P)
     cargo build --locked --release --manifest-path "$root/subrepos/redline-testing/Cargo.toml" --bin redline-testing >&2
-    CI_REDLINE_TESTING_LOCAL_BIN="$root/target/release/redline-testing"
+    CI_REDLINE_TESTING_LOCAL_BIN="$CARGO_TARGET_DIR/release/redline-testing"
     CI_REDLINE_TESTING_LOCAL_SOURCE="$root/subrepos/redline-testing"
     ci_install_redline_testing_local
 }

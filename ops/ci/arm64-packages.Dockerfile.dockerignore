@@ -10,6 +10,16 @@ dist
 # These public tracked inputs must stay in the exact Git checkout.
 !benchmark-results/perf/regressions/main-bac7e9186-vs-v5.1.1-abba/run.log
 !benchmark-results/perf/regressions/main-bac7e9186-vs-v5.1.1-abba/unit-tests.log
+!benchmark-results/perf/regressions/tighter-top-group-3e8-20261008/two-core/coordinator.log
+!benchmark-results/perf/regressions/tighter-top-group-3e8-20261008/two-core/session-1/measure.log
+!benchmark-results/perf/regressions/tighter-top-group-3e8-20261008/two-core/session-2/measure.log
+!benchmark-results/perf/regressions/tighter-top-group-3e8-20261008/one-core/coordinator.log
+!benchmark-results/perf/regressions/tighter-top-group-3e8-20261008/one-core/session-1/measure.log
+!benchmark-results/perf/regressions/tighter-top-group-3e8-20261008/one-core/session-2/measure.log
+!benchmark-results/perf/regressions/tighter-top-group-3e8-20261008/scheduling-barrier/coordinator.log
+!benchmark-results/perf/regressions/tighter-top-group-3e8-20261008/scheduling-barrier/measure.log
+!benchmark-results/perf/regressions/tighter-top-group-3e8-20261008/rejected-affinity/coordinator.log
+!benchmark-results/perf/regressions/tighter-top-group-3e8-20261008/rejected-affinity/measure.log
 !subrepos/redline-central/.env.example
 !subrepos/redline-split-ops/release-evidence/8.0.0/jain-consumer-jain6-web2-r3.test.log
 !subrepos/redline-split-ops/release-evidence/8.0.0/jain-consumer.test.log

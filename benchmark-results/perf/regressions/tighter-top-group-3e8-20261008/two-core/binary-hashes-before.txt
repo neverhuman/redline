@@ -1,0 +1,2 @@
+3f6db0b1badfb07350c4efb6f5b0626e335228389327aad352899b1e850b21c4  inputs/release/redline-scoreboard
+c25b4f353c5396f05a76d68ed62634d1bc1b976568b8af042009bf4d7ab7091f  inputs/main/redline-scoreboard

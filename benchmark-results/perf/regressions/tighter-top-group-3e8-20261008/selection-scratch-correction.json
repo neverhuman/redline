@@ -1,0 +1,7 @@
+{
+  "event": "read-only snapshot helper reused a mutable scratch filename; frozen plans and all raw receipts unchanged",
+  "newSnapshotRetained": "host-selection-one-core.json",
+  "oldSnapshotRestoredFromFrozenPlan": true,
+  "oldSha256": "e3a98008b7824c8eba824c0430c7f2d6730e60945e2ac0eddeeb8fb7eb2e5dd4",
+  "newSha256": "7e696a2acfdc0661647bf566ff69cc04fcfac2fa884122215773b4e298cdc53e"
+}
